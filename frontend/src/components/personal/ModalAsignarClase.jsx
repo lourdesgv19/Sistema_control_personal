@@ -1,5 +1,6 @@
-import React from "react";
-import { X } from "lucide-react";
+import React, { useState } from "react";
+import { X, Plus, BookOpen, Check } from "lucide-react";
+import { createMateria } from "../../services/configuracionService";
 
 export default function ModalAsignarClase({
   isOpen,
@@ -9,12 +10,79 @@ export default function ModalAsignarClase({
   setFormClase,
   empleado,
   materiasActivas = [],
+  onMateriaCreada, // Callback opcional para refrescar el catálogo en el componente padre
 }) {
+  const [creandoNuevaMateria, setCreandoNuevaMateria] = useState(false);
+  const [guardandoMateria, setGuardandoMateria] = useState(false);
+  const [errorCreacion, setErrorCreacion] = useState("");
+
+  const [formNuevaMateria, setFormNuevaMateria] = useState({
+    nombre: "",
+    codigo: "",
+    comision: "",
+    aulaPredeterminada: "",
+    departamento: "",
+  });
+
   if (!isOpen || !empleado) return null;
+
+  const handleCrearYMateriaRapida = async (e) => {
+    e.preventDefault();
+    if (!formNuevaMateria.nombre.trim()) {
+      setErrorCreacion("El nombre de la materia es obligatorio.");
+      return;
+    }
+
+    setGuardandoMateria(true);
+    setErrorCreacion("");
+
+    try {
+      const payload = {
+        nombre: formNuevaMateria.nombre.trim(),
+        codigo: formNuevaMateria.codigo.trim(),
+        comision: formNuevaMateria.comision.trim(),
+        aulaPredeterminada: formNuevaMateria.aulaPredeterminada.trim(),
+        departamento: formNuevaMateria.departamento.trim() || "General",
+        activo: true,
+      };
+
+      const materiaGuardada = await createMateria(payload);
+
+      // Si el componente padre pasa la función para refrescar la lista de materias:
+      if (onMateriaCreada) {
+        await onMateriaCreada(materiaGuardada);
+      }
+
+      // Queda automáticamente elegida en la asignación
+      setFormClase((prev) => ({
+        ...prev,
+        materiaId: materiaGuardada.id,
+        materia: materiaGuardada.nombre,
+        comision: materiaGuardada.comision || prev.comision,
+        aula: materiaGuardada.aulaPredeterminada || prev.aula,
+      }));
+
+      // Cerrar y limpiar subformulario
+      setCreandoNuevaMateria(false);
+      setFormNuevaMateria({
+        nombre: "",
+        codigo: "",
+        comision: "",
+        aulaPredeterminada: "",
+        departamento: "",
+      });
+    } catch (err) {
+      console.error(err);
+      setErrorCreacion("No se pudo registrar la nueva materia.");
+    } finally {
+      setGuardandoMateria(false);
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
       <div className="bg-white rounded-3xl w-full max-w-md overflow-hidden shadow-2xl animate-in zoom-in-95">
+        {/* Cabecera */}
         <div className="bg-[#6b21a8] px-6 py-4 text-white flex items-center justify-between">
           <div>
             <h3 className="font-bold text-sm">
@@ -33,37 +101,154 @@ export default function ModalAsignarClase({
         </div>
 
         <form onSubmit={onSubmit} className="p-6 space-y-4 text-xs">
+          {/* SECTOR MATERIA CON BOTÓN '+' */}
           <div>
-            <label className="block font-semibold text-slate-700 mb-1">
-              Materia *
-            </label>
-            <select
-              required
-              value={formClase.materiaId || ""}
-              onChange={(e) => {
-                const idSel = e.target.value;
-                const mat = materiasActivas.find(
-                  (m) => String(m.id) === String(idSel),
-                );
-                setFormClase({
-                  ...formClase,
-                  materiaId: idSel,
-                  materia: mat ? mat.nombre : "",
-                  comision: mat?.comision || formClase.comision,
-                  aula: mat?.aulaPredeterminada || formClase.aula,
-                });
-              }}
-              className="w-full border border-slate-200 rounded-xl px-3 py-2.5 outline-none focus:border-purple-600 bg-white"
-            >
-              <option value="">Seleccione una cátedra del catálogo...</option>
-              {materiasActivas.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.nombre} {m.comision ? `(${m.comision})` : ""}
-                </option>
-              ))}
-            </select>
+            <div className="flex items-center justify-between mb-1">
+              <label className="font-semibold text-slate-700">Materia *</label>
+              <button
+                type="button"
+                onClick={() => setCreandoNuevaMateria(!creandoNuevaMateria)}
+                className="text-[11px] font-bold text-purple-700 hover:text-purple-900 flex items-center gap-1 transition cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+                {creandoNuevaMateria ? "Cerrar creación" : "Nueva Materia"}
+              </button>
+            </div>
+
+            {/* Selector desplegable */}
+            <div className="flex items-center gap-2">
+              <select
+                required={!creandoNuevaMateria}
+                value={formClase.materiaId || ""}
+                onChange={(e) => {
+                  const idSel = e.target.value;
+                  const mat = materiasActivas.find(
+                    (m) => String(m.id) === String(idSel),
+                  );
+                  setFormClase({
+                    ...formClase,
+                    materiaId: idSel,
+                    materia: mat ? mat.nombre : "",
+                    comision: mat?.comision || formClase.comision,
+                    aula: mat?.aulaPredeterminada || formClase.aula,
+                  });
+                }}
+                className="w-full border border-slate-200 rounded-xl px-3 py-2.5 outline-none focus:border-purple-600 bg-white"
+              >
+                <option value="">Seleccione una cátedra del catálogo...</option>
+                {materiasActivas.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.nombre} {m.comision ? `(${m.comision})` : ""}
+                  </option>
+                ))}
+              </select>
+
+              <button
+                type="button"
+                onClick={() => setCreandoNuevaMateria(!creandoNuevaMateria)}
+                className={`p-2.5 rounded-xl border transition cursor-pointer shrink-0 ${
+                  creandoNuevaMateria
+                    ? "bg-purple-100 border-purple-300 text-purple-700"
+                    : "bg-purple-50 border-purple-200 text-purple-700 hover:bg-purple-100"
+                }`}
+                title="Crear nueva materia que no está en la lista"
+              >
+                <Plus className="w-4 h-4 stroke-[2.5]" />
+              </button>
+            </div>
           </div>
 
+          {/* SUBFORMULARIO DESPLEGABLE PARA CREAR MATERIA SOBRE LA MARCHA */}
+          {creandoNuevaMateria && (
+            <div className="bg-purple-50/70 border border-purple-200 rounded-2xl p-3.5 space-y-3 animate-in fade-in slide-in-from-top-2">
+              <div className="flex items-center gap-1.5 font-bold text-purple-900 text-xs">
+                <BookOpen className="w-3.5 h-3.5" />
+                <span>Registrar Cátedra en Catálogo</span>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-semibold text-slate-600 mb-0.5">
+                  Nombre de la Materia / Asignatura *
+                </label>
+                <input
+                  type="text"
+                  placeholder="ej. Álgebra Lineal, Física II"
+                  value={formNuevaMateria.nombre}
+                  onChange={(e) =>
+                    setFormNuevaMateria({
+                      ...formNuevaMateria,
+                      nombre: e.target.value,
+                    })
+                  }
+                  className="w-full bg-white border border-purple-200 rounded-lg px-2.5 py-1.5 outline-none focus:border-purple-600"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-[10px] font-semibold text-slate-600 mb-0.5">
+                    Comisión
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="ej. 1K01"
+                    value={formNuevaMateria.comision}
+                    onChange={(e) =>
+                      setFormNuevaMateria({
+                        ...formNuevaMateria,
+                        comision: e.target.value,
+                      })
+                    }
+                    className="w-full bg-white border border-purple-200 rounded-lg px-2 py-1.5 outline-none focus:border-purple-600"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-semibold text-slate-600 mb-0.5">
+                    Aula Base
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="ej. Aula Magna 2"
+                    value={formNuevaMateria.aulaPredeterminada}
+                    onChange={(e) =>
+                      setFormNuevaMateria({
+                        ...formNuevaMateria,
+                        aulaPredeterminada: e.target.value,
+                      })
+                    }
+                    className="w-full bg-white border border-purple-200 rounded-lg px-2 py-1.5 outline-none focus:border-purple-600"
+                  />
+                </div>
+              </div>
+
+              {errorCreacion && (
+                <div className="text-[10px] text-rose-600 font-semibold">
+                  {errorCreacion}
+                </div>
+              )}
+
+              <div className="flex items-center justify-end gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setCreandoNuevaMateria(false)}
+                  className="px-2.5 py-1 text-slate-500 hover:text-slate-700 text-[11px]"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  disabled={guardandoMateria}
+                  onClick={handleCrearYMateriaRapida}
+                  className="px-3 py-1.5 bg-purple-700 hover:bg-purple-800 text-white font-semibold rounded-lg text-[11px] shadow-xs flex items-center gap-1 transition"
+                >
+                  <Check className="w-3 h-3 stroke-[3]" />
+                  {guardandoMateria ? "Guardando..." : "Guardar y Elegir"}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Días de Dictado (Selección Múltiple) */}
           <div>
             <label className="block font-semibold text-slate-700 mb-1.5">
               Días de Dictado (Selección Múltiple) *
@@ -110,6 +295,7 @@ export default function ModalAsignarClase({
             </span>
           </div>
 
+          {/* Horas */}
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block font-semibold text-slate-700 mb-1">
@@ -141,6 +327,7 @@ export default function ModalAsignarClase({
             </div>
           </div>
 
+          {/* Comisión y Aula */}
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block font-semibold text-slate-700 mb-1">

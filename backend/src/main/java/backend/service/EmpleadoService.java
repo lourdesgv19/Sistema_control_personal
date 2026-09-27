@@ -1,21 +1,14 @@
 package backend.service;
 
 import backend.dto.MetricasPersonalDTO;
-import backend.model.Empleado;
-import backend.model.EmpleadoClase;
-import backend.model.EmpleadoRangoHorario;
-import backend.model.Horario;
+import backend.model.*;
 import backend.repositories.EmpleadoClaseRepository;
 import backend.repositories.EmpleadoRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.util.ArrayList;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Set;
 import java.time.Duration;
 import java.time.LocalTime;
+import java.util.*;
 
 @Service
 public class EmpleadoService {
@@ -30,17 +23,17 @@ public class EmpleadoService {
 
     @Transactional(readOnly = true)
     public List<Empleado> listarTodos() {
-        return empleadoRepo.findAllOrdenados();
+        return empleadoRepo.findAll();
     }
 
     @Transactional(readOnly = true)
     public Empleado obtenerPorId(Long id) {
         return empleadoRepo.findById(id)
-                .orElseThrow(() -> new RuntimeException("Colaborador no encontrado con ID: " + id));
+                .orElseThrow(() -> new RuntimeException("Empleado no encontrado con ID: " + id));
     }
 
     @Transactional
-    public Empleado guardar(Empleado emp) {
+    public Empleado crear(Empleado emp) {
         emp.setActivo(true);
         emp.setFechaBaja(null);
         return empleadoRepo.save(emp);
@@ -56,8 +49,6 @@ public class EmpleadoService {
         emp.setTelefono(empActualizado.getTelefono());
         emp.setNroLegajo(empActualizado.getNroLegajo());
         emp.setIdBiometrico(empActualizado.getIdBiometrico());
-        emp.setCategoria(empActualizado.getCategoria());
-        emp.setCargos(empActualizado.getCargos());
         emp.setRolSistema(empActualizado.getRolSistema());
         emp.setTipoRegimenHorario(empActualizado.getTipoRegimenHorario());
         emp.setHorarioGeneral(empActualizado.getHorarioGeneral());
@@ -65,15 +56,22 @@ public class EmpleadoService {
         emp.setToleranciaEgresoMin(empActualizado.getToleranciaEgresoMin());
         emp.setActivo(empActualizado.getActivo());
 
+        // Manejo de categorías múltiples (@ManyToMany)
+        emp.setCategorias(empActualizado.getCategorias() != null ? empActualizado.getCategorias() : new ArrayList<>());
+
+        // Manejo de cargos múltiples
+        emp.setCargos(empActualizado.getCargos() != null ? empActualizado.getCargos() : new ArrayList<>());
+
         if (Boolean.TRUE.equals(empActualizado.getActivo())) {
             emp.setFechaBaja(null);
         }
 
+        // Persistir rangos de horario específico
         if ("ESPECIFICO".equals(empActualizado.getTipoRegimenHorario())) {
             emp.getRangosHorario().clear();
             if (empActualizado.getRangosHorario() != null) {
                 for (EmpleadoRangoHorario rango : empActualizado.getRangosHorario()) {
-                    rango.setEmpleado(emp); // Asocia la clave foránea id_empleado
+                    rango.setEmpleado(emp);
                     emp.getRangosHorario().add(rango);
                 }
             }
@@ -85,8 +83,11 @@ public class EmpleadoService {
     }
 
     @Transactional
-    public void bajaLogica(Long id) {
-        empleadoRepo.deleteById(id);
+    public void eliminar(Long id) {
+        Empleado emp = obtenerPorId(id);
+        emp.setActivo(false);
+        emp.setFechaBaja(java.time.LocalDateTime.now());
+        empleadoRepo.save(emp);
     }
 
     @Transactional
@@ -97,70 +98,8 @@ public class EmpleadoService {
         empleadoRepo.save(emp);
     }
 
-    @Transactional
-    public EmpleadoClase agregarClase(Long empleadoId, EmpleadoClase clase) {
-        Empleado emp = obtenerPorId(empleadoId);
-        clase.setEmpleado(emp);
-        return claseRepo.save(clase);
-    }
-
-    @Transactional
-public List<EmpleadoClase> agregarClasesMultiples(Long empleadoId, String materia, String comision, 
-                                                  String horaInicio, String horaFin, String aula, 
-                                                  List<String> diasSemana) {
-    Empleado emp = obtenerPorId(empleadoId);
-    List<EmpleadoClase> creadas = new ArrayList<>();
-
-    for (String dia : diasSemana) {
-        EmpleadoClase nueva = new EmpleadoClase();
-        nueva.setEmpleado(emp);
-        nueva.setMateria(materia);
-        nueva.setComision(comision);
-        nueva.setHoraInicio(LocalTime.parse(horaInicio));
-        nueva.setHoraFin(LocalTime.parse(horaFin));
-        nueva.setAula(aula);
-        nueva.setDiaSemana(dia);
-        creadas.add(claseRepo.save(nueva));
-    }
-
-    if (!"POR_CLASES".equals(emp.getTipoRegimenHorario())) {
-        emp.setTipoRegimenHorario("POR_CLASES");
-        empleadoRepo.save(emp); 
-    }
-
-    return creadas;
-}
-
-    @Transactional
-    public void eliminarClase(Long claseId) {
-        claseRepo.deleteById(claseId);
-    }
-
+    // --- CÁLCULO DE MÉTRICAS PERSONAL DTO ---
     @Transactional(readOnly = true)
-    public List<EmpleadoClase> listarClases(Long empleadoId) {
-        return claseRepo.findByEmpleadoId(empleadoId);
-    }
-
-    @Transactional
-    public Empleado asignarTurnoPersonalizado(Long id, Empleado datos) {
-    Empleado emp = obtenerPorId(id);
-    emp.setTipoRegimenHorario(datos.getTipoRegimenHorario());
-    emp.setHorarioGeneral(datos.getHorarioGeneral());
-    emp.setToleranciaIngresoMin(datos.getToleranciaIngresoMin());
-    emp.setToleranciaEgresoMin(datos.getToleranciaEgresoMin());
-
-    // Si envía rangos horarios personalizados
-    if (datos.getRangosHorario() != null) {
-        emp.getRangosHorario().clear();
-        for (EmpleadoRangoHorario rango : datos.getRangosHorario()) {
-            rango.setEmpleado(emp);
-            emp.getRangosHorario().add(rango);
-        }
-    }
-    return empleadoRepo.save(emp);
-}
-
-@Transactional(readOnly = true)
     public MetricasPersonalDTO calcularMetricas(Long empleadoId) {
         Empleado emp = obtenerPorId(empleadoId);
 
@@ -224,7 +163,6 @@ public List<EmpleadoClase> agregarClasesMultiples(Long empleadoId, String materi
             totalHorasSemana = horasJornadaDiaria * (diasSet.isEmpty() ? 5 : diasSet.size());
         }
 
-        // Construcción del texto del rango de días
         String textoDias = formatearTextoDias(diasSet);
 
         return new MetricasPersonalDTO(
@@ -237,6 +175,69 @@ public List<EmpleadoClase> agregarClasesMultiples(Long empleadoId, String materi
                 emp.getToleranciaEgresoMin() != null ? emp.getToleranciaEgresoMin() : 10,
                 new ArrayList<>(diasSet)
         );
+    }
+
+    // --- ASIGNACIÓN DE CLASES CON CONTROL DE SOLAPAMIENTO ---
+    @Transactional
+    public List<EmpleadoClase> agregarClasesMultiples(Long empleadoId, String materia, String comision,
+                                                      String horaInicioStr, String horaFinStr, String aula,
+                                                      List<String> diasSemana) {
+        Empleado emp = obtenerPorId(empleadoId);
+        LocalTime nuevaInicio = LocalTime.parse(horaInicioStr);
+        LocalTime nuevaFin = LocalTime.parse(horaFinStr);
+
+        if (!nuevaFin.isAfter(nuevaInicio)) {
+            throw new IllegalArgumentException("La hora de fin debe ser posterior a la de inicio.");
+        }
+
+        List<EmpleadoClase> clasesActivas = claseRepo.findByEmpleadoId(empleadoId);
+
+        for (String dia : diasSemana) {
+            for (EmpleadoClase existente : clasesActivas) {
+                if (existente.getDiaSemana().equalsIgnoreCase(dia)) {
+                    LocalTime exInicio = existente.getHoraInicio();
+                    LocalTime exFin = existente.getHoraFin();
+
+                    if (nuevaInicio.isBefore(exFin) && nuevaFin.isAfter(exInicio)) {
+                        throw new IllegalStateException(String.format(
+                            "Conflicto el día %s: ya dicta '%s' de %s a %s hs.",
+                            dia, existente.getMateria(),
+                            exInicio.toString().substring(0, 5), exFin.toString().substring(0, 5)
+                        ));
+                    }
+                }
+            }
+        }
+
+        List<EmpleadoClase> creadas = new ArrayList<>();
+        for (String dia : diasSemana) {
+            EmpleadoClase nueva = new EmpleadoClase();
+            nueva.setEmpleado(emp);
+            nueva.setMateria(materia);
+            nueva.setComision(comision);
+            nueva.setHoraInicio(nuevaInicio);
+            nueva.setHoraFin(nuevaFin);
+            nueva.setAula(aula);
+            nueva.setDiaSemana(dia);
+            nueva.setActivo(true);
+            creadas.add(claseRepo.save(nueva));
+        }
+
+        if (!"POR_CLASES".equals(emp.getTipoRegimenHorario())) {
+            emp.setTipoRegimenHorario("POR_CLASES");
+            empleadoRepo.save(emp);
+        }
+
+        return creadas;
+    }
+
+    @Transactional
+    public void eliminarClase(Long claseId) {
+        EmpleadoClase clase = claseRepo.findById(claseId)
+                .orElseThrow(() -> new RuntimeException("Clase no encontrada"));
+        clase.setActivo(false);
+        clase.setFechaBaja(java.time.LocalDateTime.now());
+        claseRepo.save(clase);
     }
 
     private String normalizarNombreDia(String dia) {

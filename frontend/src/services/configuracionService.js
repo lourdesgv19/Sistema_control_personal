@@ -16,7 +16,7 @@ export const deleteCategoria = async (id) =>
   (await apiClient.delete(`/configuracion/categorias/${id}`)).data;
 
 export const reactivarCategoria = async (id) =>
-  (await apiClient.patch(`/configuracion/categorias/${id}/reactivar`)).data;
+  (await apiClient.patch(`/configuracion/categorias/${id}/activar`)).data;
 
 // ==========================================
 // 2. CATÁLOGO DE CARGOS Y PUESTOS

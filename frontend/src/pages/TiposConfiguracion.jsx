@@ -80,7 +80,6 @@ const FORM_MATERIA_INICIAL = {
   nombre: "",
   codigo: "",
   departamento: "",
-  comision: "",
   aulaPredeterminada: "",
   estado: "Activo",
 };
@@ -134,10 +133,10 @@ export default function TiposConfiguracion() {
   const [materias, setMaterias] = useState([]);
 
   // FILTROS POR ESTADO DESPLEGABLES
-  const [filtroEstadoCat, setFiltroEstadoCat] = useState("ACTIVOS");
-  const [filtroEstadoCargo, setFiltroEstadoCargo] = useState("ACTIVOS");
-  const [filtroEstadoHorario, setFiltroEstadoHorario] = useState("ACTIVOS");
-  const [filtroEstadoMateria, setFiltroEstadoMateria] = useState("ACTIVOS");
+  const [filtroEstadoCat, setFiltroEstadoCat] = useState("TODOS");
+  const [filtroEstadoCargo, setFiltroEstadoCargo] = useState("TODOS");
+  const [filtroEstadoHorario, setFiltroEstadoHorario] = useState("TODOS");
+  const [filtroEstadoMateria, setFiltroEstadoMateria] = useState("TODOS");
 
   // Otros filtros
   const [cargoSearch, setCargoSearch] = useState("");
@@ -608,7 +607,6 @@ export default function TiposConfiguracion() {
       nombre: m.nombre || "",
       codigo: m.codigo || "",
       departamento: m.departamento || "",
-      comision: m.comision || "",
       aulaPredeterminada: m.aulaPredeterminada || "",
       estado: m.activo !== false ? "Activo" : "Inactivo",
     });
@@ -622,7 +620,6 @@ export default function TiposConfiguracion() {
         nombre: formMateria.nombre,
         codigo: formMateria.codigo,
         departamento: formMateria.departamento,
-        comision: formMateria.comision,
         aulaPredeterminada: formMateria.aulaPredeterminada,
         activo: formMateria.estado === "Activo",
       };
@@ -760,7 +757,6 @@ export default function TiposConfiguracion() {
     const matchSearch =
       m.nombre?.toLowerCase().includes(query) ||
       m.codigo?.toLowerCase().includes(query) ||
-      m.comision?.toLowerCase().includes(query) ||
       m.departamento?.toLowerCase().includes(query);
 
     return matchEstado && matchSearch;
@@ -1393,7 +1389,6 @@ export default function TiposConfiguracion() {
                     Materia / Asignatura
                   </th>
                   <th className="px-6 py-3.5 tracking-wider">Código / Depto</th>
-                  <th className="px-6 py-3.5 tracking-wider">Comisión</th>
                   <th className="px-6 py-3.5 tracking-wider">Aula Base</th>
                   <th className="px-6 py-3.5 tracking-wider">Estado</th>
                   <th className="px-6 py-3.5 tracking-wider text-right">
@@ -1424,9 +1419,6 @@ export default function TiposConfiguracion() {
                           ""
                         )}
                         {m.departamento || "General"}
-                      </td>
-                      <td className="px-6 py-4 font-mono font-semibold text-indigo-700">
-                        {m.comision || "-"}
                       </td>
                       <td className="px-6 py-4 text-slate-600">
                         {m.aulaPredeterminada || "-"}
@@ -1836,7 +1828,7 @@ export default function TiposConfiguracion() {
                 </div>
                 <div>
                   <label className="block font-semibold text-slate-700 mb-1">
-                    Hora Egreso (Fija) *
+                    Hora Salida (Fija) *
                   </label>
                   <input
                     type="time"
@@ -2020,23 +2012,6 @@ export default function TiposConfiguracion() {
                     value={formMateria.codigo}
                     onChange={(e) =>
                       setFormMateria({ ...formMateria, codigo: e.target.value })
-                    }
-                    className="w-full border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-indigo-600 font-mono"
-                  />
-                </div>
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">
-                    Comisión / Curso
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="ej. Comisión 1K01"
-                    value={formMateria.comision}
-                    onChange={(e) =>
-                      setFormMateria({
-                        ...formMateria,
-                        comision: e.target.value,
-                      })
                     }
                     className="w-full border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-indigo-600 font-mono"
                   />

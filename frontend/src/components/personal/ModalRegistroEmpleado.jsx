@@ -71,12 +71,12 @@ export default function ModalRegistroEmpleado({
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block font-semibold text-slate-700 mb-1">
-                DNI / Documento *
+                DNI / Documento (Sin puntos) *
               </label>
               <input
                 type="text"
                 required
-                placeholder="Ej: 28.455.912"
+                placeholder="Ej: 28455912"
                 value={formEmpleado.dni}
                 onChange={(e) =>
                   setFormEmpleado({ ...formEmpleado, dni: e.target.value })
@@ -86,12 +86,12 @@ export default function ModalRegistroEmpleado({
             </div>
             <div>
               <label className="block font-semibold text-slate-700 mb-1">
-                Email Institucional *
+                Email *
               </label>
               <input
                 type="email"
                 required
-                placeholder="carlos.benitez@instituto.edu.ar"
+                placeholder="carlos.benitez@gmail.com"
                 value={formEmpleado.email}
                 onChange={(e) =>
                   setFormEmpleado({ ...formEmpleado, email: e.target.value })
@@ -123,7 +123,7 @@ export default function ModalRegistroEmpleado({
               <input
                 type="text"
                 required
-                placeholder="LEG-1019"
+                placeholder="001"
                 value={formEmpleado.nroLegajo}
                 onChange={(e) =>
                   setFormEmpleado({
@@ -144,7 +144,7 @@ export default function ModalRegistroEmpleado({
               <input
                 type="text"
                 required
-                placeholder="BIO-19"
+                placeholder="19"
                 value={formEmpleado.idBiometrico}
                 onChange={(e) =>
                   setFormEmpleado({
@@ -180,7 +180,7 @@ export default function ModalRegistroEmpleado({
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block font-semibold text-slate-700 mb-1">
-                Turno General Asignado
+                Horario Asignado
               </label>
               <select
                 value={formEmpleado.horarioGeneralId}

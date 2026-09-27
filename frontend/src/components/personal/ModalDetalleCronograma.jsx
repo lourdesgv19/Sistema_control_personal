@@ -1,5 +1,5 @@
 import React from "react";
-import { X, Calendar, Plus, Sliders } from "lucide-react";
+import { X, Calendar, Plus, Sliders, AlertTriangle } from "lucide-react";
 import { getBadgeColorClasses } from "../../pages/TiposConfiguracion";
 
 export default function ModalDetalleCronograma({
@@ -17,6 +17,7 @@ export default function ModalDetalleCronograma({
 }) {
   if (!isOpen || !empleado) return null;
 
+  const isActivo = empleado.activo !== false;
   const esDocentePorClases = empleado.tipoRegimenHorario === "POR_CLASES";
   const tieneTurnoPreestablecido =
     empleado.tipoRegimenHorario === "PREESTABLECIDO" && empleado.horarioGeneral;
@@ -31,6 +32,7 @@ export default function ModalDetalleCronograma({
   return (
     <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
       <div className="bg-white rounded-3xl w-full max-w-5xl overflow-hidden shadow-2xl animate-in zoom-in-95 flex flex-col max-h-[90vh]">
+        {/* Cabecera */}
         <div className="bg-[#111827] px-6 py-4 text-white flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-indigo-950 flex items-center justify-center text-indigo-400">
@@ -42,11 +44,13 @@ export default function ModalDetalleCronograma({
                   {empleado.apellido}, {empleado.nombre}
                 </h3>
                 <span
-                  className={`text-[9px] font-bold px-2 py-0.5 rounded-full uppercase border ${getBadgeColorClasses(
-                    empleado.categoria?.colorIdentificacion,
-                  )}`}
+                  className={`text-[9px] font-bold px-2 py-0.5 rounded-full uppercase border ${
+                    isActivo
+                      ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/30"
+                      : "bg-rose-500/20 text-rose-300 border-rose-500/30"
+                  }`}
                 >
-                  {empleado.categoria?.nombre || "GENERAL"}
+                  {isActivo ? "ACTIVO" : "INACTIVO / BAJA"}
                 </span>
                 <span className="text-slate-400 text-xs">
                   Legajo: {empleado.nroLegajo}
@@ -64,7 +68,20 @@ export default function ModalDetalleCronograma({
           </button>
         </div>
 
+        {/* ALERTA VISUAL SI EL EMPLEADO ESTÁ INACTIVO */}
+        {!isActivo && (
+          <div className="bg-amber-50 border-b border-amber-200 px-6 py-2.5 flex items-center gap-2 text-amber-800 text-xs font-medium">
+            <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+            <span>
+              <strong>Empleado Inactivo:</strong> Las opciones de asignación de
+              turnos, alta y eliminación de clases están deshabilitadas hasta
+              que se reactive al empleado.
+            </span>
+          </div>
+        )}
+
         <div className="p-6 overflow-y-auto space-y-6">
+          {/* Métricas */}
           <div className="grid grid-cols-4 gap-4 text-xs">
             <div className="bg-slate-50 border border-slate-200 p-4 rounded-2xl">
               <div className="text-[10px] font-bold uppercase text-slate-400">
@@ -119,6 +136,7 @@ export default function ModalDetalleCronograma({
             </div>
           </div>
 
+          {/* Grilla Semanal */}
           <div>
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2 text-xs font-bold text-slate-900">
@@ -128,8 +146,17 @@ export default function ModalDetalleCronograma({
 
               {esDocentePorClases && (
                 <button
+                  type="button"
+                  disabled={!isActivo}
                   onClick={() => onOpenAsignarClase()}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold shadow-xs transition"
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold shadow-xs transition ${
+                    !isActivo
+                      ? "bg-slate-200 text-slate-400 cursor-not-allowed"
+                      : "bg-purple-600 hover:bg-purple-700 text-white cursor-pointer"
+                  }`}
+                  title={
+                    !isActivo ? "Empleado inactivo" : "Asignar Nueva Clase"
+                  }
                 >
                   <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
                   Asignar Nueva Clase
@@ -188,16 +215,23 @@ export default function ModalDetalleCronograma({
                       <div className="space-y-2">
                         {clasesDia.map((c) => (
                           <div
-                            key={c.id}
+                            key={c.id || c.idClase}
                             className="bg-purple-50/70 border border-purple-100 rounded-xl p-2 text-[10px] relative group"
                           >
-                            <button
-                              onClick={() => onEliminarClase(c.id)}
-                              className="absolute top-1 right-1 text-slate-400 hover:text-rose-600 opacity-0 group-hover:opacity-100 transition"
-                              title="Quitar clase"
-                            >
-                              <X className="w-3 h-3" />
-                            </button>
+                            {/* X solo interactiva si el empleado está activo */}
+                            {isActivo && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onEliminarClase(c.id || c.idClase);
+                                }}
+                                className="absolute top-1 right-1 p-0.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-md opacity-0 group-hover:opacity-100 transition cursor-pointer z-10"
+                                title="Quitar clase"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            )}
                             <div className="font-bold text-purple-900 leading-tight">
                               {c.materia}
                             </div>
@@ -208,11 +242,6 @@ export default function ModalDetalleCronograma({
                             {c.aula && (
                               <div className="text-slate-500 mt-0.5">
                                 Aula: {c.aula}
-                              </div>
-                            )}
-                            {c.comision && (
-                              <div className="text-purple-600 font-semibold mt-0.5">
-                                {c.comision}
                               </div>
                             )}
                           </div>
@@ -270,8 +299,13 @@ export default function ModalDetalleCronograma({
                     {esDocentePorClases && (
                       <button
                         type="button"
+                        disabled={!isActivo}
                         onClick={() => onOpenAsignarClase(nombre)}
-                        className="w-full mt-2 py-1.5 border border-dashed border-purple-300 hover:border-purple-500 hover:bg-purple-50 text-purple-700 rounded-xl text-[10px] font-bold transition cursor-pointer flex items-center justify-center gap-1"
+                        className={`w-full mt-2 py-1.5 border border-dashed rounded-xl text-[10px] font-bold transition flex items-center justify-center gap-1 ${
+                          !isActivo
+                            ? "border-slate-200 text-slate-300 cursor-not-allowed bg-slate-50"
+                            : "border-purple-300 hover:border-purple-500 hover:bg-purple-50 text-purple-700 cursor-pointer"
+                        }`}
                       >
                         <Plus className="w-3 h-3" />
                         Clase
@@ -284,19 +318,31 @@ export default function ModalDetalleCronograma({
           </div>
         </div>
 
+        {/* Footer */}
         <div className="bg-slate-50 px-6 py-4 border-t border-slate-200 flex items-center justify-between">
           <button
             onClick={onClose}
-            className="text-xs font-semibold text-slate-600 hover:text-slate-900"
+            className="text-xs font-semibold text-slate-600 hover:text-slate-900 cursor-pointer"
           >
             Cerrar
           </button>
           <button
+            type="button"
+            disabled={!isActivo}
             onClick={() => {
               onClose();
               onOpenAsignarTurno(empleado);
             }}
-            className="flex items-center gap-2 px-5 py-2 rounded-xl bg-[#4b35e6] hover:bg-[#3e2bc0] text-white text-xs font-semibold shadow-md transition"
+            className={`flex items-center gap-2 px-5 py-2 rounded-xl text-xs font-semibold shadow-md transition ${
+              !isActivo
+                ? "bg-slate-200 text-slate-400 cursor-not-allowed shadow-none"
+                : "bg-[#4b35e6] hover:bg-[#3e2bc0] text-white cursor-pointer"
+            }`}
+            title={
+              !isActivo
+                ? "Empleado inactivo: Reactívelo primero"
+                : "Modificar Turno"
+            }
           >
             <Sliders className="w-3.5 h-3.5" />
             Modificar / Asignar Horario

@@ -2,6 +2,8 @@ package backend.model;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
+
+import java.time.LocalDateTime;
 import java.time.LocalTime;
 
 @Entity
@@ -36,6 +38,12 @@ public class EmpleadoClase {
     @Column(length = 80)
     private String aula;
 
+    @Column(nullable = false)
+    private Boolean activo = true;
+
+    @Column(name = "fecha_baja")
+    private LocalDateTime fechaBaja;
+
     public EmpleadoClase() {}
 
     public Long getId() { return id; }
@@ -54,4 +62,8 @@ public class EmpleadoClase {
     public void setHoraFin(LocalTime horaFin) { this.horaFin = horaFin; }
     public String getAula() { return aula; }
     public void setAula(String aula) { this.aula = aula; }
+    public Boolean getActivo() { return activo; }
+    public void setActivo(Boolean activo) { this.activo = activo; }
+    public LocalDateTime getFechaBaja() { return fechaBaja; }
+    public void setFechaBaja(LocalDateTime fechaBaja) { this.fechaBaja = fechaBaja; }
 }

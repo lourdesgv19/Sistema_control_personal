@@ -63,7 +63,6 @@ const FORM_CLASE_INICIAL = {
   materiaId: "",
   materia: "",
   diasSemana: ["Lunes"],
-  comision: "",
   horaInicio: "18:00",
   horaFin: "21:00",
   aula: "",
@@ -94,7 +93,7 @@ export default function GestionPersonal() {
   const [searchTerm, setSearchTerm] = useState("");
   const [filterRegimen, setFilterRegimen] = useState("TODOS");
   const [filterCategoria, setFilterCategoria] = useState("TODAS");
-  const [filterEstado, setFilterEstado] = useState("ACTIVOS");
+  const [filterEstado, setFilterEstado] = useState("TODOS");
   const [paginaActual, setPaginaActual] = useState(1);
 
   // Estados de modales
@@ -264,6 +263,19 @@ export default function GestionPersonal() {
     const inicio = (paginaActual - 1) * ITEMS_POR_PAGINA;
     return filteredEmpleados.slice(inicio, inicio + ITEMS_POR_PAGINA);
   }, [filteredEmpleados, paginaActual]);
+
+  const verificarEmpleadoActivo = (emp, accionPermitida) => {
+    if (emp.activo === false) {
+      mostrarAviso(
+        "warning",
+        "Empleado Inactivo",
+        `El empleado ${emp.apellido}, ${emp.nombre} se encuentra dado de baja lógica. Debe reactivarlo en el sistema para poder modificar sus horarios o asignarle cátedras.`,
+      );
+      return false;
+    }
+    accionPermitida();
+    return true;
+  };
 
   // --- HANDLERS: EMPLEADOS ---
   const abrirModalCrear = () => {
@@ -491,7 +503,6 @@ export default function GestionPersonal() {
         materiaId: formClase.materiaId,
         materia: formClase.materia,
         diasSemana: dias,
-        comision: formClase.comision,
         horaInicio: horaIniStr,
         horaFin: horaFinStr,
         aula: formClase.aula,
@@ -523,17 +534,35 @@ export default function GestionPersonal() {
   };
 
   const handleEliminarClase = async (claseId) => {
+    if (!claseId) {
+      mostrarAviso("danger", "Error", "ID de clase no válido.");
+      return;
+    }
+
     try {
       await removeEmpleadoClase(claseId);
+      // Refrescar las clases y métricas del empleado abierto
       const [clasesActualizadas, metricasActualizadas] = await Promise.all([
         getEmpleadoClases(empleadoSeleccionado.id),
         getMetricasEmpleado(empleadoSeleccionado.id),
       ]);
-      setClasesEmpleado(clasesActualizadas);
+
+      setClasesEmpleado(clasesActualizadas || []);
       setMetricasEmpleado(metricasActualizadas);
+
+      // Refrescar la tabla general de empleados
       await cargarDatos();
+      mostrarAviso(
+        "success",
+        "Clase Eliminada",
+        "La clase fue dada de baja del cronograma.",
+      );
     } catch (err) {
-      mostrarAviso("danger", "Error", "No se pudo quitar la clase.");
+      console.error("Error al eliminar la clase:", err);
+      const mensaje =
+        err.response?.data?.message ||
+        "No se pudo quitar la clase del servidor.";
+      mostrarAviso("danger", "Error", mensaje);
     }
   };
 
@@ -623,21 +652,23 @@ export default function GestionPersonal() {
         <button
           type="button"
           onClick={() => setFilterRegimen("TODOS")}
-          className={`p-5 rounded-2xl flex flex-col justify-between text-left transition-all cursor-pointer ${
+          className={`p-5 rounded-2xl flex flex-col justify-between text-left transition-all border cursor-pointer ${
             filterRegimen === "TODOS"
-              ? "bg-[#0f172a] text-white ring-4 ring-indigo-500/20 shadow-lg scale-[1.02]"
-              : "bg-[#0f172a]/90 text-white/80 hover:bg-[#0f172a]"
+              ? "bg-slate-50/90 border-slate-700 ring-4 ring-slate-400/20 shadow-md scale-[1.02]"
+              : "bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50/50"
           }`}
         >
-          <div className="flex items-center justify-between w-full">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+          <div className="flex items-center justify-between w-full text-slate-700">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-700">
               Total Personal
             </span>
-            <Users className="w-4 h-4 text-slate-400" />
+            <Users className="w-4 h-4 text-slate-500" />
           </div>
           <div className="mt-3">
-            <div className="text-2xl font-black text-white">{stats.total}</div>
-            <div className="text-[10px] text-slate-400 mt-0.5">
+            <div className="text-2xl font-bold text-slate-900">
+              {stats.total}
+            </div>
+            <div className="text-[10px] text-slate-500 font-medium mt-0.5">
               Todos los empleados
             </div>
           </div>
@@ -900,43 +931,6 @@ export default function GestionPersonal() {
                     </td>
 
                     <td className="px-6 py-4">
-                      <div className="flex items-center gap-2 mb-1.5">
-                        {emp.tipoRegimenHorario === "POR_CLASES" && (
-                          <span className="font-bold text-slate-900 text-sm">
-                            Cátedras{" "}
-                            <span className="bg-purple-100 text-purple-700 text-[10px] font-bold px-2 py-0.5 rounded-full">
-                              Por Clases
-                            </span>
-                          </span>
-                        )}
-
-                        {emp.tipoRegimenHorario === "PREESTABLECIDO" && (
-                          <span className="font-bold text-slate-900 text-sm">
-                            Fijo{" "}
-                            <span className="bg-indigo-50 border border-indigo-200 text-indigo-700 text-[10px] font-semibold px-2 py-0.5 rounded-full">
-                              {horarioNombre || "Turno Fijo"}
-                            </span>
-                          </span>
-                        )}
-
-                        {emp.tipoRegimenHorario === "ESPECIFICO" && (
-                          <span className="font-bold text-slate-900 text-sm">
-                            Personalizado{" "}
-                            <span className="bg-blue-50 text-blue-700 text-[10px] font-bold px-2 py-0.5 rounded-full">
-                              Específico
-                            </span>
-                          </span>
-                        )}
-
-                        {(!emp.tipoRegimenHorario ||
-                          emp.tipoRegimenHorario === "SIN_HORARIO") && (
-                          <span className="inline-flex items-center gap-1 text-amber-600 font-semibold text-xs">
-                            <AlertTriangle className="w-3.5 h-3.5" /> Sin
-                            horario
-                          </span>
-                        )}
-                      </div>
-
                       <button
                         onClick={() => handleVerDetalle(emp)}
                         className="inline-flex items-center gap-1.5 px-3 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg text-xs font-semibold transition cursor-pointer"
@@ -967,6 +961,7 @@ export default function GestionPersonal() {
 
                     <td className="px-6 py-4 text-right">
                       <div className="flex items-center justify-end gap-2 text-slate-400">
+                        {/* Ver Detalle / Cronograma (Siempre accesible para consulta histórica) */}
                         <button
                           onClick={() => handleVerDetalle(emp)}
                           className="p-1 hover:text-indigo-600 transition"
@@ -975,35 +970,73 @@ export default function GestionPersonal() {
                           <Eye className="w-4 h-4" />
                         </button>
 
+                        {/* Asignar Turno / Horario (Bloqueado si está inactivo) */}
                         <button
-                          onClick={() => abrirModalTurno(emp)}
-                          className="p-1 hover:text-indigo-600 transition"
-                          title="Asignar Turno / Horario"
+                          onClick={() =>
+                            verificarEmpleadoActivo(emp, () =>
+                              abrirModalTurno(emp),
+                            )
+                          }
+                          className={`p-1 transition ${
+                            emp.activo === false
+                              ? "opacity-30 cursor-not-allowed hover:text-slate-400"
+                              : "hover:text-indigo-600 cursor-pointer"
+                          }`}
+                          title={
+                            emp.activo === false
+                              ? "Empleado inactivo: Reactívelo para asignar turnos"
+                              : "Asignar Turno / Horario"
+                          }
                         >
                           <Clock className="w-4 h-4" />
                         </button>
 
+                        {/* Asignar Clase a Docente (Bloqueado si está inactivo) */}
                         {esDocente && (
                           <button
-                            onClick={() => {
-                              setEmpleadoSeleccionado(emp);
-                              handleAbrirAsignarClase();
-                            }}
-                            className="p-1 hover:text-purple-600 transition"
-                            title="Asignar Clase a Docente"
+                            onClick={() =>
+                              verificarEmpleadoActivo(emp, () => {
+                                setEmpleadoSeleccionado(emp);
+                                handleAbrirAsignarClase();
+                              })
+                            }
+                            className={`p-1 transition ${
+                              emp.activo === false
+                                ? "opacity-30 cursor-not-allowed hover:text-slate-400"
+                                : "hover:text-purple-600 cursor-pointer"
+                            }`}
+                            title={
+                              emp.activo === false
+                                ? "Empleado inactivo: Reactívelo para asignar clases"
+                                : "Asignar Clase a Docente"
+                            }
                           >
                             <Plus className="w-4 h-4 text-purple-600 stroke-[2.5]" />
                           </button>
                         )}
 
+                        {/* Editar Empleado (Bloqueado si está inactivo) */}
                         <button
-                          onClick={() => abrirModalEditar(emp)}
-                          className="p-1 hover:text-indigo-600 transition"
-                          title="Editar Empleado"
+                          onClick={() =>
+                            verificarEmpleadoActivo(emp, () =>
+                              abrirModalEditar(emp),
+                            )
+                          }
+                          className={`p-1 transition ${
+                            emp.activo === false
+                              ? "opacity-30 cursor-not-allowed hover:text-slate-400"
+                              : "hover:text-indigo-600 cursor-pointer"
+                          }`}
+                          title={
+                            emp.activo === false
+                              ? "Empleado inactivo: Reactívelo para editar sus datos"
+                              : "Editar Empleado"
+                          }
                         >
                           <Pencil className="w-4 h-4" />
                         </button>
 
+                        {/* Alta / Baja Lógica */}
                         {emp.activo !== false ? (
                           <button
                             onClick={() =>
@@ -1012,7 +1045,7 @@ export default function GestionPersonal() {
                                 `${emp.nombre} ${emp.apellido}`,
                               )
                             }
-                            className="p-1 hover:text-rose-600 transition"
+                            className="p-1 hover:text-rose-600 transition cursor-pointer"
                             title="Dar de baja"
                           >
                             <Trash2 className="w-4 h-4" />
@@ -1025,7 +1058,7 @@ export default function GestionPersonal() {
                                 `${emp.nombre} ${emp.apellido}`,
                               )
                             }
-                            className="p-1 hover:text-emerald-600 transition"
+                            className="p-1 hover:text-emerald-600 transition cursor-pointer"
                             title="Reactivar Empleado"
                           >
                             <RotateCcw className="w-4 h-4 text-emerald-600" />
@@ -1134,9 +1167,19 @@ export default function GestionPersonal() {
         diasMap={DIAS_MAP}
         diasEspecificos={diasEspecificos}
         rangosEspecificos={rangosEspecificos}
-        onOpenAsignarClase={handleAbrirAsignarClase}
-        onEliminarClase={handleEliminarClase}
-        onOpenAsignarTurno={abrirModalTurno}
+        onOpenAsignarClase={(dia) =>
+          verificarEmpleadoActivo(empleadoSeleccionado, () =>
+            handleAbrirAsignarClase(dia),
+          )
+        }
+        onEliminarClase={(claseId) =>
+          verificarEmpleadoActivo(empleadoSeleccionado, () =>
+            handleEliminarClase(claseId),
+          )
+        }
+        onOpenAsignarTurno={(emp) =>
+          verificarEmpleadoActivo(emp, () => abrirModalTurno(emp))
+        }
       />
 
       <ModalAsignarClase
@@ -1147,6 +1190,7 @@ export default function GestionPersonal() {
         setFormClase={setFormClase}
         empleado={empleadoSeleccionado}
         materiasActivas={materiasActivas}
+        onMateriaCreada={(nueva) => setMaterias((prev) => [...prev, nueva])}
       />
 
       <ModalAsignarTurno

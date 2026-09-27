@@ -39,7 +39,6 @@ public class MateriaService {
         existente.setNombre(m.getNombre());
         existente.setCodigo(m.getCodigo());
         existente.setDepartamento(m.getDepartamento());
-        existente.setComision(m.getComision());
         existente.setAulaPredeterminada(m.getAulaPredeterminada());
         existente.setActivo(m.getActivo());
         if (Boolean.TRUE.equals(m.getActivo())) {

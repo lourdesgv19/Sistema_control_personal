@@ -41,10 +41,12 @@ public class Empleado {
     @Column(name = "id_biometrico", nullable = false, unique = true, length = 30)
     private String idBiometrico;
 
-    @NotFound(action = NotFoundAction.IGNORE)
-    @ManyToOne(fetch = FetchType.EAGER)
-    @JoinColumn(name = "id_categoria", nullable = false)
-    private Categoria categoria;
+    @ManyToMany
+    @JoinTable(
+    name = "empleado_categorias",
+    joinColumns = @JoinColumn(name = "id_empleado"),
+    inverseJoinColumns = @JoinColumn(name = "id_categoria"))
+    private List<Categoria> categorias = new ArrayList<>();
 
     @ManyToMany(fetch = FetchType.EAGER)
     @JoinTable(
@@ -52,7 +54,7 @@ public class Empleado {
         joinColumns = @JoinColumn(name = "id_empleado"),
         inverseJoinColumns = @JoinColumn(name = "id_cargo")
     )
-    private Set<Cargo> cargos = new HashSet<>();
+    private List<Cargo> cargos = new ArrayList<>();
 
     @OneToMany(mappedBy = "empleado", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     private List<EmpleadoRangoHorario> rangosHorario = new ArrayList<>();
@@ -102,10 +104,10 @@ public class Empleado {
     public void setNroLegajo(String nroLegajo) { this.nroLegajo = nroLegajo; }
     public String getIdBiometrico() { return idBiometrico; }
     public void setIdBiometrico(String idBiometrico) { this.idBiometrico = idBiometrico; }
-    public Categoria getCategoria() { return categoria; }
-    public void setCategoria(Categoria categoria) { this.categoria = categoria; }
-    public Set<Cargo> getCargos() { return cargos; }
-    public void setCargos(Set<Cargo> cargos) { this.cargos = cargos; }
+    public List<Categoria> getCategorias() { return categorias; }
+    public void setCategorias(List<Categoria> categoria) { this.categorias = categoria; }
+    public List<Cargo> getCargos() { return cargos; }
+    public void setCargos(List<Cargo> cargos) { this.cargos = cargos; }
     public String getRolSistema() { return rolSistema; }
     public void setRolSistema(String rolSistema) { this.rolSistema = rolSistema; }
     public String getTipoRegimenHorario() { return tipoRegimenHorario; }
