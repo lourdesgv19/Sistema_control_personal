@@ -11,13 +11,10 @@ import {
   Pencil,
   Trash2,
   RotateCcw,
-  X,
-  Check,
   Calendar,
   Loader2,
   ChevronLeft,
   ChevronRight,
-  Layers,
 } from "lucide-react";
 import {
   getEmpleados,
@@ -27,7 +24,7 @@ import {
   reactivarEmpleado,
   getEmpleadoClases,
   getMetricasEmpleado,
-  addEmpleadoClase,
+  addEmpleadoClasesMultiples,
   removeEmpleadoClase,
 } from "../services/empleadoService";
 import {
@@ -39,6 +36,12 @@ import {
 import { getBadgeColorClasses } from "./TiposConfiguracion";
 import ModalAlerta from "../components/comunes/ModalAlerta";
 
+// Componentes modales extraídos
+import ModalRegistroEmpleado from "../components/personal/ModalRegistroEmpleado";
+import ModalDetalleCronograma from "../components/personal/ModalDetalleCronograma";
+import ModalAsignarClase from "../components/personal/ModalAsignarClase";
+import ModalAsignarTurno from "../components/personal/ModalAsignarTurno";
+
 const FORM_EMP_INICIAL = {
   nombre: "",
   apellido: "",
@@ -47,7 +50,7 @@ const FORM_EMP_INICIAL = {
   telefono: "",
   nroLegajo: "",
   idBiometrico: "",
-  categoriaId: "",
+  categoriasIds: [],
   cargosIds: [],
   rolSistema: "Consulta / Empleado (Visualiza su ficha)",
   tipoRegimenHorario: "SIN_HORARIO",
@@ -57,8 +60,9 @@ const FORM_EMP_INICIAL = {
 };
 
 const FORM_CLASE_INICIAL = {
+  materiaId: "",
   materia: "",
-  diaSemana: ["Lunes"],
+  diasSemana: ["Lunes"],
   comision: "",
   horaInicio: "18:00",
   horaFin: "21:00",
@@ -93,7 +97,7 @@ export default function GestionPersonal() {
   const [filterEstado, setFilterEstado] = useState("ACTIVOS");
   const [paginaActual, setPaginaActual] = useState(1);
 
-  // Modales
+  // Estados de modales
   const [modalRegistro, setModalRegistro] = useState(false);
   const [editandoEmpleadoId, setEditandoEmpleadoId] = useState(null);
   const [formEmpleado, setFormEmpleado] = useState(FORM_EMP_INICIAL);
@@ -105,7 +109,6 @@ export default function GestionPersonal() {
   const [modalAsignarClase, setModalAsignarClase] = useState(false);
   const [formClase, setFormClase] = useState(FORM_CLASE_INICIAL);
 
-  // Modal Asignar Turno (General o Específico)
   const [modalAsignarTurno, setModalAsignarTurno] = useState(false);
   const [tipoAsignacionTurno, setTipoAsignacionTurno] =
     useState("PREESTABLECIDO");
@@ -200,11 +203,10 @@ export default function GestionPersonal() {
   );
 
   const cargosFiltradosForm = useMemo(() => {
-    if (!formEmpleado.categoriaId) return cargosActivos;
-    return cargosActivos.filter(
-      (c) => String(c.categoria?.id) === String(formEmpleado.categoriaId),
-    );
-  }, [formEmpleado.categoriaId, cargosActivos]);
+    const cats = formEmpleado.categoriasIds || [];
+    if (cats.length === 0) return cargosActivos;
+    return cargosActivos.filter((c) => cats.includes(c.categoria?.id));
+  }, [formEmpleado.categoriasIds, cargosActivos]);
 
   const stats = useMemo(() => {
     const total = empleados.length;
@@ -246,6 +248,9 @@ export default function GestionPersonal() {
 
       const matchCat =
         filterCategoria === "TODAS" ||
+        (e.categorias || []).some(
+          (c) => c.nombre?.toLowerCase() === filterCategoria.toLowerCase(),
+        ) ||
         (e.categoria?.nombre || "").toLowerCase() ===
           filterCategoria.toLowerCase();
 
@@ -260,12 +265,12 @@ export default function GestionPersonal() {
     return filteredEmpleados.slice(inicio, inicio + ITEMS_POR_PAGINA);
   }, [filteredEmpleados, paginaActual]);
 
-  // --- REGISTRAR / EDITAR EMPLEADO ---
+  // --- HANDLERS: EMPLEADOS ---
   const abrirModalCrear = () => {
     setEditandoEmpleadoId(null);
     setFormEmpleado({
       ...FORM_EMP_INICIAL,
-      categoriaId: categoriasActivas[0]?.id || "",
+      categoriasIds: categoriasActivas[0]?.id ? [categoriasActivas[0].id] : [],
       cargosIds: [],
       horarioGeneralId: horariosActivos[0]?.id || "",
     });
@@ -274,16 +279,23 @@ export default function GestionPersonal() {
 
   const abrirModalEditar = (emp) => {
     setEditandoEmpleadoId(emp.id);
+    let catIds = [];
+    if (Array.isArray(emp.categorias)) {
+      catIds = emp.categorias.map((c) => c.id);
+    } else if (emp.categoria?.id) {
+      catIds = [emp.categoria.id];
+    }
+
     setFormEmpleado({
-      nombre: emp.nombre,
-      apellido: emp.apellido,
-      dni: emp.dni,
+      nombre: emp.nombre || "",
+      apellido: emp.apellido || "",
+      dni: emp.dni || "",
       email: emp.email || "",
       telefono: emp.telefono || "",
-      nroLegajo: emp.nroLegajo,
-      idBiometrico: emp.idBiometrico,
-      categoriaId: emp.categoria?.id || "",
-      cargosIds: emp.cargos ? emp.cargos.map((c) => c.id) : [],
+      nroLegajo: emp.nroLegajo || "",
+      idBiometrico: emp.idBiometrico || "",
+      categoriasIds: catIds,
+      cargosIds: Array.isArray(emp.cargos) ? emp.cargos.map((c) => c.id) : [],
       rolSistema: emp.rolSistema || "Consulta / Empleado (Visualiza su ficha)",
       tipoRegimenHorario: emp.tipoRegimenHorario || "SIN_HORARIO",
       horarioGeneralId: emp.horarioGeneral?.id || "",
@@ -310,8 +322,12 @@ export default function GestionPersonal() {
           : formEmpleado.tipoRegimenHorario,
         toleranciaIngresoMin: parseInt(formEmpleado.toleranciaIngresoMin),
         toleranciaEgresoMin: parseInt(formEmpleado.toleranciaEgresoMin),
-        categoria: { id: parseInt(formEmpleado.categoriaId) },
-        cargos: formEmpleado.cargosIds.map((id) => ({ id: parseInt(id) })),
+        categorias: (formEmpleado.categoriasIds || []).map((id) => ({
+          id: parseInt(id),
+        })),
+        cargos: (formEmpleado.cargosIds || []).map((id) => ({
+          id: parseInt(id),
+        })),
         horarioGeneral: formEmpleado.horarioGeneralId
           ? { id: parseInt(formEmpleado.horarioGeneralId) }
           : null,
@@ -322,14 +338,14 @@ export default function GestionPersonal() {
         mostrarAviso(
           "success",
           "Empleado Actualizado",
-          "Los datos del empleado se modificaron correctamente.",
+          "Los datos se modificaron correctamente.",
         );
       } else {
         await createEmpleado(payload);
         mostrarAviso(
           "success",
           "Empleado Registrado",
-          "El nuevo empleado fue dado de alta en el padrón.",
+          "El nuevo empleado fue dado de alta.",
         );
       }
 
@@ -339,7 +355,7 @@ export default function GestionPersonal() {
       mostrarAviso(
         "danger",
         "Error",
-        "No se pudo registrar el empleado. Verifique que DNI, Legajo o ID Biométrico no estén duplicados.",
+        "No se pudo registrar el empleado. Verifique DNI, Legajo o ID Biométrico.",
       );
     }
   };
@@ -417,31 +433,67 @@ export default function GestionPersonal() {
     setModalDetalle(true);
   };
 
+  const handleAbrirAsignarClase = (diaPreseleccionado = null) => {
+    setFormClase({
+      ...FORM_CLASE_INICIAL,
+      diasSemana: diaPreseleccionado ? [diaPreseleccionado] : ["Lunes"],
+    });
+    setModalAsignarClase(true);
+  };
+
   const handleGuardarClase = async (e) => {
     e.preventDefault();
     if (!empleadoSeleccionado) return;
-    if (formClase.diasSemana.length === 0) {
+
+    const dias = formClase.diasSemana || [];
+    if (dias.length === 0) {
       mostrarAviso(
         "warning",
         "Atención",
-        "Debe seleccionar al menos un día de la semana.",
+        "Debe seleccionar al menos un día de cursada.",
       );
       return;
     }
 
+    const horaIniStr =
+      formClase.horaInicio.length === 5
+        ? `${formClase.horaInicio}:00`
+        : formClase.horaInicio;
+    const horaFinStr =
+      formClase.horaFin.length === 5
+        ? `${formClase.horaFin}:00`
+        : formClase.horaFin;
+
+    // Validación preventiva de sobreposición
+    for (const dia of dias) {
+      const claseConflicto = clasesEmpleado.find((c) => {
+        if (!c.diaSemana || c.diaSemana.toLowerCase() !== dia.toLowerCase())
+          return false;
+        const iniExist = c.horaInicio.substring(0, 5);
+        const finExist = c.horaFin.substring(0, 5);
+        const iniNueva = formClase.horaInicio.substring(0, 5);
+        const finNueva = formClase.horaFin.substring(0, 5);
+        return iniNueva < finExist && finNueva > iniExist;
+      });
+
+      if (claseConflicto) {
+        mostrarAviso(
+          "danger",
+          "Conflicto de Horario",
+          `El día ${dia} ya tiene asignada la materia "${claseConflicto.materia}" de ${claseConflicto.horaInicio.substring(0, 5)} a ${claseConflicto.horaFin.substring(0, 5)} hs.`,
+        );
+        return;
+      }
+    }
+
     try {
       const payload = {
+        materiaId: formClase.materiaId,
         materia: formClase.materia,
-        diasSemana: formClase.diasSemana,
+        diasSemana: dias,
         comision: formClase.comision,
-        horaInicio:
-          formClase.horaInicio.length === 5
-            ? `${formClase.horaInicio}:00`
-            : formClase.horaInicio,
-        horaFin:
-          formClase.horaFin.length === 5
-            ? `${formClase.horaFin}:00`
-            : formClase.horaFin,
+        horaInicio: horaIniStr,
+        horaFin: horaFinStr,
         aula: formClase.aula,
       };
 
@@ -460,28 +512,32 @@ export default function GestionPersonal() {
       mostrarAviso(
         "success",
         "Clases Asignadas",
-        "Las cátedras fueron programadas exitosamente.",
+        "Las cátedras fueron agregadas sin conflictos.",
       );
     } catch (err) {
-      console.error(err);
-      mostrarAviso("danger", "Error", "No se pudieron asignar las clases.");
+      const mensaje =
+        err.response?.data?.message ||
+        "No se pudo asignar la clase por conflicto de horario.";
+      mostrarAviso("danger", "Error de Asignación", mensaje);
     }
   };
 
   const handleEliminarClase = async (claseId) => {
     try {
       await removeEmpleadoClase(claseId);
-      const clasesActualizadas = await getEmpleadoClases(
-        empleadoSeleccionado.id,
-      );
+      const [clasesActualizadas, metricasActualizadas] = await Promise.all([
+        getEmpleadoClases(empleadoSeleccionado.id),
+        getMetricasEmpleado(empleadoSeleccionado.id),
+      ]);
       setClasesEmpleado(clasesActualizadas);
+      setMetricasEmpleado(metricasActualizadas);
       await cargarDatos();
     } catch (err) {
       mostrarAviso("danger", "Error", "No se pudo quitar la clase.");
     }
   };
 
-  // --- ASIGNACIÓN DE TURNO (GENERAL O ESPECÍFICO / PERSONALIZADO) ---
+  // --- ASIGNACIÓN DE TURNO ---
   const abrirModalTurno = (emp) => {
     setEmpleadoSeleccionado(emp);
     setTipoAsignacionTurno(
@@ -534,38 +590,6 @@ export default function GestionPersonal() {
     }
   };
 
-  const agregarRangoHorario = () => {
-    setRangosEspecificos([
-      ...rangosEspecificos,
-      { horaDesde: "14:00", horaHasta: "18:00", etiqueta: "Turno Tarde" },
-    ]);
-  };
-
-  const eliminarRangoHorario = (index) => {
-    setRangosEspecificos(rangosEspecificos.filter((_, i) => i !== index));
-  };
-
-  const toggleDiaEspecifico = (diaClave) => {
-    if (diasEspecificos.includes(diaClave)) {
-      setDiasEspecificos(diasEspecificos.filter((d) => d !== diaClave));
-    } else {
-      setDiasEspecificos([...diasEspecificos, diaClave]);
-    }
-  };
-
-  if (loading) {
-    return (
-      <div className="flex h-96 items-center justify-center">
-        <div className="flex flex-col items-center gap-2 text-slate-500">
-          <Loader2 className="w-8 h-8 animate-spin text-indigo-600" />
-          <span className="text-xs font-semibold">
-            Cargando personal y carga horaria...
-          </span>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="p-6 lg:p-8 max-w-7xl mx-auto space-y-6 font-sans">
       {/* 1. HEADER */}
@@ -594,7 +618,7 @@ export default function GestionPersonal() {
         </button>
       </div>
 
-      {/* 2. TARJETAS DE CANTIDADES FILTRABLES */}
+      {/* 2. TARJETAS DE CANTIDADES */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         <button
           type="button"
@@ -720,7 +744,7 @@ export default function GestionPersonal() {
         </button>
       </div>
 
-      {/* 3. BARRA DE FILTROS */}
+      {/* 3. FILTROS */}
       <div className="bg-white p-3 border border-slate-200 rounded-2xl shadow-xs flex flex-col lg:flex-row lg:items-center justify-between gap-3">
         <div className="relative flex-1">
           <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -790,12 +814,26 @@ export default function GestionPersonal() {
           <tbody className="divide-y divide-slate-100 text-slate-800">
             {empleadosPaginados.length > 0 ? (
               empleadosPaginados.map((emp) => {
-                const esDocente = (emp.categoria?.codigoTag || "")
-                  .toLowerCase()
-                  .includes("docente");
+                const esDocente =
+                  (emp.categorias || []).some((c) =>
+                    (c.codigoTag || c.nombre || "")
+                      .toLowerCase()
+                      .includes("docente"),
+                  ) ||
+                  (emp.categoria?.codigoTag || "")
+                    .toLowerCase()
+                    .includes("docente");
+
                 const horarioNombre = emp.horarioGeneral
                   ? emp.horarioGeneral.nombre
                   : null;
+
+                const categoriasList =
+                  emp.categorias && emp.categorias.length > 0
+                    ? emp.categorias
+                    : emp.categoria
+                      ? [emp.categoria]
+                      : [];
 
                 return (
                   <tr
@@ -824,13 +862,25 @@ export default function GestionPersonal() {
                     </td>
 
                     <td className="px-6 py-4">
-                      <span
-                        className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-wider uppercase border mb-1.5 ${getBadgeColorClasses(
-                          emp.categoria?.colorIdentificacion,
-                        )}`}
-                      >
-                        {emp.categoria?.nombre || "GENERAL"}
-                      </span>
+                      <div className="flex flex-wrap gap-1 mb-1.5">
+                        {categoriasList.length > 0 ? (
+                          categoriasList.map((cat) => (
+                            <span
+                              key={cat.id}
+                              className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-wider uppercase border ${getBadgeColorClasses(
+                                cat.colorIdentificacion,
+                              )}`}
+                            >
+                              {cat.nombre}
+                            </span>
+                          ))
+                        ) : (
+                          <span className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-wider uppercase border bg-slate-50 text-slate-600 border-slate-200">
+                            GENERAL
+                          </span>
+                        )}
+                      </div>
+
                       <div className="flex flex-wrap gap-1 mt-0.5">
                         {emp.cargos && emp.cargos.length > 0 ? (
                           emp.cargos.map((cg) => (
@@ -937,7 +987,7 @@ export default function GestionPersonal() {
                           <button
                             onClick={() => {
                               setEmpleadoSeleccionado(emp);
-                              setModalAsignarClase(true);
+                              handleAbrirAsignarClase();
                             }}
                             className="p-1 hover:text-purple-600 transition"
                             title="Asignar Clase a Docente"
@@ -1062,1153 +1112,83 @@ export default function GestionPersonal() {
         </div>
       </div>
 
-      {/* ========================================================
-          MODAL 1: REGISTRAR / EDITAR EMPLEADO
-         ======================================================== */}
-      {modalRegistro && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl w-full max-w-2xl overflow-hidden shadow-2xl animate-in zoom-in-95">
-            <div className="bg-[#111827] px-6 py-4 text-white flex items-center justify-between">
-              <div>
-                <h3 className="font-bold text-sm">
-                  {editandoEmpleadoId
-                    ? "Editar Empleado"
-                    : "Registrar Nuevo Empleado"}
-                </h3>
-                <p className="text-[11px] text-slate-400">
-                  Defina datos personales, legajo institucional e ID biométrico.
-                </p>
-              </div>
-              <button
-                onClick={() => setModalRegistro(false)}
-                className="text-slate-400 hover:text-white"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
+      {/* RENDERIZADO DE LOS 4 MODALES EXTERNOS */}
+      <ModalRegistroEmpleado
+        isOpen={modalRegistro}
+        onClose={() => setModalRegistro(false)}
+        onSubmit={handleGuardarEmpleado}
+        formEmpleado={formEmpleado}
+        setFormEmpleado={setFormEmpleado}
+        editandoEmpleadoId={editandoEmpleadoId}
+        categoriasActivas={categoriasActivas}
+        cargosFiltradosForm={cargosFiltradosForm}
+        horariosActivos={horariosActivos}
+      />
 
-            <form
-              onSubmit={handleGuardarEmpleado}
-              className="p-6 space-y-4 text-xs"
-            >
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">
-                    Nombre *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="Ej: Carlos"
-                    value={formEmpleado.nombre}
-                    onChange={(e) =>
-                      setFormEmpleado({
-                        ...formEmpleado,
-                        nombre: e.target.value,
-                      })
-                    }
-                    className="w-full border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-indigo-600"
-                  />
-                </div>
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">
-                    Apellido *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="Ej: Benítez"
-                    value={formEmpleado.apellido}
-                    onChange={(e) =>
-                      setFormEmpleado({
-                        ...formEmpleado,
-                        apellido: e.target.value,
-                      })
-                    }
-                    className="w-full border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-indigo-600"
-                  />
-                </div>
-              </div>
+      <ModalDetalleCronograma
+        isOpen={modalDetalle}
+        onClose={() => setModalDetalle(false)}
+        empleado={empleadoSeleccionado}
+        clases={clasesEmpleado}
+        metricas={metricasEmpleado}
+        diasMap={DIAS_MAP}
+        diasEspecificos={diasEspecificos}
+        rangosEspecificos={rangosEspecificos}
+        onOpenAsignarClase={handleAbrirAsignarClase}
+        onEliminarClase={handleEliminarClase}
+        onOpenAsignarTurno={abrirModalTurno}
+      />
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">
-                    DNI / Documento *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="Ej: 28.455.912"
-                    value={formEmpleado.dni}
-                    onChange={(e) =>
-                      setFormEmpleado({ ...formEmpleado, dni: e.target.value })
-                    }
-                    className="w-full border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-indigo-600"
-                  />
-                </div>
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">
-                    Email Institucional *
-                  </label>
-                  <input
-                    type="email"
-                    required
-                    placeholder="carlos.benitez@instituto.edu.ar"
-                    value={formEmpleado.email}
-                    onChange={(e) =>
-                      setFormEmpleado({
-                        ...formEmpleado,
-                        email: e.target.value,
-                      })
-                    }
-                    className="w-full border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-indigo-600"
-                  />
-                </div>
-              </div>
+      <ModalAsignarClase
+        isOpen={modalAsignarClase}
+        onClose={() => setModalAsignarClase(false)}
+        onSubmit={handleGuardarClase}
+        formClase={formClase}
+        setFormClase={setFormClase}
+        empleado={empleadoSeleccionado}
+        materiasActivas={materiasActivas}
+      />
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">
-                    Teléfono
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="+54 11 4821-9901"
-                    value={formEmpleado.telefono}
-                    onChange={(e) =>
-                      setFormEmpleado({
-                        ...formEmpleado,
-                        telefono: e.target.value,
-                      })
-                    }
-                    className="w-full border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-indigo-600"
-                  />
-                </div>
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">
-                    Nº Legajo *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="LEG-1019"
-                    value={formEmpleado.nroLegajo}
-                    onChange={(e) =>
-                      setFormEmpleado({
-                        ...formEmpleado,
-                        nroLegajo: e.target.value,
-                      })
-                    }
-                    className="w-full border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-indigo-600 font-mono"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">
-                    ID Biométrico (Reloj) *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="BIO-19"
-                    value={formEmpleado.idBiometrico}
-                    onChange={(e) =>
-                      setFormEmpleado({
-                        ...formEmpleado,
-                        idBiometrico: e.target.value,
-                      })
-                    }
-                    className="w-full border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-indigo-600 font-mono"
-                  />
-                </div>
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">
-                    Categoría Laboral *
-                  </label>
-                  <select
-                    value={formEmpleado.categoriaId}
-                    onChange={(e) =>
-                      setFormEmpleado({
-                        ...formEmpleado,
-                        categoriaId: e.target.value,
-                        cargosIds: [],
-                      })
-                    }
-                    className="w-full border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-indigo-600 bg-white"
-                  >
-                    {categoriasActivas.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.nombre} ({c.codigoTag})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              {/* ASIGNACIÓN DE MÚLTIPLES CARGOS */}
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">
-                  Cargos / Puestos Asignados (Selección múltiple):
-                </label>
-                <div className="grid grid-cols-2 gap-2 border border-slate-200 rounded-xl p-3 max-h-36 overflow-y-auto bg-slate-50/50">
-                  {cargosFiltradosForm.map((cg) => {
-                    const seleccionado = formEmpleado.cargosIds.includes(cg.id);
-                    return (
-                      <button
-                        key={cg.id}
-                        type="button"
-                        onClick={() => {
-                          if (seleccionado) {
-                            setFormEmpleado({
-                              ...formEmpleado,
-                              cargosIds: formEmpleado.cargosIds.filter(
-                                (id) => id !== cg.id,
-                              ),
-                            });
-                          } else {
-                            setFormEmpleado({
-                              ...formEmpleado,
-                              cargosIds: [...formEmpleado.cargosIds, cg.id],
-                            });
-                          }
-                        }}
-                        className={`flex items-center justify-between px-3 py-1.5 rounded-lg text-xs font-semibold border text-left transition cursor-pointer ${
-                          seleccionado
-                            ? "bg-indigo-600 text-white border-indigo-600 shadow-xs"
-                            : "bg-white text-slate-700 border-slate-200 hover:bg-slate-100"
-                        }`}
-                      >
-                        <span className="truncate">{cg.nombre}</span>
-                        {seleccionado && (
-                          <Check className="w-3.5 h-3.5 ml-2 shrink-0" />
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">
-                    Turno General Asignado
-                  </label>
-                  <select
-                    value={formEmpleado.horarioGeneralId}
-                    onChange={(e) =>
-                      setFormEmpleado({
-                        ...formEmpleado,
-                        horarioGeneralId: e.target.value,
-                      })
-                    }
-                    className="w-full border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-indigo-600 bg-white"
-                  >
-                    <option value="">
-                      Sin turno fijo (Por Cátedras o Específico)
-                    </option>
-                    {horariosActivos.map((h) => (
-                      <option key={h.id} value={h.id}>
-                        {h.nombre} ({h.horaEntrada?.substring(0, 5)} a{" "}
-                        {h.horaEgreso?.substring(0, 5)})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">
-                    Rol en Sistema *
-                  </label>
-                  <select
-                    value={formEmpleado.rolSistema}
-                    onChange={(e) =>
-                      setFormEmpleado({
-                        ...formEmpleado,
-                        rolSistema: e.target.value,
-                      })
-                    }
-                    className="w-full border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-indigo-600 bg-white"
-                  >
-                    <option value="Consulta / Empleado (Visualiza su ficha)">
-                      Consulta / Empleado (Visualiza su ficha)
-                    </option>
-                    <option value="Administrador">Administrador General</option>
-                    <option value="Recursos Humanos">
-                      Recursos Humanos / Auditor
-                    </option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => setModalRegistro(false)}
-                  className="px-4 py-2 font-medium text-slate-600 hover:bg-slate-100 rounded-xl"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2 font-semibold text-white bg-[#4b35e6] hover:bg-[#3e2bc0] rounded-xl shadow-md"
-                >
-                  {editandoEmpleadoId
-                    ? "Guardar Cambios"
-                    : "Registrar Empleado"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* ========================================================
-          MODAL 2: CRONOGRAMA SEMANAL & FICHA DETALLADA (CORREGIDO)
-         ======================================================== */}
-      {modalDetalle &&
-        empleadoSeleccionado &&
-        (() => {
-          const emp = empleadoSeleccionado;
-          const esDocentePorClases = emp.tipoRegimenHorario === "POR_CLASES";
-          const tieneTurnoPreestablecido =
-            emp.tipoRegimenHorario === "PREESTABLECIDO" && emp.horarioGeneral;
-          const tieneTurnoEspecifico = emp.tipoRegimenHorario === "ESPECIFICO";
-
-          const diasPreestablecidos = tieneTurnoPreestablecido
-            ? (emp.horarioGeneral.diasLaborables || "")
-                .split(",")
-                .map((d) => d.trim().toLowerCase())
-            : [];
-
-          let totalHoras = 0;
-          let diasConActividad = 0;
-
-          DIAS_MAP.forEach(({ clave, nombre }) => {
-            let tiene = false;
-            if (esDocentePorClases) {
-              tiene = clasesEmpleado.some(
-                (c) => c.diaSemana?.toLowerCase() === nombre.toLowerCase(),
-              );
-            } else if (tieneTurnoPreestablecido) {
-              tiene = diasPreestablecidos.some(
-                (d) =>
-                  d === clave.toLowerCase() ||
-                  d === nombre.toLowerCase().substring(0, 3),
-              );
-            } else if (tieneTurnoEspecifico) {
-              tiene = diasEspecificos.some(
-                (d) => d.toLowerCase() === clave.toLowerCase(),
-              );
-            }
-            if (tiene) diasConActividad++;
-          });
-
-          if (tieneTurnoPreestablecido) {
-            totalHoras = 40;
-          } else if (esDocentePorClases) {
-            totalHoras = clasesEmpleado.length * 3;
+      <ModalAsignarTurno
+        isOpen={modalAsignarTurno}
+        onClose={() => setModalAsignarTurno(false)}
+        onSubmit={handleGuardarTurno}
+        empleado={empleadoSeleccionado}
+        tipoAsignacionTurno={tipoAsignacionTurno}
+        setTipoAsignacionTurno={setTipoAsignacionTurno}
+        horarioGeneralSeleccionado={horarioGeneralSeleccionado}
+        setHorarioGeneralSeleccionado={setHorarioGeneralSeleccionado}
+        horariosActivos={horariosActivos}
+        rangosEspecificos={rangosEspecificos}
+        onAgregarRango={() =>
+          setRangosEspecificos([
+            ...rangosEspecificos,
+            { horaDesde: "14:00", horaHasta: "18:00", etiqueta: "Turno Tarde" },
+          ])
+        }
+        onEliminarRango={(idx) =>
+          setRangosEspecificos(rangosEspecificos.filter((_, i) => i !== idx))
+        }
+        onCambiarRango={(idx, campo, valor) => {
+          const nuevo = [...rangosEspecificos];
+          nuevo[idx][campo] = valor;
+          setRangosEspecificos(nuevo);
+        }}
+        diasEspecificos={diasEspecificos}
+        onToggleDiaEspecifico={(diaClave) => {
+          if (diasEspecificos.includes(diaClave)) {
+            setDiasEspecificos(diasEspecificos.filter((d) => d !== diaClave));
+          } else {
+            setDiasEspecificos([...diasEspecificos, diaClave]);
           }
+        }}
+        tolIngresoEsp={tolIngresoEsp}
+        setTolIngresoEsp={setTolIngresoEsp}
+        tolEgresoEsp={tolEgresoEsp}
+        setTolEgresoEsp={setTolEgresoEsp}
+        diasMap={DIAS_MAP}
+      />
 
-          return (
-            <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-              <div className="bg-white rounded-3xl w-full max-w-5xl overflow-hidden shadow-2xl animate-in zoom-in-95 flex flex-col max-h-[90vh]">
-                {/* Header */}
-                <div className="bg-[#111827] px-6 py-4 text-white flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-indigo-950 flex items-center justify-center text-indigo-400">
-                      <Calendar className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <h3 className="font-bold text-sm">
-                          {emp.apellido}, {emp.nombre}
-                        </h3>
-                        <span
-                          className={`text-[9px] font-bold px-2 py-0.5 rounded-full uppercase border ${getBadgeColorClasses(
-                            emp.categoria?.colorIdentificacion,
-                          )}`}
-                        >
-                          {emp.categoria?.nombre}
-                        </span>
-                        <span className="text-slate-400 text-xs">
-                          Legajo: {emp.nroLegajo}
-                        </span>
-                      </div>
-                      <div className="text-[11px] text-slate-400 mt-0.5">
-                        {(emp.cargos || []).map((c) => c.nombre).join(", ") ||
-                          "Sin cargo"}{" "}
-                        • DNI: {emp.dni}
-                      </div>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => setModalDetalle(false)}
-                    className="text-slate-400 hover:text-white"
-                  >
-                    <X className="w-5 h-5" />
-                  </button>
-                </div>
-
-                <div className="p-6 overflow-y-auto space-y-6">
-                  {/* 4 Cards Superiores */}
-                  <div className="grid grid-cols-4 gap-4 text-xs">
-                    <div className="bg-slate-50 border border-slate-200 p-4 rounded-2xl">
-                      <div className="text-[10px] font-bold uppercase text-slate-400">
-                        Carga Semanal Total
-                      </div>
-                      <div className="text-xl font-bold text-slate-900 mt-1">
-                        {metricasEmpleado
-                          ? metricasEmpleado.cargaSemanalHoras
-                          : 0}{" "}
-                        horas
-                      </div>
-                      <div className="text-[10px] text-slate-500">
-                        Calculadas semanalmente
-                      </div>
-                    </div>
-
-                    <div className="bg-purple-50/60 border border-purple-100 p-4 rounded-2xl">
-                      <div className="text-[10px] font-bold uppercase text-purple-700">
-                        Régimen Horario
-                      </div>
-                      <div className="text-sm font-bold text-purple-900 mt-1">
-                        {metricasEmpleado
-                          ? metricasEmpleado.regimenHorarioDescripcion
-                          : "Sin Asignar"}
-                      </div>
-                      <div className="text-[10px] text-purple-700">
-                        {metricasEmpleado
-                          ? metricasEmpleado.regimenHorarioSubtitulo
-                          : ""}
-                      </div>
-                    </div>
-
-                    <div className="bg-blue-50/60 border border-blue-100 p-4 rounded-2xl">
-                      <div className="text-[10px] font-bold uppercase text-blue-700">
-                        Días con Asistencia
-                      </div>
-                      <div className="text-xl font-bold text-blue-900 mt-1">
-                        {metricasEmpleado
-                          ? metricasEmpleado.diasConAsistencia
-                          : 0}{" "}
-                        días
-                      </div>
-                      <div
-                        className="text-[10px] text-blue-700 font-medium truncate"
-                        title={metricasEmpleado?.textoRangoDias}
-                      >
-                        {metricasEmpleado
-                          ? metricasEmpleado.textoRangoDias
-                          : "Sin días asignados"}
-                      </div>
-                    </div>
-
-                    <div className="bg-emerald-50/60 border border-emerald-100 p-4 rounded-2xl">
-                      <div className="text-[10px] font-bold uppercase text-emerald-700">
-                        Tolerancias de Registro
-                      </div>
-                      <div className="text-sm font-bold text-emerald-900 mt-1">
-                        +
-                        {metricasEmpleado
-                          ? metricasEmpleado.toleranciaIngresoMin
-                          : 15}
-                        m / -
-                        {metricasEmpleado
-                          ? metricasEmpleado.toleranciaEgresoMin
-                          : 10}
-                        m
-                      </div>
-                      <div className="text-[10px] text-emerald-700">
-                        Ingreso y Egreso permitidos
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Grilla Semanal: LUNES a DOMINGO */}
-                  <div>
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center gap-2 text-xs font-bold text-slate-900">
-                        <Calendar className="w-4 h-4 text-indigo-600" />
-                        <span>Cronograma de Clases y Jornadas por Día:</span>
-                      </div>
-
-                      {esDocentePorClases && (
-                        <button
-                          onClick={() => setModalAsignarClase(true)}
-                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold shadow-xs transition"
-                        >
-                          <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
-                          Asignar Nueva Clase
-                        </button>
-                      )}
-                    </div>
-
-                    <div className="grid grid-cols-7 gap-2.5">
-                      {DIAS_MAP.map(({ clave, nombre }) => {
-                        const clasesDia = clasesEmpleado.filter(
-                          (c) =>
-                            c.diaSemana?.toLowerCase() === nombre.toLowerCase(),
-                        );
-
-                        const trabajaPreestablecido =
-                          tieneTurnoPreestablecido &&
-                          diasPreestablecidos.some(
-                            (d) =>
-                              d === clave.toLowerCase() ||
-                              d === nombre.toLowerCase().substring(0, 3),
-                          );
-
-                        const trabajaEspecifico =
-                          tieneTurnoEspecifico &&
-                          diasEspecificos.some(
-                            (d) => d.toLowerCase() === clave.toLowerCase(),
-                          );
-
-                        const tieneActividad =
-                          clasesDia.length > 0 ||
-                          trabajaPreestablecido ||
-                          trabajaEspecifico;
-
-                        return (
-                          <div
-                            key={nombre}
-                            className={`border rounded-2xl p-2.5 flex flex-col justify-between min-h-[220px] ${
-                              tieneActividad
-                                ? "bg-white border-slate-200"
-                                : "bg-slate-50/60 border-slate-200/60"
-                            }`}
-                          >
-                            <div>
-                              <div className="flex items-center justify-between mb-2">
-                                <span className="text-[11px] font-bold uppercase text-slate-700">
-                                  {nombre}
-                                </span>
-                                {tieneActividad ? (
-                                  <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                                ) : (
-                                  <span className="text-[9px] text-slate-400 font-medium">
-                                    Franco
-                                  </span>
-                                )}
-                              </div>
-
-                              <div className="space-y-2">
-                                {/* Tarjetas de Clases Docentes */}
-                                {clasesDia.map((c) => (
-                                  <div
-                                    key={c.id}
-                                    className="bg-purple-50/70 border border-purple-100 rounded-xl p-2 text-[10px] relative group"
-                                  >
-                                    <button
-                                      onClick={() => handleEliminarClase(c.id)}
-                                      className="absolute top-1 right-1 text-slate-400 hover:text-rose-600 opacity-0 group-hover:opacity-100 transition"
-                                      title="Quitar clase"
-                                    >
-                                      <X className="w-3 h-3" />
-                                    </button>
-                                    <div className="font-bold text-purple-900 leading-tight">
-                                      {c.materia}
-                                    </div>
-                                    <div className="text-purple-700 mt-1 font-medium">
-                                      {c.horaInicio?.substring(0, 5)} -{" "}
-                                      {c.horaFin?.substring(0, 5)}
-                                    </div>
-                                    {c.aula && (
-                                      <div className="text-slate-500 mt-0.5">
-                                        Aula: {c.aula}
-                                      </div>
-                                    )}
-                                    {c.comision && (
-                                      <div className="text-purple-600 font-semibold mt-0.5">
-                                        {c.comision}
-                                      </div>
-                                    )}
-                                  </div>
-                                ))}
-
-                                {/* Tarjeta de Turno Preestablecido Fijo */}
-                                {trabajaPreestablecido && (
-                                  <div className="bg-indigo-50/60 border border-indigo-200 rounded-xl p-2.5 text-[10px] space-y-1">
-                                    <div className="font-bold text-indigo-900 leading-tight">
-                                      {emp.horarioGeneral.nombre}
-                                    </div>
-                                    <div className="text-indigo-700 font-semibold">
-                                      {emp.horarioGeneral.horaEntrada?.substring(
-                                        0,
-                                        5,
-                                      )}{" "}
-                                      a{" "}
-                                      {emp.horarioGeneral.horaEgreso?.substring(
-                                        0,
-                                        5,
-                                      )}{" "}
-                                      hs
-                                    </div>
-                                    <div className="text-indigo-500 text-[9px]">
-                                      Jornada Completa
-                                    </div>
-                                  </div>
-                                )}
-
-                                {/* Tarjeta de Turno Específico Personalizado */}
-                                {trabajaEspecifico && (
-                                  <div className="space-y-1">
-                                    {rangosEspecificos.map((r, idx) => (
-                                      <div
-                                        key={idx}
-                                        className="bg-blue-50/70 border border-blue-200 rounded-xl p-2 text-[10px]"
-                                      >
-                                        <div className="font-bold text-blue-900">
-                                          {r.etiqueta || "Turno Específico"}
-                                        </div>
-                                        <div className="text-blue-700 font-semibold">
-                                          {r.horaDesde} a {r.horaHasta} hs
-                                        </div>
-                                      </div>
-                                    ))}
-                                  </div>
-                                )}
-
-                                {!tieneActividad && (
-                                  <div className="text-center py-10 text-[11px] text-slate-400 italic">
-                                    Sin actividad
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-
-                            {esDocentePorClases && (
-                              <button
-                                onClick={() => {
-                                  setFormClase({
-                                    ...FORM_CLASE_INICIAL,
-                                    diaSemana: nombre,
-                                  });
-                                  setModalAsignarClase(true);
-                                }}
-                                className="w-full mt-2 py-1 border border-dashed border-slate-300 hover:border-purple-400 text-slate-500 hover:text-purple-600 rounded-lg text-[10px] font-semibold transition"
-                              >
-                                + Clase
-                              </button>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Footer */}
-                <div className="bg-slate-50 px-6 py-4 border-t border-slate-200 flex items-center justify-between">
-                  <button
-                    onClick={() => setModalDetalle(false)}
-                    className="text-xs font-semibold text-slate-600 hover:text-slate-900"
-                  >
-                    Cerrar
-                  </button>
-                  <button
-                    onClick={() => {
-                      setModalDetalle(false);
-                      abrirModalTurno(emp);
-                    }}
-                    className="flex items-center gap-2 px-5 py-2 rounded-xl bg-[#4b35e6] hover:bg-[#3e2bc0] text-white text-xs font-semibold shadow-md transition"
-                  >
-                    <Sliders className="w-3.5 h-3.5" />
-                    Modificar / Asignar Turno
-                  </button>
-                </div>
-              </div>
-            </div>
-          );
-        })()}
-
-      {/* ========================================================
-          MODAL 3: ASIGNAR CLASE
-         ======================================================== */}
-      {/* MODAL 3: ASIGNAR CLASE AL CRONOGRAMA */}
-      {modalAsignarClase && empleadoSeleccionado && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl w-full max-w-md overflow-hidden shadow-2xl animate-in zoom-in-95">
-            <div className="bg-[#6b21a8] px-6 py-4 text-white flex items-center justify-between">
-              <div>
-                <h3 className="font-bold text-sm">
-                  Asignar Clase al Cronograma Docente
-                </h3>
-                <p className="text-[11px] text-purple-200">
-                  {empleadoSeleccionado.apellido}, {empleadoSeleccionado.nombre}
-                </p>
-              </div>
-              <button
-                onClick={() => setModalAsignarClase(false)}
-                className="text-purple-200 hover:text-white"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <form
-              onSubmit={handleGuardarClase}
-              className="p-6 space-y-4 text-xs"
-            >
-              {/* LISTA DESPLEGABLE DE CÁTEDRAS */}
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">
-                  Materia *
-                </label>
-                <select
-                  required
-                  value={formClase.materiaId || ""}
-                  onChange={(e) => {
-                    const idSel = e.target.value;
-                    const mat = (materiasActivas || []).find(
-                      (m) => String(m.id) === String(idSel),
-                    );
-                    setFormClase({
-                      ...formClase,
-                      materiaId: idSel,
-                      materia: mat ? mat.nombre : "",
-                      comision: mat?.comision || formClase.comision,
-                      aula: mat?.aulaPredeterminada || formClase.aula,
-                    });
-                  }}
-                  className="w-full border border-slate-200 rounded-xl px-3 py-2.5 outline-none focus:border-purple-600 bg-white"
-                >
-                  <option value="">
-                    Seleccione una cátedra del catálogo...
-                  </option>
-                  {(materiasActivas || []).map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.nombre} {m.comision ? `(${m.comision})` : ""}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* SELECCIÓN MÚLTIPLE DE DÍAS DE CURSADA */}
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1.5">
-                  Días de Dictado (Selección Múltiple) *
-                </label>
-                <div className="grid grid-cols-6 gap-1.5">
-                  {[
-                    "Lunes",
-                    "Martes",
-                    "Miércoles",
-                    "Jueves",
-                    "Viernes",
-                    "Sábado",
-                  ].map((dia) => {
-                    const sel = formClase.diaSemana.includes(dia);
-                    return (
-                      <button
-                        type="button"
-                        key={dia}
-                        onClick={() => {
-                          const nuevos = sel
-                            ? formClase.diasSemana.filter((d) => d !== dia)
-                            : [...formClase.diasSemana, dia];
-                          setFormClase({ ...formClase, diasSemana: nuevos });
-                        }}
-                        className={`py-2 px-1 rounded-xl text-xs font-bold transition border cursor-pointer text-center ${
-                          sel
-                            ? "bg-purple-600 text-white border-purple-600 shadow-xs"
-                            : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
-                        }`}
-                      >
-                        {dia.substring(0, 3)}
-                      </button>
-                    );
-                  })}
-                </div>
-                <span className="text-[10px] text-slate-400 mt-1 block">
-                  Días marcados: {formClase.diaSemana.join(", ") || "Ninguno"}
-                </span>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">
-                    Hora Inicio *
-                  </label>
-                  <input
-                    type="time"
-                    required
-                    value={formClase.horaInicio}
-                    onChange={(e) =>
-                      setFormClase({ ...formClase, horaInicio: e.target.value })
-                    }
-                    className="w-full border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-purple-600"
-                  />
-                </div>
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">
-                    Hora Fin *
-                  </label>
-                  <input
-                    type="time"
-                    required
-                    value={formClase.horaFin}
-                    onChange={(e) =>
-                      setFormClase({ ...formClase, horaFin: e.target.value })
-                    }
-                    className="w-full border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-purple-600"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">
-                    Comisión / Curso
-                  </label>
-                  <input
-                    type="text"
-                    value={formClase.comision}
-                    onChange={(e) =>
-                      setFormClase({ ...formClase, comision: e.target.value })
-                    }
-                    className="w-full border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-purple-600"
-                  />
-                </div>
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">
-                    Aula / Laboratorio
-                  </label>
-                  <input
-                    type="text"
-                    value={formClase.aula}
-                    onChange={(e) =>
-                      setFormClase({ ...formClase, aula: e.target.value })
-                    }
-                    className="w-full border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-purple-600"
-                  />
-                </div>
-              </div>
-
-              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => setModalAsignarClase(false)}
-                  className="px-4 py-2 font-medium text-slate-600 hover:bg-slate-100 rounded-xl"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2 font-semibold text-white bg-purple-600 hover:bg-purple-700 rounded-xl shadow-md"
-                >
-                  + Asignar al Cronograma
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* ========================================================
-          MODAL 4: ASIGNAR TURNO GENERAL O ESPECÍFICO
-         ======================================================== */}
-      {modalAsignarTurno && empleadoSeleccionado && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl w-full max-w-xl overflow-hidden shadow-2xl animate-in zoom-in-95 flex flex-col max-h-[92vh]">
-            <div className="bg-[#111827] px-6 py-4 text-white flex items-center justify-between">
-              <div>
-                <h3 className="font-bold text-sm">
-                  Asignar Turno y Horario Laboral
-                </h3>
-                <p className="text-[11px] text-slate-400">
-                  {empleadoSeleccionado.apellido}, {empleadoSeleccionado.nombre}{" "}
-                  •{" "}
-                  {(empleadoSeleccionado.cargos || [])
-                    .map((c) => c.nombre)
-                    .join(", ")}
-                </p>
-              </div>
-              <button
-                onClick={() => setModalAsignarTurno(false)}
-                className="text-slate-400 hover:text-white"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="p-6 space-y-5 text-xs overflow-y-auto">
-              <div className="text-[10px] font-bold uppercase text-slate-400">
-                Tipo de Asignación de Horario
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <button
-                  type="button"
-                  onClick={() => setTipoAsignacionTurno("PREESTABLECIDO")}
-                  className={`p-3.5 rounded-2xl border text-left flex items-start gap-3 transition cursor-pointer ${
-                    tipoAsignacionTurno === "PREESTABLECIDO"
-                      ? "border-indigo-600 bg-indigo-50/50 ring-2 ring-indigo-600"
-                      : "border-slate-200 hover:bg-slate-50"
-                  }`}
-                >
-                  <div className="w-8 h-8 rounded-xl bg-indigo-600 text-white flex items-center justify-center shrink-0">
-                    <Clock className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <div className="font-bold text-slate-900">
-                      Turno Preestablecido General
-                    </div>
-                    <div className="text-[10px] text-slate-500 mt-0.5">
-                      Asignar uno de los turnos corporativos de la
-                      configuración.
-                    </div>
-                  </div>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setTipoAsignacionTurno("ESPECIFICO")}
-                  className={`p-3.5 rounded-2xl border text-left flex items-start gap-3 transition cursor-pointer ${
-                    tipoAsignacionTurno === "ESPECIFICO"
-                      ? "border-indigo-600 bg-indigo-50/50 ring-2 ring-indigo-600"
-                      : "border-slate-200 hover:bg-slate-50"
-                  }`}
-                >
-                  <div className="w-8 h-8 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0">
-                    <Sliders className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <div className="font-bold text-slate-900">
-                      Turno Específico / Personalizado
-                    </div>
-                    <div className="text-[10px] text-slate-500 mt-0.5">
-                      Para empleados o docentes: rangos horarios por jornada.
-                    </div>
-                  </div>
-                </button>
-              </div>
-
-              {/* OPCIÓN 1: TURNO GENERAL PREESTABLECIDO */}
-              {tipoAsignacionTurno === "PREESTABLECIDO" && (
-                <div className="space-y-3 pt-2">
-                  <label className="block font-semibold text-slate-700">
-                    Seleccionar Turno de la Tabla Preestablecida:
-                  </label>
-                  <select
-                    value={horarioGeneralSeleccionado}
-                    onChange={(e) =>
-                      setHorarioGeneralSeleccionado(e.target.value)
-                    }
-                    className="w-full border border-slate-200 rounded-xl px-3 py-2.5 outline-none focus:border-indigo-600 bg-white"
-                  >
-                    {horariosActivos.map((h) => (
-                      <option key={h.id} value={h.id}>
-                        {h.nombre} ({h.horaEntrada?.substring(0, 5)} a{" "}
-                        {h.horaEgreso?.substring(0, 5)} hs • Cat:{" "}
-                        {h.categoria?.nombre})
-                      </option>
-                    ))}
-                  </select>
-
-                  {(() => {
-                    const sel = horariosActivos.find(
-                      (h) =>
-                        String(h.id) === String(horarioGeneralSeleccionado),
-                    );
-                    if (!sel) return null;
-                    return (
-                      <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-2 mt-2">
-                        <div className="flex items-center justify-between">
-                          <span className="font-bold text-slate-900">
-                            {sel.nombre}
-                          </span>
-                          <span className="bg-indigo-50 text-indigo-700 font-bold px-2 py-0.5 rounded-lg text-[11px]">
-                            {sel.horaEntrada?.substring(0, 5)} →{" "}
-                            {sel.horaEgreso?.substring(0, 5)} hs
-                          </span>
-                        </div>
-                        <div className="grid grid-cols-3 gap-2 pt-2 border-t border-slate-200/60 text-[10px]">
-                          <div>
-                            <span className="text-slate-400 block uppercase font-semibold">
-                              Categoría
-                            </span>
-                            <span className="font-bold text-slate-700">
-                              {sel.categoria?.nombre}
-                            </span>
-                          </div>
-                          <div>
-                            <span className="text-slate-400 block uppercase font-semibold">
-                              Días
-                            </span>
-                            <span className="font-bold text-slate-700">
-                              {sel.diasLaborables}
-                            </span>
-                          </div>
-                          <div>
-                            <span className="text-slate-400 block uppercase font-semibold">
-                              Tol. Entrada
-                            </span>
-                            <span className="font-bold text-slate-700">
-                              {sel.tolEntradaMin} min
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })()}
-                </div>
-              )}
-
-              {/* OPCIÓN 2: TURNO ESPECÍFICO / PERSONALIZADO */}
-              {tipoAsignacionTurno === "ESPECIFICO" && (
-                <div className="space-y-4 pt-1">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <div className="font-bold text-slate-900">
-                        Rangos Horarios del Día (Intervalos o Jornada Partida)
-                      </div>
-                      <div className="text-[10px] text-slate-400">
-                        Puede definir 1, 2 o más rangos horarios por jornada.
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={agregarRangoHorario}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-semibold transition"
-                    >
-                      <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
-                      Agregar Rango
-                    </button>
-                  </div>
-
-                  <div className="space-y-2.5">
-                    {rangosEspecificos.map((rango, idx) => (
-                      <div
-                        key={idx}
-                        className="bg-slate-50 border border-slate-200 rounded-2xl p-3 flex items-center gap-3"
-                      >
-                        <span className="font-bold text-slate-700 shrink-0">
-                          Rango {idx + 1}:
-                        </span>
-                        <div className="flex items-center gap-2 flex-1">
-                          <input
-                            type="time"
-                            value={rango.horaDesde}
-                            onChange={(e) => {
-                              const nuevo = [...rangosEspecificos];
-                              nuevo[idx].horaDesde = e.target.value;
-                              setRangosEspecificos(nuevo);
-                            }}
-                            className="bg-white border border-slate-200 rounded-xl px-2 py-1.5 outline-none font-medium"
-                          />
-                          <span className="text-slate-400">→</span>
-                          <input
-                            type="time"
-                            value={rango.horaHasta}
-                            onChange={(e) => {
-                              const nuevo = [...rangosEspecificos];
-                              nuevo[idx].horaHasta = e.target.value;
-                              setRangosEspecificos(nuevo);
-                            }}
-                            className="bg-white border border-slate-200 rounded-xl px-2 py-1.5 outline-none font-medium"
-                          />
-                          <input
-                            type="text"
-                            placeholder="Etiqueta (ej: Turno Mañana)"
-                            value={rango.etiqueta}
-                            onChange={(e) => {
-                              const nuevo = [...rangosEspecificos];
-                              nuevo[idx].etiqueta = e.target.value;
-                              setRangosEspecificos(nuevo);
-                            }}
-                            className="bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 outline-none flex-1"
-                          />
-                        </div>
-                        {rangosEspecificos.length > 1 && (
-                          <button
-                            type="button"
-                            onClick={() => eliminarRangoHorario(idx)}
-                            className="text-slate-400 hover:text-rose-600 p-1"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-
-                  <div>
-                    <div className="font-bold text-slate-700 mb-2">
-                      Días en que Aplica este Turno
-                    </div>
-                    <div className="flex gap-1.5">
-                      {DIAS_MAP.map(({ clave }) => {
-                        const sel = diasEspecificos.includes(clave);
-                        return (
-                          <button
-                            type="button"
-                            key={clave}
-                            onClick={() => toggleDiaEspecifico(clave)}
-                            className={`flex-1 py-2 rounded-xl font-bold transition cursor-pointer ${
-                              sel
-                                ? "bg-[#4b35e6] text-white shadow-xs"
-                                : "bg-white border border-slate-200 text-slate-600 hover:bg-slate-50"
-                            }`}
-                          >
-                            {clave}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block font-semibold text-slate-700 mb-1">
-                        Tolerancia de Ingreso (minutos)
-                      </label>
-                      <input
-                        type="number"
-                        value={tolIngresoEsp}
-                        onChange={(e) => setTolIngresoEsp(e.target.value)}
-                        className="w-full border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-indigo-600"
-                      />
-                    </div>
-                    <div>
-                      <label className="block font-semibold text-slate-700 mb-1">
-                        Tolerancia de Egreso (minutos)
-                      </label>
-                      <input
-                        type="number"
-                        value={tolEgresoEsp}
-                        onChange={(e) => setTolEgresoEsp(e.target.value)}
-                        className="w-full border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-indigo-600"
-                      />
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Botones de acción */}
-              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => setModalAsignarTurno(false)}
-                  className="px-4 py-2 font-medium text-slate-600 hover:bg-slate-100 rounded-xl"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  onClick={handleGuardarTurno}
-                  className="px-5 py-2 font-semibold text-white bg-[#4b35e6] hover:bg-[#3e2bc0] rounded-xl shadow-md"
-                >
-                  Guardar Asignación
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL ALERTA CENTRALIZADO */}
       <ModalAlerta
         isOpen={modalAlerta.isOpen}
         tipo={modalAlerta.tipo}
