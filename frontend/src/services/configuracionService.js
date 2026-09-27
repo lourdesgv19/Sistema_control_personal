@@ -53,3 +53,17 @@ export const deleteHorario = async (id) =>
 
 export const reactivarHorario = async (id) =>
   (await apiClient.patch(`/configuracion/horarios/${id}/reactivar`)).data;
+
+// ==========================================
+// 4. MATERIAS
+// ==========================================
+export const getMaterias = async () =>
+  (await apiClient.get("/configuracion/materias")).data;
+export const createMateria = async (data) =>
+  (await apiClient.post("/configuracion/materias", data)).data;
+export const updateMateria = async (id, data) =>
+  (await apiClient.put(`/configuracion/materias/${id}`, data)).data;
+export const deleteMateria = async (id) =>
+  (await apiClient.delete(`/configuracion/materias/${id}`)).data;
+export const reactivarMateria = async (id) =>
+  (await apiClient.patch(`/configuracion/materias/${id}/reactivar`)).data;

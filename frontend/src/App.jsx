@@ -2,6 +2,7 @@ import React from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import Layout from "./components/layout/Layout";
 import TiposConfiguracion from "./pages/TiposConfiguracion";
+import GestionPersonal from "./pages/GestionPersonal";
 
 export default function App() {
   return (
@@ -13,6 +14,7 @@ export default function App() {
 
           {/* Módulo activo de Categorías, Cargos y Turnos */}
           <Route path="configuracion" element={<TiposConfiguracion />} />
+          <Route path="/personal" element={<GestionPersonal />} />
 
           {/* Módulos de Operación de Asistencia */}
           <Route
@@ -39,15 +41,7 @@ export default function App() {
               </div>
             }
           />
-          <Route
-            path="personal"
-            element={
-              <div className="p-8 text-slate-500 font-medium">
-                Módulo de Personal (Docentes, Administrativos, Maestranza) en
-                construcción
-              </div>
-            }
-          />
+
           <Route
             path="alertas"
             element={

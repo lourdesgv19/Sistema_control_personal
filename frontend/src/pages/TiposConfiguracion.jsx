@@ -13,6 +13,7 @@ import {
   Check,
   Loader2,
   RotateCcw,
+  BookOpen,
 } from "lucide-react";
 import {
   getCategorias,
@@ -30,6 +31,11 @@ import {
   updateHorario,
   deleteHorario,
   reactivarHorario,
+  getMaterias,
+  createMateria,
+  updateMateria,
+  deleteMateria,
+  reactivarMateria,
 } from "../services/configuracionService";
 import ModalAlerta from "../components/comunes/ModalAlerta";
 
@@ -68,6 +74,15 @@ const FORM_HORARIO_INICIAL = {
   tolEgreso: 10,
   maxSalidas: 2,
   tiempoMaxFuera: 45,
+};
+
+const FORM_MATERIA_INICIAL = {
+  nombre: "",
+  codigo: "",
+  departamento: "",
+  comision: "",
+  aulaPredeterminada: "",
+  estado: "Activo",
 };
 
 export const getBadgeColorClasses = (color) => {
@@ -116,16 +131,19 @@ export default function TiposConfiguracion() {
   const [categorias, setCategorias] = useState([]);
   const [cargos, setCargos] = useState([]);
   const [horarios, setHorarios] = useState([]);
+  const [materias, setMaterias] = useState([]);
 
-  // FILTROS POR ESTADO DESPLEGABLES (POR DEFECTO "ACTIVOS")
-  const [filtroEstadoCat, setFiltroEstadoCat] = useState("ACTIVOS"); // "ACTIVOS" | "INACTIVOS" | "TODOS"
+  // FILTROS POR ESTADO DESPLEGABLES
+  const [filtroEstadoCat, setFiltroEstadoCat] = useState("ACTIVOS");
   const [filtroEstadoCargo, setFiltroEstadoCargo] = useState("ACTIVOS");
   const [filtroEstadoHorario, setFiltroEstadoHorario] = useState("ACTIVOS");
+  const [filtroEstadoMateria, setFiltroEstadoMateria] = useState("ACTIVOS");
 
   // Otros filtros
   const [cargoSearch, setCargoSearch] = useState("");
   const [cargoCategoryFilter, setCargoCategoryFilter] = useState("TODAS");
   const [horarioCategoryFilter, setHorarioCategoryFilter] = useState("TODOS");
+  const [materiaSearch, setMateriaSearch] = useState("");
 
   // Modales
   const [modalCat, setModalCat] = useState(false);
@@ -136,6 +154,9 @@ export default function TiposConfiguracion() {
 
   const [modalHorario, setModalHorario] = useState(false);
   const [editandoHorarioId, setEditandoHorarioId] = useState(null);
+
+  const [modalMateria, setModalMateria] = useState(false);
+  const [editandoMateriaId, setEditandoMateriaId] = useState(null);
 
   // Modal Alerta Centralizado
   const [modalAlerta, setModalAlerta] = useState({
@@ -153,6 +174,7 @@ export default function TiposConfiguracion() {
   const [formCat, setFormCat] = useState(FORM_CAT_INICIAL);
   const [formCargo, setFormCargo] = useState(FORM_CARGO_INICIAL);
   const [formHorario, setFormHorario] = useState(FORM_HORARIO_INICIAL);
+  const [formMateria, setFormMateria] = useState(FORM_MATERIA_INICIAL);
 
   const mostrarAviso = (tipo, titulo, mensaje) => {
     setModalAlerta({
@@ -169,17 +191,18 @@ export default function TiposConfiguracion() {
   const cargarDatos = async () => {
     setLoading(true);
     try {
-      const [catsRes, cargosRes, horariosRes] = await Promise.all([
+      const [catsRes, cargosRes, horariosRes, materiasRes] = await Promise.all([
         getCategorias(),
         getCargos(),
         getHorarios(),
+        getMaterias(),
       ]);
 
       setCategorias(Array.isArray(catsRes) ? catsRes : []);
       setCargos(Array.isArray(cargosRes) ? cargosRes : []);
       setHorarios(Array.isArray(horariosRes) ? horariosRes : []);
+      setMaterias(Array.isArray(materiasRes) ? materiasRes : []);
 
-      // Solo categorías activas para selectores por defecto
       const catsActivas = (catsRes || []).filter((c) => c.activo !== false);
       if (catsActivas.length > 0) {
         setFormCargo((prev) => ({
@@ -207,7 +230,6 @@ export default function TiposConfiguracion() {
     cargarDatos();
   }, []);
 
-  // Lista de categorías activas para los selectores de los modales
   const categoriasActivas = categorias.filter((c) => c.activo !== false);
 
   // --- HANDLERS: CATEGORÍAS ---
@@ -573,11 +595,124 @@ export default function TiposConfiguracion() {
     }
   };
 
+  // --- HANDLERS: MATERIAS / CÁTEDRAS ---
+  const abrirModalCrearMateria = () => {
+    setEditandoMateriaId(null);
+    setFormMateria(FORM_MATERIA_INICIAL);
+    setModalMateria(true);
+  };
+
+  const abrirModalEditarMateria = (m) => {
+    setEditandoMateriaId(m.id);
+    setFormMateria({
+      nombre: m.nombre || "",
+      codigo: m.codigo || "",
+      departamento: m.departamento || "",
+      comision: m.comision || "",
+      aulaPredeterminada: m.aulaPredeterminada || "",
+      estado: m.activo !== false ? "Activo" : "Inactivo",
+    });
+    setModalMateria(true);
+  };
+
+  const handleGuardarMateria = async (e) => {
+    e.preventDefault();
+    try {
+      const payload = {
+        nombre: formMateria.nombre,
+        codigo: formMateria.codigo,
+        departamento: formMateria.departamento,
+        comision: formMateria.comision,
+        aulaPredeterminada: formMateria.aulaPredeterminada,
+        activo: formMateria.estado === "Activo",
+      };
+
+      if (editandoMateriaId) {
+        await updateMateria(editandoMateriaId, payload);
+        mostrarAviso(
+          "success",
+          "Cátedra Actualizada",
+          "Los datos de la materia se actualizaron correctamente.",
+        );
+      } else {
+        await createMateria(payload);
+        mostrarAviso(
+          "success",
+          "Cátedra Registrada",
+          "La nueva materia se ha registrado en el catálogo.",
+        );
+      }
+
+      await cargarDatos();
+      setModalMateria(false);
+      setEditandoMateriaId(null);
+      setFormMateria(FORM_MATERIA_INICIAL);
+    } catch (err) {
+      mostrarAviso(
+        "danger",
+        "Error",
+        "No se pudo guardar la materia o cátedra.",
+      );
+    }
+  };
+
+  const handleEliminarMateria = (id, nombre) => {
+    setModalAlerta({
+      isOpen: true,
+      tipo: "danger",
+      titulo: "¿Dar de baja cátedra?",
+      mensaje: `¿Desea dar de baja lógica la cátedra "${nombre}"?`,
+      textoConfirmar: "Sí, dar de baja",
+      textoCancelar: "Cancelar",
+      mostrarCancelar: true,
+      onConfirmar: async () => {
+        setModalAlerta((prev) => ({ ...prev, isOpen: false }));
+        try {
+          await deleteMateria(id);
+          await cargarDatos();
+          mostrarAviso(
+            "success",
+            "Baja Exitosa",
+            `La cátedra "${nombre}" fue dada de baja.`,
+          );
+        } catch (err) {
+          mostrarAviso("danger", "Error", "No se pudo dar de baja la materia.");
+        }
+      },
+    });
+  };
+
+  const handleReactivarMateria = (id, nombre) => {
+    setModalAlerta({
+      isOpen: true,
+      tipo: "info",
+      titulo: "¿Reactivar cátedra?",
+      mensaje: `¿Desea reactivar la materia "${nombre}" en el catálogo institucional?`,
+      textoConfirmar: "Sí, reactivar",
+      textoCancelar: "Cancelar",
+      mostrarCancelar: true,
+      onConfirmar: async () => {
+        setModalAlerta((prev) => ({ ...prev, isOpen: false }));
+        try {
+          await reactivarMateria(id);
+          await cargarDatos();
+          mostrarAviso(
+            "success",
+            "Reactivación Exitosa",
+            `La cátedra "${nombre}" fue reactivada.`,
+          );
+        } catch (err) {
+          mostrarAviso("danger", "Error", "No se pudo reactivar la materia.");
+        }
+      },
+    });
+  };
+
   // --- FILTROS DE LISTADO ---
   const filteredCategorias = categorias.filter((cat) => {
     if (filtroEstadoCat === "ACTIVOS") return cat.activo !== false;
     if (filtroEstadoCat === "INACTIVOS") return cat.activo === false;
-    return true; // "TODOS"
+    return true;
   });
 
   const filteredCargos = cargos.filter((c) => {
@@ -615,6 +750,22 @@ export default function TiposConfiguracion() {
     return matchEstado && matchCat;
   });
 
+  const filteredMaterias = materias.filter((m) => {
+    const matchEstado =
+      filtroEstadoMateria === "TODOS" ||
+      (filtroEstadoMateria === "ACTIVOS" && m.activo !== false) ||
+      (filtroEstadoMateria === "INACTIVOS" && m.activo === false);
+
+    const query = materiaSearch.toLowerCase();
+    const matchSearch =
+      m.nombre?.toLowerCase().includes(query) ||
+      m.codigo?.toLowerCase().includes(query) ||
+      m.comision?.toLowerCase().includes(query) ||
+      m.departamento?.toLowerCase().includes(query);
+
+    return matchEstado && matchSearch;
+  });
+
   if (loading) {
     return (
       <div className="flex h-96 items-center justify-center">
@@ -641,14 +792,14 @@ export default function TiposConfiguracion() {
               Configuración del Sistema
             </h1>
             <p className="text-xs text-slate-500">
-              Gestión centralizada de Categorías, Catálogo de Cargos y Tabla de
-              Horarios Preestablecidos
+              Gestión centralizada de Categorías, Cargos, Tabla de Horarios y
+              Catálogo de Materias
             </p>
           </div>
         </div>
 
         {/* Subpestañas */}
-        <div className="flex bg-slate-100 p-1.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-600">
+        <div className="flex flex-wrap bg-slate-100 p-1.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-600">
           <button
             onClick={() => setActiveTab("categorias")}
             className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg transition-all ${
@@ -693,6 +844,21 @@ export default function TiposConfiguracion() {
               {horarios.length}
             </span>
           </button>
+
+          <button
+            onClick={() => setActiveTab("materias")}
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg transition-all ${
+              activeTab === "materias"
+                ? "bg-white text-indigo-700 shadow-xs border border-slate-200"
+                : "hover:text-slate-900"
+            }`}
+          >
+            <BookOpen className="w-3.5 h-3.5 text-indigo-600" />
+            Materias
+            <span className="bg-slate-200 text-slate-700 px-1.5 py-0.5 rounded-full text-[10px] font-bold">
+              {materias.length}
+            </span>
+          </button>
         </div>
       </div>
 
@@ -712,7 +878,6 @@ export default function TiposConfiguracion() {
             </div>
 
             <div className="flex items-center gap-3">
-              {/* SELECTOR DESPLEGABLE DE ESTADO (CATEGORÍAS) */}
               <div className="flex items-center gap-2 text-xs">
                 <span className="text-slate-500 font-medium">Estado:</span>
                 <select
@@ -837,7 +1002,6 @@ export default function TiposConfiguracion() {
             </button>
           </div>
 
-          {/* BARRA DE FILTROS: BÚSQUEDA + CATEGORÍA + SELECTOR DESPLEGABLE DE ESTADO */}
           <div className="bg-white p-3 border border-slate-200 rounded-xl shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3">
             <div className="relative flex-1">
               <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -867,7 +1031,6 @@ export default function TiposConfiguracion() {
                 </select>
               </div>
 
-              {/* SELECTOR DESPLEGABLE DE ESTADO (CARGOS) */}
               <div className="flex items-center gap-2 text-slate-600">
                 <span className="font-medium text-slate-500">Estado:</span>
                 <select
@@ -1003,7 +1166,6 @@ export default function TiposConfiguracion() {
             </button>
           </div>
 
-          {/* BARRA DE FILTROS: CATEGORÍA + SELECTOR DESPLEGABLE DE ESTADO */}
           <div className="bg-white p-3 border border-slate-200 rounded-xl shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs">
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-slate-500 font-medium mr-1">
@@ -1026,7 +1188,6 @@ export default function TiposConfiguracion() {
               )}
             </div>
 
-            {/* SELECTOR DESPLEGABLE DE ESTADO (HORARIOS) */}
             <div className="flex items-center gap-2 text-slate-600 self-start md:self-auto">
               <span className="font-medium text-slate-500">Estado:</span>
               <select
@@ -1169,6 +1330,156 @@ export default function TiposConfiguracion() {
                 </div>
               );
             })}
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================
+          VISTA 4: CATÁLOGO DE CÁTEDRAS Y MATERIAS
+         ======================================================== */}
+      {activeTab === "materias" && (
+        <div className="space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-2 gap-4">
+            <div>
+              <h2 className="text-base font-bold text-slate-900">
+                Catálogo de Cátedras y Materias
+              </h2>
+              <p className="text-xs text-slate-500">
+                Listado de materias, departamentos y comisiones institucionales
+                para asignación docente
+              </p>
+            </div>
+            <button
+              onClick={abrirModalCrearMateria}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#4b35e6] hover:bg-[#3f2bc9] text-white text-xs font-semibold shadow-md transition"
+            >
+              <Plus className="w-4 h-4 stroke-[2.5]" />
+              Nueva Materia
+            </button>
+          </div>
+
+          {/* Barra de Filtros: Búsqueda y Estado */}
+          <div className="bg-white p-3 border border-slate-200 rounded-xl shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3">
+            <div className="relative flex-1">
+              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                value={materiaSearch}
+                onChange={(e) => setMateriaSearch(e.target.value)}
+                placeholder="Buscar por materia, código, departamento o comisión..."
+                className="w-full pl-9 pr-3 py-2 text-xs text-slate-800 placeholder-slate-400 border border-slate-200 rounded-xl outline-none focus:border-indigo-500"
+              />
+            </div>
+
+            <div className="flex items-center gap-2 text-xs text-slate-600">
+              <span className="font-medium text-slate-500">Estado:</span>
+              <select
+                value={filtroEstadoMateria}
+                onChange={(e) => setFiltroEstadoMateria(e.target.value)}
+                className="bg-white border border-slate-200 text-slate-700 font-semibold rounded-xl px-3 py-2 text-xs outline-none focus:border-indigo-600 transition shadow-xs"
+              >
+                <option value="ACTIVOS">Solo Activos</option>
+                <option value="TODOS">Todos</option>
+                <option value="INACTIVOS">Solo Bajas (Inactivos)</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-xs">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-[#f8fafc] text-slate-500 font-bold uppercase text-[10px] border-b border-slate-100">
+                <tr>
+                  <th className="px-6 py-3.5 tracking-wider">
+                    Materia / Asignatura
+                  </th>
+                  <th className="px-6 py-3.5 tracking-wider">Código / Depto</th>
+                  <th className="px-6 py-3.5 tracking-wider">Comisión</th>
+                  <th className="px-6 py-3.5 tracking-wider">Aula Base</th>
+                  <th className="px-6 py-3.5 tracking-wider">Estado</th>
+                  <th className="px-6 py-3.5 tracking-wider text-right">
+                    Acciones
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 text-slate-800">
+                {filteredMaterias.length > 0 ? (
+                  filteredMaterias.map((m) => (
+                    <tr
+                      key={m.id}
+                      className={`transition-colors ${
+                        m.activo === false
+                          ? "bg-slate-50/60 opacity-80"
+                          : "hover:bg-slate-50/70"
+                      }`}
+                    >
+                      <td className="px-6 py-4 font-bold text-slate-900 text-sm">
+                        {m.nombre}
+                      </td>
+                      <td className="px-6 py-4 text-slate-500">
+                        {m.codigo ? (
+                          <span className="font-mono font-semibold text-slate-700">
+                            {m.codigo} •{" "}
+                          </span>
+                        ) : (
+                          ""
+                        )}
+                        {m.departamento || "General"}
+                      </td>
+                      <td className="px-6 py-4 font-mono font-semibold text-indigo-700">
+                        {m.comision || "-"}
+                      </td>
+                      <td className="px-6 py-4 text-slate-600">
+                        {m.aulaPredeterminada || "-"}
+                      </td>
+                      <td className="px-6 py-4">
+                        <StatusBadge activo={m.activo} />
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        <div className="flex items-center justify-end gap-2 text-slate-400">
+                          <button
+                            onClick={() => abrirModalEditarMateria(m)}
+                            className="p-1 hover:text-indigo-600 transition"
+                            title="Editar Materia"
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </button>
+                          {m.activo !== false ? (
+                            <button
+                              onClick={() =>
+                                handleEliminarMateria(m.id, m.nombre)
+                              }
+                              className="p-1 hover:text-rose-600 transition"
+                              title="Dar de baja"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() =>
+                                handleReactivarMateria(m.id, m.nombre)
+                              }
+                              className="p-1 hover:text-emerald-600 transition"
+                              title="Reactivar Materia"
+                            >
+                              <RotateCcw className="w-4 h-4 text-emerald-600" />
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td
+                      colSpan={6}
+                      className="text-center py-12 text-slate-400 text-xs"
+                    >
+                      No se encontraron materias con los filtros seleccionados.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
           </div>
         </div>
       )}
@@ -1360,7 +1671,6 @@ export default function TiposConfiguracion() {
                 <label className="block font-semibold text-slate-700 mb-1">
                   Categoría Institucional *
                 </label>
-                {/* SELECTOR DESPLEGABLE: ÚNICAMENTE CATEGORÍAS ACTIVAS */}
                 <select
                   value={formCargo.categoriaId}
                   onChange={(e) =>
@@ -1472,7 +1782,6 @@ export default function TiposConfiguracion() {
                 <label className="block font-semibold text-slate-700 mb-1">
                   Categoría Aplicable *
                 </label>
-                {/* SELECTOR DESPLEGABLE: ÚNICAMENTE CATEGORÍAS ACTIVAS */}
                 <select
                   value={formHorario.categoriaId}
                   onChange={(e) =>
@@ -1654,6 +1963,153 @@ export default function TiposConfiguracion() {
                   className="px-5 py-2 font-semibold text-white bg-[#4b35e6] hover:bg-[#3e2bc0] rounded-xl shadow-md"
                 >
                   {editandoHorarioId ? "Guardar Cambios" : "Guardar Horario"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal 4: Materia / Cátedra */}
+      {modalMateria && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-md overflow-hidden shadow-2xl">
+            <div className="bg-[#111827] px-6 py-4 text-white flex items-center justify-between">
+              <div className="flex items-center gap-2.5 font-bold text-sm">
+                <BookOpen className="w-4 h-4 text-indigo-400" />
+                <span>
+                  {editandoMateriaId ? "Editar Materia" : "Nueva Materia"}
+                </span>
+              </div>
+              <button
+                onClick={() => setModalMateria(false)}
+                className="text-slate-400 hover:text-white"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form
+              onSubmit={handleGuardarMateria}
+              className="p-6 space-y-4 text-xs"
+            >
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">
+                  Nombre de la Materia *
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="ej. Álgebra Lineal Aplicada, Física I"
+                  value={formMateria.nombre}
+                  onChange={(e) =>
+                    setFormMateria({ ...formMateria, nombre: e.target.value })
+                  }
+                  className="w-full border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-indigo-600"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">
+                    Código de Cátedra
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="ej. MAT-101"
+                    value={formMateria.codigo}
+                    onChange={(e) =>
+                      setFormMateria({ ...formMateria, codigo: e.target.value })
+                    }
+                    className="w-full border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-indigo-600 font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">
+                    Comisión / Curso
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="ej. Comisión 1K01"
+                    value={formMateria.comision}
+                    onChange={(e) =>
+                      setFormMateria({
+                        ...formMateria,
+                        comision: e.target.value,
+                      })
+                    }
+                    className="w-full border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-indigo-600 font-mono"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">
+                  Departamento / Carrera
+                </label>
+                <input
+                  type="text"
+                  placeholder="ej. Departamento de Ciencias Básicas"
+                  value={formMateria.departamento}
+                  onChange={(e) =>
+                    setFormMateria({
+                      ...formMateria,
+                      departamento: e.target.value,
+                    })
+                  }
+                  className="w-full border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-indigo-600"
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">
+                  Aula / Laboratorio Predeterminado
+                </label>
+                <input
+                  type="text"
+                  placeholder="ej. Aula Magna 1, Laboratorio 3"
+                  value={formMateria.aulaPredeterminada}
+                  onChange={(e) =>
+                    setFormMateria({
+                      ...formMateria,
+                      aulaPredeterminada: e.target.value,
+                    })
+                  }
+                  className="w-full border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-indigo-600"
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">
+                  Estado *
+                </label>
+                <select
+                  value={formMateria.estado}
+                  onChange={(e) =>
+                    setFormMateria({ ...formMateria, estado: e.target.value })
+                  }
+                  className="w-full border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-indigo-600 bg-white"
+                >
+                  <option value="Activo">
+                    Activo (Habilitada en el sistema)
+                  </option>
+                  <option value="Inactivo">Inactivo (Baja lógica)</option>
+                </select>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setModalMateria(false)}
+                  className="px-4 py-2 font-medium text-slate-600 hover:bg-slate-100 rounded-xl"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 font-semibold text-white bg-[#4b35e6] hover:bg-[#3e2bc0] rounded-xl shadow-md"
+                >
+                  {editandoMateriaId ? "Guardar Cambios" : "Guardar Cátedra"}
                 </button>
               </div>
             </form>
