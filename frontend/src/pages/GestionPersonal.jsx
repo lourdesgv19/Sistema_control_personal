@@ -22,10 +22,10 @@ import {
   updateEmpleado,
   deleteEmpleado,
   reactivarEmpleado,
-  getEmpleadoClases,
+  getEmpleadoHorarios,
+  addEmpleadoHorario,
+  removeEmpleadoHorario,
   getMetricasEmpleado,
-  addEmpleadoClasesMultiples,
-  removeEmpleadoClase,
 } from "../services/empleadoService";
 import {
   getCategorias,
@@ -36,7 +36,7 @@ import {
 import { getBadgeColorClasses } from "./TiposConfiguracion";
 import ModalAlerta from "../components/comunes/ModalAlerta";
 
-// Componentes modales extraídos
+// Modales del módulo de personal
 import ModalRegistroEmpleado from "../components/personal/ModalRegistroEmpleado";
 import ModalDetalleCronograma from "../components/personal/ModalDetalleCronograma";
 import ModalAsignarClase from "../components/personal/ModalAsignarClase";
@@ -53,8 +53,6 @@ const FORM_EMP_INICIAL = {
   categoriasIds: [],
   cargosIds: [],
   rolSistema: "Consulta / Empleado (Visualiza su ficha)",
-  tipoRegimenHorario: "SIN_HORARIO",
-  horarioGeneralId: "",
   toleranciaIngresoMin: 15,
   toleranciaEgresoMin: 10,
 };
@@ -69,14 +67,31 @@ const FORM_CLASE_INICIAL = {
 };
 
 const DIAS_MAP = [
-  { clave: "Lun", nombre: "Lunes" },
-  { clave: "Mar", nombre: "Martes" },
-  { clave: "Mié", nombre: "Miércoles" },
-  { clave: "Jue", nombre: "Jueves" },
-  { clave: "Vie", nombre: "Viernes" },
-  { clave: "Sáb", nombre: "Sábado" },
-  { clave: "Dom", nombre: "Domingo" },
+  { clave: "Lun", nombre: "Lunes", diaNumero: 1 },
+  { clave: "Mar", nombre: "Martes", diaNumero: 2 },
+  { clave: "Mié", nombre: "Miércoles", diaNumero: 3 },
+  { clave: "Jue", nombre: "Jueves", diaNumero: 4 },
+  { clave: "Vie", nombre: "Viernes", diaNumero: 5 },
+  { clave: "Sáb", nombre: "Sábado", diaNumero: 6 },
+  { clave: "Dom", nombre: "Domingo", diaNumero: 7 },
 ];
+
+const MAPA_DIAS_NUMERO = {
+  Lunes: 1,
+  Martes: 2,
+  Miércoles: 3,
+  Jueves: 4,
+  Viernes: 5,
+  Sábado: 6,
+  Domingo: 7,
+  Lun: 1,
+  Mar: 2,
+  Mié: 3,
+  Jue: 4,
+  Vie: 5,
+  Sáb: 6,
+  Dom: 7,
+};
 
 const ITEMS_POR_PAGINA = 15;
 
@@ -86,8 +101,11 @@ export default function GestionPersonal() {
   const [categorias, setCategorias] = useState([]);
   const [cargos, setCargos] = useState([]);
   const [horarios, setHorarios] = useState([]);
-  const [metricasEmpleado, setMetricasEmpleado] = useState(null);
   const [materias, setMaterias] = useState([]);
+
+  // Métricas y franjas unificadas del empleado en consulta
+  const [metricasEmpleado, setMetricasEmpleado] = useState(null);
+  const [horariosEmpleado, setHorariosEmpleado] = useState([]);
 
   // Filtros
   const [searchTerm, setSearchTerm] = useState("");
@@ -103,7 +121,6 @@ export default function GestionPersonal() {
 
   const [modalDetalle, setModalDetalle] = useState(false);
   const [empleadoSeleccionado, setEmpleadoSeleccionado] = useState(null);
-  const [clasesEmpleado, setClasesEmpleado] = useState([]);
 
   const [modalAsignarClase, setModalAsignarClase] = useState(false);
   const [formClase, setFormClase] = useState(FORM_CLASE_INICIAL);
@@ -209,19 +226,19 @@ export default function GestionPersonal() {
 
   const stats = useMemo(() => {
     const total = empleados.length;
-    const porClases = empleados.filter(
-      (e) => e.tipoRegimenHorario === "POR_CLASES",
+    const porClases = empleados.filter((e) =>
+      (e.categorias || []).some((c) =>
+        (c.codigoTag || c.nombre || "").toLowerCase().includes("docente"),
+      ),
     ).length;
     const turnoFijo = empleados.filter(
-      (e) => e.tipoRegimenHorario === "PREESTABLECIDO",
+      (e) =>
+        !(e.categorias || []).some((c) =>
+          (c.codigoTag || c.nombre || "").toLowerCase().includes("docente"),
+        ),
     ).length;
-    const especifico = empleados.filter(
-      (e) => e.tipoRegimenHorario === "ESPECIFICO",
-    ).length;
-    const sinHorario = empleados.filter(
-      (e) => !e.tipoRegimenHorario || e.tipoRegimenHorario === "SIN_HORARIO",
-    ).length;
-    return { total, porClases, turnoFijo, especifico, sinHorario };
+    const sinHorario = empleados.filter((e) => e.activo === false).length;
+    return { total, porClases, turnoFijo, especifico: 0, sinHorario };
   }, [empleados]);
 
   const filteredEmpleados = useMemo(() => {
@@ -239,23 +256,15 @@ export default function GestionPersonal() {
         e.nroLegajo.toLowerCase().includes(query) ||
         (e.cargos || []).some((c) => c.nombre.toLowerCase().includes(query));
 
-      const matchRegimen =
-        filterRegimen === "TODOS" ||
-        (filterRegimen === "SIN_HORARIO"
-          ? !e.tipoRegimenHorario || e.tipoRegimenHorario === "SIN_HORARIO"
-          : e.tipoRegimenHorario === filterRegimen);
-
       const matchCat =
         filterCategoria === "TODAS" ||
         (e.categorias || []).some(
           (c) => c.nombre?.toLowerCase() === filterCategoria.toLowerCase(),
-        ) ||
-        (e.categoria?.nombre || "").toLowerCase() ===
-          filterCategoria.toLowerCase();
+        );
 
-      return matchEstado && matchSearch && matchRegimen && matchCat;
+      return matchEstado && matchSearch && matchCat;
     });
-  }, [empleados, searchTerm, filterRegimen, filterCategoria, filterEstado]);
+  }, [empleados, searchTerm, filterCategoria, filterEstado]);
 
   const totalPaginas =
     Math.ceil(filteredEmpleados.length / ITEMS_POR_PAGINA) || 1;
@@ -269,7 +278,7 @@ export default function GestionPersonal() {
       mostrarAviso(
         "warning",
         "Empleado Inactivo",
-        `El empleado ${emp.apellido}, ${emp.nombre} se encuentra dado de baja lógica. Debe reactivarlo en el sistema para poder modificar sus horarios o asignarle cátedras.`,
+        `El empleado ${emp.apellido}, ${emp.nombre} se encuentra dado de baja lógica. Debe reactivarlo para modificar sus horarios.`,
       );
       return false;
     }
@@ -284,19 +293,17 @@ export default function GestionPersonal() {
       ...FORM_EMP_INICIAL,
       categoriasIds: categoriasActivas[0]?.id ? [categoriasActivas[0].id] : [],
       cargosIds: [],
-      horarioGeneralId: horariosActivos[0]?.id || "",
     });
     setModalRegistro(true);
   };
 
   const abrirModalEditar = (emp) => {
     setEditandoEmpleadoId(emp.id);
-    let catIds = [];
-    if (Array.isArray(emp.categorias)) {
-      catIds = emp.categorias.map((c) => c.id);
-    } else if (emp.categoria?.id) {
-      catIds = [emp.categoria.id];
-    }
+    const catIds = Array.isArray(emp.categorias)
+      ? emp.categorias.map((c) => c.id)
+      : emp.categoria?.id
+        ? [emp.categoria.id]
+        : [];
 
     setFormEmpleado({
       nombre: emp.nombre || "",
@@ -309,8 +316,6 @@ export default function GestionPersonal() {
       categoriasIds: catIds,
       cargosIds: Array.isArray(emp.cargos) ? emp.cargos.map((c) => c.id) : [],
       rolSistema: emp.rolSistema || "Consulta / Empleado (Visualiza su ficha)",
-      tipoRegimenHorario: emp.tipoRegimenHorario || "SIN_HORARIO",
-      horarioGeneralId: emp.horarioGeneral?.id || "",
       toleranciaIngresoMin: emp.toleranciaIngresoMin ?? 15,
       toleranciaEgresoMin: emp.toleranciaEgresoMin ?? 10,
     });
@@ -329,9 +334,6 @@ export default function GestionPersonal() {
         nroLegajo: formEmpleado.nroLegajo,
         idBiometrico: formEmpleado.idBiometrico,
         rolSistema: formEmpleado.rolSistema,
-        tipoRegimenHorario: formEmpleado.horarioGeneralId
-          ? "PREESTABLECIDO"
-          : formEmpleado.tipoRegimenHorario,
         toleranciaIngresoMin: parseInt(formEmpleado.toleranciaIngresoMin),
         toleranciaEgresoMin: parseInt(formEmpleado.toleranciaEgresoMin),
         categorias: (formEmpleado.categoriasIds || []).map((id) => ({
@@ -340,9 +342,6 @@ export default function GestionPersonal() {
         cargos: (formEmpleado.cargosIds || []).map((id) => ({
           id: parseInt(id),
         })),
-        horarioGeneral: formEmpleado.horarioGeneralId
-          ? { id: parseInt(formEmpleado.horarioGeneralId) }
-          : null,
       };
 
       if (editandoEmpleadoId) {
@@ -428,18 +427,18 @@ export default function GestionPersonal() {
     });
   };
 
-  // --- CRONOGRAMA & CLASES ---
+  // --- CRONOGRAMA & HORARIOS UNIFICADOS ---
   const handleVerDetalle = async (emp) => {
     setEmpleadoSeleccionado(emp);
     try {
-      const [clases, metricas] = await Promise.all([
-        getEmpleadoClases(emp.id),
+      const [horariosRes, metricasRes] = await Promise.all([
+        getEmpleadoHorarios(emp.id),
         getMetricasEmpleado(emp.id),
       ]);
-      setClasesEmpleado(clases || []);
-      setMetricasEmpleado(metricas);
+      setHorariosEmpleado(horariosRes || []);
+      setMetricasEmpleado(metricasRes);
     } catch (err) {
-      setClasesEmpleado([]);
+      setHorariosEmpleado([]);
       setMetricasEmpleado(null);
     }
     setModalDetalle(true);
@@ -453,8 +452,8 @@ export default function GestionPersonal() {
     setModalAsignarClase(true);
   };
 
-  const handleGuardarClase = async (e) => {
-    e.preventDefault();
+  const handleGuardarClase = async (e, forzar = false) => {
+    if (e && e.preventDefault) e.preventDefault();
     if (!empleadoSeleccionado) return;
 
     const dias = formClase.diasSemana || [];
@@ -467,55 +466,35 @@ export default function GestionPersonal() {
       return;
     }
 
-    const horaIniStr =
-      formClase.horaInicio.length === 5
-        ? `${formClase.horaInicio}:00`
-        : formClase.horaInicio;
-    const horaFinStr =
-      formClase.horaFin.length === 5
-        ? `${formClase.horaFin}:00`
-        : formClase.horaFin;
-
-    // Validación preventiva de sobreposición
-    for (const dia of dias) {
-      const claseConflicto = clasesEmpleado.find((c) => {
-        if (!c.diaSemana || c.diaSemana.toLowerCase() !== dia.toLowerCase())
-          return false;
-        const iniExist = c.horaInicio.substring(0, 5);
-        const finExist = c.horaFin.substring(0, 5);
-        const iniNueva = formClase.horaInicio.substring(0, 5);
-        const finNueva = formClase.horaFin.substring(0, 5);
-        return iniNueva < finExist && finNueva > iniExist;
-      });
-
-      if (claseConflicto) {
-        mostrarAviso(
-          "danger",
-          "Conflicto de Horario",
-          `El día ${dia} ya tiene asignada la materia "${claseConflicto.materia}" de ${claseConflicto.horaInicio.substring(0, 5)} a ${claseConflicto.horaFin.substring(0, 5)} hs.`,
-        );
-        return;
-      }
-    }
-
     try {
+      const diasNumericos = dias.map((d) =>
+        typeof d === "number" ? d : MAPA_DIAS_NUMERO[d] || 1,
+      );
+
       const payload = {
-        materiaId: formClase.materiaId,
-        materia: formClase.materia,
-        diasSemana: dias,
-        horaInicio: horaIniStr,
-        horaFin: horaFinStr,
-        aula: formClase.aula,
+        diasSemana: diasNumericos,
+        horaEntrada:
+          formClase.horaInicio.length === 5
+            ? `${formClase.horaInicio}:00`
+            : formClase.horaInicio,
+        horaSalida:
+          formClase.horaFin.length === 5
+            ? `${formClase.horaFin}:00`
+            : formClase.horaFin,
+        materiaId: formClase.materiaId ? parseInt(formClase.materiaId) : null,
+        etiqueta: formClase.materia || "Cátedra",
+        aula: formClase.aula || null,
+        forzarGuardado: forzar, // <-- Indica si el usuario ya aceptó la advertencia
       };
 
-      await addEmpleadoClasesMultiples(empleadoSeleccionado.id, payload);
+      await addEmpleadoHorario(empleadoSeleccionado.id, payload);
 
-      const [clasesActualizadas, metricasActualizadas] = await Promise.all([
-        getEmpleadoClases(empleadoSeleccionado.id),
+      const [horariosActualizados, metricasActualizadas] = await Promise.all([
+        getEmpleadoHorarios(empleadoSeleccionado.id),
         getMetricasEmpleado(empleadoSeleccionado.id),
       ]);
 
-      setClasesEmpleado(clasesActualizadas);
+      setHorariosEmpleado(horariosActualizados);
       setMetricasEmpleado(metricasActualizadas);
       setModalAsignarClase(false);
       setFormClase(FORM_CLASE_INICIAL);
@@ -523,99 +502,160 @@ export default function GestionPersonal() {
       mostrarAviso(
         "success",
         "Clases Asignadas",
-        "Las cátedras fueron agregadas sin conflictos.",
+        "Las cátedras fueron agregadas con éxito.",
       );
     } catch (err) {
-      const mensaje =
-        err.response?.data?.message ||
-        "No se pudo asignar la clase por conflicto de horario.";
-      mostrarAviso("danger", "Error de Asignación", mensaje);
+      const mensaje = err.response?.data?.message || "";
+
+      // Si el backend avisa de solapamiento, se muestra la advertencia con opción de continuar:
+      if (mensaje.includes("SOLAPAMIENTO")) {
+        setModalAlerta({
+          isOpen: true,
+          tipo: "warning",
+          titulo: "¿Superponer Horario?",
+          mensaje: `${mensaje.replace("SOLAPAMIENTO: ", "")} ¿Desea guardarlo de todas formas?`,
+          textoConfirmar: "Sí, asignar igual",
+          textoCancelar: "Corregir horario",
+          mostrarCancelar: true,
+          onConfirmar: async () => {
+            setModalAlerta((prev) => ({ ...prev, isOpen: false }));
+            await handleGuardarClase(null, true); // Reintenta con forzar = true
+          },
+        });
+      } else {
+        mostrarAviso(
+          "danger",
+          "Error",
+          mensaje || "No se pudo asignar el bloque horario.",
+        );
+      }
     }
   };
 
-  const handleEliminarClase = async (claseId) => {
-    if (!claseId) {
-      mostrarAviso("danger", "Error", "ID de clase no válido.");
-      return;
-    }
-
+  const handleEliminarHorario = async (horarioId) => {
     try {
-      await removeEmpleadoClase(claseId);
-      // Refrescar las clases y métricas del empleado abierto
-      const [clasesActualizadas, metricasActualizadas] = await Promise.all([
-        getEmpleadoClases(empleadoSeleccionado.id),
+      await removeEmpleadoHorario(horarioId);
+      const [horariosActualizados, metricasActualizadas] = await Promise.all([
+        getEmpleadoHorarios(empleadoSeleccionado.id),
         getMetricasEmpleado(empleadoSeleccionado.id),
       ]);
-
-      setClasesEmpleado(clasesActualizadas || []);
+      setHorariosEmpleado(horariosActualizados);
       setMetricasEmpleado(metricasActualizadas);
-
-      // Refrescar la tabla general de empleados
       await cargarDatos();
       mostrarAviso(
         "success",
-        "Clase Eliminada",
-        "La clase fue dada de baja del cronograma.",
+        "Horario Eliminado",
+        "La franja horaria fue dada de baja.",
       );
     } catch (err) {
-      console.error("Error al eliminar la clase:", err);
-      const mensaje =
-        err.response?.data?.message ||
-        "No se pudo quitar la clase del servidor.";
-      mostrarAviso("danger", "Error", mensaje);
+      mostrarAviso("danger", "Error", "No se pudo eliminar el bloque horario.");
     }
   };
 
-  // --- ASIGNACIÓN DE TURNO ---
+  // --- ASIGNACIÓN DE TURNO PREESTABLECIDO O RANGOS ESPECÍFICOS ---
   const abrirModalTurno = (emp) => {
     setEmpleadoSeleccionado(emp);
-    setTipoAsignacionTurno(
-      emp.tipoRegimenHorario === "ESPECIFICO" ? "ESPECIFICO" : "PREESTABLECIDO",
-    );
-    setHorarioGeneralSeleccionado(
-      emp.horarioGeneral?.id || horariosActivos[0]?.id || "",
-    );
+    setTipoAsignacionTurno("PREESTABLECIDO");
+    setHorarioGeneralSeleccionado(horariosActivos[0]?.id || "");
     setTolIngresoEsp(emp.toleranciaIngresoMin ?? 15);
     setTolEgresoEsp(emp.toleranciaEgresoMin ?? 10);
     setModalAsignarTurno(true);
   };
 
-  const handleGuardarTurno = async () => {
-    if (!empleadoSeleccionado) return;
-    try {
-      const payload = {
-        ...empleadoSeleccionado,
-        tipoRegimenHorario: tipoAsignacionTurno,
-        horarioGeneral:
-          tipoAsignacionTurno === "PREESTABLECIDO"
-            ? { id: parseInt(horarioGeneralSeleccionado) }
-            : null,
-        toleranciaIngresoMin: parseInt(tolIngresoEsp),
-        toleranciaEgresoMin: parseInt(tolEgresoEsp),
-        rangosHorario:
-          tipoAsignacionTurno === "ESPECIFICO"
-            ? rangosEspecificos.map((r) => ({
-                horaDesde:
-                  r.horaDesde.length === 5 ? `${r.horaDesde}:00` : r.horaDesde,
-                horaHasta:
-                  r.horaHasta.length === 5 ? `${r.horaHasta}:00` : r.horaHasta,
-                etiqueta: r.etiqueta || "Turno Específico",
-                diasAplicables: diasEspecificos.join(","),
-              }))
-            : [],
-      };
+  const handleGuardarTurno = async (forzar = false) => {
+    // Si 'forzar' no es booleano estricto (por ejemplo, viene el evento onClick del botón), se fija en false
+    const esForzado = typeof forzar === "boolean" ? forzar : false;
 
-      await updateEmpleado(empleadoSeleccionado.id, payload);
+    if (!empleadoSeleccionado) return;
+
+    try {
+      if (tipoAsignacionTurno === "PREESTABLECIDO") {
+        const plantilla = horarios.find(
+          (h) => h.id === parseInt(horarioGeneralSeleccionado),
+        );
+        if (!plantilla) {
+          mostrarAviso(
+            "warning",
+            "Atención",
+            "Seleccione un turno preestablecido.",
+          );
+          return;
+        }
+
+        const diasArray = plantilla.diasLaborables
+          ? plantilla.diasLaborables
+              .split(",")
+              .map((d) => MAPA_DIAS_NUMERO[d.trim()] || 1)
+          : [1, 2, 3, 4, 5];
+
+        await addEmpleadoHorario(empleadoSeleccionado.id, {
+          diasSemana: diasArray,
+          horaEntrada: plantilla.horaEntrada,
+          horaSalida: plantilla.horaEgreso,
+          materiaId: null,
+          etiqueta: plantilla.nombre,
+          aula: null,
+          forzarGuardado: esForzado, // ✅ Siempre es un booleano puro (true o false)
+        });
+      } else {
+        const diasNumericos = diasEspecificos.map(
+          (d) => MAPA_DIAS_NUMERO[d] || 1,
+        );
+
+        for (const r of rangosEspecificos) {
+          await addEmpleadoHorario(empleadoSeleccionado.id, {
+            diasSemana: diasNumericos,
+            horaEntrada:
+              r.horaDesde.length === 5 ? `${r.horaDesde}:00` : r.horaDesde,
+            horaSalida:
+              r.horaHasta.length === 5 ? `${r.horaHasta}:00` : r.horaHasta,
+            materiaId: null,
+            etiqueta: r.etiqueta || "Turno Específico",
+            aula: null,
+            forzarGuardado: esForzado, // ✅ Siempre es un booleano puro
+          });
+        }
+      }
+
+      const [horariosActualizados, metricasActualizadas] = await Promise.all([
+        getEmpleadoHorarios(empleadoSeleccionado.id),
+        getMetricasEmpleado(empleadoSeleccionado.id),
+      ]);
+      setHorariosEmpleado(horariosActualizados);
+      setMetricasEmpleado(metricasActualizadas);
       await cargarDatos();
       setModalAsignarTurno(false);
       mostrarAviso(
         "success",
         "Turno Asignado",
-        "Se actualizó el régimen laboral del empleado.",
+        "Se generaron las franjas horarias del empleado.",
       );
     } catch (err) {
-      console.error(err);
-      mostrarAviso("danger", "Error", "No se pudo asignar el horario.");
+      const mensaje = err.response?.data?.message || "";
+      if (mensaje.includes("SOLAPAMIENTO")) {
+        setModalAlerta({
+          isOpen: true,
+          tipo: "warning",
+          titulo: "¿Superponer Franjas Horarias?",
+          mensaje: `${mensaje.replace(
+            "SOLAPAMIENTO: ",
+            "",
+          )} ¿Desea asignar este turno de todas formas?`,
+          textoConfirmar: "Sí, asignar igual",
+          textoCancelar: "Revisar horario",
+          mostrarCancelar: true,
+          onConfirmar: async () => {
+            setModalAlerta((prev) => ({ ...prev, isOpen: false }));
+            await handleGuardarTurno(true); // ✅ Pasa un booleano explícito
+          },
+        });
+      } else {
+        mostrarAviso(
+          "danger",
+          "Conflicto",
+          mensaje || "No se pudo asignar el turno.",
+        );
+      }
     }
   };
 
@@ -640,7 +680,7 @@ export default function GestionPersonal() {
 
         <button
           onClick={abrirModalCrear}
-          className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#4b35e6] hover:bg-[#3f2bc9] text-white text-xs font-semibold shadow-md shadow-indigo-100 transition self-start md:self-auto"
+          className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#4b35e6] hover:bg-[#3f2bc9] text-white text-xs font-semibold shadow-md shadow-indigo-100 transition self-start md:self-auto cursor-pointer"
         >
           <Plus className="w-4 h-4 stroke-[2.5]" />
           Registrar Empleado
@@ -648,7 +688,7 @@ export default function GestionPersonal() {
       </div>
 
       {/* 2. TARJETAS DE CANTIDADES */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <button
           type="button"
           onClick={() => setFilterRegimen("TODOS")}
@@ -669,23 +709,23 @@ export default function GestionPersonal() {
               {stats.total}
             </div>
             <div className="text-[10px] text-slate-500 font-medium mt-0.5">
-              Todos los empleados
+              Todos los registrados
             </div>
           </div>
         </button>
 
         <button
           type="button"
-          onClick={() => setFilterRegimen("POR_CLASES")}
+          onClick={() => setFilterRegimen("DOCENTES")}
           className={`p-5 rounded-2xl flex flex-col justify-between text-left transition-all border cursor-pointer ${
-            filterRegimen === "POR_CLASES"
+            filterRegimen === "DOCENTES"
               ? "bg-purple-50/80 border-purple-500 ring-4 ring-purple-500/20 shadow-md scale-[1.02]"
               : "bg-white border-slate-200 hover:border-purple-300 hover:bg-purple-50/30"
           }`}
         >
           <div className="flex items-center justify-between w-full text-purple-600">
             <span className="text-[10px] font-bold uppercase tracking-wider text-purple-700">
-              Por Clases
+              Docentes
             </span>
             <BookOpen className="w-4 h-4" />
           </div>
@@ -694,23 +734,23 @@ export default function GestionPersonal() {
               {stats.porClases}
             </div>
             <div className="text-[10px] text-purple-600 font-medium mt-0.5">
-              Docentes con cátedras
+              Con perfil docente
             </div>
           </div>
         </button>
 
         <button
           type="button"
-          onClick={() => setFilterRegimen("PREESTABLECIDO")}
+          onClick={() => setFilterRegimen("GENERAL")}
           className={`p-5 rounded-2xl flex flex-col justify-between text-left transition-all border cursor-pointer ${
-            filterRegimen === "PREESTABLECIDO"
+            filterRegimen === "GENERAL"
               ? "bg-indigo-50/80 border-indigo-500 ring-4 ring-indigo-500/20 shadow-md scale-[1.02]"
               : "bg-white border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/30"
           }`}
         >
           <div className="flex items-center justify-between w-full text-indigo-600">
             <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-700">
-              Turno Fijo
+              Administrativos / Maestranza
             </span>
             <Clock className="w-4 h-4" />
           </div>
@@ -719,48 +759,23 @@ export default function GestionPersonal() {
               {stats.turnoFijo}
             </div>
             <div className="text-[10px] text-indigo-600 font-medium mt-0.5">
-              Preestablecido general
+              Personal no docente
             </div>
           </div>
         </button>
 
         <button
           type="button"
-          onClick={() => setFilterRegimen("ESPECIFICO")}
+          onClick={() => setFilterRegimen("INACTIVOS")}
           className={`p-5 rounded-2xl flex flex-col justify-between text-left transition-all border cursor-pointer ${
-            filterRegimen === "ESPECIFICO"
-              ? "bg-blue-50/80 border-blue-500 ring-4 ring-blue-500/20 shadow-md scale-[1.02]"
-              : "bg-white border-slate-200 hover:border-blue-300 hover:bg-blue-50/30"
+            filterRegimen === "INACTIVOS"
+              ? "bg-rose-50/80 border-rose-500 ring-4 ring-rose-500/20 shadow-md scale-[1.02]"
+              : "bg-white border-slate-200 hover:border-rose-300 hover:bg-rose-50/30"
           }`}
         >
-          <div className="flex items-center justify-between w-full text-blue-600">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-blue-700">
-              Específico
-            </span>
-            <Sliders className="w-4 h-4" />
-          </div>
-          <div className="mt-3">
-            <div className="text-2xl font-bold text-slate-900">
-              {stats.especifico}
-            </div>
-            <div className="text-[10px] text-blue-600 font-medium mt-0.5">
-              Rangos personalizados
-            </div>
-          </div>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setFilterRegimen("SIN_HORARIO")}
-          className={`p-5 rounded-2xl flex flex-col justify-between text-left transition-all border cursor-pointer ${
-            filterRegimen === "SIN_HORARIO"
-              ? "bg-amber-50/80 border-amber-500 ring-4 ring-amber-500/20 shadow-md scale-[1.02]"
-              : "bg-white border-slate-200 hover:border-amber-300 hover:bg-amber-50/30"
-          }`}
-        >
-          <div className="flex items-center justify-between w-full text-amber-500">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-amber-600">
-              Sin Horario
+          <div className="flex items-center justify-between w-full text-rose-500">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-rose-600">
+              Bajas Lógicas
             </span>
             <AlertTriangle className="w-4 h-4" />
           </div>
@@ -768,8 +783,8 @@ export default function GestionPersonal() {
             <div className="text-2xl font-bold text-slate-900">
               {stats.sinHorario}
             </div>
-            <div className="text-[10px] text-amber-600 font-medium mt-0.5">
-              Pendientes de asignar
+            <div className="text-[10px] text-rose-600 font-medium mt-0.5">
+              Inactivos
             </div>
           </div>
         </button>
@@ -790,18 +805,6 @@ export default function GestionPersonal() {
 
         <div className="flex flex-wrap items-center gap-2.5 text-xs">
           <select
-            value={filterRegimen}
-            onChange={(e) => setFilterRegimen(e.target.value)}
-            className="border border-slate-200 rounded-xl px-3 py-2 bg-white text-slate-700 outline-none focus:border-indigo-500 font-medium"
-          >
-            <option value="TODOS">Todos los regímenes de horario</option>
-            <option value="POR_CLASES">Docente por Cátedras</option>
-            <option value="PREESTABLECIDO">Turno Preestablecido</option>
-            <option value="ESPECIFICO">Rango Específico</option>
-            <option value="SIN_HORARIO">Sin Horario Asignado</option>
-          </select>
-
-          <select
             value={filterCategoria}
             onChange={(e) => setFilterCategoria(e.target.value)}
             className="border border-slate-200 rounded-xl px-3 py-2 bg-white text-slate-700 outline-none focus:border-indigo-500 font-medium"
@@ -819,8 +822,8 @@ export default function GestionPersonal() {
             onChange={(e) => setFilterEstado(e.target.value)}
             className="border border-slate-200 rounded-xl px-3 py-2 bg-white font-semibold text-slate-700 outline-none focus:border-indigo-500"
           >
-            <option value="ACTIVOS">Solo Activos</option>
             <option value="TODOS">Todos los estados</option>
+            <option value="ACTIVOS">Solo Activos</option>
             <option value="INACTIVOS">Solo Bajas</option>
           </select>
         </div>
@@ -834,7 +837,7 @@ export default function GestionPersonal() {
               <th className="px-6 py-3.5 tracking-wider">Empleado</th>
               <th className="px-6 py-3.5 tracking-wider">Categoría & Cargo</th>
               <th className="px-6 py-3.5 tracking-wider">
-                Carga Semanal & Horario
+                Cronograma & Horarios
               </th>
               <th className="px-6 py-3.5 tracking-wider">Estado</th>
               <th className="px-6 py-3.5 tracking-wider text-right">
@@ -854,10 +857,6 @@ export default function GestionPersonal() {
                   (emp.categoria?.codigoTag || "")
                     .toLowerCase()
                     .includes("docente");
-
-                const horarioNombre = emp.horarioGeneral
-                  ? emp.horarioGeneral.nombre
-                  : null;
 
                 const categoriasList =
                   emp.categorias && emp.categorias.length > 0
@@ -936,7 +935,7 @@ export default function GestionPersonal() {
                         className="inline-flex items-center gap-1.5 px-3 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg text-xs font-semibold transition cursor-pointer"
                       >
                         <Calendar className="w-3.5 h-3.5" />
-                        Ver detalle
+                        Ver cronograma
                       </button>
                     </td>
 
@@ -961,16 +960,14 @@ export default function GestionPersonal() {
 
                     <td className="px-6 py-4 text-right">
                       <div className="flex items-center justify-end gap-2 text-slate-400">
-                        {/* Ver Detalle / Cronograma (Siempre accesible para consulta histórica) */}
                         <button
                           onClick={() => handleVerDetalle(emp)}
-                          className="p-1 hover:text-indigo-600 transition"
+                          className="p-1 hover:text-indigo-600 transition cursor-pointer"
                           title="Ver Cronograma y Ficha"
                         >
                           <Eye className="w-4 h-4" />
                         </button>
 
-                        {/* Asignar Turno / Horario (Bloqueado si está inactivo) */}
                         <button
                           onClick={() =>
                             verificarEmpleadoActivo(emp, () =>
@@ -984,14 +981,13 @@ export default function GestionPersonal() {
                           }`}
                           title={
                             emp.activo === false
-                              ? "Empleado inactivo: Reactívelo para asignar turnos"
-                              : "Asignar Turno / Horario"
+                              ? "Empleado inactivo"
+                              : "Asignar Horario / Turno"
                           }
                         >
                           <Clock className="w-4 h-4" />
                         </button>
 
-                        {/* Asignar Clase a Docente (Bloqueado si está inactivo) */}
                         {esDocente && (
                           <button
                             onClick={() =>
@@ -1007,15 +1003,14 @@ export default function GestionPersonal() {
                             }`}
                             title={
                               emp.activo === false
-                                ? "Empleado inactivo: Reactívelo para asignar clases"
-                                : "Asignar Clase a Docente"
+                                ? "Empleado inactivo"
+                                : "Asignar Cátedra a Docente"
                             }
                           >
                             <Plus className="w-4 h-4 text-purple-600 stroke-[2.5]" />
                           </button>
                         )}
 
-                        {/* Editar Empleado (Bloqueado si está inactivo) */}
                         <button
                           onClick={() =>
                             verificarEmpleadoActivo(emp, () =>
@@ -1027,16 +1022,11 @@ export default function GestionPersonal() {
                               ? "opacity-30 cursor-not-allowed hover:text-slate-400"
                               : "hover:text-indigo-600 cursor-pointer"
                           }`}
-                          title={
-                            emp.activo === false
-                              ? "Empleado inactivo: Reactívelo para editar sus datos"
-                              : "Editar Empleado"
-                          }
+                          title="Editar Empleado"
                         >
                           <Pencil className="w-4 h-4" />
                         </button>
 
-                        {/* Alta / Baja Lógica */}
                         {emp.activo !== false ? (
                           <button
                             onClick={() =>
@@ -1145,7 +1135,7 @@ export default function GestionPersonal() {
         </div>
       </div>
 
-      {/* RENDERIZADO DE LOS 4 MODALES EXTERNOS */}
+      {/* RENDERIZADO DE MODALES */}
       <ModalRegistroEmpleado
         isOpen={modalRegistro}
         onClose={() => setModalRegistro(false)}
@@ -1162,7 +1152,7 @@ export default function GestionPersonal() {
         isOpen={modalDetalle}
         onClose={() => setModalDetalle(false)}
         empleado={empleadoSeleccionado}
-        clases={clasesEmpleado}
+        clases={horariosEmpleado}
         metricas={metricasEmpleado}
         diasMap={DIAS_MAP}
         diasEspecificos={diasEspecificos}
@@ -1172,9 +1162,9 @@ export default function GestionPersonal() {
             handleAbrirAsignarClase(dia),
           )
         }
-        onEliminarClase={(claseId) =>
+        onEliminarClase={(horarioId) =>
           verificarEmpleadoActivo(empleadoSeleccionado, () =>
-            handleEliminarClase(claseId),
+            handleEliminarHorario(horarioId),
           )
         }
         onOpenAsignarTurno={(emp) =>

@@ -1,16 +1,13 @@
 import React from "react";
 import { X, Calendar, Plus, Sliders, AlertTriangle } from "lucide-react";
-import { getBadgeColorClasses } from "../../pages/TiposConfiguracion";
 
 export default function ModalDetalleCronograma({
   isOpen,
   onClose,
   empleado,
-  clases,
+  clases = [],
   metricas,
-  diasMap,
-  diasEspecificos,
-  rangosEspecificos,
+  diasMap = [],
   onOpenAsignarClase,
   onEliminarClase,
   onOpenAsignarTurno,
@@ -18,16 +15,12 @@ export default function ModalDetalleCronograma({
   if (!isOpen || !empleado) return null;
 
   const isActivo = empleado.activo !== false;
-  const esDocentePorClases = empleado.tipoRegimenHorario === "POR_CLASES";
-  const tieneTurnoPreestablecido =
-    empleado.tipoRegimenHorario === "PREESTABLECIDO" && empleado.horarioGeneral;
-  const tieneTurnoEspecifico = empleado.tipoRegimenHorario === "ESPECIFICO";
 
-  const diasPreestablecidos = tieneTurnoPreestablecido
-    ? (empleado.horarioGeneral.diasLaborables || "")
-        .split(",")
-        .map((d) => d.trim().toLowerCase())
-    : [];
+  const esDocente =
+    (empleado.categorias || []).some((c) =>
+      (c.codigoTag || c.nombre || "").toLowerCase().includes("docente"),
+    ) ||
+    (empleado.categoria?.codigoTag || "").toLowerCase().includes("docente");
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
@@ -63,25 +56,28 @@ export default function ModalDetalleCronograma({
               </div>
             </div>
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-white">
+          <button
+            onClick={onClose}
+            className="text-slate-400 hover:text-white cursor-pointer"
+          >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* ALERTA VISUAL SI EL EMPLEADO ESTÁ INACTIVO */}
+        {/* Alerta de baja lógica */}
         {!isActivo && (
           <div className="bg-amber-50 border-b border-amber-200 px-6 py-2.5 flex items-center gap-2 text-amber-800 text-xs font-medium">
             <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
             <span>
               <strong>Empleado Inactivo:</strong> Las opciones de asignación de
-              turnos, alta y eliminación de clases están deshabilitadas hasta
+              turnos, alta y eliminación de horarios están deshabilitadas hasta
               que se reactive al empleado.
             </span>
           </div>
         )}
 
         <div className="p-6 overflow-y-auto space-y-6">
-          {/* Métricas */}
+          {/* Métricas calculadas centralizadas */}
           <div className="grid grid-cols-4 gap-4 text-xs">
             <div className="bg-slate-50 border border-slate-200 p-4 rounded-2xl">
               <div className="text-[10px] font-bold uppercase text-slate-400">
@@ -144,7 +140,7 @@ export default function ModalDetalleCronograma({
                 <span>Cronograma de Clases y Jornadas por Día:</span>
               </div>
 
-              {esDocentePorClases && (
+              {esDocente && (
                 <button
                   type="button"
                   disabled={!isActivo}
@@ -165,29 +161,12 @@ export default function ModalDetalleCronograma({
             </div>
 
             <div className="grid grid-cols-7 gap-2.5">
-              {diasMap.map(({ clave, nombre }) => {
-                const clasesDia = clases.filter(
-                  (c) => c.diaSemana?.toLowerCase() === nombre.toLowerCase(),
+              {diasMap.map(({ nombre, diaNumero }) => {
+                // Filtro unificado por diaNumero (1=Lunes, ..., 7=Domingo)
+                const franjasDia = clases.filter(
+                  (c) => c.diaSemana === diaNumero,
                 );
-
-                const trabajaPreestablecido =
-                  tieneTurnoPreestablecido &&
-                  diasPreestablecidos.some(
-                    (d) =>
-                      d === clave.toLowerCase() ||
-                      d === nombre.toLowerCase().substring(0, 3),
-                  );
-
-                const trabajaEspecifico =
-                  tieneTurnoEspecifico &&
-                  (diasEspecificos || []).some(
-                    (d) => d.toLowerCase() === clave.toLowerCase(),
-                  );
-
-                const tieneActividad =
-                  clasesDia.length > 0 ||
-                  trabajaPreestablecido ||
-                  trabajaEspecifico;
+                const tieneActividad = franjasDia.length > 0;
 
                 return (
                   <div
@@ -213,80 +192,64 @@ export default function ModalDetalleCronograma({
                       </div>
 
                       <div className="space-y-2">
-                        {clasesDia.map((c) => (
-                          <div
-                            key={c.id || c.idClase}
-                            className="bg-purple-50/70 border border-purple-100 rounded-xl p-2 text-[10px] relative group"
-                          >
-                            {/* X solo interactiva si el empleado está activo */}
-                            {isActivo && (
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  onEliminarClase(c.id || c.idClase);
-                                }}
-                                className="absolute top-1 right-1 p-0.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-md opacity-0 group-hover:opacity-100 transition cursor-pointer z-10"
-                                title="Quitar clase"
-                              >
-                                <X className="w-3.5 h-3.5" />
-                              </button>
-                            )}
-                            <div className="font-bold text-purple-900 leading-tight">
-                              {c.materia}
-                            </div>
-                            <div className="text-purple-700 mt-1 font-medium">
-                              {c.horaInicio?.substring(0, 5)} -{" "}
-                              {c.horaFin?.substring(0, 5)}
-                            </div>
-                            {c.aula && (
-                              <div className="text-slate-500 mt-0.5">
-                                Aula: {c.aula}
-                              </div>
-                            )}
-                          </div>
-                        ))}
+                        {franjasDia.map((f) => {
+                          const esMateria = Boolean(f.materia);
+                          return (
+                            <div
+                              key={f.id || f.idEmpleadoHorario}
+                              className={`border rounded-xl p-2 text-[10px] relative group ${
+                                esMateria
+                                  ? "bg-purple-50/70 border-purple-100"
+                                  : "bg-indigo-50/70 border-indigo-100"
+                              }`}
+                            >
+                              {isActivo && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onEliminarClase(
+                                      f.id || f.idEmpleadoHorario,
+                                    );
+                                  }}
+                                  className="absolute top-1 right-1 p-0.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-md opacity-0 group-hover:opacity-100 transition cursor-pointer z-10"
+                                  title="Quitar franja horaria"
+                                >
+                                  <X className="w-3.5 h-3.5" />
+                                </button>
+                              )}
 
-                        {trabajaPreestablecido && (
-                          <div className="bg-indigo-50/60 border border-indigo-200 rounded-xl p-2.5 text-[10px] space-y-1">
-                            <div className="font-bold text-indigo-900 leading-tight">
-                              {empleado.horarioGeneral.nombre}
-                            </div>
-                            <div className="text-indigo-700 font-semibold">
-                              {empleado.horarioGeneral.horaEntrada?.substring(
-                                0,
-                                5,
-                              )}{" "}
-                              a{" "}
-                              {empleado.horarioGeneral.horaEgreso?.substring(
-                                0,
-                                5,
-                              )}{" "}
-                              hs
-                            </div>
-                            <div className="text-indigo-500 text-[9px]">
-                              Jornada Completa
-                            </div>
-                          </div>
-                        )}
-
-                        {trabajaEspecifico && (
-                          <div className="space-y-1">
-                            {(rangosEspecificos || []).map((r, idx) => (
                               <div
-                                key={idx}
-                                className="bg-blue-50/70 border border-blue-200 rounded-xl p-2 text-[10px]"
+                                className={`font-bold leading-tight ${
+                                  esMateria
+                                    ? "text-purple-900"
+                                    : "text-indigo-900"
+                                }`}
                               >
-                                <div className="font-bold text-blue-900">
-                                  {r.etiqueta || "Turno Específico"}
-                                </div>
-                                <div className="text-blue-700 font-semibold">
-                                  {r.horaDesde} a {r.horaHasta} hs
-                                </div>
+                                {esMateria
+                                  ? f.materia.nombre
+                                  : f.etiqueta || "Turno Regular"}
                               </div>
-                            ))}
-                          </div>
-                        )}
+
+                              <div
+                                className={`mt-1 font-semibold ${
+                                  esMateria
+                                    ? "text-purple-700"
+                                    : "text-indigo-700"
+                                }`}
+                              >
+                                {f.horaEntrada?.substring(0, 5)} -{" "}
+                                {f.horaSalida?.substring(0, 5)} hs
+                              </div>
+
+                              {f.aula && (
+                                <div className="text-slate-500 mt-0.5">
+                                  Aula: {f.aula}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
 
                         {!tieneActividad && (
                           <div className="text-center py-10 text-[11px] text-slate-400 italic">
@@ -296,7 +259,7 @@ export default function ModalDetalleCronograma({
                       </div>
                     </div>
 
-                    {esDocentePorClases && (
+                    {esDocente && (
                       <button
                         type="button"
                         disabled={!isActivo}
@@ -338,11 +301,7 @@ export default function ModalDetalleCronograma({
                 ? "bg-slate-200 text-slate-400 cursor-not-allowed shadow-none"
                 : "bg-[#4b35e6] hover:bg-[#3e2bc0] text-white cursor-pointer"
             }`}
-            title={
-              !isActivo
-                ? "Empleado inactivo: Reactívelo primero"
-                : "Modificar Turno"
-            }
+            title={!isActivo ? "Empleado inactivo" : "Modificar Turno"}
           >
             <Sliders className="w-3.5 h-3.5" />
             Modificar / Asignar Horario

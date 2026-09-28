@@ -10,18 +10,18 @@ export default function ModalAsignarTurno({
   setTipoAsignacionTurno,
   horarioGeneralSeleccionado,
   setHorarioGeneralSeleccionado,
-  horariosActivos,
-  rangosEspecificos,
+  horariosActivos = [],
+  rangosEspecificos = [],
   onAgregarRango,
   onEliminarRango,
   onCambiarRango,
-  diasEspecificos,
+  diasEspecificos = [],
   onToggleDiaEspecifico,
   tolIngresoEsp,
   setTolIngresoEsp,
   tolEgresoEsp,
   setTolEgresoEsp,
-  diasMap,
+  diasMap = [],
 }) {
   if (!isOpen || !empleado) return null;
 
@@ -31,21 +31,24 @@ export default function ModalAsignarTurno({
         <div className="bg-[#111827] px-6 py-4 text-white flex items-center justify-between">
           <div>
             <h3 className="font-bold text-sm">
-              Asignar Turno y Horario Laboral
+              Asignar Turno y Franjas Horarias
             </h3>
             <p className="text-[11px] text-slate-400">
               {empleado.apellido}, {empleado.nombre} •{" "}
               {(empleado.cargos || []).map((c) => c.nombre).join(", ")}
             </p>
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-white">
+          <button
+            onClick={onClose}
+            className="text-slate-400 hover:text-white cursor-pointer"
+          >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         <div className="p-6 space-y-5 text-xs overflow-y-auto">
           <div className="text-[10px] font-bold uppercase text-slate-400">
-            Tipo de Asignación de Horario
+            Modalidad de Carga de Horario
           </div>
           <div className="grid grid-cols-2 gap-3">
             <button
@@ -62,10 +65,10 @@ export default function ModalAsignarTurno({
               </div>
               <div>
                 <div className="font-bold text-slate-900">
-                  Turno Preestablecido General
+                  Turno Plantilla General
                 </div>
                 <div className="text-[10px] text-slate-500 mt-0.5">
-                  Asignar uno de los turnos corporativos de la configuración.
+                  Copiar franja horaria desde un turno preestablecido.
                 </div>
               </div>
             </button>
@@ -84,10 +87,10 @@ export default function ModalAsignarTurno({
               </div>
               <div>
                 <div className="font-bold text-slate-900">
-                  Turno Específico / Personalizado
+                  Franja Personalizada / Turno Cortado
                 </div>
                 <div className="text-[10px] text-slate-500 mt-0.5">
-                  Para empleados o docentes: rangos horarios por jornada.
+                  Para turnos mañana/tarde o esquemas a medida.
                 </div>
               </div>
             </button>
@@ -96,20 +99,26 @@ export default function ModalAsignarTurno({
           {tipoAsignacionTurno === "PREESTABLECIDO" && (
             <div className="space-y-3 pt-2">
               <label className="block font-semibold text-slate-700">
-                Seleccionar Turno de la Tabla Preestablecida:
+                Seleccionar Plantilla Preestablecida:
               </label>
               <select
                 value={horarioGeneralSeleccionado}
                 onChange={(e) => setHorarioGeneralSeleccionado(e.target.value)}
                 className="w-full border border-slate-200 rounded-xl px-3 py-2.5 outline-none focus:border-indigo-600 bg-white"
               >
-                {horariosActivos.map((h) => (
-                  <option key={h.id} value={h.id}>
-                    {h.nombre} ({h.horaEntrada?.substring(0, 5)} a{" "}
-                    {h.horaEgreso?.substring(0, 5)} hs • Cat:{" "}
-                    {h.categoria?.nombre})
+                {horariosActivos.length === 0 ? (
+                  <option value="">
+                    No hay horarios preestablecidos disponibles
                   </option>
-                ))}
+                ) : (
+                  horariosActivos.map((h) => (
+                    <option key={h.id} value={h.id}>
+                      {h.nombre} ({h.horaEntrada?.substring(0, 5)} a{" "}
+                      {h.horaEgreso?.substring(0, 5)} hs • Cat:{" "}
+                      {h.categoria?.nombre || "General"})
+                    </option>
+                  ))
+                )}
               </select>
 
               {(() => {
@@ -134,7 +143,7 @@ export default function ModalAsignarTurno({
                           Categoría
                         </span>
                         <span className="font-bold text-slate-700">
-                          {sel.categoria?.nombre}
+                          {sel.categoria?.nombre || "General"}
                         </span>
                       </div>
                       <div>
@@ -142,7 +151,7 @@ export default function ModalAsignarTurno({
                           Días
                         </span>
                         <span className="font-bold text-slate-700">
-                          {sel.diasLaborables}
+                          {sel.diasLaborables || "Lun-Vie"}
                         </span>
                       </div>
                       <div>
@@ -150,7 +159,7 @@ export default function ModalAsignarTurno({
                           Tol. Entrada
                         </span>
                         <span className="font-bold text-slate-700">
-                          {sel.tolEntradaMin} min
+                          {sel.tolEntradaMin ?? 15} min
                         </span>
                       </div>
                     </div>
@@ -165,75 +174,82 @@ export default function ModalAsignarTurno({
               <div className="flex items-center justify-between">
                 <div>
                   <div className="font-bold text-slate-900">
-                    Rangos Horarios del Día (Intervalos o Jornada Partida)
+                    Bloques de Horario (Ej: Turno Mañana y Tarde)
                   </div>
                   <div className="text-[10px] text-slate-400">
-                    Puede definir 1, 2 o más rangos horarios por jornada.
+                    Puede definir 1, 2 o más bloques horarios por jornada.
                   </div>
                 </div>
                 <button
                   type="button"
                   onClick={onAgregarRango}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-semibold transition"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-semibold transition cursor-pointer"
                 >
                   <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
-                  Agregar Rango
+                  Agregar Bloque
                 </button>
               </div>
 
               <div className="space-y-2.5">
-                {(rangosEspecificos || []).map((rango, idx) => (
-                  <div
-                    key={idx}
-                    className="bg-slate-50 border border-slate-200 rounded-2xl p-3 flex items-center gap-3"
-                  >
-                    <span className="font-bold text-slate-700 shrink-0">
-                      Rango {idx + 1}:
-                    </span>
-                    <div className="flex items-center gap-2 flex-1">
-                      <input
-                        type="time"
-                        value={rango.horaDesde}
-                        onChange={(e) =>
-                          onCambiarRango(idx, "horaDesde", e.target.value)
-                        }
-                        className="bg-white border border-slate-200 rounded-xl px-2 py-1.5 outline-none font-medium"
-                      />
-                      <span className="text-slate-400">→</span>
-                      <input
-                        type="time"
-                        value={rango.horaHasta}
-                        onChange={(e) =>
-                          onCambiarRango(idx, "horaHasta", e.target.value)
-                        }
-                        className="bg-white border border-slate-200 rounded-xl px-2 py-1.5 outline-none font-medium"
-                      />
-                      <input
-                        type="text"
-                        placeholder="Etiqueta (ej: Turno Mañana)"
-                        value={rango.etiqueta}
-                        onChange={(e) =>
-                          onCambiarRango(idx, "etiqueta", e.target.value)
-                        }
-                        className="bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 outline-none flex-1"
-                      />
-                    </div>
-                    {rangosEspecificos.length > 1 && (
+                {rangosEspecificos.length === 0 ? (
+                  <div className="p-4 bg-slate-50 border border-dashed border-slate-200 rounded-2xl text-center text-slate-400 text-xs">
+                    No hay bloques definidos. Presione "+ Agregar Bloque".
+                  </div>
+                ) : (
+                  rangosEspecificos.map((rango, idx) => (
+                    <div
+                      key={idx}
+                      className="bg-slate-50 border border-slate-200 rounded-2xl p-3 flex items-center gap-3"
+                    >
+                      <span className="font-bold text-slate-700 shrink-0">
+                        Bloque {idx + 1}:
+                      </span>
+                      <div className="flex items-center gap-2 flex-1">
+                        <input
+                          type="time"
+                          value={rango.horaDesde}
+                          onChange={(e) =>
+                            onCambiarRango(idx, "horaDesde", e.target.value)
+                          }
+                          className="bg-white border border-slate-200 rounded-xl px-2 py-1.5 outline-none font-medium"
+                        />
+                        <span className="text-slate-400">→</span>
+                        <input
+                          type="time"
+                          value={rango.horaHasta}
+                          onChange={(e) =>
+                            onCambiarRango(idx, "horaHasta", e.target.value)
+                          }
+                          className="bg-white border border-slate-200 rounded-xl px-2 py-1.5 outline-none font-medium"
+                        />
+                        <input
+                          type="text"
+                          placeholder="Etiqueta (ej: Mañana, Tarde)"
+                          value={rango.etiqueta}
+                          onChange={(e) =>
+                            onCambiarRango(idx, "etiqueta", e.target.value)
+                          }
+                          className="bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 outline-none flex-1"
+                        />
+                      </div>
+
+                      {/* Botón de eliminación siempre visible por bloque */}
                       <button
                         type="button"
                         onClick={() => onEliminarRango(idx)}
-                        className="text-slate-400 hover:text-rose-600 p-1"
+                        className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer shrink-0"
+                        title="Eliminar este bloque"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
-                    )}
-                  </div>
-                ))}
+                    </div>
+                  ))
+                )}
               </div>
 
               <div>
                 <div className="font-bold text-slate-700 mb-2">
-                  Días en que Aplica este Turno
+                  Días en que Aplica
                 </div>
                 <div className="flex gap-1.5">
                   {diasMap.map(({ clave }) => {
@@ -255,31 +271,6 @@ export default function ModalAsignarTurno({
                   })}
                 </div>
               </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">
-                    Tolerancia de Ingreso (minutos)
-                  </label>
-                  <input
-                    type="number"
-                    value={tolIngresoEsp}
-                    onChange={(e) => setTolIngresoEsp(e.target.value)}
-                    className="w-full border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-indigo-600"
-                  />
-                </div>
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">
-                    Tolerancia de Egreso (minutos)
-                  </label>
-                  <input
-                    type="number"
-                    value={tolEgresoEsp}
-                    onChange={(e) => setTolEgresoEsp(e.target.value)}
-                    className="w-full border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-indigo-600"
-                  />
-                </div>
-              </div>
             </div>
           )}
 
@@ -287,16 +278,16 @@ export default function ModalAsignarTurno({
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 font-medium text-slate-600 hover:bg-slate-100 rounded-xl"
+              className="px-4 py-2 font-medium text-slate-600 hover:bg-slate-100 rounded-xl cursor-pointer"
             >
               Cancelar
             </button>
             <button
-              type="submit"
+              type="button"
               onClick={onSubmit}
-              className="px-5 py-2 font-semibold text-white bg-[#4b35e6] hover:bg-[#3e2bc0] rounded-xl shadow-md"
+              className="px-5 py-2 font-semibold text-white bg-[#4b35e6] hover:bg-[#3e2bc0] rounded-xl shadow-md cursor-pointer"
             >
-              Guardar Asignación
+              Guardar en Cronograma
             </button>
           </div>
         </div>

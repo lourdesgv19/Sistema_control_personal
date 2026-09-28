@@ -9,9 +9,8 @@ export default function ModalRegistroEmpleado({
   formEmpleado,
   setFormEmpleado,
   editandoEmpleadoId,
-  categoriasActivas,
-  cargosFiltradosForm,
-  horariosActivos,
+  categoriasActivas = [],
+  cargosFiltradosForm = [],
 }) {
   if (!isOpen) return null;
 
@@ -29,7 +28,10 @@ export default function ModalRegistroEmpleado({
               Defina datos personales, legajo institucional e ID biométrico.
             </p>
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-white">
+          <button
+            onClick={onClose}
+            className="text-slate-400 hover:text-white cursor-pointer"
+          >
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -86,13 +88,12 @@ export default function ModalRegistroEmpleado({
             </div>
             <div>
               <label className="block font-semibold text-slate-700 mb-1">
-                Email *
+                Email
               </label>
               <input
                 type="email"
-                required
-                placeholder="carlos.benitez@gmail.com"
-                value={formEmpleado.email}
+                placeholder="carlos.benitez@instituto.edu.ar"
+                value={formEmpleado.email || ""}
                 onChange={(e) =>
                   setFormEmpleado({ ...formEmpleado, email: e.target.value })
                 }
@@ -109,7 +110,7 @@ export default function ModalRegistroEmpleado({
               <input
                 type="text"
                 placeholder="+54 11 4821-9901"
-                value={formEmpleado.telefono}
+                value={formEmpleado.telefono || ""}
                 onChange={(e) =>
                   setFormEmpleado({ ...formEmpleado, telefono: e.target.value })
                 }
@@ -177,33 +178,7 @@ export default function ModalRegistroEmpleado({
             }
           />
 
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block font-semibold text-slate-700 mb-1">
-                Horario Asignado
-              </label>
-              <select
-                value={formEmpleado.horarioGeneralId}
-                onChange={(e) =>
-                  setFormEmpleado({
-                    ...formEmpleado,
-                    horarioGeneralId: e.target.value,
-                  })
-                }
-                className="w-full border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-indigo-600 bg-white"
-              >
-                <option value="">
-                  Sin turno fijo (Por Cátedras o Específico)
-                </option>
-                {horariosActivos.map((h) => (
-                  <option key={h.id} value={h.id}>
-                    {h.nombre} ({h.horaEntrada?.substring(0, 5)} a{" "}
-                    {h.horaEgreso?.substring(0, 5)})
-                  </option>
-                ))}
-              </select>
-            </div>
-
+          <div className="grid grid-cols-3 gap-4">
             <div>
               <label className="block font-semibold text-slate-700 mb-1">
                 Rol en Sistema *
@@ -219,7 +194,7 @@ export default function ModalRegistroEmpleado({
                 className="w-full border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-indigo-600 bg-white"
               >
                 <option value="Consulta / Empleado (Visualiza su ficha)">
-                  Consulta / Empleado (Visualiza su ficha)
+                  Consulta / Empleado
                 </option>
                 <option value="Administrador">Administrador General</option>
                 <option value="Recursos Humanos">
@@ -227,19 +202,53 @@ export default function ModalRegistroEmpleado({
                 </option>
               </select>
             </div>
+
+            <div>
+              <label className="block font-semibold text-slate-700 mb-1">
+                Tol. Ingreso (min)
+              </label>
+              <input
+                type="number"
+                value={formEmpleado.toleranciaIngresoMin}
+                onChange={(e) =>
+                  setFormEmpleado({
+                    ...formEmpleado,
+                    toleranciaIngresoMin: e.target.value,
+                  })
+                }
+                className="w-full border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-indigo-600"
+              />
+            </div>
+
+            <div>
+              <label className="block font-semibold text-slate-700 mb-1">
+                Tol. Egreso (min)
+              </label>
+              <input
+                type="number"
+                value={formEmpleado.toleranciaEgresoMin}
+                onChange={(e) =>
+                  setFormEmpleado({
+                    ...formEmpleado,
+                    toleranciaEgresoMin: e.target.value,
+                  })
+                }
+                className="w-full border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-indigo-600"
+              />
+            </div>
           </div>
 
           <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 font-medium text-slate-600 hover:bg-slate-100 rounded-xl"
+              className="px-4 py-2 font-medium text-slate-600 hover:bg-slate-100 rounded-xl cursor-pointer"
             >
               Cancelar
             </button>
             <button
               type="submit"
-              className="px-5 py-2 font-semibold text-white bg-[#4b35e6] hover:bg-[#3e2bc0] rounded-xl shadow-md"
+              className="px-5 py-2 font-semibold text-white bg-[#4b35e6] hover:bg-[#3e2bc0] rounded-xl shadow-md cursor-pointer"
             >
               {editandoEmpleadoId ? "Guardar Cambios" : "Registrar Empleado"}
             </button>

@@ -10,7 +10,7 @@ export default function ModalAsignarClase({
   setFormClase,
   empleado,
   materiasActivas = [],
-  onMateriaCreada, // Callback opcional para refrescar el catálogo en el componente padre
+  onMateriaCreada,
 }) {
   const [creandoNuevaMateria, setCreandoNuevaMateria] = useState(false);
   const [guardandoMateria, setGuardandoMateria] = useState(false);
@@ -19,7 +19,6 @@ export default function ModalAsignarClase({
   const [formNuevaMateria, setFormNuevaMateria] = useState({
     nombre: "",
     codigo: "",
-    comision: "",
     aulaPredeterminada: "",
     departamento: "",
   });
@@ -40,7 +39,6 @@ export default function ModalAsignarClase({
       const payload = {
         nombre: formNuevaMateria.nombre.trim(),
         codigo: formNuevaMateria.codigo.trim(),
-        comision: formNuevaMateria.comision.trim(),
         aulaPredeterminada: formNuevaMateria.aulaPredeterminada.trim(),
         departamento: formNuevaMateria.departamento.trim() || "General",
         activo: true,
@@ -48,26 +46,21 @@ export default function ModalAsignarClase({
 
       const materiaGuardada = await createMateria(payload);
 
-      // Si el componente padre pasa la función para refrescar la lista de materias:
       if (onMateriaCreada) {
         await onMateriaCreada(materiaGuardada);
       }
 
-      // Queda automáticamente elegida en la asignación
       setFormClase((prev) => ({
         ...prev,
         materiaId: materiaGuardada.id,
         materia: materiaGuardada.nombre,
-        comision: materiaGuardada.comision || prev.comision,
         aula: materiaGuardada.aulaPredeterminada || prev.aula,
       }));
 
-      // Cerrar y limpiar subformulario
       setCreandoNuevaMateria(false);
       setFormNuevaMateria({
         nombre: "",
         codigo: "",
-        comision: "",
         aulaPredeterminada: "",
         departamento: "",
       });
@@ -82,7 +75,6 @@ export default function ModalAsignarClase({
   return (
     <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
       <div className="bg-white rounded-3xl w-full max-w-md overflow-hidden shadow-2xl animate-in zoom-in-95">
-        {/* Cabecera */}
         <div className="bg-[#6b21a8] px-6 py-4 text-white flex items-center justify-between">
           <div>
             <h3 className="font-bold text-sm">
@@ -94,17 +86,18 @@ export default function ModalAsignarClase({
           </div>
           <button
             onClick={onClose}
-            className="text-purple-200 hover:text-white"
+            className="text-purple-200 hover:text-white cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         <form onSubmit={onSubmit} className="p-6 space-y-4 text-xs">
-          {/* SECTOR MATERIA CON BOTÓN '+' */}
           <div>
             <div className="flex items-center justify-between mb-1">
-              <label className="font-semibold text-slate-700">Materia *</label>
+              <label className="font-semibold text-slate-700">
+                Materia / Cátedra *
+              </label>
               <button
                 type="button"
                 onClick={() => setCreandoNuevaMateria(!creandoNuevaMateria)}
@@ -115,7 +108,6 @@ export default function ModalAsignarClase({
               </button>
             </div>
 
-            {/* Selector desplegable */}
             <div className="flex items-center gap-2">
               <select
                 required={!creandoNuevaMateria}
@@ -129,7 +121,6 @@ export default function ModalAsignarClase({
                     ...formClase,
                     materiaId: idSel,
                     materia: mat ? mat.nombre : "",
-                    comision: mat?.comision || formClase.comision,
                     aula: mat?.aulaPredeterminada || formClase.aula,
                   });
                 }}
@@ -138,7 +129,7 @@ export default function ModalAsignarClase({
                 <option value="">Seleccione una cátedra del catálogo...</option>
                 {materiasActivas.map((m) => (
                   <option key={m.id} value={m.id}>
-                    {m.nombre} {m.comision ? `(${m.comision})` : ""}
+                    {m.nombre} {m.codigo ? `[${m.codigo}]` : ""}
                   </option>
                 ))}
               </select>
@@ -151,14 +142,13 @@ export default function ModalAsignarClase({
                     ? "bg-purple-100 border-purple-300 text-purple-700"
                     : "bg-purple-50 border-purple-200 text-purple-700 hover:bg-purple-100"
                 }`}
-                title="Crear nueva materia que no está en la lista"
+                title="Crear materia si no está en la lista"
               >
                 <Plus className="w-4 h-4 stroke-[2.5]" />
               </button>
             </div>
           </div>
 
-          {/* SUBFORMULARIO DESPLEGABLE PARA CREAR MATERIA SOBRE LA MARCHA */}
           {creandoNuevaMateria && (
             <div className="bg-purple-50/70 border border-purple-200 rounded-2xl p-3.5 space-y-3 animate-in fade-in slide-in-from-top-2">
               <div className="flex items-center gap-1.5 font-bold text-purple-900 text-xs">
@@ -187,19 +177,19 @@ export default function ModalAsignarClase({
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="block text-[10px] font-semibold text-slate-600 mb-0.5">
-                    Comisión
+                    Código de Cátedra
                   </label>
                   <input
                     type="text"
-                    placeholder="ej. 1K01"
-                    value={formNuevaMateria.comision}
+                    placeholder="ej. ALG-101"
+                    value={formNuevaMateria.codigo}
                     onChange={(e) =>
                       setFormNuevaMateria({
                         ...formNuevaMateria,
-                        comision: e.target.value,
+                        codigo: e.target.value,
                       })
                     }
-                    className="w-full bg-white border border-purple-200 rounded-lg px-2 py-1.5 outline-none focus:border-purple-600"
+                    className="w-full bg-white border border-purple-200 rounded-lg px-2.5 py-1.5 outline-none focus:border-purple-600"
                   />
                 </div>
                 <div>
@@ -216,7 +206,7 @@ export default function ModalAsignarClase({
                         aulaPredeterminada: e.target.value,
                       })
                     }
-                    className="w-full bg-white border border-purple-200 rounded-lg px-2 py-1.5 outline-none focus:border-purple-600"
+                    className="w-full bg-white border border-purple-200 rounded-lg px-2.5 py-1.5 outline-none focus:border-purple-600"
                   />
                 </div>
               </div>
@@ -231,7 +221,7 @@ export default function ModalAsignarClase({
                 <button
                   type="button"
                   onClick={() => setCreandoNuevaMateria(false)}
-                  className="px-2.5 py-1 text-slate-500 hover:text-slate-700 text-[11px]"
+                  className="px-2.5 py-1 text-slate-500 hover:text-slate-700 text-[11px] cursor-pointer"
                 >
                   Cancelar
                 </button>
@@ -239,7 +229,7 @@ export default function ModalAsignarClase({
                   type="button"
                   disabled={guardandoMateria}
                   onClick={handleCrearYMateriaRapida}
-                  className="px-3 py-1.5 bg-purple-700 hover:bg-purple-800 text-white font-semibold rounded-lg text-[11px] shadow-xs flex items-center gap-1 transition"
+                  className="px-3 py-1.5 bg-purple-700 hover:bg-purple-800 text-white font-semibold rounded-lg text-[11px] shadow-xs flex items-center gap-1 transition cursor-pointer"
                 >
                   <Check className="w-3 h-3 stroke-[3]" />
                   {guardandoMateria ? "Guardando..." : "Guardar y Elegir"}
@@ -248,7 +238,7 @@ export default function ModalAsignarClase({
             </div>
           )}
 
-          {/* Días de Dictado (Selección Múltiple) */}
+          {/* Días de Dictado (Lunes a Sábado) */}
           <div>
             <label className="block font-semibold text-slate-700 mb-1.5">
               Días de Dictado (Selección Múltiple) *
@@ -327,47 +317,33 @@ export default function ModalAsignarClase({
             </div>
           </div>
 
-          {/* Comisión y Aula */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block font-semibold text-slate-700 mb-1">
-                Comisión / Curso
-              </label>
-              <input
-                type="text"
-                value={formClase.comision}
-                onChange={(e) =>
-                  setFormClase({ ...formClase, comision: e.target.value })
-                }
-                className="w-full border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-purple-600"
-              />
-            </div>
-            <div>
-              <label className="block font-semibold text-slate-700 mb-1">
-                Aula / Laboratorio
-              </label>
-              <input
-                type="text"
-                value={formClase.aula}
-                onChange={(e) =>
-                  setFormClase({ ...formClase, aula: e.target.value })
-                }
-                className="w-full border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-purple-600"
-              />
-            </div>
+          {/* Aula */}
+          <div>
+            <label className="block font-semibold text-slate-700 mb-1">
+              Aula / Laboratorio (Opcional)
+            </label>
+            <input
+              type="text"
+              placeholder="Ej: Aula 102, Laboratorio Informática"
+              value={formClase.aula || ""}
+              onChange={(e) =>
+                setFormClase({ ...formClase, aula: e.target.value })
+              }
+              className="w-full border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-purple-600"
+            />
           </div>
 
           <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 font-medium text-slate-600 hover:bg-slate-100 rounded-xl"
+              className="px-4 py-2 font-medium text-slate-600 hover:bg-slate-100 rounded-xl cursor-pointer"
             >
               Cancelar
             </button>
             <button
               type="submit"
-              className="px-5 py-2 font-semibold text-white bg-purple-600 hover:bg-purple-700 rounded-xl shadow-md"
+              className="px-5 py-2 font-semibold text-white bg-purple-600 hover:bg-purple-700 rounded-xl shadow-md cursor-pointer"
             >
               + Asignar al Cronograma
             </button>

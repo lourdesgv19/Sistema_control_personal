@@ -38,6 +38,7 @@ import {
   reactivarMateria,
 } from "../services/configuracionService";
 import ModalAlerta from "../components/comunes/ModalAlerta";
+import { buscarSimilar } from "../utils/textSimilarity";
 
 const PALETA_COLORES = [
   { id: "indigo", bg: "bg-[#4338ca]", ring: "ring-[#4338ca]" },
@@ -132,7 +133,7 @@ export default function TiposConfiguracion() {
   const [horarios, setHorarios] = useState([]);
   const [materias, setMaterias] = useState([]);
 
-  // FILTROS POR ESTADO DESPLEGABLES
+  // Filtros por estado
   const [filtroEstadoCat, setFiltroEstadoCat] = useState("TODOS");
   const [filtroEstadoCargo, setFiltroEstadoCargo] = useState("TODOS");
   const [filtroEstadoHorario, setFiltroEstadoHorario] = useState("TODOS");
@@ -252,40 +253,44 @@ export default function TiposConfiguracion() {
 
   const handleGuardarCategoria = async (e) => {
     e.preventDefault();
-    try {
-      const payload = {
-        nombre: formCat.nombre,
-        codigoTag:
-          formCat.codigoTag ||
-          formCat.nombre.toLowerCase().replace(/\s+/g, "-"),
-        colorIdentificacion: formCat.colorIdentificacion,
-        descripcion: formCat.descripcion,
-        activo: formCat.estado === "Activo",
-      };
 
-      if (editandoCatId) {
-        await updateCategoria(editandoCatId, payload);
+    // Validación de similitud preventiva:
+    const coincidencia = buscarSimilar(
+      formCat.nombre,
+      categorias,
+      editandoCatId,
+    );
+
+    if (coincidencia) {
+      if (coincidencia.tipo === "EXACTO") {
         mostrarAviso(
-          "success",
-          "Categoría Actualizada",
-          "Los cambios se guardaron correctamente.",
+          "danger",
+          "Categoría Duplicada",
+          `Ya existe una categoría registrada exactamente como "${coincidencia.item.nombre}".`,
         );
-      } else {
-        await createCategoria(payload);
-        mostrarAviso(
-          "success",
-          "Categoría Creada",
-          "La categoría se registró exitosamente.",
-        );
+        return; // Bloquea el envío
       }
 
-      await cargarDatos();
-      setModalCat(false);
-      setEditandoCatId(null);
-      setFormCat(FORM_CAT_INICIAL);
-    } catch (err) {
-      mostrarAviso("danger", "Error", "No se pudo guardar la categoría.");
+      if (coincidencia.tipo === "SIMILAR") {
+        // Advertir con ModalAlerta permitiendo continuar o cancelar
+        setModalAlerta({
+          isOpen: true,
+          tipo: "warning",
+          titulo: "¿Desea continuar?",
+          mensaje: `El nombre "${formCat.nombre}" es muy similar a la categoría existente "${coincidencia.item.nombre}". ¿Desea guardarlo de todas formas?`,
+          textoConfirmar: "Sí, registrar de todos modos",
+          textoCancelar: "Revisar nombre",
+          mostrarCancelar: true,
+          onConfirmar: async () => {
+            setModalAlerta((prev) => ({ ...prev, isOpen: false }));
+            await procederGuardarCategoria(); // Función que hace el POST/PUT
+          },
+        });
+        return;
+      }
     }
+
+    await procederGuardarCategoria();
   };
 
   const handleEliminarCategoria = (id, nombre) => {
@@ -369,37 +374,99 @@ export default function TiposConfiguracion() {
 
   const handleGuardarCargo = async (e) => {
     e.preventDefault();
-    try {
-      const payload = {
-        nombre: formCargo.nombre,
-        descripcion: formCargo.descripcion,
-        activo: formCargo.estado === "Activo",
-        categoria: { id: parseInt(formCargo.categoriaId) },
-      };
 
-      if (editandoCargoId) {
-        await updateCargo(editandoCargoId, payload);
+    if (!formCargo.nombre.trim()) {
+      mostrarAviso(
+        "warning",
+        "Atención",
+        "El nombre del cargo es obligatorio.",
+      );
+      return;
+    }
+
+    if (!formCargo.categoriaId) {
+      mostrarAviso(
+        "warning",
+        "Atención",
+        "Debe asignar una categoría institucional.",
+      );
+      return;
+    }
+
+    // Comprobación de similitud o duplicado
+    const coincidencia = buscarSimilar(
+      formCargo.nombre,
+      cargos,
+      editandoCargoId,
+    );
+
+    const ejecutarPeticion = async () => {
+      try {
+        const payload = {
+          nombre: formCargo.nombre.trim(),
+          descripcion: formCargo.descripcion?.trim() || "",
+          activo: formCargo.estado === "Activo",
+          categoria: { id: parseInt(formCargo.categoriaId) },
+        };
+
+        if (editandoCargoId) {
+          await updateCargo(editandoCargoId, payload);
+          mostrarAviso(
+            "success",
+            "Cargo Actualizado",
+            "Los cambios del cargo se guardaron exitosamente.",
+          );
+        } else {
+          await createCargo(payload);
+          mostrarAviso(
+            "success",
+            "Cargo Registrado",
+            "El nuevo cargo se ha creado correctamente.",
+          );
+        }
+
+        await cargarDatos();
+        setModalCargo(false);
+        setEditandoCargoId(null);
+        setFormCargo(FORM_CARGO_INICIAL);
+      } catch (err) {
         mostrarAviso(
-          "success",
-          "Cargo Actualizado",
-          "Los cambios del cargo se guardaron exitosamente.",
-        );
-      } else {
-        await createCargo(payload);
-        mostrarAviso(
-          "success",
-          "Cargo Registrado",
-          "El nuevo cargo se ha creado correctamente.",
+          "danger",
+          "Error",
+          "No se pudo guardar el cargo en el servidor.",
         );
       }
+    };
 
-      await cargarDatos();
-      setModalCargo(false);
-      setEditandoCargoId(null);
-      setFormCargo(FORM_CARGO_INICIAL);
-    } catch (err) {
-      mostrarAviso("danger", "Error", "No se pudo guardar el cargo.");
+    if (coincidencia) {
+      if (coincidencia.tipo === "EXACTO") {
+        mostrarAviso(
+          "danger",
+          "Cargo Duplicado",
+          `Ya existe un cargo registrado con el nombre "${coincidencia.item.nombre}".`,
+        );
+        return;
+      }
+
+      if (coincidencia.tipo === "SIMILAR") {
+        setModalAlerta({
+          isOpen: true,
+          tipo: "warning",
+          titulo: "¿Desea continuar?",
+          mensaje: `El nombre "${formCargo.nombre}" es muy similar al cargo existente "${coincidencia.item.nombre}". ¿Desea guardarlo de todas formas?`,
+          textoConfirmar: "Sí, registrar de todos modos",
+          textoCancelar: "Revisar nombre",
+          mostrarCancelar: true,
+          onConfirmar: async () => {
+            setModalAlerta((prev) => ({ ...prev, isOpen: false }));
+            await ejecutarPeticion();
+          },
+        });
+        return;
+      }
     }
+
+    await ejecutarPeticion();
   };
 
   const handleEliminarCargo = (id, nombre) => {
@@ -485,50 +552,129 @@ export default function TiposConfiguracion() {
 
   const handleGuardarHorario = async (e) => {
     e.preventDefault();
-    try {
-      const payload = {
-        nombre: formHorario.nombre,
-        categoria: { id: parseInt(formHorario.categoriaId) },
-        activo: formHorario.estado === "Activo",
-        horaEntrada:
-          formHorario.horaEntrada.length === 5
-            ? `${formHorario.horaEntrada}:00`
-            : formHorario.horaEntrada,
-        horaEgreso:
-          formHorario.horaEgreso.length === 5
-            ? `${formHorario.horaEgreso}:00`
-            : formHorario.horaEgreso,
-        diasLaborables: formHorario.dias.join(","),
-        tolEntradaMin: parseInt(formHorario.tolEntrada),
-        tolEgresoMin: parseInt(formHorario.tolEgreso),
-        maxSalidasIntermedias: parseInt(formHorario.maxSalidas),
-        tiempoMaxFueraMin: parseInt(formHorario.tiempoMaxFuera),
-        totalPersonal: 0,
-      };
 
-      if (editandoHorarioId) {
-        await updateHorario(editandoHorarioId, payload);
+    if (!formHorario.nombre.trim()) {
+      mostrarAviso(
+        "warning",
+        "Atención",
+        "El nombre del horario es obligatorio.",
+      );
+      return;
+    }
+
+    if (!formHorario.categoriaId) {
+      mostrarAviso(
+        "warning",
+        "Atención",
+        "Debe seleccionar una categoría aplicable.",
+      );
+      return;
+    }
+
+    if (!formHorario.dias || formHorario.dias.length === 0) {
+      mostrarAviso(
+        "warning",
+        "Atención",
+        "Debe marcar al menos un día laborable.",
+      );
+      return;
+    }
+
+    if (formHorario.horaEntrada >= formHorario.horaEgreso) {
+      mostrarAviso(
+        "danger",
+        "Rango Inválido",
+        "La hora de egreso debe ser posterior a la hora de entrada.",
+      );
+      return;
+    }
+
+    // Comprobación de similitud o duplicado de plantilla de horario
+    const coincidencia = buscarSimilar(
+      formHorario.nombre,
+      horarios,
+      editandoHorarioId,
+    );
+
+    const ejecutarPeticion = async () => {
+      try {
+        const payload = {
+          nombre: formHorario.nombre.trim(),
+          categoria: { id: parseInt(formHorario.categoriaId) },
+          activo: formHorario.estado === "Activo",
+          horaEntrada:
+            formHorario.horaEntrada.length === 5
+              ? `${formHorario.horaEntrada}:00`
+              : formHorario.horaEntrada,
+          horaEgreso:
+            formHorario.horaEgreso.length === 5
+              ? `${formHorario.horaEgreso}:00`
+              : formHorario.horaEgreso,
+          diasLaborables: formHorario.dias.join(","),
+          tolEntradaMin: parseInt(formHorario.tolEntrada),
+          tolEgresoMin: parseInt(formHorario.tolEgreso),
+          maxSalidasIntermedias: parseInt(formHorario.maxSalidas || 2),
+          tiempoMaxFueraMin: parseInt(formHorario.tiempoMaxFuera || 45),
+        };
+
+        if (editandoHorarioId) {
+          await updateHorario(editandoHorarioId, payload);
+          mostrarAviso(
+            "success",
+            "Horario Actualizado",
+            "Los parámetros del horario se actualizaron con éxito.",
+          );
+        } else {
+          await createHorario(payload);
+          mostrarAviso(
+            "success",
+            "Horario Registrado",
+            "El horario ha sido registrado en el sistema.",
+          );
+        }
+
+        await cargarDatos();
+        setModalHorario(false);
+        setEditandoHorarioId(null);
+        setFormHorario(FORM_HORARIO_INICIAL);
+      } catch (err) {
         mostrarAviso(
-          "success",
-          "Horario Actualizado",
-          "Los parámetros del horario se actualizaron con éxito.",
-        );
-      } else {
-        await createHorario(payload);
-        mostrarAviso(
-          "success",
-          "Horario Registrado",
-          "El horario ha sido registrado en el sistema.",
+          "danger",
+          "Error",
+          "No se pudo guardar la plantilla de horario.",
         );
       }
+    };
 
-      await cargarDatos();
-      setModalHorario(false);
-      setEditandoHorarioId(null);
-      setFormHorario(FORM_HORARIO_INICIAL);
-    } catch (err) {
-      mostrarAviso("danger", "Error", "No se pudo guardar el horario.");
+    if (coincidencia) {
+      if (coincidencia.tipo === "EXACTO") {
+        mostrarAviso(
+          "danger",
+          "Horario Duplicado",
+          `Ya existe un horario registrado con el nombre "${coincidencia.item.nombre}".`,
+        );
+        return;
+      }
+
+      if (coincidencia.tipo === "SIMILAR") {
+        setModalAlerta({
+          isOpen: true,
+          tipo: "warning",
+          titulo: "¿Desea continuar?",
+          mensaje: `El nombre "${formHorario.nombre}" es muy similar al horario existente "${coincidencia.item.nombre}". ¿Desea guardarlo de todas formas?`,
+          textoConfirmar: "Sí, registrar de todos modos",
+          textoCancelar: "Revisar nombre",
+          mostrarCancelar: true,
+          onConfirmar: async () => {
+            setModalAlerta((prev) => ({ ...prev, isOpen: false }));
+            await ejecutarPeticion();
+          },
+        });
+        return;
+      }
     }
+
+    await ejecutarPeticion();
   };
 
   const handleEliminarHorario = (id, nombre) => {
@@ -615,42 +761,91 @@ export default function TiposConfiguracion() {
 
   const handleGuardarMateria = async (e) => {
     e.preventDefault();
-    try {
-      const payload = {
-        nombre: formMateria.nombre,
-        codigo: formMateria.codigo,
-        departamento: formMateria.departamento,
-        aulaPredeterminada: formMateria.aulaPredeterminada,
-        activo: formMateria.estado === "Activo",
-      };
 
-      if (editandoMateriaId) {
-        await updateMateria(editandoMateriaId, payload);
+    if (!formMateria.nombre.trim()) {
+      mostrarAviso(
+        "warning",
+        "Atención",
+        "El nombre de la materia es obligatorio.",
+      );
+      return;
+    }
+
+    // Comprobación de similitud o duplicado
+    const coincidencia = buscarSimilar(
+      formMateria.nombre,
+      materias,
+      editandoMateriaId,
+    );
+
+    const ejecutarPeticion = async () => {
+      try {
+        const payload = {
+          nombre: formMateria.nombre.trim(),
+          codigo: formMateria.codigo?.trim() || null,
+          departamento: formMateria.departamento?.trim() || null,
+          aulaPredeterminada: formMateria.aulaPredeterminada?.trim() || null,
+          activo: formMateria.estado === "Activo",
+        };
+
+        if (editandoMateriaId) {
+          await updateMateria(editandoMateriaId, payload);
+          mostrarAviso(
+            "success",
+            "Cátedra Actualizada",
+            "Los datos de la materia se actualizaron correctamente.",
+          );
+        } else {
+          await createMateria(payload);
+          mostrarAviso(
+            "success",
+            "Cátedra Registrada",
+            "La nueva materia se ha registrado en el catálogo.",
+          );
+        }
+
+        await cargarDatos();
+        setModalMateria(false);
+        setEditandoMateriaId(null);
+        setFormMateria(FORM_MATERIA_INICIAL);
+      } catch (err) {
         mostrarAviso(
-          "success",
-          "Cátedra Actualizada",
-          "Los datos de la materia se actualizaron correctamente.",
-        );
-      } else {
-        await createMateria(payload);
-        mostrarAviso(
-          "success",
-          "Cátedra Registrada",
-          "La nueva materia se ha registrado en el catálogo.",
+          "danger",
+          "Error",
+          "No se pudo guardar la materia o cátedra.",
         );
       }
+    };
 
-      await cargarDatos();
-      setModalMateria(false);
-      setEditandoMateriaId(null);
-      setFormMateria(FORM_MATERIA_INICIAL);
-    } catch (err) {
-      mostrarAviso(
-        "danger",
-        "Error",
-        "No se pudo guardar la materia o cátedra.",
-      );
+    if (coincidencia) {
+      if (coincidencia.tipo === "EXACTO") {
+        mostrarAviso(
+          "danger",
+          "Materia Duplicada",
+          `Ya existe una materia registrada con el nombre "${coincidencia.item.nombre}".`,
+        );
+        return;
+      }
+
+      if (coincidencia.tipo === "SIMILAR") {
+        setModalAlerta({
+          isOpen: true,
+          tipo: "warning",
+          titulo: "¿Desea continuar?",
+          mensaje: `El nombre "${formMateria.nombre}" es muy similar a la materia existente "${coincidencia.item.nombre}". ¿Desea guardarla de todas formas?`,
+          textoConfirmar: "Sí, registrar de todos modos",
+          textoCancelar: "Revisar nombre",
+          mostrarCancelar: true,
+          onConfirmar: async () => {
+            setModalAlerta((prev) => ({ ...prev, isOpen: false }));
+            await ejecutarPeticion();
+          },
+        });
+        return;
+      }
     }
+
+    await ejecutarPeticion();
   };
 
   const handleEliminarMateria = (id, nombre) => {
@@ -1297,7 +1492,8 @@ export default function TiposConfiguracion() {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-3 gap-2 pt-3 border-t border-slate-100 text-center">
+                  {/* SECCIÓN INFERIOR: TOLERANCIAS EN 2 COLUMNAS SIMÉTRICAS */}
+                  <div className="grid grid-cols-2 gap-2 pt-3 border-t border-slate-100 text-center">
                     <div className="bg-[#f8fafc] p-2 rounded-xl">
                       <div className="text-[9px] font-bold uppercase text-slate-400">
                         Tolerancia Entrada
@@ -1308,18 +1504,10 @@ export default function TiposConfiguracion() {
                     </div>
                     <div className="bg-[#f8fafc] p-2 rounded-xl">
                       <div className="text-[9px] font-bold uppercase text-slate-400">
-                        Tolerancia Egreso
+                        Tolerancia Salida
                       </div>
                       <div className="text-xs font-bold text-slate-800 mt-0.5">
                         {h.tolEgresoMin}m
-                      </div>
-                    </div>
-                    <div className="bg-[#f8fafc] p-2 rounded-xl">
-                      <div className="text-[9px] font-bold uppercase text-slate-400">
-                        Personal
-                      </div>
-                      <div className="text-xs font-bold text-indigo-600 mt-0.5">
-                        {h.totalPersonal || 0}
                       </div>
                     </div>
                   </div>
@@ -1354,7 +1542,6 @@ export default function TiposConfiguracion() {
             </button>
           </div>
 
-          {/* Barra de Filtros: Búsqueda y Estado */}
           <div className="bg-white p-3 border border-slate-200 rounded-xl shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3">
             <div className="relative flex-1">
               <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -1891,7 +2078,7 @@ export default function TiposConfiguracion() {
                 </div>
                 <div>
                   <label className="block font-semibold text-slate-700 mb-1">
-                    Tolerancia Egreso (minutos)
+                    Tolerancia Salida (minutos)
                   </label>
                   <input
                     type="number"
