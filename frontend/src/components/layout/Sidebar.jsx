@@ -10,7 +10,7 @@ import {
   FileSpreadsheet,
   Settings,
   LogOut,
-  UploadCloud, 
+  UploadCloud,
 } from "lucide-react";
 
 export default function Sidebar({ isSidebarOpen, onToggleSidebar }) {
@@ -18,14 +18,17 @@ export default function Sidebar({ isSidebarOpen, onToggleSidebar }) {
 
   // Menú ajustado a los requerimientos del Sistema de Control de Asistencia
   const navItems = [
+    {
+      to: "/importacion",
+      label: "Importar lista de fichajes",
+      icon: UploadCloud,
+    },
+    { to: "/personal", label: "Gestión de Personal", icon: Users },
     { to: "/dashboard", label: "Dashboard General", icon: LayoutDashboard },
     { to: "/clases", label: "Horarios y Cátedras", icon: CalendarDays },
-    { to: "/personal", label: "Gestión de Personal", icon: Users },
     { to: "/alertas", label: "Alertas e Infracciones", icon: AlertTriangle },
     { to: "/reportes", label: "Métricas y Reportes", icon: FileSpreadsheet },
     { to: "/configuracion", label: "Tipos y Configuración", icon: Settings },
-    {to: "/importacion", label:"Importar lista de fichajes", icon:UploadCloud}
-    
   ];
 
   const handleConfirmLogout = () => {

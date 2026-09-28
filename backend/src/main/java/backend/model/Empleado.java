@@ -38,7 +38,7 @@ public class Empleado {
     @Column(name = "nro_legajo", nullable = false, unique = true, length = 30)
     private String nroLegajo;
 
-    @Column(name = "id_biometrico", nullable = false, unique = true, length = 30)
+    @Column(name = "id_biometrico", nullable = true, unique = true, length = 30)
     private String idBiometrico;
 
     @ManyToMany
