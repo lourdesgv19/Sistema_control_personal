@@ -3,7 +3,6 @@ import {
   Users,
   BookOpen,
   Clock,
-  Sliders,
   AlertTriangle,
   Search,
   Plus,
@@ -17,7 +16,7 @@ import {
   ChevronRight,
 } from "lucide-react";
 import {
-  getEmpleados,
+  getEmpleadosPaginados,
   createEmpleado,
   updateEmpleado,
   deleteEmpleado,
@@ -26,6 +25,7 @@ import {
   addEmpleadoHorario,
   removeEmpleadoHorario,
   getMetricasEmpleado,
+  getPersonalResumen,
 } from "../services/empleadoService";
 import {
   getCategorias,
@@ -103,6 +103,11 @@ export default function GestionPersonal() {
   const [horarios, setHorarios] = useState([]);
   const [materias, setMaterias] = useState([]);
 
+  // Paginación y conteos del Servidor
+  const [paginaActual, setPaginaActual] = useState(1);
+  const [totalPaginas, setTotalPaginas] = useState(1);
+  const [totalElementos, setTotalElementos] = useState(0);
+
   // Métricas y franjas unificadas del empleado en consulta
   const [metricasEmpleado, setMetricasEmpleado] = useState(null);
   const [horariosEmpleado, setHorariosEmpleado] = useState([]);
@@ -112,7 +117,6 @@ export default function GestionPersonal() {
   const [filterRegimen, setFilterRegimen] = useState("TODOS");
   const [filterCategoria, setFilterCategoria] = useState("TODAS");
   const [filterEstado, setFilterEstado] = useState("TODOS");
-  const [paginaActual, setPaginaActual] = useState(1);
 
   // Estados de modales
   const [modalRegistro, setModalRegistro] = useState(false);
@@ -166,27 +170,77 @@ export default function GestionPersonal() {
     });
   };
 
-  const cargarDatos = async () => {
-    setLoading(true);
+  const [resumenGlobal, setResumenGlobal] = useState({
+    totalPersonal: 0,
+    totalDocentes: 0,
+    totalAdministrativos: 0,
+    totalInactivos: 0,
+  });
+
+  const cargarResumenGlobal = async () => {
     try {
-      const [empRes, catRes, carRes, horRes, matRes] = await Promise.all([
-        getEmpleados(),
+      const data = await getPersonalResumen();
+      if (data) setResumenGlobal(data);
+    } catch (err) {
+      console.error("Error al cargar resumen global:", err);
+    }
+  };
+
+  // 1. Cargar catálogos maestros iniciales
+  const cargarCatalogos = async () => {
+    try {
+      const [catRes, carRes, horRes, matRes] = await Promise.all([
         getCategorias(),
         getCargos(),
         getHorarios(),
         getMaterias(),
       ]);
-      setEmpleados(Array.isArray(empRes) ? empRes : []);
       setCategorias(Array.isArray(catRes) ? catRes : []);
       setCargos(Array.isArray(carRes) ? carRes : []);
       setHorarios(Array.isArray(horRes) ? horRes : []);
       setMaterias(Array.isArray(matRes) ? matRes : []);
     } catch (err) {
-      console.error(err);
+      console.error("Error al cargar catálogos:", err);
       mostrarAviso(
         "danger",
         "Error de Carga",
-        "No se pudieron obtener los datos del servidor.",
+        "No se pudieron obtener los catálogos del servidor.",
+      );
+    }
+  };
+
+  // 2. Consulta optimizada y paginada desde el backend
+  const cargarEmpleadosServidor = async (page = 0) => {
+    setLoading(true);
+    try {
+      const catId =
+        filterCategoria !== "TODAS"
+          ? categorias.find(
+              (c) => c.nombre?.toLowerCase() === filterCategoria.toLowerCase(),
+            )?.id
+          : null;
+
+      const res = await getEmpleadosPaginados(
+        searchTerm,
+        catId,
+        filterEstado,
+        page,
+        ITEMS_POR_PAGINA,
+      );
+      if (res && res.content) {
+        setEmpleados(res.content);
+        setTotalPaginas(res.totalPages || 1);
+        setTotalElementos(res.totalElements || 0);
+        setPaginaActual(res.number + 1);
+      } else {
+        setEmpleados(Array.isArray(res) ? res : []);
+      }
+    } catch (err) {
+      console.error("Error al cargar empleados del servidor:", err);
+      mostrarAviso(
+        "danger",
+        "Error",
+        "No se pudo obtener el padrón de empleados.",
       );
     } finally {
       setLoading(false);
@@ -194,12 +248,17 @@ export default function GestionPersonal() {
   };
 
   useEffect(() => {
-    cargarDatos();
+    cargarCatalogos();
+    cargarResumenGlobal();
   }, []);
 
+  // Recarga con debounce de búsqueda y sincronización de filtros
   useEffect(() => {
-    setPaginaActual(1);
-  }, [searchTerm, filterRegimen, filterCategoria, filterEstado]);
+    const timer = setTimeout(() => {
+      cargarEmpleadosServidor(paginaActual - 1);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchTerm, filterCategoria, filterEstado, paginaActual]);
 
   const categoriasActivas = useMemo(
     () => categorias.filter((c) => c.activo !== false),
@@ -224,8 +283,9 @@ export default function GestionPersonal() {
     return cargosActivos.filter((c) => cats.includes(c.categoria?.id));
   }, [formEmpleado.categoriasIds, cargosActivos]);
 
+  // Tarjetas informativas de cantidades
   const stats = useMemo(() => {
-    const total = empleados.length;
+    const total = totalElementos;
     const porClases = empleados.filter((e) =>
       (e.categorias || []).some((c) =>
         (c.codigoTag || c.nombre || "").toLowerCase().includes("docente"),
@@ -238,47 +298,15 @@ export default function GestionPersonal() {
         ),
     ).length;
     const sinHorario = empleados.filter((e) => e.activo === false).length;
-    return { total, porClases, turnoFijo, especifico: 0, sinHorario };
-  }, [empleados]);
-
-  const filteredEmpleados = useMemo(() => {
-    return empleados.filter((e) => {
-      const matchEstado =
-        filterEstado === "TODOS" ||
-        (filterEstado === "ACTIVOS" && e.activo !== false) ||
-        (filterEstado === "INACTIVOS" && e.activo === false);
-
-      const query = searchTerm.toLowerCase();
-      const matchSearch =
-        e.nombre.toLowerCase().includes(query) ||
-        e.apellido.toLowerCase().includes(query) ||
-        e.dni.toLowerCase().includes(query) ||
-        e.nroLegajo.toLowerCase().includes(query) ||
-        (e.cargos || []).some((c) => c.nombre.toLowerCase().includes(query));
-
-      const matchCat =
-        filterCategoria === "TODAS" ||
-        (e.categorias || []).some(
-          (c) => c.nombre?.toLowerCase() === filterCategoria.toLowerCase(),
-        );
-
-      return matchEstado && matchSearch && matchCat;
-    });
-  }, [empleados, searchTerm, filterCategoria, filterEstado]);
-
-  const totalPaginas =
-    Math.ceil(filteredEmpleados.length / ITEMS_POR_PAGINA) || 1;
-  const empleadosPaginados = useMemo(() => {
-    const inicio = (paginaActual - 1) * ITEMS_POR_PAGINA;
-    return filteredEmpleados.slice(inicio, inicio + ITEMS_POR_PAGINA);
-  }, [filteredEmpleados, paginaActual]);
+    return { total, porClases, turnoFijo, sinHorario };
+  }, [empleados, totalElementos]);
 
   const verificarEmpleadoActivo = (emp, accionPermitida) => {
     if (emp.activo === false) {
       mostrarAviso(
         "warning",
         "Empleado Inactivo",
-        `El empleado ${emp.apellido}, ${emp.nombre} se encuentra dado de baja lógica. Debe reactivarlo para modificar sus horarios.`,
+        `El empleado ${emp.apellido}, ${emp.nombre} se encuentra dado de baja lógica. Debe reactivarlo para modificar sus horarios o asignarle cátedras.`,
       );
       return false;
     }
@@ -360,13 +388,13 @@ export default function GestionPersonal() {
         );
       }
 
-      await cargarDatos();
+      await cargarEmpleadosServidor(paginaActual - 1);
       setModalRegistro(false);
     } catch (err) {
       mostrarAviso(
         "danger",
         "Error",
-        "No se pudo registrar el empleado. Verifique DNI, Legajo o ID Biométrico.",
+        "No se pudo registrar el empleado. Verifique que DNI, Legajo o ID Biométrico no existan previamente.",
       );
     }
   };
@@ -384,7 +412,7 @@ export default function GestionPersonal() {
         setModalAlerta((prev) => ({ ...prev, isOpen: false }));
         try {
           await deleteEmpleado(id);
-          await cargarDatos();
+          await cargarEmpleadosServidor(paginaActual - 1);
           mostrarAviso(
             "success",
             "Baja Exitosa",
@@ -414,7 +442,7 @@ export default function GestionPersonal() {
         setModalAlerta((prev) => ({ ...prev, isOpen: false }));
         try {
           await reactivarEmpleado(id);
-          await cargarDatos();
+          await cargarEmpleadosServidor(paginaActual - 1);
           mostrarAviso(
             "success",
             "Reactivación Exitosa",
@@ -438,6 +466,7 @@ export default function GestionPersonal() {
       setHorariosEmpleado(horariosRes || []);
       setMetricasEmpleado(metricasRes);
     } catch (err) {
+      console.error("Error al cargar cronograma:", err);
       setHorariosEmpleado([]);
       setMetricasEmpleado(null);
     }
@@ -484,7 +513,7 @@ export default function GestionPersonal() {
         materiaId: formClase.materiaId ? parseInt(formClase.materiaId) : null,
         etiqueta: formClase.materia || "Cátedra",
         aula: formClase.aula || null,
-        forzarGuardado: forzar, // <-- Indica si el usuario ya aceptó la advertencia
+        forzarGuardado: forzar,
       };
 
       await addEmpleadoHorario(empleadoSeleccionado.id, payload);
@@ -498,7 +527,7 @@ export default function GestionPersonal() {
       setMetricasEmpleado(metricasActualizadas);
       setModalAsignarClase(false);
       setFormClase(FORM_CLASE_INICIAL);
-      await cargarDatos();
+      await cargarEmpleadosServidor(paginaActual - 1);
       mostrarAviso(
         "success",
         "Clases Asignadas",
@@ -507,7 +536,6 @@ export default function GestionPersonal() {
     } catch (err) {
       const mensaje = err.response?.data?.message || "";
 
-      // Si el backend avisa de solapamiento, se muestra la advertencia con opción de continuar:
       if (mensaje.includes("SOLAPAMIENTO")) {
         setModalAlerta({
           isOpen: true,
@@ -519,7 +547,7 @@ export default function GestionPersonal() {
           mostrarCancelar: true,
           onConfirmar: async () => {
             setModalAlerta((prev) => ({ ...prev, isOpen: false }));
-            await handleGuardarClase(null, true); // Reintenta con forzar = true
+            await handleGuardarClase(null, true);
           },
         });
       } else {
@@ -541,7 +569,7 @@ export default function GestionPersonal() {
       ]);
       setHorariosEmpleado(horariosActualizados);
       setMetricasEmpleado(metricasActualizadas);
-      await cargarDatos();
+      await cargarEmpleadosServidor(paginaActual - 1);
       mostrarAviso(
         "success",
         "Horario Eliminado",
@@ -563,9 +591,7 @@ export default function GestionPersonal() {
   };
 
   const handleGuardarTurno = async (forzar = false) => {
-    // Si 'forzar' no es booleano estricto (por ejemplo, viene el evento onClick del botón), se fija en false
     const esForzado = typeof forzar === "boolean" ? forzar : false;
-
     if (!empleadoSeleccionado) return;
 
     try {
@@ -595,7 +621,7 @@ export default function GestionPersonal() {
           materiaId: null,
           etiqueta: plantilla.nombre,
           aula: null,
-          forzarGuardado: esForzado, // ✅ Siempre es un booleano puro (true o false)
+          forzarGuardado: esForzado,
         });
       } else {
         const diasNumericos = diasEspecificos.map(
@@ -612,7 +638,7 @@ export default function GestionPersonal() {
             materiaId: null,
             etiqueta: r.etiqueta || "Turno Específico",
             aula: null,
-            forzarGuardado: esForzado, // ✅ Siempre es un booleano puro
+            forzarGuardado: esForzado,
           });
         }
       }
@@ -623,7 +649,7 @@ export default function GestionPersonal() {
       ]);
       setHorariosEmpleado(horariosActualizados);
       setMetricasEmpleado(metricasActualizadas);
-      await cargarDatos();
+      await cargarEmpleadosServidor(paginaActual - 1);
       setModalAsignarTurno(false);
       mostrarAviso(
         "success",
@@ -637,16 +663,13 @@ export default function GestionPersonal() {
           isOpen: true,
           tipo: "warning",
           titulo: "¿Superponer Franjas Horarias?",
-          mensaje: `${mensaje.replace(
-            "SOLAPAMIENTO: ",
-            "",
-          )} ¿Desea asignar este turno de todas formas?`,
+          mensaje: `${mensaje.replace("SOLAPAMIENTO: ", "")} ¿Desea asignar este turno de todas formas?`,
           textoConfirmar: "Sí, asignar igual",
           textoCancelar: "Revisar horario",
           mostrarCancelar: true,
           onConfirmar: async () => {
             setModalAlerta((prev) => ({ ...prev, isOpen: false }));
-            await handleGuardarTurno(true); // ✅ Pasa un booleano explícito
+            await handleGuardarTurno(true);
           },
         });
       } else {
@@ -688,12 +711,18 @@ export default function GestionPersonal() {
       </div>
 
       {/* 2. TARJETAS DE CANTIDADES */}
+      {/* 2. TARJETAS DE CANTIDADES GLOBALES */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {/* TOTAL PERSONAL */}
         <button
           type="button"
-          onClick={() => setFilterRegimen("TODOS")}
+          onClick={() => {
+            setFilterEstado("TODOS");
+            setFilterCategoria("TODAS");
+            setPaginaActual(1);
+          }}
           className={`p-5 rounded-2xl flex flex-col justify-between text-left transition-all border cursor-pointer ${
-            filterRegimen === "TODOS"
+            filterEstado === "TODOS" && filterCategoria === "TODAS"
               ? "bg-slate-50/90 border-slate-700 ring-4 ring-slate-400/20 shadow-md scale-[1.02]"
               : "bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50/50"
           }`}
@@ -706,7 +735,7 @@ export default function GestionPersonal() {
           </div>
           <div className="mt-3">
             <div className="text-2xl font-bold text-slate-900">
-              {stats.total}
+              {resumenGlobal.totalPersonal}
             </div>
             <div className="text-[10px] text-slate-500 font-medium mt-0.5">
               Todos los registrados
@@ -714,11 +743,16 @@ export default function GestionPersonal() {
           </div>
         </button>
 
+        {/* DOCENTES */}
         <button
           type="button"
-          onClick={() => setFilterRegimen("DOCENTES")}
+          onClick={() => {
+            setFilterCategoria("Docentes");
+            setFilterEstado("ACTIVOS");
+            setPaginaActual(1);
+          }}
           className={`p-5 rounded-2xl flex flex-col justify-between text-left transition-all border cursor-pointer ${
-            filterRegimen === "DOCENTES"
+            filterCategoria.toLowerCase().includes("docente")
               ? "bg-purple-50/80 border-purple-500 ring-4 ring-purple-500/20 shadow-md scale-[1.02]"
               : "bg-white border-slate-200 hover:border-purple-300 hover:bg-purple-50/30"
           }`}
@@ -731,7 +765,7 @@ export default function GestionPersonal() {
           </div>
           <div className="mt-3">
             <div className="text-2xl font-bold text-slate-900">
-              {stats.porClases}
+              {resumenGlobal.totalDocentes}
             </div>
             <div className="text-[10px] text-purple-600 font-medium mt-0.5">
               Con perfil docente
@@ -739,24 +773,29 @@ export default function GestionPersonal() {
           </div>
         </button>
 
+        {/* ADMINISTRATIVOS */}
         <button
           type="button"
-          onClick={() => setFilterRegimen("GENERAL")}
+          onClick={() => {
+            setFilterCategoria("TODAS");
+            setFilterEstado("ACTIVOS");
+            setPaginaActual(1);
+          }}
           className={`p-5 rounded-2xl flex flex-col justify-between text-left transition-all border cursor-pointer ${
-            filterRegimen === "GENERAL"
+            filterEstado === "ACTIVOS" && filterCategoria === "TODAS"
               ? "bg-indigo-50/80 border-indigo-500 ring-4 ring-indigo-500/20 shadow-md scale-[1.02]"
               : "bg-white border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/30"
           }`}
         >
           <div className="flex items-center justify-between w-full text-indigo-600">
             <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-700">
-              Administrativos / Maestranza
+              Administrativos
             </span>
             <Clock className="w-4 h-4" />
           </div>
           <div className="mt-3">
             <div className="text-2xl font-bold text-slate-900">
-              {stats.turnoFijo}
+              {resumenGlobal.totalAdministrativos}
             </div>
             <div className="text-[10px] text-indigo-600 font-medium mt-0.5">
               Personal no docente
@@ -764,11 +803,16 @@ export default function GestionPersonal() {
           </div>
         </button>
 
+        {/* BAJAS LÓGICAS */}
         <button
           type="button"
-          onClick={() => setFilterRegimen("INACTIVOS")}
+          onClick={() => {
+            setFilterEstado("INACTIVOS");
+            setFilterCategoria("TODAS");
+            setPaginaActual(1);
+          }}
           className={`p-5 rounded-2xl flex flex-col justify-between text-left transition-all border cursor-pointer ${
-            filterRegimen === "INACTIVOS"
+            filterEstado === "INACTIVOS"
               ? "bg-rose-50/80 border-rose-500 ring-4 ring-rose-500/20 shadow-md scale-[1.02]"
               : "bg-white border-slate-200 hover:border-rose-300 hover:bg-rose-50/30"
           }`}
@@ -781,7 +825,7 @@ export default function GestionPersonal() {
           </div>
           <div className="mt-3">
             <div className="text-2xl font-bold text-slate-900">
-              {stats.sinHorario}
+              {resumenGlobal.totalInactivos}
             </div>
             <div className="text-[10px] text-rose-600 font-medium mt-0.5">
               Inactivos
@@ -846,8 +890,24 @@ export default function GestionPersonal() {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 text-slate-800">
-            {empleadosPaginados.length > 0 ? (
-              empleadosPaginados.map((emp) => {
+            {loading ? (
+              <tr>
+                <td colSpan={5} className="text-center py-12 text-slate-400">
+                  <Loader2 className="w-5 h-5 animate-spin mx-auto text-indigo-600 mb-2" />
+                  Cargando nómina de empleados...
+                </td>
+              </tr>
+            ) : empleados.length === 0 ? (
+              <tr>
+                <td
+                  colSpan={5}
+                  className="text-center py-12 text-slate-400 text-xs italic"
+                >
+                  No se encontraron empleados con los filtros seleccionados.
+                </td>
+              </tr>
+            ) : (
+              empleados.map((emp) => {
                 const esDocente =
                   (emp.categorias || []).some((c) =>
                     (c.codigoTag || c.nombre || "")
@@ -1059,47 +1119,33 @@ export default function GestionPersonal() {
                   </tr>
                 );
               })
-            ) : (
-              <tr>
-                <td
-                  colSpan={5}
-                  className="text-center py-12 text-slate-400 text-xs"
-                >
-                  No se encontraron empleados con los filtros seleccionados.
-                </td>
-              </tr>
             )}
           </tbody>
         </table>
 
-        {/* 5. PAGINACIÓN */}
+        {/* 5. PAGINACIÓN DESDE EL SERVIDOR */}
         <div className="bg-white px-6 py-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
           <div className="text-slate-500">
             Mostrando{" "}
             <span className="font-bold text-slate-800">
-              {filteredEmpleados.length === 0
+              {totalElementos === 0
                 ? 0
                 : (paginaActual - 1) * ITEMS_POR_PAGINA + 1}
             </span>{" "}
             a{" "}
             <span className="font-bold text-slate-800">
-              {Math.min(
-                paginaActual * ITEMS_POR_PAGINA,
-                filteredEmpleados.length,
-              )}
+              {Math.min(paginaActual * ITEMS_POR_PAGINA, totalElementos)}
             </span>{" "}
             de{" "}
-            <span className="font-bold text-slate-800">
-              {filteredEmpleados.length}
-            </span>{" "}
+            <span className="font-bold text-slate-800">{totalElementos}</span>{" "}
             empleados
           </div>
 
           <div className="flex items-center gap-1.5">
             <button
               onClick={() => setPaginaActual((prev) => Math.max(prev - 1, 1))}
-              disabled={paginaActual === 1}
-              className="p-2 border border-slate-200 rounded-xl hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition"
+              disabled={paginaActual === 1 || loading}
+              className="p-2 border border-slate-200 rounded-xl hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer"
               title="Página Anterior"
             >
               <ChevronLeft className="w-4 h-4" />
@@ -1110,7 +1156,8 @@ export default function GestionPersonal() {
                 <button
                   key={num}
                   onClick={() => setPaginaActual(num)}
-                  className={`w-8 h-8 rounded-xl font-bold transition ${
+                  disabled={loading}
+                  className={`w-8 h-8 rounded-xl font-bold transition cursor-pointer ${
                     paginaActual === num
                       ? "bg-[#4b35e6] text-white shadow-xs"
                       : "border border-slate-200 text-slate-600 hover:bg-slate-50"
@@ -1125,8 +1172,8 @@ export default function GestionPersonal() {
               onClick={() =>
                 setPaginaActual((prev) => Math.min(prev + 1, totalPaginas))
               }
-              disabled={paginaActual === totalPaginas}
-              className="p-2 border border-slate-200 rounded-xl hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition"
+              disabled={paginaActual === totalPaginas || loading}
+              className="p-2 border border-slate-200 rounded-xl hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer"
               title="Página Siguiente"
             >
               <ChevronRight className="w-4 h-4" />
@@ -1145,7 +1192,6 @@ export default function GestionPersonal() {
         editandoEmpleadoId={editandoEmpleadoId}
         categoriasActivas={categoriasActivas}
         cargosFiltradosForm={cargosFiltradosForm}
-        horariosActivos={horariosActivos}
       />
 
       <ModalDetalleCronograma

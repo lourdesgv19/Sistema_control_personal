@@ -1,14 +1,10 @@
 package backend.model;
 
 import jakarta.persistence.*;
-import org.hibernate.annotations.NotFound;
-import org.hibernate.annotations.NotFoundAction;
 import org.hibernate.annotations.SQLDelete;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 
 @Entity
 @Table(name = "empleados")
@@ -41,14 +37,15 @@ public class Empleado {
     @Column(name = "id_biometrico", nullable = true, unique = true, length = 30)
     private String idBiometrico;
 
-    @ManyToMany
+    @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
-    name = "empleado_categorias",
-    joinColumns = @JoinColumn(name = "id_empleado"),
-    inverseJoinColumns = @JoinColumn(name = "id_categoria"))
+        name = "empleado_categorias",
+        joinColumns = @JoinColumn(name = "id_empleado"),
+        inverseJoinColumns = @JoinColumn(name = "id_categoria")
+    )
     private List<Categoria> categorias = new ArrayList<>();
 
-    @ManyToMany(fetch = FetchType.EAGER)
+    @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
         name = "empleado_cargos",
         joinColumns = @JoinColumn(name = "id_empleado"),
@@ -59,20 +56,11 @@ public class Empleado {
     @Column(name = "rol_sistema")
     private String rolSistema;
 
-    @Column(name = "tipo_regimen_horario")
-    private String tipoRegimenHorario = "SIN_HORARIO";
-
-    @NotFound(action = NotFoundAction.IGNORE)
-    @ManyToOne(fetch = FetchType.EAGER)
-    @JoinColumn(name = "id_horario_general")
-    private Horario horarioGeneral;
-
     @Column(name = "tolerancia_ingreso_min")
     private Integer toleranciaIngresoMin = 15;
 
     @Column(name = "tolerancia_egreso_min")
     private Integer toleranciaEgresoMin = 10;
-
 
     @Column(nullable = false)
     private Boolean activo = true;
@@ -100,15 +88,11 @@ public class Empleado {
     public String getIdBiometrico() { return idBiometrico; }
     public void setIdBiometrico(String idBiometrico) { this.idBiometrico = idBiometrico; }
     public List<Categoria> getCategorias() { return categorias; }
-    public void setCategorias(List<Categoria> categoria) { this.categorias = categoria; }
+    public void setCategorias(List<Categoria> categorias) { this.categorias = categorias; }
     public List<Cargo> getCargos() { return cargos; }
     public void setCargos(List<Cargo> cargos) { this.cargos = cargos; }
     public String getRolSistema() { return rolSistema; }
     public void setRolSistema(String rolSistema) { this.rolSistema = rolSistema; }
-    public String getTipoRegimenHorario() { return tipoRegimenHorario; }
-    public void setTipoRegimenHorario(String tipoRegimenHorario) { this.tipoRegimenHorario = tipoRegimenHorario; }
-    public Horario getHorarioGeneral() { return horarioGeneral; }
-    public void setHorarioGeneral(Horario horarioGeneral) { this.horarioGeneral = horarioGeneral; }
     public Integer getToleranciaIngresoMin() { return toleranciaIngresoMin; }
     public void setToleranciaIngresoMin(Integer toleranciaIngresoMin) { this.toleranciaIngresoMin = toleranciaIngresoMin; }
     public Integer getToleranciaEgresoMin() { return toleranciaEgresoMin; }

@@ -5,6 +5,9 @@ import backend.model.*;
 import backend.repositories.EmpleadoHorarioRepository;
 import backend.repositories.EmpleadoRepository;
 import backend.repositories.MateriaRepository;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,8 +31,14 @@ public class EmpleadoService {
     }
 
     @Transactional(readOnly = true)
-    public List<Empleado> listarTodos() {
-        return empleadoRepo.findAll();
+    public List<Empleado> listarTodosActivos() {
+        return empleadoRepo.findAllActivos();
+    }
+
+    @Transactional(readOnly = true)
+    public Page<Empleado> listarPaginado(String q, Long categoriaId, String estado, int page, int size) {
+        Pageable pageable = PageRequest.of(page, size);
+        return empleadoRepo.buscarPaginado(q, categoriaId, estado, pageable);
     }
 
     @Transactional(readOnly = true)
@@ -58,11 +67,11 @@ public class EmpleadoService {
         emp.setRolSistema(empActualizado.getRolSistema());
         emp.setToleranciaIngresoMin(empActualizado.getToleranciaIngresoMin());
         emp.setToleranciaEgresoMin(empActualizado.getToleranciaEgresoMin());
-        emp.setActivo(empActualizado.getActivo());
         emp.setCategorias(empActualizado.getCategorias() != null ? empActualizado.getCategorias() : new ArrayList<>());
         emp.setCargos(empActualizado.getCargos() != null ? empActualizado.getCargos() : new ArrayList<>());
 
         if (Boolean.TRUE.equals(empActualizado.getActivo())) {
+            emp.setActivo(true);
             emp.setFechaBaja(null);
         }
 
@@ -86,7 +95,7 @@ public class EmpleadoService {
     }
 
     // =========================================================
-    // GESTIÓN UNIFICADA DE HORARIOS
+    // HORARIOS UNIFICADOS
     // =========================================================
 
     @Transactional(readOnly = true)
@@ -94,70 +103,66 @@ public class EmpleadoService {
         return horarioRepo.findByEmpleadoId(empleadoId);
     }
 
-@Transactional
-public List<EmpleadoHorario> agregarHorariosMultiples(Long empleadoId,
-                                                     List<Integer> diasSemana,
-                                                     String horaEntradaStr,
-                                                     String horaSalidaStr,
-                                                     Long materiaId,
-                                                     String etiqueta,
-                                                     String aula,
-                                                     Boolean forzarGuardado) {
-    Empleado emp = obtenerPorId(empleadoId);
-    LocalTime nuevaEntrada = LocalTime.parse(horaEntradaStr);
-    LocalTime nuevaSalida = LocalTime.parse(horaSalidaStr);
+    @Transactional
+    public List<EmpleadoHorario> agregarHorariosMultiples(Long empleadoId,
+                                                         List<Integer> diasSemana,
+                                                         String horaEntradaStr,
+                                                         String horaSalidaStr,
+                                                         Long materiaId,
+                                                         String etiqueta,
+                                                         String aula,
+                                                         Boolean forzarGuardado) {
+        Empleado emp = obtenerPorId(empleadoId);
+        LocalTime nuevaEntrada = LocalTime.parse(horaEntradaStr);
+        LocalTime nuevaSalida = LocalTime.parse(horaSalidaStr);
 
-    if (!nuevaSalida.isAfter(nuevaEntrada)) {
-        throw new IllegalArgumentException("La hora de salida debe ser posterior a la de entrada.");
-    }
+        if (!nuevaSalida.isAfter(nuevaEntrada)) {
+            throw new IllegalArgumentException("La hora de salida debe ser posterior a la de entrada.");
+        }
 
-    Materia mat = (materiaId != null) ? materiaRepo.findById(materiaId).orElse(null) : null;
-    List<EmpleadoHorario> existentes = horarioRepo.findByEmpleadoId(empleadoId);
+        Materia mat = (materiaId != null) ? materiaRepo.findById(materiaId).orElse(null) : null;
+        List<EmpleadoHorario> existentes = horarioRepo.findByEmpleadoId(empleadoId);
 
-    // Si NO se confirmó forzar el guardado, se comprueban solapamientos para advertir
-    if (!Boolean.TRUE.equals(forzarGuardado)) {
-        for (Integer dia : diasSemana) {
-            for (EmpleadoHorario h : existentes) {
-                if (h.getDiaSemana().equals(dia)) {
-                    LocalTime exEntrada = h.getHoraEntrada();
-                    LocalTime exSalida = h.getHoraSalida();
+        if (!Boolean.TRUE.equals(forzarGuardado)) {
+            for (Integer dia : diasSemana) {
+                for (EmpleadoHorario h : existentes) {
+                    if (h.getDiaSemana().equals(dia)) {
+                        LocalTime exEntrada = h.getHoraEntrada();
+                        LocalTime exSalida = h.getHoraSalida();
 
-                    // Regla de solapamiento: inicioA < finB && finA > inicioB
-                    if (nuevaEntrada.isBefore(exSalida) && nuevaSalida.isAfter(exEntrada)) {
-                        String nombreDia = diaNumeroANombre(dia);
-                        String info = h.getMateria() != null ? h.getMateria().getNombre() : (h.getEtiqueta() != null ? h.getEtiqueta() : "Turno");
-                        
-                        // Lanzamos excepción específica que el frontend identificará como advertencia
-                        throw new IllegalStateException(String.format(
-                            "SOLAPAMIENTO: El día %s coincide parcialmente con '%s' (%s a %s hs).",
-                            nombreDia, info,
-                            exEntrada.toString().substring(0, 5), exSalida.toString().substring(0, 5)
-                        ));
+                        if (nuevaEntrada.isBefore(exSalida) && nuevaSalida.isAfter(exEntrada)) {
+                            String nombreDia = diaNumeroANombre(dia);
+                            String info = h.getMateria() != null ? h.getMateria().getNombre() : (h.getEtiqueta() != null ? h.getEtiqueta() : "Turno");
+                            
+                            throw new IllegalStateException(String.format(
+                                "SOLAPAMIENTO: El día %s coincide parcialmente con '%s' (%s a %s hs).",
+                                nombreDia, info,
+                                exEntrada.toString().substring(0, 5), exSalida.toString().substring(0, 5)
+                            ));
+                        }
                     }
                 }
             }
         }
-    }
 
-    // Persistir las franjas horarias
-    List<EmpleadoHorario> creados = new ArrayList<>();
-    for (Integer dia : diasSemana) {
-        EmpleadoHorario nuevo = new EmpleadoHorario();
-        nuevo.setEmpleado(emp);
-        nuevo.setDiaSemana(dia);
-        nuevo.setHoraEntrada(nuevaEntrada);
-        nuevo.setHoraSalida(nuevaSalida);
-        nuevo.setMateria(mat);
-        nuevo.setEtiqueta(etiqueta);
-        nuevo.setAula(aula != null && !aula.isBlank() ? aula : (mat != null ? mat.getAulaPredeterminada() : null));
-        nuevo.setToleranciaIngresoMin(emp.getToleranciaIngresoMin() != null ? emp.getToleranciaIngresoMin() : 15);
-        nuevo.setToleranciaEgresoMin(emp.getToleranciaEgresoMin() != null ? emp.getToleranciaEgresoMin() : 10);
-        nuevo.setActivo(true);
-        creados.add(horarioRepo.save(nuevo));
-    }
+        List<EmpleadoHorario> creados = new ArrayList<>();
+        for (Integer dia : diasSemana) {
+            EmpleadoHorario nuevo = new EmpleadoHorario();
+            nuevo.setEmpleado(emp);
+            nuevo.setDiaSemana(dia);
+            nuevo.setHoraEntrada(nuevaEntrada);
+            nuevo.setHoraSalida(nuevaSalida);
+            nuevo.setMateria(mat);
+            nuevo.setEtiqueta(etiqueta);
+            nuevo.setAula(aula != null && !aula.isBlank() ? aula : (mat != null ? mat.getAulaPredeterminada() : null));
+            nuevo.setToleranciaIngresoMin(emp.getToleranciaIngresoMin() != null ? emp.getToleranciaIngresoMin() : 15);
+            nuevo.setToleranciaEgresoMin(emp.getToleranciaEgresoMin() != null ? emp.getToleranciaEgresoMin() : 10);
+            nuevo.setActivo(true);
+            creados.add(horarioRepo.save(nuevo));
+        }
 
-    return creados;
-}
+        return creados;
+    }
 
     @Transactional
     public void eliminarHorario(Long horarioId) {
@@ -169,7 +174,7 @@ public List<EmpleadoHorario> agregarHorariosMultiples(Long empleadoId,
     }
 
     // =========================================================
-    // MÉTRICAS CALCULADAS DIRECTAS DESDE LA TABLA UNIFICADA
+    // MÉTRICAS CALCULADAS
     // =========================================================
     @Transactional(readOnly = true)
     public MetricasPersonalDTO calcularMetricas(Long empleadoId) {

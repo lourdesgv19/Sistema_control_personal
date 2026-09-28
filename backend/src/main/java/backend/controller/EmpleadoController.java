@@ -1,13 +1,15 @@
 package backend.controller;
 
 import backend.dto.MetricasPersonalDTO;
+import backend.dto.PersonalResumenDTO;
 import backend.model.Empleado;
 import backend.model.EmpleadoHorario;
+import backend.repositories.EmpleadoRepository;
 import backend.service.EmpleadoService;
+import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
 import java.util.List;
 import java.util.Map;
 
@@ -17,14 +19,28 @@ import java.util.Map;
 public class EmpleadoController {
 
     private final EmpleadoService empleadoService;
+    private final EmpleadoRepository empleadoRepo;
 
-    public EmpleadoController(EmpleadoService empleadoService) {
+    public EmpleadoController(EmpleadoService empleadoService, EmpleadoRepository empleadoRepository) {
         this.empleadoService = empleadoService;
+        this.empleadoRepo = empleadoRepository;
     }
 
+    // Listado paginado con filtros para la grilla principal
     @GetMapping
-    public ResponseEntity<List<Empleado>> listar() {
-        return ResponseEntity.ok(empleadoService.listarTodos());
+    public ResponseEntity<Page<Empleado>> listar(
+            @RequestParam(value = "q", required = false, defaultValue = "") String q,
+            @RequestParam(value = "categoriaId", required = false) Long categoriaId,
+            @RequestParam(value = "estado", required = false, defaultValue = "TODOS") String estado,
+            @RequestParam(value = "page", defaultValue = "0") int page,
+            @RequestParam(value = "size", defaultValue = "15") int size) {
+        return ResponseEntity.ok(empleadoService.listarPaginado(q, categoriaId, estado, page, size));
+    }
+
+    // Lista simple para selectores desplegables de modales (solo activos)
+    @GetMapping("/activos")
+    public ResponseEntity<List<Empleado>> listarActivos() {
+        return ResponseEntity.ok(empleadoService.listarTodosActivos());
     }
 
     @GetMapping("/{id}")
@@ -59,23 +75,19 @@ public class EmpleadoController {
         return ResponseEntity.ok(empleadoService.calcularMetricas(id));
     }
 
-    // ========================================================
-    // ENDPOINTS UNIFICADOS DE HORARIOS
-    // ========================================================
-
     @GetMapping("/{id}/horarios")
     public ResponseEntity<List<EmpleadoHorario>> listarHorarios(@PathVariable Long id) {
         return ResponseEntity.ok(empleadoService.listarHorariosEmpleado(id));
     }
 
     public record AsignarHorarioRequest(
-        List<Integer> diasSemana,      // [1, 2, 3] donde 1=Lunes, 7=Domingo
-        String horaEntrada,            // "08:00" o "08:00:00"
-        String horaSalida,             // "12:00" o "12:00:00"
-        Long materiaId,                // opcional (para docentes)
-        String etiqueta,               // opcional ("Turno Mañana", "Cátedra A")
+        List<Integer> diasSemana,
+        String horaEntrada,
+        String horaSalida,
+        Long materiaId,
+        String etiqueta,
         String aula,
-        Boolean forzarGuardado                    // opcional
+        Boolean forzarGuardado
     ) {}
 
     @PostMapping("/{id}/horarios")
@@ -103,5 +115,20 @@ public class EmpleadoController {
     public ResponseEntity<Void> eliminarHorario(@PathVariable Long horarioId) {
         empleadoService.eliminarHorario(horarioId);
         return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping("/resumen-metricas")
+    public ResponseEntity<PersonalResumenDTO> obtenerResumenMetricas() {
+        long activos = empleadoRepo.countActivos();
+        long inactivos = empleadoRepo.countInactivos();
+        long docentes = empleadoRepo.countDocentes();
+        long administrativos = empleadoRepo.countAdministrativos();
+
+        return ResponseEntity.ok(new backend.dto.PersonalResumenDTO(
+            activos + inactivos,
+            docentes,
+            administrativos,
+            inactivos
+        ));
     }
 }
