@@ -56,9 +56,6 @@ public class Empleado {
     )
     private List<Cargo> cargos = new ArrayList<>();
 
-    @OneToMany(mappedBy = "empleado", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
-    private List<EmpleadoRangoHorario> rangosHorario = new ArrayList<>();
-
     @Column(name = "rol_sistema")
     private String rolSistema;
 
@@ -76,8 +73,6 @@ public class Empleado {
     @Column(name = "tolerancia_egreso_min")
     private Integer toleranciaEgresoMin = 10;
 
-    @OneToMany(mappedBy = "empleado", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
-    private List<EmpleadoClase> clases = new ArrayList<>();
 
     @Column(nullable = false)
     private Boolean activo = true;
@@ -118,10 +113,6 @@ public class Empleado {
     public void setToleranciaIngresoMin(Integer toleranciaIngresoMin) { this.toleranciaIngresoMin = toleranciaIngresoMin; }
     public Integer getToleranciaEgresoMin() { return toleranciaEgresoMin; }
     public void setToleranciaEgresoMin(Integer toleranciaEgresoMin) { this.toleranciaEgresoMin = toleranciaEgresoMin; }
-    public List<EmpleadoClase> getClases() { return clases; }
-    public void setClases(List<EmpleadoClase> clases) { this.clases = clases; }
-    public List<EmpleadoRangoHorario> getRangosHorario() { return rangosHorario; }
-    public void setRangosHorario(List<EmpleadoRangoHorario> rangosHorario) { this.rangosHorario = rangosHorario; }
     public Boolean getActivo() { return activo; }
     public void setActivo(Boolean activo) { this.activo = activo; }
     public LocalDateTime getFechaBaja() { return fechaBaja; }

@@ -8,8 +8,8 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 
 @Entity
-@Table(name = "config_horarios")
-@SQLDelete(sql = "UPDATE config_horarios SET activo = false, fecha_baja = NOW() WHERE id_horario = ?")
+@Table(name = "config_turnos_plantilla")
+@SQLDelete(sql = "UPDATE config_turnos_plantilla SET activo = false, fecha_baja = NOW() WHERE id_horario = ?")
 public class Horario {
 
     @Id

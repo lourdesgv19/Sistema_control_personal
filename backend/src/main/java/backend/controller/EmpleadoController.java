@@ -2,8 +2,7 @@ package backend.controller;
 
 import backend.dto.MetricasPersonalDTO;
 import backend.model.Empleado;
-import backend.model.EmpleadoClase;
-import backend.repositories.EmpleadoClaseRepository;
+import backend.model.EmpleadoHorario;
 import backend.service.EmpleadoService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -18,11 +17,9 @@ import java.util.Map;
 public class EmpleadoController {
 
     private final EmpleadoService empleadoService;
-    private final EmpleadoClaseRepository empleadoClaseRepo;
 
-    public EmpleadoController(EmpleadoService empleadoService, EmpleadoClaseRepository empleadoClaseRepo) {
+    public EmpleadoController(EmpleadoService empleadoService) {
         this.empleadoService = empleadoService;
-        this.empleadoClaseRepo = empleadoClaseRepo;
     }
 
     @GetMapping
@@ -62,44 +59,49 @@ public class EmpleadoController {
         return ResponseEntity.ok(empleadoService.calcularMetricas(id));
     }
 
-    @GetMapping("/{id}/clases")
-    public ResponseEntity<List<EmpleadoClase>> obtenerClases(@PathVariable Long id) {
-        return ResponseEntity.ok(empleadoClaseRepo.findByEmpleadoId(id));
+    // ========================================================
+    // ENDPOINTS UNIFICADOS DE HORARIOS
+    // ========================================================
+
+    @GetMapping("/{id}/horarios")
+    public ResponseEntity<List<EmpleadoHorario>> listarHorarios(@PathVariable Long id) {
+        return ResponseEntity.ok(empleadoService.listarHorariosEmpleado(id));
     }
 
-    public record AsignarClaseRequest(
-        Long materiaId,
-        String materia,
-        List<String> diasSemana,
-        String comision,
-        String horaInicio,
-        String horaFin,
-        String aula
+    public record AsignarHorarioRequest(
+        List<Integer> diasSemana,      // [1, 2, 3] donde 1=Lunes, 7=Domingo
+        String horaEntrada,            // "08:00" o "08:00:00"
+        String horaSalida,             // "12:00" o "12:00:00"
+        Long materiaId,                // opcional (para docentes)
+        String etiqueta,               // opcional ("Turno Mañana", "Cátedra A")
+        String aula,
+        Boolean forzarGuardado                    // opcional
     ) {}
 
-    @PostMapping("/{id}/clases/multiple")
-    public ResponseEntity<?> agregarClasesMultiples(
+    @PostMapping("/{id}/horarios")
+    public ResponseEntity<?> agregarHorarios(
             @PathVariable Long id,
-            @RequestBody AsignarClaseRequest req) {
+            @RequestBody AsignarHorarioRequest req) {
         try {
-            List<EmpleadoClase> clases = empleadoService.agregarClasesMultiples(
+            List<EmpleadoHorario> creados = empleadoService.agregarHorariosMultiples(
                     id,
-                    req.materia(),
-                    req.comision(),
-                    req.horaInicio(),
-                    req.horaFin(),
+                    req.diasSemana(),
+                    req.horaEntrada().length() == 5 ? req.horaEntrada() + ":00" : req.horaEntrada(),
+                    req.horaSalida().length() == 5 ? req.horaSalida() + ":00" : req.horaSalida(),
+                    req.materiaId(),
+                    req.etiqueta(),
                     req.aula(),
-                    req.diasSemana()
+                    req.forzarGuardado() != null && req.forzarGuardado()
             );
-            return ResponseEntity.status(HttpStatus.CREATED).body(clases);
+            return ResponseEntity.status(HttpStatus.CREATED).body(creados);
         } catch (IllegalArgumentException | IllegalStateException e) {
             return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
         }
     }
 
-    @DeleteMapping("/clases/{claseId}")
-    public ResponseEntity<Void> eliminarClase(@PathVariable Long claseId) {
-        empleadoService.eliminarClase(claseId);
+    @DeleteMapping("/horarios/{horarioId}")
+    public ResponseEntity<Void> eliminarHorario(@PathVariable Long horarioId) {
+        empleadoService.eliminarHorario(horarioId);
         return ResponseEntity.noContent().build();
     }
 }

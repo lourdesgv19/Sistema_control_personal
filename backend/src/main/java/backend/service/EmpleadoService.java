@@ -2,10 +2,12 @@ package backend.service;
 
 import backend.dto.MetricasPersonalDTO;
 import backend.model.*;
-import backend.repositories.EmpleadoClaseRepository;
+import backend.repositories.EmpleadoHorarioRepository;
 import backend.repositories.EmpleadoRepository;
+import backend.repositories.MateriaRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
 import java.time.Duration;
 import java.time.LocalTime;
 import java.util.*;
@@ -14,11 +16,15 @@ import java.util.*;
 public class EmpleadoService {
 
     private final EmpleadoRepository empleadoRepo;
-    private final EmpleadoClaseRepository claseRepo;
+    private final EmpleadoHorarioRepository horarioRepo;
+    private final MateriaRepository materiaRepo;
 
-    public EmpleadoService(EmpleadoRepository empleadoRepo, EmpleadoClaseRepository claseRepo) {
+    public EmpleadoService(EmpleadoRepository empleadoRepo, 
+                           EmpleadoHorarioRepository horarioRepo,
+                           MateriaRepository materiaRepo) {
         this.empleadoRepo = empleadoRepo;
-        this.claseRepo = claseRepo;
+        this.horarioRepo = horarioRepo;
+        this.materiaRepo = materiaRepo;
     }
 
     @Transactional(readOnly = true)
@@ -50,33 +56,14 @@ public class EmpleadoService {
         emp.setNroLegajo(empActualizado.getNroLegajo());
         emp.setIdBiometrico(empActualizado.getIdBiometrico());
         emp.setRolSistema(empActualizado.getRolSistema());
-        emp.setTipoRegimenHorario(empActualizado.getTipoRegimenHorario());
-        emp.setHorarioGeneral(empActualizado.getHorarioGeneral());
         emp.setToleranciaIngresoMin(empActualizado.getToleranciaIngresoMin());
         emp.setToleranciaEgresoMin(empActualizado.getToleranciaEgresoMin());
         emp.setActivo(empActualizado.getActivo());
-
-        // Manejo de categorías múltiples (@ManyToMany)
         emp.setCategorias(empActualizado.getCategorias() != null ? empActualizado.getCategorias() : new ArrayList<>());
-
-        // Manejo de cargos múltiples
         emp.setCargos(empActualizado.getCargos() != null ? empActualizado.getCargos() : new ArrayList<>());
 
         if (Boolean.TRUE.equals(empActualizado.getActivo())) {
             emp.setFechaBaja(null);
-        }
-
-        // Persistir rangos de horario específico
-        if ("ESPECIFICO".equals(empActualizado.getTipoRegimenHorario())) {
-            emp.getRangosHorario().clear();
-            if (empActualizado.getRangosHorario() != null) {
-                for (EmpleadoRangoHorario rango : empActualizado.getRangosHorario()) {
-                    rango.setEmpleado(emp);
-                    emp.getRangosHorario().add(rango);
-                }
-            }
-        } else {
-            emp.getRangosHorario().clear();
         }
 
         return empleadoRepo.save(emp);
@@ -98,71 +85,119 @@ public class EmpleadoService {
         empleadoRepo.save(emp);
     }
 
-    // --- CÁLCULO DE MÉTRICAS PERSONAL DTO ---
+    // =========================================================
+    // GESTIÓN UNIFICADA DE HORARIOS
+    // =========================================================
+
+    @Transactional(readOnly = true)
+    public List<EmpleadoHorario> listarHorariosEmpleado(Long empleadoId) {
+        return horarioRepo.findByEmpleadoId(empleadoId);
+    }
+
+@Transactional
+public List<EmpleadoHorario> agregarHorariosMultiples(Long empleadoId,
+                                                     List<Integer> diasSemana,
+                                                     String horaEntradaStr,
+                                                     String horaSalidaStr,
+                                                     Long materiaId,
+                                                     String etiqueta,
+                                                     String aula,
+                                                     Boolean forzarGuardado) {
+    Empleado emp = obtenerPorId(empleadoId);
+    LocalTime nuevaEntrada = LocalTime.parse(horaEntradaStr);
+    LocalTime nuevaSalida = LocalTime.parse(horaSalidaStr);
+
+    if (!nuevaSalida.isAfter(nuevaEntrada)) {
+        throw new IllegalArgumentException("La hora de salida debe ser posterior a la de entrada.");
+    }
+
+    Materia mat = (materiaId != null) ? materiaRepo.findById(materiaId).orElse(null) : null;
+    List<EmpleadoHorario> existentes = horarioRepo.findByEmpleadoId(empleadoId);
+
+    // Si NO se confirmó forzar el guardado, se comprueban solapamientos para advertir
+    if (!Boolean.TRUE.equals(forzarGuardado)) {
+        for (Integer dia : diasSemana) {
+            for (EmpleadoHorario h : existentes) {
+                if (h.getDiaSemana().equals(dia)) {
+                    LocalTime exEntrada = h.getHoraEntrada();
+                    LocalTime exSalida = h.getHoraSalida();
+
+                    // Regla de solapamiento: inicioA < finB && finA > inicioB
+                    if (nuevaEntrada.isBefore(exSalida) && nuevaSalida.isAfter(exEntrada)) {
+                        String nombreDia = diaNumeroANombre(dia);
+                        String info = h.getMateria() != null ? h.getMateria().getNombre() : (h.getEtiqueta() != null ? h.getEtiqueta() : "Turno");
+                        
+                        // Lanzamos excepción específica que el frontend identificará como advertencia
+                        throw new IllegalStateException(String.format(
+                            "SOLAPAMIENTO: El día %s coincide parcialmente con '%s' (%s a %s hs).",
+                            nombreDia, info,
+                            exEntrada.toString().substring(0, 5), exSalida.toString().substring(0, 5)
+                        ));
+                    }
+                }
+            }
+        }
+    }
+
+    // Persistir las franjas horarias
+    List<EmpleadoHorario> creados = new ArrayList<>();
+    for (Integer dia : diasSemana) {
+        EmpleadoHorario nuevo = new EmpleadoHorario();
+        nuevo.setEmpleado(emp);
+        nuevo.setDiaSemana(dia);
+        nuevo.setHoraEntrada(nuevaEntrada);
+        nuevo.setHoraSalida(nuevaSalida);
+        nuevo.setMateria(mat);
+        nuevo.setEtiqueta(etiqueta);
+        nuevo.setAula(aula != null && !aula.isBlank() ? aula : (mat != null ? mat.getAulaPredeterminada() : null));
+        nuevo.setToleranciaIngresoMin(emp.getToleranciaIngresoMin() != null ? emp.getToleranciaIngresoMin() : 15);
+        nuevo.setToleranciaEgresoMin(emp.getToleranciaEgresoMin() != null ? emp.getToleranciaEgresoMin() : 10);
+        nuevo.setActivo(true);
+        creados.add(horarioRepo.save(nuevo));
+    }
+
+    return creados;
+}
+
+    @Transactional
+    public void eliminarHorario(Long horarioId) {
+        EmpleadoHorario h = horarioRepo.findById(horarioId)
+                .orElseThrow(() -> new RuntimeException("Horario no encontrado con ID: " + horarioId));
+        h.setActivo(false);
+        h.setFechaBaja(java.time.LocalDateTime.now());
+        horarioRepo.save(h);
+    }
+
+    // =========================================================
+    // MÉTRICAS CALCULADAS DIRECTAS DESDE LA TABLA UNIFICADA
+    // =========================================================
     @Transactional(readOnly = true)
     public MetricasPersonalDTO calcularMetricas(Long empleadoId) {
         Empleado emp = obtenerPorId(empleadoId);
+        List<EmpleadoHorario> franjas = horarioRepo.findByEmpleadoId(empleadoId);
 
         double totalHorasSemana = 0.0;
         Set<String> diasSet = new LinkedHashSet<>();
-        String regimenDesc = "Sin Horario Fijado";
-        String regimenSub = "Pendiente de asignar";
+        boolean tieneMaterias = false;
 
-        String tipo = emp.getTipoRegimenHorario() != null ? emp.getTipoRegimenHorario() : "SIN_HORARIO";
+        for (EmpleadoHorario f : franjas) {
+            String diaNombre = diaNumeroANombre(f.getDiaSemana());
+            diasSet.add(diaNombre);
 
-        if ("POR_CLASES".equals(tipo)) {
-            List<EmpleadoClase> clases = claseRepo.findByEmpleadoId(empleadoId);
-            regimenDesc = "Docente Por Cátedras";
-            regimenSub = clases.size() + " clases en la semana";
-
-            for (EmpleadoClase c : clases) {
-                if (c.getDiaSemana() != null) {
-                    diasSet.add(normalizarNombreDia(c.getDiaSemana()));
-                }
-                if (c.getHoraInicio() != null && c.getHoraFin() != null) {
-                    long minutos = Duration.between(c.getHoraInicio(), c.getHoraFin()).toMinutes();
-                    if (minutos > 0) totalHorasSemana += (minutos / 60.0);
-                }
-            }
-        } else if ("PREESTABLECIDO".equals(tipo) && emp.getHorarioGeneral() != null) {
-            Horario h = emp.getHorarioGeneral();
-            regimenDesc = h.getNombre();
-            regimenSub = "Horario institucional corporativo";
-
-            String[] dias = (h.getDiasLaborables() != null ? h.getDiasLaborables() : "").split(",");
-            for (String d : dias) {
-                String diaNorm = normalizarDiaAbreviado(d.trim());
-                if (!diaNorm.isEmpty()) diasSet.add(diaNorm);
+            if (f.getMateria() != null) {
+                tieneMaterias = true;
             }
 
-            if (h.getHoraEntrada() != null && h.getHoraEgreso() != null) {
-                long minutosJornada = Duration.between(h.getHoraEntrada(), h.getHoraEgreso()).toMinutes();
-                if (minutosJornada > 0) {
-                    totalHorasSemana = (minutosJornada / 60.0) * diasSet.size();
+            if (f.getHoraEntrada() != null && f.getHoraSalida() != null) {
+                long minutos = Duration.between(f.getHoraEntrada(), f.getHoraSalida()).toMinutes();
+                if (minutos > 0) {
+                    totalHorasSemana += (minutos / 60.0);
                 }
             }
-        } else if ("ESPECIFICO".equals(tipo)) {
-            regimenDesc = "Horario Específico";
-            regimenSub = "Jornada personalizada";
-
-            double horasJornadaDiaria = 0.0;
-            if (emp.getRangosHorario() != null) {
-                for (EmpleadoRangoHorario r : emp.getRangosHorario()) {
-                    if (r.getDiasAplicables() != null) {
-                        for (String d : r.getDiasAplicables().split(",")) {
-                            String diaNorm = normalizarDiaAbreviado(d.trim());
-                            if (!diaNorm.isEmpty()) diasSet.add(diaNorm);
-                        }
-                    }
-                    if (r.getHoraDesde() != null && r.getHoraHasta() != null) {
-                        long min = Duration.between(r.getHoraDesde(), r.getHoraHasta()).toMinutes();
-                        if (min > 0) horasJornadaDiaria += (min / 60.0);
-                    }
-                }
-            }
-            totalHorasSemana = horasJornadaDiaria * (diasSet.isEmpty() ? 5 : diasSet.size());
         }
 
+        String regimenDesc = franjas.isEmpty() ? "Sin Horario Fijado" : (tieneMaterias ? "Docente Por Cátedras" : "Jornada Regular");
+        String regimenSub = franjas.isEmpty() ? "Pendiente de asignar" : franjas.size() + " bloques semanales";
         String textoDias = formatearTextoDias(diasSet);
 
         return new MetricasPersonalDTO(
@@ -177,91 +212,17 @@ public class EmpleadoService {
         );
     }
 
-    // --- ASIGNACIÓN DE CLASES CON CONTROL DE SOLAPAMIENTO ---
-    @Transactional
-    public List<EmpleadoClase> agregarClasesMultiples(Long empleadoId, String materia, String comision,
-                                                      String horaInicioStr, String horaFinStr, String aula,
-                                                      List<String> diasSemana) {
-        Empleado emp = obtenerPorId(empleadoId);
-        LocalTime nuevaInicio = LocalTime.parse(horaInicioStr);
-        LocalTime nuevaFin = LocalTime.parse(horaFinStr);
-
-        if (!nuevaFin.isAfter(nuevaInicio)) {
-            throw new IllegalArgumentException("La hora de fin debe ser posterior a la de inicio.");
-        }
-
-        List<EmpleadoClase> clasesActivas = claseRepo.findByEmpleadoId(empleadoId);
-
-        for (String dia : diasSemana) {
-            for (EmpleadoClase existente : clasesActivas) {
-                if (existente.getDiaSemana().equalsIgnoreCase(dia)) {
-                    LocalTime exInicio = existente.getHoraInicio();
-                    LocalTime exFin = existente.getHoraFin();
-
-                    if (nuevaInicio.isBefore(exFin) && nuevaFin.isAfter(exInicio)) {
-                        throw new IllegalStateException(String.format(
-                            "Conflicto el día %s: ya dicta '%s' de %s a %s hs.",
-                            dia, existente.getMateria(),
-                            exInicio.toString().substring(0, 5), exFin.toString().substring(0, 5)
-                        ));
-                    }
-                }
-            }
-        }
-
-        List<EmpleadoClase> creadas = new ArrayList<>();
-        for (String dia : diasSemana) {
-            EmpleadoClase nueva = new EmpleadoClase();
-            nueva.setEmpleado(emp);
-            nueva.setMateria(materia);
-            nueva.setComision(comision);
-            nueva.setHoraInicio(nuevaInicio);
-            nueva.setHoraFin(nuevaFin);
-            nueva.setAula(aula);
-            nueva.setDiaSemana(dia);
-            nueva.setActivo(true);
-            creadas.add(claseRepo.save(nueva));
-        }
-
-        if (!"POR_CLASES".equals(emp.getTipoRegimenHorario())) {
-            emp.setTipoRegimenHorario("POR_CLASES");
-            empleadoRepo.save(emp);
-        }
-
-        return creadas;
-    }
-
-    @Transactional
-    public void eliminarClase(Long claseId) {
-        EmpleadoClase clase = claseRepo.findById(claseId)
-                .orElseThrow(() -> new RuntimeException("Clase no encontrada"));
-        clase.setActivo(false);
-        clase.setFechaBaja(java.time.LocalDateTime.now());
-        claseRepo.save(clase);
-    }
-
-    private String normalizarNombreDia(String dia) {
-        String d = dia.toLowerCase();
-        if (d.contains("lun")) return "Lunes";
-        if (d.contains("mar")) return "Martes";
-        if (d.contains("mi")) return "Miércoles";
-        if (d.contains("jue")) return "Jueves";
-        if (d.contains("vie")) return "Viernes";
-        if (d.contains("s")) return "Sábado";
-        if (d.contains("dom")) return "Domingo";
-        return dia;
-    }
-
-    private String normalizarDiaAbreviado(String clave) {
-        String c = clave.toLowerCase();
-        if (c.startsWith("lun")) return "Lunes";
-        if (c.startsWith("mar")) return "Martes";
-        if (c.startsWith("mi")) return "Miércoles";
-        if (c.startsWith("jue")) return "Jueves";
-        if (c.startsWith("vie")) return "Viernes";
-        if (c.startsWith("s")) return "Sábado";
-        if (c.startsWith("dom")) return "Domingo";
-        return "";
+    private String diaNumeroANombre(Integer dia) {
+        return switch (dia) {
+            case 1 -> "Lunes";
+            case 2 -> "Martes";
+            case 3 -> "Miércoles";
+            case 4 -> "Jueves";
+            case 5 -> "Viernes";
+            case 6 -> "Sábado";
+            case 7 -> "Domingo";
+            default -> "Día " + dia;
+        };
     }
 
     private String formatearTextoDias(Set<String> dias) {
