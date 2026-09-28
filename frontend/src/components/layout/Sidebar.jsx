@@ -10,6 +10,7 @@ import {
   FileSpreadsheet,
   Settings,
   LogOut,
+  UploadCloud, 
 } from "lucide-react";
 
 export default function Sidebar({ isSidebarOpen, onToggleSidebar }) {
@@ -23,6 +24,8 @@ export default function Sidebar({ isSidebarOpen, onToggleSidebar }) {
     { to: "/alertas", label: "Alertas e Infracciones", icon: AlertTriangle },
     { to: "/reportes", label: "Métricas y Reportes", icon: FileSpreadsheet },
     { to: "/configuracion", label: "Tipos y Configuración", icon: Settings },
+    {to: "/importacion", label:"Importar lista de fichajes", icon:UploadCloud}
+    
   ];
 
   const handleConfirmLogout = () => {

@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import Layout from "./components/layout/Layout";
 import TiposConfiguracion from "./pages/TiposConfiguracion";
 import GestionPersonal from "./pages/GestionPersonal";
+import ImportacionFichajes from "./pages/ImportacionFichajes";
 
 export default function App() {
   return (
@@ -15,6 +16,7 @@ export default function App() {
           {/* Módulo activo de Categorías, Cargos y Turnos */}
           <Route path="configuracion" element={<TiposConfiguracion />} />
           <Route path="/personal" element={<GestionPersonal />} />
+          <Route path="/importacion" element={<ImportacionFichajes />} />
 
           {/* Módulos de Operación de Asistencia */}
           <Route
