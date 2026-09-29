@@ -6,19 +6,33 @@ const api = axios.create({
   headers: {
     "Content-Type": "application/json",
   },
+  timeout: 5000,
 });
 
 // 2. Interceptor de solicitudes (Request)
-api.interceptors.request.use(
-  (config) => {
-    console.log(
-      `📡 [HTTP OUT] ${config.method?.toUpperCase()} ${config.baseURL || ""}${config.url}`,
-      config.data || "",
+api.interceptors.response.use(
+  (response) => {
+    // Notifica que el servidor respondió con éxito
+    window.dispatchEvent(
+      new CustomEvent("servidor:estado", { detail: { ok: true } }),
     );
-    return config;
+    return response;
   },
   (error) => {
-    console.error("❌ [HTTP OUT ERROR]", error);
+    // Si no hubo respuesta o hay error de red (servidor apagado)
+    if (
+      !error.response ||
+      error.code === "ERR_NETWORK" ||
+      error.message === "Network Error"
+    ) {
+      console.error(
+        `💥 [HTTP ERROR NO_RESPONSE] ${error.config?.url}: ${error.message}`,
+      );
+      // Notifica inmediatamente a la barra de conexión
+      window.dispatchEvent(
+        new CustomEvent("servidor:estado", { detail: { ok: false } }),
+      );
+    }
     return Promise.reject(error);
   },
 );

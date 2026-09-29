@@ -1,4 +1,10 @@
-import React, { useState, useEffect, useMemo, useRef } from "react";
+import React, {
+  useState,
+  useEffect,
+  useMemo,
+  useRef,
+  useCallback,
+} from "react";
 import {
   UploadCloud,
   FileSpreadsheet,
@@ -312,7 +318,8 @@ export default function ImportacionFichajes() {
     });
   };
 
-  const cargarDatos = async () => {
+  // 1. Cargar historial, empleados, conteos y catálogos
+  const cargarDatos = useCallback(async () => {
     setLoading(true);
     setErrorGlobal("");
     try {
@@ -337,13 +344,10 @@ export default function ImportacionFichajes() {
     } finally {
       setLoading(false);
     }
-  };
-
-  useEffect(() => {
-    cargarDatos();
   }, []);
 
-  const cargarMarcacionesServidor = async (q = "", page = 0) => {
+  // 2. Cargar marcaciones paginadas del servidor
+  const cargarMarcacionesServidor = useCallback(async (q = "", page = 0) => {
     setCargandoFichajes(true);
     try {
       const data = await getMarcacionesPaginadas(q, page, 25);
@@ -360,14 +364,42 @@ export default function ImportacionFichajes() {
     } finally {
       setCargandoFichajes(false);
     }
-  };
+  }, []);
 
+  // Carga inicial al montar el componente
+  useEffect(() => {
+    cargarDatos();
+  }, [cargarDatos]);
+
+  // Sincronización automática ante restablecimiento de conexión (sin recarga manual)
+  useEffect(() => {
+    const handleRecuperacion = () => {
+      cargarDatos();
+      if (vistaActual === "marcaciones") {
+        cargarMarcacionesServidor(busquedaFichaje, paginaFichajes);
+      }
+    };
+
+    window.addEventListener("conexion:restaurada", handleRecuperacion);
+    return () => {
+      window.removeEventListener("conexion:restaurada", handleRecuperacion);
+    };
+  }, [
+    cargarDatos,
+    cargarMarcacionesServidor,
+    vistaActual,
+    busquedaFichaje,
+    paginaFichajes,
+  ]);
+
+  // Cargar marcaciones al ingresar a la vista o cambiar de página
   useEffect(() => {
     if (vistaActual === "marcaciones") {
       cargarMarcacionesServidor(busquedaFichaje, paginaFichajes);
     }
-  }, [vistaActual, paginaFichajes]);
+  }, [vistaActual, paginaFichajes, cargarMarcacionesServidor, busquedaFichaje]);
 
+  // Debounce para el buscador del padrón general
   useEffect(() => {
     if (vistaActual === "marcaciones") {
       const timer = setTimeout(() => {
@@ -376,8 +408,9 @@ export default function ImportacionFichajes() {
       }, 350);
       return () => clearTimeout(timer);
     }
-  }, [busquedaFichaje]);
+  }, [busquedaFichaje, vistaActual, cargarMarcacionesServidor]);
 
+  // Consulta al backend para el modal de un lote específico
   const consultarFichajesDelLote = async (id, nombre, fecha) => {
     setCargandoModalFichajes(true);
     try {
@@ -409,7 +442,12 @@ export default function ImportacionFichajes() {
       }, 300);
       return () => clearTimeout(timer);
     }
-  }, [filtroModalNombre, filtroModalFecha, modalArchivo.isOpen]);
+  }, [
+    filtroModalNombre,
+    filtroModalFecha,
+    modalArchivo.isOpen,
+    modalArchivo.item,
+  ]);
 
   const handleSeleccionarArchivo = (e) => {
     if (e.target.files && e.target.files[0]) {
@@ -677,7 +715,7 @@ export default function ImportacionFichajes() {
             {vistaActual === "historial" ? (
               <>
                 <Eye className="w-4 h-4 text-indigo-600" />
-                <span>Ver Historial de Fichadas</span>
+                <span>Ver Padrón de Fichadas</span>
               </>
             ) : (
               <>
@@ -744,7 +782,7 @@ export default function ImportacionFichajes() {
               ) : (
                 <UploadCloud className="w-4 h-4" />
               )}
-              Importar lista fichaje
+              Importar Marcaciones
             </button>
           </div>
         </div>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import {
   Users,
   BookOpen,
@@ -114,7 +114,6 @@ export default function GestionPersonal() {
 
   // Filtros
   const [searchTerm, setSearchTerm] = useState("");
-  const [filterRegimen, setFilterRegimen] = useState("TODOS");
   const [filterCategoria, setFilterCategoria] = useState("TODAS");
   const [filterEstado, setFilterEstado] = useState("TODOS");
 
@@ -177,17 +176,18 @@ export default function GestionPersonal() {
     totalInactivos: 0,
   });
 
-  const cargarResumenGlobal = async () => {
+  // 1. Cargar métricas de tarjetas globales
+  const cargarResumenGlobal = useCallback(async () => {
     try {
       const data = await getPersonalResumen();
       if (data) setResumenGlobal(data);
     } catch (err) {
       console.error("Error al cargar resumen global:", err);
     }
-  };
+  }, []);
 
-  // 1. Cargar catálogos maestros iniciales
-  const cargarCatalogos = async () => {
+  // 2. Cargar catálogos maestros
+  const cargarCatalogos = useCallback(async () => {
     try {
       const [catRes, carRes, horRes, matRes] = await Promise.all([
         getCategorias(),
@@ -201,64 +201,78 @@ export default function GestionPersonal() {
       setMaterias(Array.isArray(matRes) ? matRes : []);
     } catch (err) {
       console.error("Error al cargar catálogos:", err);
-      mostrarAviso(
-        "danger",
-        "Error de Carga",
-        "No se pudieron obtener los catálogos del servidor.",
-      );
     }
-  };
+  }, []);
 
-  // 2. Consulta optimizada y paginada desde el backend
-  const cargarEmpleadosServidor = async (page = 0) => {
-    setLoading(true);
-    try {
-      const catId =
-        filterCategoria !== "TODAS"
-          ? categorias.find(
-              (c) => c.nombre?.toLowerCase() === filterCategoria.toLowerCase(),
-            )?.id
-          : null;
+  // 3. Consulta paginada y filtrada desde el backend
+  const cargarEmpleadosServidor = useCallback(
+    async (page = 0) => {
+      setLoading(true);
+      try {
+        const catId =
+          filterCategoria !== "TODAS"
+            ? categorias.find(
+                (c) =>
+                  c.nombre?.toLowerCase() === filterCategoria.toLowerCase(),
+              )?.id
+            : null;
 
-      const res = await getEmpleadosPaginados(
-        searchTerm,
-        catId,
-        filterEstado,
-        page,
-        ITEMS_POR_PAGINA,
-      );
-      if (res && res.content) {
-        setEmpleados(res.content);
-        setTotalPaginas(res.totalPages || 1);
-        setTotalElementos(res.totalElements || 0);
-        setPaginaActual(res.number + 1);
-      } else {
-        setEmpleados(Array.isArray(res) ? res : []);
+        const res = await getEmpleadosPaginados(
+          searchTerm,
+          catId,
+          filterEstado,
+          page,
+          ITEMS_POR_PAGINA,
+        );
+        if (res && res.content) {
+          setEmpleados(res.content);
+          setTotalPaginas(res.totalPages || 1);
+          setTotalElementos(res.totalElements || 0);
+          setPaginaActual(res.number + 1);
+        } else {
+          setEmpleados(Array.isArray(res) ? res : []);
+        }
+      } catch (err) {
+        console.error("Error al cargar empleados del servidor:", err);
+      } finally {
+        setLoading(false);
       }
-    } catch (err) {
-      console.error("Error al cargar empleados del servidor:", err);
-      mostrarAviso(
-        "danger",
-        "Error",
-        "No se pudo obtener el padrón de empleados.",
-      );
-    } finally {
-      setLoading(false);
-    }
-  };
+    },
+    [categorias, filterCategoria, filterEstado, searchTerm],
+  );
 
+  // Carga inicial
   useEffect(() => {
     cargarCatalogos();
     cargarResumenGlobal();
-  }, []);
+  }, [cargarCatalogos, cargarResumenGlobal]);
 
-  // Recarga con debounce de búsqueda y sincronización de filtros
+  // Recarga automática y silenciosa al recuperarse la conexión
+  useEffect(() => {
+    const handleRecuperacion = () => {
+      cargarCatalogos();
+      cargarResumenGlobal();
+      cargarEmpleadosServidor(paginaActual - 1);
+    };
+
+    window.addEventListener("conexion:restaurada", handleRecuperacion);
+    return () => {
+      window.removeEventListener("conexion:restaurada", handleRecuperacion);
+    };
+  }, [
+    cargarCatalogos,
+    cargarResumenGlobal,
+    cargarEmpleadosServidor,
+    paginaActual,
+  ]);
+
+  // Sincronización y debounce de búsqueda
   useEffect(() => {
     const timer = setTimeout(() => {
       cargarEmpleadosServidor(paginaActual - 1);
     }, 300);
     return () => clearTimeout(timer);
-  }, [searchTerm, filterCategoria, filterEstado, paginaActual]);
+  }, [cargarEmpleadosServidor, paginaActual]);
 
   const categoriasActivas = useMemo(
     () => categorias.filter((c) => c.activo !== false),
@@ -282,24 +296,6 @@ export default function GestionPersonal() {
     if (cats.length === 0) return cargosActivos;
     return cargosActivos.filter((c) => cats.includes(c.categoria?.id));
   }, [formEmpleado.categoriasIds, cargosActivos]);
-
-  // Tarjetas informativas de cantidades
-  const stats = useMemo(() => {
-    const total = totalElementos;
-    const porClases = empleados.filter((e) =>
-      (e.categorias || []).some((c) =>
-        (c.codigoTag || c.nombre || "").toLowerCase().includes("docente"),
-      ),
-    ).length;
-    const turnoFijo = empleados.filter(
-      (e) =>
-        !(e.categorias || []).some((c) =>
-          (c.codigoTag || c.nombre || "").toLowerCase().includes("docente"),
-        ),
-    ).length;
-    const sinHorario = empleados.filter((e) => e.activo === false).length;
-    return { total, porClases, turnoFijo, sinHorario };
-  }, [empleados, totalElementos]);
 
   const verificarEmpleadoActivo = (emp, accionPermitida) => {
     if (emp.activo === false) {
@@ -389,6 +385,7 @@ export default function GestionPersonal() {
       }
 
       await cargarEmpleadosServidor(paginaActual - 1);
+      cargarResumenGlobal();
       setModalRegistro(false);
     } catch (err) {
       mostrarAviso(
@@ -413,6 +410,7 @@ export default function GestionPersonal() {
         try {
           await deleteEmpleado(id);
           await cargarEmpleadosServidor(paginaActual - 1);
+          cargarResumenGlobal();
           mostrarAviso(
             "success",
             "Baja Exitosa",
@@ -443,6 +441,7 @@ export default function GestionPersonal() {
         try {
           await reactivarEmpleado(id);
           await cargarEmpleadosServidor(paginaActual - 1);
+          cargarResumenGlobal();
           mostrarAviso(
             "success",
             "Reactivación Exitosa",
@@ -580,7 +579,7 @@ export default function GestionPersonal() {
     }
   };
 
-  // --- ASIGNACIÓN DE TURNO PREESTABLECIDO O RANGOS ESPECÍFICOS ---
+  // --- ASIGNACIÓN DE TURNO ---
   const abrirModalTurno = (emp) => {
     setEmpleadoSeleccionado(emp);
     setTipoAsignacionTurno("PREESTABLECIDO");
@@ -696,7 +695,7 @@ export default function GestionPersonal() {
             </h1>
             <p className="text-xs text-slate-500">
               Padrón de empleados, carga horaria semanal y acceso al cronograma
-              detallado por empleado.
+              detallado por empleado[cite: 3].
             </p>
           </div>
         </div>
@@ -710,7 +709,6 @@ export default function GestionPersonal() {
         </button>
       </div>
 
-      {/* 2. TARJETAS DE CANTIDADES */}
       {/* 2. TARJETAS DE CANTIDADES GLOBALES */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {/* TOTAL PERSONAL */}
@@ -777,12 +775,16 @@ export default function GestionPersonal() {
         <button
           type="button"
           onClick={() => {
-            setFilterCategoria("TODAS");
+            const catAdmin = categorias.find((c) =>
+              c.nombre?.toLowerCase().includes("administrativ"),
+            )?.nombre;
+            setFilterCategoria(catAdmin || "TODAS");
             setFilterEstado("ACTIVOS");
             setPaginaActual(1);
           }}
           className={`p-5 rounded-2xl flex flex-col justify-between text-left transition-all border cursor-pointer ${
-            filterEstado === "ACTIVOS" && filterCategoria === "TODAS"
+            filterEstado === "ACTIVOS" &&
+            filterCategoria.toLowerCase().includes("administrativ")
               ? "bg-indigo-50/80 border-indigo-500 ring-4 ring-indigo-500/20 shadow-md scale-[1.02]"
               : "bg-white border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/30"
           }`}
@@ -850,7 +852,10 @@ export default function GestionPersonal() {
         <div className="flex flex-wrap items-center gap-2.5 text-xs">
           <select
             value={filterCategoria}
-            onChange={(e) => setFilterCategoria(e.target.value)}
+            onChange={(e) => {
+              setFilterCategoria(e.target.value);
+              setPaginaActual(1);
+            }}
             className="border border-slate-200 rounded-xl px-3 py-2 bg-white text-slate-700 outline-none focus:border-indigo-500 font-medium"
           >
             <option value="TODAS">Todas Las Categorías</option>
@@ -863,7 +868,10 @@ export default function GestionPersonal() {
 
           <select
             value={filterEstado}
-            onChange={(e) => setFilterEstado(e.target.value)}
+            onChange={(e) => {
+              setFilterEstado(e.target.value);
+              setPaginaActual(1);
+            }}
             className="border border-slate-200 rounded-xl px-3 py-2 bg-white font-semibold text-slate-700 outline-none focus:border-indigo-500"
           >
             <option value="TODOS">Todos los estados</option>

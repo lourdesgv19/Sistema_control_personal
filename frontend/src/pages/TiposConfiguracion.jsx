@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   Settings,
   Tag,
@@ -188,7 +188,7 @@ export default function TiposConfiguracion() {
     });
   };
 
-  const cargarDatos = async () => {
+  const cargarDatos = useCallback(async () => {
     setLoading(true);
     try {
       const [catsRes, cargosRes, horariosRes, materiasRes] = await Promise.all([
@@ -224,11 +224,23 @@ export default function TiposConfiguracion() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     cargarDatos();
-  }, []);
+  }, [cargarDatos]);
+
+  // Sincronización automática silenciosa al restaurarse la conexión
+  useEffect(() => {
+    const handleRecuperacion = () => {
+      cargarDatos();
+    };
+
+    window.addEventListener("conexion:restaurada", handleRecuperacion);
+    return () => {
+      window.removeEventListener("conexion:restaurada", handleRecuperacion);
+    };
+  }, [cargarDatos]);
 
   const categoriasActivas = categorias.filter((c) => c.activo !== false);
 
