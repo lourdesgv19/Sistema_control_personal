@@ -694,7 +694,7 @@ export default function GestionPersonal() {
             </h1>
             <p className="text-xs text-slate-500">
               Padrón de empleados, carga horaria semanal y acceso al cronograma
-              detallado por empleado[cite: 3].
+              detallado por empleado.
             </p>
           </div>
         </div>

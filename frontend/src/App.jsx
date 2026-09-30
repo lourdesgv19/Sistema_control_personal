@@ -1,73 +1,74 @@
 import React from "react";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import Layout from "./components/layout/Layout";
-import TiposConfiguracion from "./pages/TiposConfiguracion";
+import { Routes, Route, Navigate } from "react-router-dom";
+import { AuthProvider } from "./context/AuthContext";
+import ProtectedRoute from "./components/auth/ProtectedRoute";
+import MainLayout from "./components/layout/MainLayout";
+import Login from "./pages/Login";
 import GestionPersonal from "./pages/GestionPersonal";
 import ImportacionFichajes from "./pages/ImportacionFichajes";
 import GestionUsuarios from "./pages/GestionUsuarios";
+import TiposConfiguracion from "./pages/TiposConfiguracion";
+import PanelAuditoria from "./pages/PanelAuditoria";
 
 export default function App() {
   return (
-    <BrowserRouter>
+    <AuthProvider>
       <Routes>
-        <Route path="/" element={<Layout />}>
-          {/* Redirección por defecto al módulo de Configuración */}
-          <Route index element={<Navigate to="/configuracion" replace />} />
+        {/* Login fuera del layout del sistema */}
+        <Route path="/login" element={<Login />} />
 
-          {/* Módulo activo de Categorías, Cargos y Turnos */}
-          <Route path="configuracion" element={<TiposConfiguracion />} />
-          <Route path="/personal" element={<GestionPersonal />} />
-          <Route path="/importacion" element={<ImportacionFichajes />} />
-          <Route path="/usuarios" element={<GestionUsuarios />} />
-
-          {/* Módulos de Operación de Asistencia */}
+        {/* Todas las pantallas del sistema con Header y Sidebar */}
+        <Route
+          element={
+            <ProtectedRoute>
+              <MainLayout />
+            </ProtectedRoute>
+          }
+        >
           <Route
-            path="dashboard"
+            path="/personal"
             element={
-              <div className="p-8 text-slate-500 font-medium">
-                Panel General y Métricas Diarias en construcción
-              </div>
+              <ProtectedRoute permisoRequerido="PERM_GESTION_PERSONAL">
+                <GestionPersonal />
+              </ProtectedRoute>
             }
           />
           <Route
-            path="fichadas"
+            path="/fichajes"
             element={
-              <div className="p-8 text-slate-500 font-medium">
-                Módulo de Ingesta y Logs del Lector Biométrico en construcción
-              </div>
+              <ProtectedRoute permisoRequerido="PERM_IMPORTAR_FICHAJES">
+                <ImportacionFichajes />
+              </ProtectedRoute>
             }
           />
           <Route
-            path="clases"
+            path="/configuracion"
             element={
-              <div className="p-8 text-slate-500 font-medium">
-                Módulo de Horarios de Clases y Cátedras Docentes en construcción
-              </div>
-            }
-          />
-
-          <Route
-            path="alertas"
-            element={
-              <div className="p-8 text-slate-500 font-medium">
-                Módulo de Alertas (Salidas en horario de clase / excesos) en
-                construcción
-              </div>
+              <ProtectedRoute permisoRequerido="PERM_GESTION_CONFIGURACION">
+                <TiposConfiguracion />
+              </ProtectedRoute>
             }
           />
           <Route
-            path="reportes"
+            path="/usuarios"
             element={
-              <div className="p-8 text-slate-500 font-medium">
-                Módulo de Reportes de Cumplimiento y Asistencia en construcción
-              </div>
+              <ProtectedRoute permisoRequerido="PERM_GESTION_USUARIOS">
+                <GestionUsuarios />
+              </ProtectedRoute>
             }
           />
-
-          {/* Ruta comodín */}
-          <Route path="*" element={<Navigate to="/configuracion" replace />} />
+          <Route
+            path="/auditoria"
+            element={
+              <ProtectedRoute permisoRequerido="AUDITORIA_VER">
+                <PanelAuditoria />
+              </ProtectedRoute>
+            }
+          />
         </Route>
+
+        <Route path="*" element={<Navigate to="/personal" replace />} />
       </Routes>
-    </BrowserRouter>
+    </AuthProvider>
   );
 }

@@ -148,6 +148,7 @@ public class VinculacionBiometricaService {
         for (AsignacionBiometricaRequest asig : asignaciones) {
             if (asig.empleadoId() != null && asig.idBiometrico() != null && !asig.idBiometrico().isBlank()) {
                 String idBio = asig.idBiometrico().trim();
+                
 
                 // Liberar el ID de cualquier otro empleado si ya lo tenía asignado (evita colisión UNIQUE)
                 empleadoRepo.findByIdBiometrico(idBio).ifPresent(otro -> {

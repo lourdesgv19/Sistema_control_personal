@@ -24,6 +24,7 @@ import {
 import { getEmpleados } from "../services/empleadoService";
 import ModalAlerta from "../components/comunes/ModalAlerta";
 import ModalCrearUsuario from "../components/usuarios/ModalCrearUsuario";
+import ModalMatrizPermisos from "../components/usuarios/ModalMatrizPermisos";
 
 const ITEMS_POR_PAGINA = 10;
 
@@ -52,6 +53,10 @@ export default function GestionUsuarios() {
 
   // Modales
   const [modalCrear, setModalCrear] = useState(false);
+  const [modalPermisos, setModalPermisos] = useState({
+    isOpen: false,
+    usuario: null,
+  });
   const [modalAlerta, setModalAlerta] = useState({
     isOpen: false,
     tipo: "info",
@@ -537,6 +542,15 @@ export default function GestionUsuarios() {
                           <KeyRound className="w-3.5 h-3.5 text-amber-600" />
                           Reset Clave
                         </button>
+                        <button
+                          onClick={() =>
+                            setModalPermisos({ isOpen: true, usuario: u })
+                          }
+                          className="px-2.5 py-1 text-xs font-semibold text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-lg hover:bg-indigo-100 transition cursor-pointer"
+                          title="Editar permisos granulares"
+                        >
+                          Permisos
+                        </button>
 
                         {u.activo !== false ? (
                           <button
@@ -629,6 +643,15 @@ export default function GestionUsuarios() {
         onClose={() => setModalCrear(false)}
         onSubmit={handleCrearUsuario}
         empleadosSinUsuario={empleadosSinUsuario}
+      />
+
+      {/*MODAL DE GESTION DE PERMISOS */}
+      <ModalMatrizPermisos
+        isOpen={modalPermisos.isOpen}
+        usuario={modalPermisos.usuario}
+        onClose={() => setModalPermisos({ isOpen: false, usuario: null })}
+        onExito={() => cargarUsuariosServidor(paginaActual - 1)}
+        mostrarAviso={mostrarAviso}
       />
 
       {/* MODAL ALERTA CENTRALIZADO */}

@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { WifiOff, ServerCrash, RefreshCw } from "lucide-react";
-import apiClient from "../../services/api";
 
 export default function BandaConexion() {
   const [online, setOnline] = useState(navigator.onLine);
@@ -10,39 +9,52 @@ export default function BandaConexion() {
 
   const verificarServidor = useCallback(async () => {
     if (!navigator.onLine) {
+      setOnline(false);
       setServerOk(false);
       estabaDesconectado.current = true;
+      window.dispatchEvent(
+        new CustomEvent("servidor:estado", { detail: { ok: false } }),
+      );
       return;
     }
-    setVerificando(true);
-    try {
-      // Endpoint liviano para ping
-      await apiClient.get("/configuracion/categorias", {
-        timeout: 2500,
-        headers: { "Cache-Control": "no-cache" },
-      });
 
-      setServerOk(true);
-      // Si venía de una desconexión, avisa a las vistas que recarguen datos silenciosamente
-      if (estabaDesconectado.current) {
+    setVerificando(true);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 2500);
+
+    try {
+      // Petición GET simple (sin headers custom para que el navegador no envíe preflight OPTIONS)
+      const res = await fetch(
+        `http://localhost:8080/api/public/ping?_t=${Date.now()}`,
+        {
+          method: "GET",
+          signal: controller.signal,
+        },
+      );
+      clearTimeout(timeoutId);
+
+      // Si el servidor HTTP de Java responde (200, o incluso 401/404), significa que Spring Boot ESTÁ VIVO
+      const estaVivo = res.status < 500;
+
+      setServerOk(estaVivo);
+      setOnline(true);
+      window.dispatchEvent(
+        new CustomEvent("servidor:estado", { detail: { ok: estaVivo } }),
+      );
+
+      if (estaVivo && estabaDesconectado.current) {
         estabaDesconectado.current = false;
         window.dispatchEvent(new CustomEvent("conexion:restaurada"));
+      } else if (!estaVivo) {
+        estabaDesconectado.current = true;
       }
     } catch (err) {
-      if (
-        err.code === "ERR_NETWORK" ||
-        err.message === "Network Error" ||
-        !err.response
-      ) {
-        setServerOk(false);
-        estabaDesconectado.current = true;
-      } else {
-        setServerOk(true);
-        if (estabaDesconectado.current) {
-          estabaDesconectado.current = false;
-          window.dispatchEvent(new CustomEvent("conexion:restaurada"));
-        }
-      }
+      // Error real de red / servidor apagado
+      setServerOk(false);
+      estabaDesconectado.current = true;
+      window.dispatchEvent(
+        new CustomEvent("servidor:estado", { detail: { ok: false } }),
+      );
     } finally {
       setVerificando(false);
     }
@@ -55,19 +67,26 @@ export default function BandaConexion() {
       setOnline(true);
       verificarServidor();
     };
+
     const handleOffline = () => {
       setOnline(false);
+      setServerOk(false);
       estabaDesconectado.current = true;
+      window.dispatchEvent(
+        new CustomEvent("servidor:estado", { detail: { ok: false } }),
+      );
     };
 
     const handleServidorEstado = (e) => {
       const ok = e.detail?.ok;
-      setServerOk(ok);
-      if (ok && estabaDesconectado.current) {
-        estabaDesconectado.current = false;
-        window.dispatchEvent(new CustomEvent("conexion:restaurada"));
-      } else if (!ok) {
-        estabaDesconectado.current = true;
+      if (typeof ok === "boolean") {
+        setServerOk(ok);
+        if (ok && estabaDesconectado.current) {
+          estabaDesconectado.current = false;
+          window.dispatchEvent(new CustomEvent("conexion:restaurada"));
+        } else if (!ok) {
+          estabaDesconectado.current = true;
+        }
       }
     };
 
@@ -75,12 +94,12 @@ export default function BandaConexion() {
     window.addEventListener("offline", handleOffline);
     window.addEventListener("servidor:estado", handleServidorEstado);
 
-    // Sondeo de respaldo cada 5 segundos únicamente si está caído
+    // Sondeo periódico cada 4 segundos
     const intervalo = setInterval(() => {
-      if (!serverOk && navigator.onLine) {
+      if (navigator.onLine) {
         verificarServidor();
       }
-    }, 5000);
+    }, 4000);
 
     return () => {
       window.removeEventListener("online", handleOnline);
@@ -88,19 +107,21 @@ export default function BandaConexion() {
       window.removeEventListener("servidor:estado", handleServidorEstado);
       clearInterval(intervalo);
     };
-  }, [serverOk, verificarServidor]);
+  }, [verificarServidor]);
 
+  // Si hay internet y el backend responde, la banda se desmonta inmediatamente
   if (online && serverOk) return null;
 
   const sinInternet = !online;
 
   return (
-    <div className="w-full bg-rose-600 border-b border-rose-700 text-white text-xs font-semibold px-4 py-2 flex items-center justify-between shadow-xs transition-all duration-300">
-      <div className="flex items-center gap-2.5 mx-auto sm:mx-0">
+    <div className="w-full bg-[#e11d48] border-b border-rose-700 text-white text-xs font-semibold px-8 py-3 flex items-center justify-between shadow-sm z-50 shrink-0 animate-in fade-in duration-200">
+      <div className="flex items-center gap-2.5">
+        <span className="w-2.5 h-2.5 rounded-full bg-white animate-pulse"></span>
         {sinInternet ? (
-          <WifiOff className="w-4 h-4 shrink-0 animate-pulse text-rose-200" />
+          <WifiOff className="w-4 h-4 shrink-0 text-white" />
         ) : (
-          <ServerCrash className="w-4 h-4 shrink-0 animate-pulse text-rose-200" />
+          <ServerCrash className="w-4 h-4 shrink-0 text-white" />
         )}
         <span>
           {sinInternet
@@ -113,10 +134,12 @@ export default function BandaConexion() {
         type="button"
         onClick={verificarServidor}
         disabled={verificando}
-        className="hidden sm:flex items-center gap-1.5 px-3 py-1 bg-white/20 hover:bg-white/30 rounded-lg transition disabled:opacity-50 text-[11px] cursor-pointer"
+        className="flex items-center gap-2 px-3.5 py-1.5 bg-white/10 hover:bg-white/20 active:bg-white/30 rounded-lg transition disabled:opacity-50 text-xs font-semibold cursor-pointer"
       >
-        <RefreshCw className={`w-3 h-3 ${verificando ? "animate-spin" : ""}`} />
-        <span>{verificando ? "Verificando..." : "Reintentar"}</span>
+        <RefreshCw
+          className={`w-3.5 h-3.5 ${verificando ? "animate-spin" : ""}`}
+        />
+        <span>{verificando ? "Verificando..." : "Reintentar conexión"}</span>
       </button>
     </div>
   );
