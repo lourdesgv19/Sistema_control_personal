@@ -1,5 +1,6 @@
 package backend.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import org.hibernate.annotations.SQLDelete;
 import java.time.LocalDateTime;
@@ -53,9 +54,6 @@ public class Empleado {
     )
     private List<Cargo> cargos = new ArrayList<>();
 
-    @Column(name = "rol_sistema")
-    private String rolSistema;
-
     @Column(name = "tolerancia_ingreso_min")
     private Integer toleranciaIngresoMin = 15;
 
@@ -68,37 +66,56 @@ public class Empleado {
     @Column(name = "fecha_baja")
     private LocalDateTime fechaBaja;
 
+    // Relación inversa opcional con la cuenta de acceso
+    @OneToOne(mappedBy = "empleado", fetch = FetchType.LAZY)
+    @JsonIgnore
+    private Usuario usuario;
+
     public Empleado() {}
 
     // Getters y Setters
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
+
     public String getNombre() { return nombre; }
     public void setNombre(String nombre) { this.nombre = nombre; }
+
     public String getApellido() { return apellido; }
     public void setApellido(String apellido) { this.apellido = apellido; }
+
     public String getDni() { return dni; }
     public void setDni(String dni) { this.dni = dni; }
+
     public String getEmail() { return email; }
     public void setEmail(String email) { this.email = email; }
+
     public String getTelefono() { return telefono; }
     public void setTelefono(String telefono) { this.telefono = telefono; }
+
     public String getNroLegajo() { return nroLegajo; }
     public void setNroLegajo(String nroLegajo) { this.nroLegajo = nroLegajo; }
+
     public String getIdBiometrico() { return idBiometrico; }
     public void setIdBiometrico(String idBiometrico) { this.idBiometrico = idBiometrico; }
+
     public List<Categoria> getCategorias() { return categorias; }
     public void setCategorias(List<Categoria> categorias) { this.categorias = categorias; }
+
     public List<Cargo> getCargos() { return cargos; }
     public void setCargos(List<Cargo> cargos) { this.cargos = cargos; }
-    public String getRolSistema() { return rolSistema; }
-    public void setRolSistema(String rolSistema) { this.rolSistema = rolSistema; }
+
     public Integer getToleranciaIngresoMin() { return toleranciaIngresoMin; }
     public void setToleranciaIngresoMin(Integer toleranciaIngresoMin) { this.toleranciaIngresoMin = toleranciaIngresoMin; }
+
     public Integer getToleranciaEgresoMin() { return toleranciaEgresoMin; }
     public void setToleranciaEgresoMin(Integer toleranciaEgresoMin) { this.toleranciaEgresoMin = toleranciaEgresoMin; }
+
     public Boolean getActivo() { return activo; }
     public void setActivo(Boolean activo) { this.activo = activo; }
+
     public LocalDateTime getFechaBaja() { return fechaBaja; }
     public void setFechaBaja(LocalDateTime fechaBaja) { this.fechaBaja = fechaBaja; }
+
+    public Usuario getUsuario() { return usuario; }
+    public void setUsuario(Usuario usuario) { this.usuario = usuario; }
 }

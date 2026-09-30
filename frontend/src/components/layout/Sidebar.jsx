@@ -11,6 +11,7 @@ import {
   Settings,
   LogOut,
   UploadCloud,
+  ShieldCheck,
 } from "lucide-react";
 
 export default function Sidebar({ isSidebarOpen, onToggleSidebar }) {
@@ -28,6 +29,7 @@ export default function Sidebar({ isSidebarOpen, onToggleSidebar }) {
     { to: "/clases", label: "Horarios y Cátedras", icon: CalendarDays },
     { to: "/alertas", label: "Alertas e Infracciones", icon: AlertTriangle },
     { to: "/reportes", label: "Métricas y Reportes", icon: FileSpreadsheet },
+    { to: "/usuarios", label: "Usuarios & Seguridad", icon: ShieldCheck },
     { to: "/configuracion", label: "Tipos y Configuración", icon: Settings },
   ];
 

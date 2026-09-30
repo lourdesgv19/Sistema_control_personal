@@ -52,7 +52,6 @@ const FORM_EMP_INICIAL = {
   idBiometrico: "",
   categoriasIds: [],
   cargosIds: [],
-  rolSistema: "Consulta / Empleado (Visualiza su ficha)",
   toleranciaIngresoMin: 15,
   toleranciaEgresoMin: 10,
 };

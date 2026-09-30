@@ -10,7 +10,6 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import java.time.Duration;
 import java.time.LocalTime;
 import java.util.*;
@@ -64,7 +63,6 @@ public class EmpleadoService {
         emp.setTelefono(empActualizado.getTelefono());
         emp.setNroLegajo(empActualizado.getNroLegajo());
         emp.setIdBiometrico(empActualizado.getIdBiometrico());
-        emp.setRolSistema(empActualizado.getRolSistema());
         emp.setToleranciaIngresoMin(empActualizado.getToleranciaIngresoMin());
         emp.setToleranciaEgresoMin(empActualizado.getToleranciaEgresoMin());
         emp.setCategorias(empActualizado.getCategorias() != null ? empActualizado.getCategorias() : new ArrayList<>());

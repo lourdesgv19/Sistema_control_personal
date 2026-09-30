@@ -4,6 +4,7 @@ import Layout from "./components/layout/Layout";
 import TiposConfiguracion from "./pages/TiposConfiguracion";
 import GestionPersonal from "./pages/GestionPersonal";
 import ImportacionFichajes from "./pages/ImportacionFichajes";
+import GestionUsuarios from "./pages/GestionUsuarios";
 
 export default function App() {
   return (
@@ -17,6 +18,7 @@ export default function App() {
           <Route path="configuracion" element={<TiposConfiguracion />} />
           <Route path="/personal" element={<GestionPersonal />} />
           <Route path="/importacion" element={<ImportacionFichajes />} />
+          <Route path="/usuarios" element={<GestionUsuarios />} />
 
           {/* Módulos de Operación de Asistencia */}
           <Route

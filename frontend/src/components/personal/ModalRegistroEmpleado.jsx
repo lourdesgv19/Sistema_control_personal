@@ -181,31 +181,7 @@ export default function ModalRegistroEmpleado({
           <div className="grid grid-cols-3 gap-4">
             <div>
               <label className="block font-semibold text-slate-700 mb-1">
-                Rol en Sistema *
-              </label>
-              <select
-                value={formEmpleado.rolSistema}
-                onChange={(e) =>
-                  setFormEmpleado({
-                    ...formEmpleado,
-                    rolSistema: e.target.value,
-                  })
-                }
-                className="w-full border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-indigo-600 bg-white"
-              >
-                <option value="Consulta / Empleado (Visualiza su ficha)">
-                  Consulta / Empleado
-                </option>
-                <option value="Administrador">Administrador General</option>
-                <option value="Recursos Humanos">
-                  Recursos Humanos / Auditor
-                </option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block font-semibold text-slate-700 mb-1">
-                Tol. Ingreso (min)
+                Tolerancia Ingreso (min)
               </label>
               <input
                 type="number"
@@ -222,7 +198,7 @@ export default function ModalRegistroEmpleado({
 
             <div>
               <label className="block font-semibold text-slate-700 mb-1">
-                Tol. Egreso (min)
+                Tolerancia Salida (min)
               </label>
               <input
                 type="number"
