@@ -10,9 +10,12 @@ import backend.repositories.UsuarioRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
 import java.text.Normalizer;
 import java.util.List;
 
@@ -21,12 +24,23 @@ public class UsuarioService {
 
     private final UsuarioRepository usuarioRepo;
     private final EmpleadoRepository empleadoRepo;
+    private final AuditoriaYPermisosService auditoriaService;
     private final BCryptPasswordEncoder passwordEncoder;
 
-    public UsuarioService(UsuarioRepository usuarioRepo, EmpleadoRepository empleadoRepo) {
+    public UsuarioService(UsuarioRepository usuarioRepo, 
+                          EmpleadoRepository empleadoRepo, 
+                          AuditoriaYPermisosService auditoriaService) {
         this.usuarioRepo = usuarioRepo;
         this.empleadoRepo = empleadoRepo;
+        this.auditoriaService = auditoriaService;
         this.passwordEncoder = new BCryptPasswordEncoder();
+    }
+
+    private String obtenerOperadorActual() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        return (auth != null && auth.getName() != null && !auth.getName().isBlank()) 
+                ? auth.getName() 
+                : "SISTEMA";
     }
 
     public List<UsuarioDTO> listarUsuarios() {
@@ -72,16 +86,47 @@ public class UsuarioService {
         if (apellido == null || apellido.isBlank()) apellido = "usuario";
         if (dni == null || dni.length() < 2) dni = "12345678";
 
-        // Quitar acentos, diacríticos y caracteres no alfanuméricos
         String normalizado = Normalizer.normalize(apellido.trim().toLowerCase(), Normalizer.Form.NFD)
                 .replaceAll("\\p{InCombiningDiacriticalMarks}+", "")
                 .replaceAll("[^a-z0-9]", "");
 
-        // Tomar primeros 2 dígitos numéricos del DNI
         String dniDigitos = dni.replaceAll("\\D", "");
         String prefijoDni = dniDigitos.length() >= 2 ? dniDigitos.substring(0, 2) : "00";
 
         return normalizado + prefijoDni;
+    }
+
+    @Transactional
+    public void cambiarPasswordPrimerInicio(Long usuarioId, String passActual, String passNueva) {
+        Usuario usuario = usuarioRepo.findById(usuarioId)
+                .orElseThrow(() -> new IllegalArgumentException("Usuario no encontrado"));
+
+        if (!passwordEncoder.matches(passActual, usuario.getPasswordHash())) {
+            throw new IllegalArgumentException("La contraseña actual no es correcta.");
+        }
+
+        if (passNueva == null || passNueva.trim().length() < 6) {
+            throw new IllegalArgumentException("La nueva contraseña debe tener al menos 6 caracteres.");
+        }
+
+        if (passwordEncoder.matches(passNueva, usuario.getPasswordHash())) {
+            throw new IllegalArgumentException("La nueva contraseña no puede ser igual a la clave actual.");
+        }
+
+        usuario.setPasswordHash(passwordEncoder.encode(passNueva.trim()));
+        usuario.setDebeCambiarPassword(false);
+        usuarioRepo.save(usuario);
+
+        // Registro de Auditoría
+        auditoriaService.registrarMovimiento(
+            usuario.getId(),
+            usuario.getUsername(),
+            usuario.getRol(),
+            "CAMBIO_PASSWORD",
+            "SEGURIDAD",
+            "El usuario " + usuario.getUsername() + " actualizó su contraseña (primer inicio o perfil).",
+            null
+        );
     }
 
     @Transactional
@@ -93,7 +138,6 @@ public class UsuarioService {
             throw new IllegalStateException("El colaborador ya tiene un usuario de acceso asignado.");
         }
 
-        // Definir Username (email, o nroLegajo, o nombre.apellido)
         String username = req.username();
         if (username == null || username.isBlank()) {
             if (emp.getEmail() != null && !emp.getEmail().isBlank()) {
@@ -107,7 +151,6 @@ public class UsuarioService {
             username = username + "_" + emp.getId();
         }
 
-        // Regla: Apellido + 2 primeros dígitos del DNI
         String passwordPlano = generarPasswordPredeterminada(emp.getApellido(), emp.getDni());
         String passwordHash = passwordEncoder.encode(passwordPlano);
 
@@ -116,9 +159,23 @@ public class UsuarioService {
         usuario.setPasswordHash(passwordHash);
         usuario.setRol(req.rol() != null ? req.rol() : "CONSULTA");
         usuario.setActivo(true);
+        usuario.setDebeCambiarPassword(true);
         usuario.setEmpleado(emp);
 
         Usuario guardado = usuarioRepo.save(usuario);
+
+        // Registro de Auditoría
+        String operador = obtenerOperadorActual();
+        auditoriaService.registrarMovimiento(
+            null,
+            operador,
+            "ADMINISTRADOR_GENERAL",
+            "CREAR_USUARIO",
+            "SEGURIDAD",
+            "Creación de usuario " + guardado.getUsername() + " (Rol: " + guardado.getRol() + ") para colaborador: " + emp.getApellido() + ", " + emp.getNombre(),
+            null
+        );
+
         return convertirADTO(guardado);
     }
 
@@ -134,7 +191,20 @@ public class UsuarioService {
         Empleado emp = usuario.getEmpleado();
         String nuevaClavePlana = generarPasswordPredeterminada(emp.getApellido(), emp.getDni());
         usuario.setPasswordHash(passwordEncoder.encode(nuevaClavePlana));
+        usuario.setDebeCambiarPassword(true);
         usuarioRepo.save(usuario);
+
+        // Registro de Auditoría
+        String operador = obtenerOperadorActual();
+        auditoriaService.registrarMovimiento(
+            null,
+            operador,
+            "ADMINISTRADOR_GENERAL",
+            "RESET_PASSWORD",
+            "SEGURIDAD",
+            "Restablecimiento de contraseña por defecto para el usuario " + usuario.getUsername(),
+            null
+        );
     }
 
     @Transactional
@@ -143,6 +213,21 @@ public class UsuarioService {
                 .orElseThrow(() -> new IllegalArgumentException("Usuario no encontrado con ID: " + usuarioId));
         usuario.setActivo(activo);
         usuarioRepo.save(usuario);
+
+        // Registro de Auditoría
+        String operador = obtenerOperadorActual();
+        String accionAudit = activo ? "HABILITAR_USUARIO" : "SUSPENDER_USUARIO";
+        String detalle = (activo ? "Se habilitó" : "Se suspendió") + " el acceso al usuario " + usuario.getUsername();
+
+        auditoriaService.registrarMovimiento(
+            null,
+            operador,
+            "ADMINISTRADOR_GENERAL",
+            accionAudit,
+            "SEGURIDAD",
+            detalle,
+            null
+        );
     }
 
     private UsuarioDTO convertirADTO(Usuario u) {

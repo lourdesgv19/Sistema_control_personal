@@ -16,10 +16,12 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
-import java.util.List;
+import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 public class AuditoriaYPermisosService {
@@ -64,16 +66,51 @@ public class AuditoriaYPermisosService {
     }
 
     /**
-     * Otorga o actualiza permisos (permanentes o temporales por X días / fecha).
+     * Sincroniza los permisos de un usuario:
+     * - Activa o crea los que están en la lista `solicitudes`.
+     * - Desactiva (activo = false) los que fueron desmarcados.
      */
     @Transactional
     public void asignarPermisosAUsuario(Long usuarioId, List<AsignarPermisoRequest> solicitudes, String administradorEjecutor) {
         Usuario usuario = usuarioRepo.findById(usuarioId)
-                .orElseThrow(() -> new IllegalArgumentException("Usuario no encontrado: " + usuarioId));
+                .orElseThrow(() -> new IllegalArgumentException("Usuario no encontrado con ID: " + usuarioId));
 
-        for (AsignarPermisoRequest req : solicitudes) {
+        List<AsignarPermisoRequest> listaSolicitudes = (solicitudes != null) ? solicitudes : Collections.emptyList();
+
+        // 1. Conjunto de códigos que se desean mantener o asignar
+        Set<String> codigosNuevos = listaSolicitudes.stream()
+                .map(AsignarPermisoRequest::codigoPermiso)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+
+        // 2. Permisos existentes en base de datos para este usuario
+        List<UsuarioPermiso> permisosActuales = usuarioPermisoRepo.findByUsuarioId(usuarioId);
+
+        // 3. DESACTIVAR los que fueron desmarcados (los que ya no están en codigosNuevos)
+        for (UsuarioPermiso up : permisosActuales) {
+            if (!codigosNuevos.contains(up.getCodigoPermiso()) && Boolean.TRUE.equals(up.getActivo())) {
+                up.setActivo(false);
+                usuarioPermisoRepo.save(up);
+
+                // Auditoría de revocación
+                registrarMovimiento(
+                    null,
+                    administradorEjecutor,
+                    "ADMINISTRADOR_GENERAL",
+                    "REVOCACION_PERMISO",
+                    "SEGURIDAD",
+                    "Se revocó el permiso " + up.getCodigoPermiso() + " al usuario " + usuario.getUsername(),
+                    null
+                );
+            }
+        }
+
+        // 4. ACTIVAR O CREAR los que sí fueron seleccionados
+        for (AsignarPermisoRequest req : listaSolicitudes) {
             UsuarioPermiso up = usuarioPermisoRepo.findByUsuarioIdAndCodigoPermiso(usuarioId, req.codigoPermiso())
                     .orElse(new UsuarioPermiso());
+
+            boolean eraInactivo = !Boolean.TRUE.equals(up.getActivo());
 
             up.setUsuario(usuario);
             up.setCodigoPermiso(req.codigoPermiso());
@@ -90,7 +127,6 @@ public class AuditoriaYPermisosService {
                     up.setFechaExpiracion(req.fechaExpiracion());
                 } else {
                     int dias = (req.duracionDias() != null && req.duracionDias() > 0) ? req.duracionDias() : 1;
-                    // Por ejemplo: si se asigna hoy a las 14:00, vence exactamente en 1 día (24 horas)
                     up.setFechaExpiracion(LocalDateTime.now().plusDays(dias));
                 }
             } else {
@@ -99,7 +135,7 @@ public class AuditoriaYPermisosService {
 
             usuarioPermisoRepo.save(up);
 
-            // Dejar trazabilidad en la auditoría
+            // Registrar movimiento en auditoría solo si es nuevo o cambió su estado
             String detalleVigencia = up.getEsTemporal() ? "Temporal hasta: " + up.getFechaExpiracion() : "Permanente";
             registrarMovimiento(
                 null,
@@ -131,11 +167,7 @@ public class AuditoriaYPermisosService {
         });
     }
 
-    /**
-     * TAREA AUTOMÁTICA PROGRAMADA:
-     * Corre cada hora (y al inicio de cada día) desactivando automáticamente permisos cuya fecha ya pasó.
-     */
-    @Scheduled(cron = "0 0 * * * *") // Se ejecuta al minuto 0 de cada hora
+    @Scheduled(cron = "0 0 * * * *")
     @Transactional
     public void purgarPermisosExpiradosAutomaticamente() {
         LocalDateTime ahora = LocalDateTime.now();
@@ -148,21 +180,20 @@ public class AuditoriaYPermisosService {
     @Transactional(readOnly = true)
     public Page<AuditoriaMovimiento> listarAuditoriaFiltrada(
             String username, String accion, String fechaInicioStr, String fechaFinStr, int page, int size) {
-        
-        LocalDateTime inicio = (fechaInicioStr != null && !fechaInicioStr.isBlank()) 
+
+        LocalDateTime inicio = (fechaInicioStr != null && !fechaInicioStr.isBlank())
                 ? LocalDate.parse(fechaInicioStr.trim()).atStartOfDay() : null;
-        LocalDateTime fin = (fechaFinStr != null && !fechaFinStr.isBlank()) 
+        LocalDateTime fin = (fechaFinStr != null && !fechaFinStr.isBlank())
                 ? LocalDate.parse(fechaFinStr.trim()).atTime(LocalTime.MAX) : null;
 
         return auditoriaRepo.buscarPaginado(username, accion, inicio, fin, PageRequest.of(page, size));
     }
 
-    // Métricas analíticas para dashboards y gráficos
     @Transactional(readOnly = true)
     public AuditoriaMetricasDTO obtenerMetricasAuditoria(String fechaInicioStr, String fechaFinStr) {
-        LocalDateTime inicio = (fechaInicioStr != null && !fechaInicioStr.isBlank()) 
+        LocalDateTime inicio = (fechaInicioStr != null && !fechaInicioStr.isBlank())
                 ? LocalDate.parse(fechaInicioStr.trim()).atStartOfDay() : null;
-        LocalDateTime fin = (fechaFinStr != null && !fechaFinStr.isBlank()) 
+        LocalDateTime fin = (fechaFinStr != null && !fechaFinStr.isBlank())
                 ? LocalDate.parse(fechaFinStr.trim()).atTime(LocalTime.MAX) : null;
 
         long total = auditoriaRepo.contarTotalMovimientosEnRango(inicio, fin);

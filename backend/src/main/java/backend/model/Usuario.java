@@ -19,7 +19,7 @@ public class Usuario {
     private String passwordHash;
 
     @Column(nullable = false, length = 80)
-    private String rol; // 'ADMINISTRADOR', 'RECURSOS_HUMANOS', 'CONSULTA'
+    private String rol; // 'ADMINISTRADOR', 'AUDITOR', 'CONSULTA'
 
     @Column(nullable = false)
     private Boolean activo = true;
@@ -33,6 +33,9 @@ public class Usuario {
 
     @Column(name = "fecha_modificacion")
     private LocalDateTime fechaModificacion;
+
+    @Column(name = "debe_cambiar_password", nullable = false)
+    private Boolean debeCambiarPassword = true;
 
     @PrePersist
     public void prePersist() {
@@ -69,4 +72,7 @@ public class Usuario {
 
     public LocalDateTime getFechaCreacion() { return fechaCreacion; }
     public LocalDateTime getFechaModificacion() { return fechaModificacion; }
+
+    public Boolean getDebeCambiarPassword() { return debeCambiarPassword; }
+    public void setDebeCambiarPassword(Boolean debeCambiarPassword) { this.debeCambiarPassword = debeCambiarPassword; }
 }

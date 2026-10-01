@@ -14,6 +14,7 @@ import {
   Loader2,
   RotateCcw,
   BookOpen,
+  Lock,
 } from "lucide-react";
 import {
   getCategorias,
@@ -39,6 +40,7 @@ import {
 } from "../services/configuracionService";
 import ModalAlerta from "../components/comunes/ModalAlerta";
 import { buscarSimilar } from "../utils/textSimilarity";
+import { useAuth } from "../context/AuthContext";
 
 const PALETA_COLORES = [
   { id: "indigo", bg: "bg-[#4338ca]", ring: "ring-[#4338ca]" },
@@ -124,6 +126,15 @@ const StatusBadge = ({ activo }) => {
 };
 
 export default function TiposConfiguracion() {
+  const { tienePermiso } = useAuth();
+
+  // Facultades de mutación PBAC
+  const puedeEditarCategorias = tienePermiso("CONFIG_EDITAR_CATEGORIAS");
+  const puedeEditarCargos = tienePermiso("CONFIG_EDITAR_CARGOS");
+  const puedeEditarMateriasTurnos = tienePermiso(
+    "CONFIG_EDITAR_MATERIAS_TURNOS",
+  );
+
   const [activeTab, setActiveTab] = useState("categorias");
   const [loading, setLoading] = useState(true);
 
@@ -191,19 +202,37 @@ export default function TiposConfiguracion() {
   const cargarDatos = useCallback(async () => {
     setLoading(true);
     try {
-      const [catsRes, cargosRes, horariosRes, materiasRes] = await Promise.all([
-        getCategorias(),
-        getCargos(),
-        getHorarios(),
-        getMaterias(),
-      ]);
+      const [catsRes, cargosRes, horariosRes, materiasRes] =
+        await Promise.allSettled([
+          getCategorias(),
+          getCargos(),
+          getHorarios(),
+          getMaterias(),
+        ]);
 
-      setCategorias(Array.isArray(catsRes) ? catsRes : []);
-      setCargos(Array.isArray(cargosRes) ? cargosRes : []);
-      setHorarios(Array.isArray(horariosRes) ? horariosRes : []);
-      setMaterias(Array.isArray(materiasRes) ? materiasRes : []);
+      const listaCats =
+        catsRes.status === "fulfilled" && Array.isArray(catsRes.value)
+          ? catsRes.value
+          : [];
+      const listaCargos =
+        cargosRes.status === "fulfilled" && Array.isArray(cargosRes.value)
+          ? cargosRes.value
+          : [];
+      const listaHorarios =
+        horariosRes.status === "fulfilled" && Array.isArray(horariosRes.value)
+          ? horariosRes.value
+          : [];
+      const listaMaterias =
+        materiasRes.status === "fulfilled" && Array.isArray(materiasRes.value)
+          ? materiasRes.value
+          : [];
 
-      const catsActivas = (catsRes || []).filter((c) => c.activo !== false);
+      setCategorias(listaCats);
+      setCargos(listaCargos);
+      setHorarios(listaHorarios);
+      setMaterias(listaMaterias);
+
+      const catsActivas = listaCats.filter((c) => c.activo !== false);
       if (catsActivas.length > 0) {
         setFormCargo((prev) => ({
           ...prev,
@@ -230,7 +259,6 @@ export default function TiposConfiguracion() {
     cargarDatos();
   }, [cargarDatos]);
 
-  // Sincronización automática silenciosa al restaurarse la conexión
   useEffect(() => {
     const handleRecuperacion = () => {
       cargarDatos();
@@ -246,12 +274,14 @@ export default function TiposConfiguracion() {
 
   // --- HANDLERS: CATEGORÍAS ---
   const abrirModalCrearCategoria = () => {
+    if (!puedeEditarCategorias) return;
     setEditandoCatId(null);
     setFormCat(FORM_CAT_INICIAL);
     setModalCat(true);
   };
 
   const abrirModalEditarCategoria = (cat) => {
+    if (!puedeEditarCategorias) return;
     setEditandoCatId(cat.id);
     setFormCat({
       nombre: cat.nombre || "",
@@ -263,10 +293,53 @@ export default function TiposConfiguracion() {
     setModalCat(true);
   };
 
+  const procederGuardarCategoria = async () => {
+    if (!puedeEditarCategorias) return;
+    try {
+      const payload = {
+        nombre: formCat.nombre.trim(),
+        codigoTag:
+          formCat.codigoTag?.trim() ||
+          formCat.nombre.trim().toLowerCase().replace(/\s+/g, "-"),
+        colorIdentificacion: formCat.colorIdentificacion,
+        descripcion: formCat.descripcion?.trim() || "",
+        activo: formCat.estado === "Activo",
+      };
+
+      if (editandoCatId) {
+        await updateCategoria(editandoCatId, payload);
+        mostrarAviso(
+          "success",
+          "Categoría Actualizada",
+          "Los datos se guardaron correctamente.",
+        );
+      } else {
+        await createCategoria(payload);
+        mostrarAviso(
+          "success",
+          "Categoría Creada",
+          "La nueva categoría se registró con éxito.",
+        );
+      }
+
+      await cargarDatos();
+      setModalCat(false);
+      setEditandoCatId(null);
+      setFormCat(FORM_CAT_INICIAL);
+    } catch (err) {
+      mostrarAviso(
+        "danger",
+        "Error al Guardar",
+        err.response?.data?.message ||
+          "No se pudo procesar la categoría en el servidor.",
+      );
+    }
+  };
+
   const handleGuardarCategoria = async (e) => {
     e.preventDefault();
+    if (!puedeEditarCategorias) return;
 
-    // Validación de similitud preventiva:
     const coincidencia = buscarSimilar(
       formCat.nombre,
       categorias,
@@ -280,11 +353,10 @@ export default function TiposConfiguracion() {
           "Categoría Duplicada",
           `Ya existe una categoría registrada exactamente como "${coincidencia.item.nombre}".`,
         );
-        return; // Bloquea el envío
+        return;
       }
 
       if (coincidencia.tipo === "SIMILAR") {
-        // Advertir con ModalAlerta permitiendo continuar o cancelar
         setModalAlerta({
           isOpen: true,
           tipo: "warning",
@@ -295,7 +367,7 @@ export default function TiposConfiguracion() {
           mostrarCancelar: true,
           onConfirmar: async () => {
             setModalAlerta((prev) => ({ ...prev, isOpen: false }));
-            await procederGuardarCategoria(); // Función que hace el POST/PUT
+            await procederGuardarCategoria();
           },
         });
         return;
@@ -306,6 +378,7 @@ export default function TiposConfiguracion() {
   };
 
   const handleEliminarCategoria = (id, nombre) => {
+    if (!puedeEditarCategorias) return;
     setModalAlerta({
       isOpen: true,
       tipo: "danger",
@@ -328,7 +401,8 @@ export default function TiposConfiguracion() {
           mostrarAviso(
             "danger",
             "Error",
-            "No se pudo dar de baja la categoría.",
+            err.response?.data?.message ||
+              "No se pudo dar de baja la categoría.",
           );
         }
       },
@@ -336,6 +410,7 @@ export default function TiposConfiguracion() {
   };
 
   const handleReactivarCategoria = (id, nombre) => {
+    if (!puedeEditarCategorias) return;
     setModalAlerta({
       isOpen: true,
       tipo: "info",
@@ -363,6 +438,7 @@ export default function TiposConfiguracion() {
 
   // --- HANDLERS: CARGOS ---
   const abrirModalCrearCargo = () => {
+    if (!puedeEditarCargos) return;
     setEditandoCargoId(null);
     setFormCargo({
       nombre: "",
@@ -374,6 +450,7 @@ export default function TiposConfiguracion() {
   };
 
   const abrirModalEditarCargo = (cargo) => {
+    if (!puedeEditarCargos) return;
     setEditandoCargoId(cargo.id);
     setFormCargo({
       nombre: cargo.nombre || "",
@@ -386,6 +463,7 @@ export default function TiposConfiguracion() {
 
   const handleGuardarCargo = async (e) => {
     e.preventDefault();
+    if (!puedeEditarCargos) return;
 
     if (!formCargo.nombre.trim()) {
       mostrarAviso(
@@ -405,7 +483,6 @@ export default function TiposConfiguracion() {
       return;
     }
 
-    // Comprobación de similitud o duplicado
     const coincidencia = buscarSimilar(
       formCargo.nombre,
       cargos,
@@ -418,7 +495,7 @@ export default function TiposConfiguracion() {
           nombre: formCargo.nombre.trim(),
           descripcion: formCargo.descripcion?.trim() || "",
           activo: formCargo.estado === "Activo",
-          categoria: { id: parseInt(formCargo.categoriaId) },
+          categoria: { id: parseInt(formCargo.categoriaId, 10) },
         };
 
         if (editandoCargoId) {
@@ -445,7 +522,8 @@ export default function TiposConfiguracion() {
         mostrarAviso(
           "danger",
           "Error",
-          "No se pudo guardar el cargo en el servidor.",
+          err.response?.data?.message ||
+            "No se pudo guardar el cargo en el servidor.",
         );
       }
     };
@@ -482,6 +560,7 @@ export default function TiposConfiguracion() {
   };
 
   const handleEliminarCargo = (id, nombre) => {
+    if (!puedeEditarCargos) return;
     setModalAlerta({
       isOpen: true,
       tipo: "danger",
@@ -508,6 +587,7 @@ export default function TiposConfiguracion() {
   };
 
   const handleReactivarCargo = (id, nombre) => {
+    if (!puedeEditarCargos) return;
     setModalAlerta({
       isOpen: true,
       tipo: "info",
@@ -535,6 +615,7 @@ export default function TiposConfiguracion() {
 
   // --- HANDLERS: HORARIOS ---
   const abrirModalCrearHorario = () => {
+    if (!puedeEditarMateriasTurnos) return;
     setEditandoHorarioId(null);
     setFormHorario({
       ...FORM_HORARIO_INICIAL,
@@ -544,6 +625,7 @@ export default function TiposConfiguracion() {
   };
 
   const abrirModalEditarHorario = (h) => {
+    if (!puedeEditarMateriasTurnos) return;
     setEditandoHorarioId(h.id);
     setFormHorario({
       nombre: h.nombre || "",
@@ -564,6 +646,7 @@ export default function TiposConfiguracion() {
 
   const handleGuardarHorario = async (e) => {
     e.preventDefault();
+    if (!puedeEditarMateriasTurnos) return;
 
     if (!formHorario.nombre.trim()) {
       mostrarAviso(
@@ -601,7 +684,6 @@ export default function TiposConfiguracion() {
       return;
     }
 
-    // Comprobación de similitud o duplicado de plantilla de horario
     const coincidencia = buscarSimilar(
       formHorario.nombre,
       horarios,
@@ -612,7 +694,7 @@ export default function TiposConfiguracion() {
       try {
         const payload = {
           nombre: formHorario.nombre.trim(),
-          categoria: { id: parseInt(formHorario.categoriaId) },
+          categoria: { id: parseInt(formHorario.categoriaId, 10) },
           activo: formHorario.estado === "Activo",
           horaEntrada:
             formHorario.horaEntrada.length === 5
@@ -623,10 +705,10 @@ export default function TiposConfiguracion() {
               ? `${formHorario.horaEgreso}:00`
               : formHorario.horaEgreso,
           diasLaborables: formHorario.dias.join(","),
-          tolEntradaMin: parseInt(formHorario.tolEntrada),
-          tolEgresoMin: parseInt(formHorario.tolEgreso),
-          maxSalidasIntermedias: parseInt(formHorario.maxSalidas || 2),
-          tiempoMaxFueraMin: parseInt(formHorario.tiempoMaxFuera || 45),
+          tolEntradaMin: parseInt(formHorario.tolEntrada, 10),
+          tolEgresoMin: parseInt(formHorario.tolEgreso, 10),
+          maxSalidasIntermedias: parseInt(formHorario.maxSalidas || 2, 10),
+          tiempoMaxFueraMin: parseInt(formHorario.tiempoMaxFuera || 45, 10),
         };
 
         if (editandoHorarioId) {
@@ -653,7 +735,8 @@ export default function TiposConfiguracion() {
         mostrarAviso(
           "danger",
           "Error",
-          "No se pudo guardar la plantilla de horario.",
+          err.response?.data?.message ||
+            "No se pudo guardar la plantilla de horario.",
         );
       }
     };
@@ -690,6 +773,7 @@ export default function TiposConfiguracion() {
   };
 
   const handleEliminarHorario = (id, nombre) => {
+    if (!puedeEditarMateriasTurnos) return;
     setModalAlerta({
       isOpen: true,
       tipo: "danger",
@@ -716,6 +800,7 @@ export default function TiposConfiguracion() {
   };
 
   const handleReactivarHorario = (id, nombre) => {
+    if (!puedeEditarMateriasTurnos) return;
     setModalAlerta({
       isOpen: true,
       tipo: "info",
@@ -754,12 +839,14 @@ export default function TiposConfiguracion() {
 
   // --- HANDLERS: MATERIAS / CÁTEDRAS ---
   const abrirModalCrearMateria = () => {
+    if (!puedeEditarMateriasTurnos) return;
     setEditandoMateriaId(null);
     setFormMateria(FORM_MATERIA_INICIAL);
     setModalMateria(true);
   };
 
   const abrirModalEditarMateria = (m) => {
+    if (!puedeEditarMateriasTurnos) return;
     setEditandoMateriaId(m.id);
     setFormMateria({
       nombre: m.nombre || "",
@@ -773,6 +860,7 @@ export default function TiposConfiguracion() {
 
   const handleGuardarMateria = async (e) => {
     e.preventDefault();
+    if (!puedeEditarMateriasTurnos) return;
 
     if (!formMateria.nombre.trim()) {
       mostrarAviso(
@@ -783,7 +871,6 @@ export default function TiposConfiguracion() {
       return;
     }
 
-    // Comprobación de similitud o duplicado
     const coincidencia = buscarSimilar(
       formMateria.nombre,
       materias,
@@ -824,7 +911,8 @@ export default function TiposConfiguracion() {
         mostrarAviso(
           "danger",
           "Error",
-          "No se pudo guardar la materia o cátedra.",
+          err.response?.data?.message ||
+            "No se pudo guardar la materia o cátedra.",
         );
       }
     };
@@ -861,6 +949,7 @@ export default function TiposConfiguracion() {
   };
 
   const handleEliminarMateria = (id, nombre) => {
+    if (!puedeEditarMateriasTurnos) return;
     setModalAlerta({
       isOpen: true,
       tipo: "danger",
@@ -887,6 +976,7 @@ export default function TiposConfiguracion() {
   };
 
   const handleReactivarMateria = (id, nombre) => {
+    if (!puedeEditarMateriasTurnos) return;
     setModalAlerta({
       isOpen: true,
       tipo: "info",
@@ -1094,13 +1184,23 @@ export default function TiposConfiguracion() {
                 </select>
               </div>
 
-              <button
-                onClick={abrirModalCrearCategoria}
-                className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#4b35e6] hover:bg-[#3f2bc9] text-white text-xs font-semibold shadow-md shadow-indigo-100 transition"
-              >
-                <Plus className="w-4 h-4 stroke-[2.5]" />
-                Nueva Categoría
-              </button>
+              {puedeEditarCategorias ? (
+                <button
+                  onClick={abrirModalCrearCategoria}
+                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#4b35e6] hover:bg-[#3f2bc9] text-white text-xs font-semibold shadow-md shadow-indigo-100 transition cursor-pointer"
+                >
+                  <Plus className="w-4 h-4 stroke-[2.5]" />
+                  Nueva Categoría
+                </button>
+              ) : (
+                <span
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 border border-slate-200 text-slate-400 text-xs font-semibold select-none cursor-not-allowed"
+                  title="Requiere permiso CONFIG_EDITAR_CATEGORIAS"
+                >
+                  <Lock className="w-3.5 h-3.5" />
+                  Creación Restringida
+                </span>
+              )}
             </div>
           </div>
 
@@ -1143,33 +1243,44 @@ export default function TiposConfiguracion() {
                     </td>
                     <td className="px-6 py-4 text-right">
                       <div className="flex items-center justify-end gap-2 text-slate-400">
-                        <button
-                          onClick={() => abrirModalEditarCategoria(cat)}
-                          className="p-1 hover:text-indigo-600 transition"
-                          title="Editar Categoría"
-                        >
-                          <Pencil className="w-4 h-4" />
-                        </button>
-                        {cat.activo !== false ? (
-                          <button
-                            onClick={() =>
-                              handleEliminarCategoria(cat.id, cat.nombre)
-                            }
-                            className="p-1 hover:text-rose-600 transition"
-                            title="Dar de baja"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                        {puedeEditarCategorias ? (
+                          <>
+                            <button
+                              onClick={() => abrirModalEditarCategoria(cat)}
+                              className="p-1 hover:text-indigo-600 transition cursor-pointer"
+                              title="Editar Categoría"
+                            >
+                              <Pencil className="w-4 h-4" />
+                            </button>
+                            {cat.activo !== false ? (
+                              <button
+                                onClick={() =>
+                                  handleEliminarCategoria(cat.id, cat.nombre)
+                                }
+                                className="p-1 hover:text-rose-600 transition cursor-pointer"
+                                title="Dar de baja"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() =>
+                                  handleReactivarCategoria(cat.id, cat.nombre)
+                                }
+                                className="p-1 hover:text-emerald-600 transition cursor-pointer"
+                                title="Reactivar Categoría"
+                              >
+                                <RotateCcw className="w-4 h-4 text-emerald-600" />
+                              </button>
+                            )}
+                          </>
                         ) : (
-                          <button
-                            onClick={() =>
-                              handleReactivarCategoria(cat.id, cat.nombre)
-                            }
-                            className="p-1 hover:text-emerald-600 transition"
-                            title="Reactivar Categoría"
+                          <span
+                            className="p-1 text-slate-300 cursor-not-allowed select-none"
+                            title="Requiere permiso CONFIG_EDITAR_CATEGORIAS"
                           >
-                            <RotateCcw className="w-4 h-4 text-emerald-600" />
-                          </button>
+                            <Lock className="w-3.5 h-3.5" />
+                          </span>
                         )}
                       </div>
                     </td>
@@ -1196,13 +1307,23 @@ export default function TiposConfiguracion() {
                 y descripción
               </p>
             </div>
-            <button
-              onClick={abrirModalCrearCargo}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#4b35e6] hover:bg-[#3f2bc9] text-white text-xs font-semibold shadow-md shadow-indigo-100 transition"
-            >
-              <Plus className="w-4 h-4 stroke-[2.5]" />
-              Nuevo Cargo
-            </button>
+            {puedeEditarCargos ? (
+              <button
+                onClick={abrirModalCrearCargo}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#4b35e6] hover:bg-[#3f2bc9] text-white text-xs font-semibold shadow-md shadow-indigo-100 transition cursor-pointer"
+              >
+                <Plus className="w-4 h-4 stroke-[2.5]" />
+                Nuevo Cargo
+              </button>
+            ) : (
+              <span
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 border border-slate-200 text-slate-400 text-xs font-semibold select-none cursor-not-allowed"
+                title="Requiere permiso CONFIG_EDITAR_CARGOS"
+              >
+                <Lock className="w-3.5 h-3.5" />
+                Creación Restringida
+              </span>
+            )}
           </div>
 
           <div className="bg-white p-3 border border-slate-200 rounded-xl shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3">
@@ -1307,33 +1428,44 @@ export default function TiposConfiguracion() {
                     </td>
                     <td className="px-6 py-4 text-right">
                       <div className="flex items-center justify-end gap-2 text-slate-400">
-                        <button
-                          onClick={() => abrirModalEditarCargo(cg)}
-                          className="p-1 hover:text-indigo-600 transition"
-                          title="Editar Cargo"
-                        >
-                          <Pencil className="w-4 h-4" />
-                        </button>
-                        {cg.activo !== false ? (
-                          <button
-                            onClick={() =>
-                              handleEliminarCargo(cg.id, cg.nombre)
-                            }
-                            className="p-1 hover:text-rose-600 transition"
-                            title="Dar de baja"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                        {puedeEditarCargos ? (
+                          <>
+                            <button
+                              onClick={() => abrirModalEditarCargo(cg)}
+                              className="p-1 hover:text-indigo-600 transition cursor-pointer"
+                              title="Editar Cargo"
+                            >
+                              <Pencil className="w-4 h-4" />
+                            </button>
+                            {cg.activo !== false ? (
+                              <button
+                                onClick={() =>
+                                  handleEliminarCargo(cg.id, cg.nombre)
+                                }
+                                className="p-1 hover:text-rose-600 transition cursor-pointer"
+                                title="Dar de baja"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() =>
+                                  handleReactivarCargo(cg.id, cg.nombre)
+                                }
+                                className="p-1 hover:text-emerald-600 transition cursor-pointer"
+                                title="Reactivar Cargo"
+                              >
+                                <RotateCcw className="w-4 h-4 text-emerald-600" />
+                              </button>
+                            )}
+                          </>
                         ) : (
-                          <button
-                            onClick={() =>
-                              handleReactivarCargo(cg.id, cg.nombre)
-                            }
-                            className="p-1 hover:text-emerald-600 transition"
-                            title="Reactivar Cargo"
+                          <span
+                            className="p-1 text-slate-300 cursor-not-allowed select-none"
+                            title="Requiere permiso CONFIG_EDITAR_CARGOS"
                           >
-                            <RotateCcw className="w-4 h-4 text-emerald-600" />
-                          </button>
+                            <Lock className="w-3.5 h-3.5" />
+                          </span>
                         )}
                       </div>
                     </td>
@@ -1360,13 +1492,23 @@ export default function TiposConfiguracion() {
                 asignación directa o general
               </p>
             </div>
-            <button
-              onClick={abrirModalCrearHorario}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#4b35e6] hover:bg-[#3f2bc9] text-white text-xs font-semibold shadow-md shadow-indigo-100 transition"
-            >
-              <Plus className="w-4 h-4 stroke-[2.5]" />
-              Nuevo Horario Preestablecido
-            </button>
+            {puedeEditarMateriasTurnos ? (
+              <button
+                onClick={abrirModalCrearHorario}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#4b35e6] hover:bg-[#3f2bc9] text-white text-xs font-semibold shadow-md shadow-indigo-100 transition cursor-pointer"
+              >
+                <Plus className="w-4 h-4 stroke-[2.5]" />
+                Nuevo Horario Preestablecido
+              </button>
+            ) : (
+              <span
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 border border-slate-200 text-slate-400 text-xs font-semibold select-none cursor-not-allowed"
+                title="Requiere permiso CONFIG_EDITAR_MATERIAS_TURNOS"
+              >
+                <Lock className="w-3.5 h-3.5" />
+                Creación Restringida
+              </span>
+            )}
           </div>
 
           <div className="bg-white p-3 border border-slate-200 rounded-xl shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs">
@@ -1379,7 +1521,7 @@ export default function TiposConfiguracion() {
                   <button
                     key={cat}
                     onClick={() => setHorarioCategoryFilter(cat)}
-                    className={`px-3 py-1.5 rounded-xl font-medium transition ${
+                    className={`px-3 py-1.5 rounded-xl font-medium transition cursor-pointer ${
                       horarioCategoryFilter === cat
                         ? "bg-[#4338ca] text-white font-semibold shadow-xs"
                         : "bg-slate-100 text-slate-600 hover:bg-slate-200"
@@ -1435,33 +1577,44 @@ export default function TiposConfiguracion() {
                       </div>
 
                       <div className="flex items-center gap-1.5 text-slate-400">
-                        <button
-                          onClick={() => abrirModalEditarHorario(h)}
-                          className="p-1 hover:text-indigo-600 transition"
-                          title="Editar Horario"
-                        >
-                          <Pencil className="w-4 h-4" />
-                        </button>
-                        {h.activo !== false ? (
-                          <button
-                            onClick={() =>
-                              handleEliminarHorario(h.id, h.nombre)
-                            }
-                            className="p-1 hover:text-rose-600 transition"
-                            title="Dar de baja"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                        {puedeEditarMateriasTurnos ? (
+                          <>
+                            <button
+                              onClick={() => abrirModalEditarHorario(h)}
+                              className="p-1 hover:text-indigo-600 transition cursor-pointer"
+                              title="Editar Horario"
+                            >
+                              <Pencil className="w-4 h-4" />
+                            </button>
+                            {h.activo !== false ? (
+                              <button
+                                onClick={() =>
+                                  handleEliminarHorario(h.id, h.nombre)
+                                }
+                                className="p-1 hover:text-rose-600 transition cursor-pointer"
+                                title="Dar de baja"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() =>
+                                  handleReactivarHorario(h.id, h.nombre)
+                                }
+                                className="p-1 hover:text-emerald-600 transition cursor-pointer"
+                                title="Reactivar Horario"
+                              >
+                                <RotateCcw className="w-4 h-4 text-emerald-600" />
+                              </button>
+                            )}
+                          </>
                         ) : (
-                          <button
-                            onClick={() =>
-                              handleReactivarHorario(h.id, h.nombre)
-                            }
-                            className="p-1 hover:text-emerald-600 transition"
-                            title="Reactivar Horario"
+                          <span
+                            className="p-1 text-slate-300 cursor-not-allowed select-none"
+                            title="Requiere permiso CONFIG_EDITAR_MATERIAS_TURNOS"
                           >
-                            <RotateCcw className="w-4 h-4 text-emerald-600" />
-                          </button>
+                            <Lock className="w-3.5 h-3.5" />
+                          </span>
                         )}
                       </div>
                     </div>
@@ -1504,7 +1657,6 @@ export default function TiposConfiguracion() {
                     </div>
                   </div>
 
-                  {/* SECCIÓN INFERIOR: TOLERANCIAS EN 2 COLUMNAS SIMÉTRICAS */}
                   <div className="grid grid-cols-2 gap-2 pt-3 border-t border-slate-100 text-center">
                     <div className="bg-[#f8fafc] p-2 rounded-xl">
                       <div className="text-[9px] font-bold uppercase text-slate-400">
@@ -1545,13 +1697,23 @@ export default function TiposConfiguracion() {
                 para asignación docente
               </p>
             </div>
-            <button
-              onClick={abrirModalCrearMateria}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#4b35e6] hover:bg-[#3f2bc9] text-white text-xs font-semibold shadow-md transition"
-            >
-              <Plus className="w-4 h-4 stroke-[2.5]" />
-              Nueva Materia
-            </button>
+            {puedeEditarMateriasTurnos ? (
+              <button
+                onClick={abrirModalCrearMateria}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#4b35e6] hover:bg-[#3f2bc9] text-white text-xs font-semibold shadow-md transition cursor-pointer"
+              >
+                <Plus className="w-4 h-4 stroke-[2.5]" />
+                Nueva Materia
+              </button>
+            ) : (
+              <span
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 border border-slate-200 text-slate-400 text-xs font-semibold select-none cursor-not-allowed"
+                title="Requiere permiso CONFIG_EDITAR_MATERIAS_TURNOS"
+              >
+                <Lock className="w-3.5 h-3.5" />
+                Creación Restringida
+              </span>
+            )}
           </div>
 
           <div className="bg-white p-3 border border-slate-200 rounded-xl shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3">
@@ -1627,33 +1789,44 @@ export default function TiposConfiguracion() {
                       </td>
                       <td className="px-6 py-4 text-right">
                         <div className="flex items-center justify-end gap-2 text-slate-400">
-                          <button
-                            onClick={() => abrirModalEditarMateria(m)}
-                            className="p-1 hover:text-indigo-600 transition"
-                            title="Editar Materia"
-                          >
-                            <Pencil className="w-4 h-4" />
-                          </button>
-                          {m.activo !== false ? (
-                            <button
-                              onClick={() =>
-                                handleEliminarMateria(m.id, m.nombre)
-                              }
-                              className="p-1 hover:text-rose-600 transition"
-                              title="Dar de baja"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
+                          {puedeEditarMateriasTurnos ? (
+                            <>
+                              <button
+                                onClick={() => abrirModalEditarMateria(m)}
+                                className="p-1 hover:text-indigo-600 transition cursor-pointer"
+                                title="Editar Materia"
+                              >
+                                <Pencil className="w-4 h-4" />
+                              </button>
+                              {m.activo !== false ? (
+                                <button
+                                  onClick={() =>
+                                    handleEliminarMateria(m.id, m.nombre)
+                                  }
+                                  className="p-1 hover:text-rose-600 transition cursor-pointer"
+                                  title="Dar de baja"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              ) : (
+                                <button
+                                  onClick={() =>
+                                    handleReactivarMateria(m.id, m.nombre)
+                                  }
+                                  className="p-1 hover:text-emerald-600 transition cursor-pointer"
+                                  title="Reactivar Materia"
+                                >
+                                  <RotateCcw className="w-4 h-4 text-emerald-600" />
+                                </button>
+                              )}
+                            </>
                           ) : (
-                            <button
-                              onClick={() =>
-                                handleReactivarMateria(m.id, m.nombre)
-                              }
-                              className="p-1 hover:text-emerald-600 transition"
-                              title="Reactivar Materia"
+                            <span
+                              className="p-1 text-slate-300 cursor-not-allowed select-none"
+                              title="Requiere permiso CONFIG_EDITAR_MATERIAS_TURNOS"
                             >
-                              <RotateCcw className="w-4 h-4 text-emerald-600" />
-                            </button>
+                              <Lock className="w-3.5 h-3.5" />
+                            </span>
                           )}
                         </div>
                       </td>
@@ -1693,7 +1866,7 @@ export default function TiposConfiguracion() {
               </div>
               <button
                 onClick={() => setModalCat(false)}
-                className="text-slate-400 hover:text-white"
+                className="text-slate-400 hover:text-white cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -1768,7 +1941,7 @@ export default function TiposConfiguracion() {
                       onClick={() =>
                         setFormCat({ ...formCat, colorIdentificacion: c.id })
                       }
-                      className={`w-9 h-9 rounded-xl ${c.bg} flex items-center justify-center text-white transition-transform ${
+                      className={`w-9 h-9 rounded-xl ${c.bg} flex items-center justify-center text-white transition-transform cursor-pointer ${
                         formCat.colorIdentificacion === c.id
                           ? "scale-110 ring-3 ring-offset-2 " + c.ring
                           : "opacity-90"
@@ -1801,13 +1974,13 @@ export default function TiposConfiguracion() {
                 <button
                   type="button"
                   onClick={() => setModalCat(false)}
-                  className="px-4 py-2 font-medium text-slate-600 hover:bg-slate-100 rounded-xl"
+                  className="px-4 py-2 font-medium text-slate-600 hover:bg-slate-100 rounded-xl cursor-pointer"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 font-semibold text-white bg-[#4b35e6] hover:bg-[#3e2bc0] rounded-xl shadow-md"
+                  className="px-5 py-2 font-semibold text-white bg-[#4b35e6] hover:bg-[#3e2bc0] rounded-xl shadow-md cursor-pointer"
                 >
                   {editandoCatId ? "Guardar Cambios" : "Guardar Categoría"}
                 </button>
@@ -1832,7 +2005,7 @@ export default function TiposConfiguracion() {
               </div>
               <button
                 onClick={() => setModalCargo(false)}
-                className="text-slate-400 hover:text-white"
+                className="text-slate-400 hover:text-white cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -1912,13 +2085,13 @@ export default function TiposConfiguracion() {
                 <button
                   type="button"
                   onClick={() => setModalCargo(false)}
-                  className="px-4 py-2 font-medium text-slate-600 hover:bg-slate-100 rounded-xl"
+                  className="px-4 py-2 font-medium text-slate-600 hover:bg-slate-100 rounded-xl cursor-pointer"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 font-semibold text-white bg-[#4b35e6] hover:bg-[#3e2bc0] rounded-xl shadow-md"
+                  className="px-5 py-2 font-semibold text-white bg-[#4b35e6] hover:bg-[#3e2bc0] rounded-xl shadow-md cursor-pointer"
                 >
                   {editandoCargoId ? "Guardar Cambios" : "Guardar Cargo"}
                 </button>
@@ -1943,7 +2116,7 @@ export default function TiposConfiguracion() {
               </div>
               <button
                 onClick={() => setModalHorario(false)}
-                className="text-slate-400 hover:text-white"
+                className="text-slate-400 hover:text-white cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -2057,7 +2230,7 @@ export default function TiposConfiguracion() {
                           type="button"
                           key={d}
                           onClick={() => toggleDia(d)}
-                          className={`flex-1 py-2 rounded-xl font-bold transition ${
+                          className={`flex-1 py-2 rounded-xl font-bold transition cursor-pointer ${
                             sel
                               ? "bg-[#4b35e6] text-white shadow-xs"
                               : "bg-white border border-slate-200 text-slate-600 hover:bg-slate-50"
@@ -2145,13 +2318,13 @@ export default function TiposConfiguracion() {
                 <button
                   type="button"
                   onClick={() => setModalHorario(false)}
-                  className="px-4 py-2 font-medium text-slate-600 hover:bg-slate-100 rounded-xl"
+                  className="px-4 py-2 font-medium text-slate-600 hover:bg-slate-100 rounded-xl cursor-pointer"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 font-semibold text-white bg-[#4b35e6] hover:bg-[#3e2bc0] rounded-xl shadow-md"
+                  className="px-5 py-2 font-semibold text-white bg-[#4b35e6] hover:bg-[#3e2bc0] rounded-xl shadow-md cursor-pointer"
                 >
                   {editandoHorarioId ? "Guardar Cambios" : "Guardar Horario"}
                 </button>
@@ -2174,7 +2347,7 @@ export default function TiposConfiguracion() {
               </div>
               <button
                 onClick={() => setModalMateria(false)}
-                className="text-slate-400 hover:text-white"
+                className="text-slate-400 hover:text-white cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -2275,13 +2448,13 @@ export default function TiposConfiguracion() {
                 <button
                   type="button"
                   onClick={() => setModalMateria(false)}
-                  className="px-4 py-2 font-medium text-slate-600 hover:bg-slate-100 rounded-xl"
+                  className="px-4 py-2 font-medium text-slate-600 hover:bg-slate-100 rounded-xl cursor-pointer"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 font-semibold text-white bg-[#4b35e6] hover:bg-[#3e2bc0] rounded-xl shadow-md"
+                  className="px-5 py-2 font-semibold text-white bg-[#4b35e6] hover:bg-[#3e2bc0] rounded-xl shadow-md cursor-pointer"
                 >
                   {editandoMateriaId ? "Guardar Cambios" : "Guardar Cátedra"}
                 </button>

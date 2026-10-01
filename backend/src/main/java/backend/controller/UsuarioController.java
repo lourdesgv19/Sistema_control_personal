@@ -1,13 +1,17 @@
 package backend.controller;
 
+import backend.dto.CambioPasswordRequest;
 import backend.dto.CrearUsuarioRequest;
 import backend.dto.UsuarioDTO;
 import backend.dto.UsuarioResumenDTO;
+import backend.model.Usuario;
+import backend.repositories.UsuarioRepository;
 import backend.service.UsuarioService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.data.domain.Page;
+import org.springframework.security.core.Authentication;
 import java.util.Map;
 
 @RestController
@@ -15,12 +19,13 @@ import java.util.Map;
 @CrossOrigin(origins = "http://localhost:5173")
 public class UsuarioController {
 
-    private final UsuarioService usuarioService;
+private final UsuarioService usuarioService;
+    private final UsuarioRepository usuarioRepo; // <-- AGREGAR
 
-    public UsuarioController(UsuarioService usuarioService) {
+    public UsuarioController(UsuarioService usuarioService, UsuarioRepository usuarioRepo) { // <-- INYECTAR
         this.usuarioService = usuarioService;
+        this.usuarioRepo = usuarioRepo;
     }
-
     // Listado paginado desde base de datos
     @GetMapping
     public ResponseEntity<Page<UsuarioDTO>> listar(
@@ -60,6 +65,27 @@ public class UsuarioController {
         } catch (IllegalArgumentException | IllegalStateException e) {
             return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
         }
+    }
+
+    @PutMapping("/{id}/primer-cambio-password")
+    public ResponseEntity<?> cambiarPasswordPrimerInicio(
+        @PathVariable Long id,
+        @RequestBody CambioPasswordRequest req,
+        Authentication auth) {
+    try {
+        // Validación: verificar que quien llama sea el dueño de la cuenta (o un ADMIN)
+        Usuario usuario = usuarioRepo.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Usuario no encontrado"));
+
+        if (!usuario.getUsername().equals(auth.getName()) && !auth.getAuthorities().stream().anyMatch(a -> a.getAuthority().contains("ADMIN"))) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("message", "No tiene autorización para modificar esta cuenta."));
+        }
+
+        usuarioService.cambiarPasswordPrimerInicio(id, req.passwordActual(), req.passwordNueva());
+        return ResponseEntity.ok(Map.of("message", "Contraseña actualizada exitosamente."));
+    } catch (IllegalArgumentException e) {
+        return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
+    }
     }
 
     @PatchMapping("/{id}/estado")

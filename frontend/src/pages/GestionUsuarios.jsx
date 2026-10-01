@@ -25,10 +25,18 @@ import { getEmpleados } from "../services/empleadoService";
 import ModalAlerta from "../components/comunes/ModalAlerta";
 import ModalCrearUsuario from "../components/usuarios/ModalCrearUsuario";
 import ModalMatrizPermisos from "../components/usuarios/ModalMatrizPermisos";
+import { useAuth } from "../context/AuthContext";
 
 const ITEMS_POR_PAGINA = 10;
 
 export default function GestionUsuarios() {
+  const { user, tienePermiso } = useAuth(); // Sesión actual y verificador de permisos
+
+  // Facultades evaluadas por PBAC
+  const puedeGestionarAccesos = tienePermiso("USUARIOS_GESTIONAR_ACCESOS");
+  const puedeResetPassword = tienePermiso("USUARIOS_RESET_PASSWORD");
+  const puedeSuspender = tienePermiso("USUARIOS_SUSPENDER");
+
   const [loading, setLoading] = useState(true);
   const [usuarios, setUsuarios] = useState([]);
   const [empleados, setEmpleados] = useState([]);
@@ -77,6 +85,15 @@ export default function GestionUsuarios() {
       textoConfirmar: "Aceptar",
       mostrarCancelar: false,
       onConfirmar: () => setModalAlerta((prev) => ({ ...prev, isOpen: false })),
+    });
+  };
+
+  // Apertura de gestión de permisos
+  const abrirModalPermisos = (u) => {
+    if (!puedeGestionarAccesos) return;
+    setModalPermisos({
+      isOpen: true,
+      usuario: u,
     });
   };
 
@@ -160,6 +177,7 @@ export default function GestionUsuarios() {
 
   // Handlers
   const handleCrearUsuario = async (payload) => {
+    if (!puedeGestionarAccesos) return;
     try {
       await createUsuario(payload);
       setModalCrear(false);
@@ -182,6 +200,7 @@ export default function GestionUsuarios() {
   };
 
   const handleResetPassword = (usuario) => {
+    if (!puedeResetPassword) return;
     setModalAlerta({
       isOpen: true,
       tipo: "warning",
@@ -211,6 +230,7 @@ export default function GestionUsuarios() {
   };
 
   const handleToggleEstado = (usuario) => {
+    if (!puedeSuspender) return;
     const nuevoEstado = !usuario.activo;
     setModalAlerta({
       isOpen: true,
@@ -263,16 +283,27 @@ export default function GestionUsuarios() {
           </div>
         </div>
 
-        <button
-          onClick={() => setModalCrear(true)}
-          className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#4b35e6] hover:bg-[#3f2bc9] text-white text-xs font-semibold shadow-md shadow-indigo-100 transition self-start md:self-auto cursor-pointer"
-        >
-          <UserPlus className="w-4 h-4 stroke-[2.5]" />
-          Habilitar Nuevo Usuario
-        </button>
+        {/* Botón Nuevo Usuario: Controlado por USUARIOS_GESTIONAR_ACCESOS */}
+        {puedeGestionarAccesos ? (
+          <button
+            onClick={() => setModalCrear(true)}
+            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#4b35e6] hover:bg-[#3f2bc9] text-white text-xs font-semibold shadow-md shadow-indigo-100 transition self-start md:self-auto cursor-pointer"
+          >
+            <UserPlus className="w-4 h-4 stroke-[2.5]" />
+            Habilitar Nuevo Usuario
+          </button>
+        ) : (
+          <span
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-100 text-slate-400 text-xs font-semibold border border-slate-200 cursor-not-allowed select-none"
+            title="Requiere permiso USUARIOS_GESTIONAR_ACCESOS"
+          >
+            <Lock className="w-3.5 h-3.5" />
+            Creación de Accesos Restringida
+          </span>
+        )}
       </div>
 
-      {/* 2. TARJETAS DE MÉTRICAS (PROVISTAS POR EL BACKEND Y FILTROS INTERACTIVOS) */}
+      {/* 2. TARJETAS DE MÉTRICAS */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {/* TOTAL CUENTAS */}
         <button
@@ -484,9 +515,13 @@ export default function GestionUsuarios() {
                       ? "bg-indigo-50 text-indigo-700 border-indigo-200"
                       : "bg-slate-100 text-slate-700 border-slate-200";
 
+                const esAdminRaiz = u.username === "admin";
+                const esUsuarioActual =
+                  (u.id || u.idUsuario) === user?.idUsuario;
+
                 return (
                   <tr
-                    key={u.id}
+                    key={u.id || u.idUsuario}
                     className={`transition-colors ${
                       u.activo === false
                         ? "bg-slate-50/60 opacity-75"
@@ -501,7 +536,7 @@ export default function GestionUsuarios() {
 
                     <td className="px-6 py-4">
                       <div className="font-semibold text-slate-800">
-                        {u.nombreCompletoEmpleado}
+                        {u.nombreCompletoEmpleado || "Sin Empleado Asociado"}
                       </div>
                     </td>
 
@@ -532,42 +567,87 @@ export default function GestionUsuarios() {
                       </span>
                     </td>
 
+                    {/* Acciones de Seguridad con PBAC */}
                     <td className="px-6 py-4 text-right">
                       <div className="flex items-center justify-end gap-2 text-slate-400">
-                        <button
-                          onClick={() => handleResetPassword(u)}
-                          className="flex items-center gap-1 px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 rounded-lg text-xs font-semibold transition cursor-pointer"
-                          title="Restablecer a contraseña predeterminada"
-                        >
-                          <KeyRound className="w-3.5 h-3.5 text-amber-600" />
-                          Reset Clave
-                        </button>
-                        <button
-                          onClick={() =>
-                            setModalPermisos({ isOpen: true, usuario: u })
-                          }
-                          className="px-2.5 py-1 text-xs font-semibold text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-lg hover:bg-indigo-100 transition cursor-pointer"
-                          title="Editar permisos granulares"
-                        >
-                          Permisos
-                        </button>
-
-                        {u.activo !== false ? (
+                        {/* 1. Reset Clave (Requiere USUARIOS_RESET_PASSWORD) */}
+                        {puedeResetPassword ? (
                           <button
-                            onClick={() => handleToggleEstado(u)}
-                            className="p-1.5 hover:text-rose-600 transition cursor-pointer"
-                            title="Suspender acceso"
+                            onClick={() => handleResetPassword(u)}
+                            className="flex items-center gap-1 px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 rounded-lg text-xs font-semibold transition cursor-pointer"
+                            title="Restablecer a contraseña predeterminada"
                           >
-                            <XCircle className="w-4 h-4 text-rose-500" />
+                            <KeyRound className="w-3.5 h-3.5 text-amber-600" />
+                            Reset Clave
                           </button>
                         ) : (
-                          <button
-                            onClick={() => handleToggleEstado(u)}
-                            className="p-1.5 hover:text-emerald-600 transition cursor-pointer"
-                            title="Reactivar acceso"
+                          <span
+                            className="flex items-center gap-1 px-2.5 py-1 bg-slate-50 text-slate-300 border border-slate-200 rounded-lg text-xs font-semibold cursor-not-allowed select-none"
+                            title="Requiere permiso USUARIOS_RESET_PASSWORD"
                           >
-                            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                            <KeyRound className="w-3.5 h-3.5" />
+                            Reset Clave
+                          </span>
+                        )}
+
+                        {/* 2. Permisos (Requiere USUARIOS_GESTIONAR_ACCESOS y no ser admin raíz) */}
+                        {puedeGestionarAccesos ? (
+                          <button
+                            onClick={() => abrirModalPermisos(u)}
+                            disabled={esAdminRaiz}
+                            className="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg text-xs font-semibold transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                            title={
+                              esAdminRaiz
+                                ? "El usuario raíz posee todos los permisos"
+                                : "Gestionar permisos"
+                            }
+                          >
+                            Permisos
                           </button>
+                        ) : (
+                          <span
+                            className="px-2.5 py-1 bg-slate-50 text-slate-300 border border-slate-200 rounded-lg text-xs font-semibold cursor-not-allowed select-none"
+                            title="Requiere permiso USUARIOS_GESTIONAR_ACCESOS"
+                          >
+                            Permisos
+                          </span>
+                        )}
+
+                        {/* 3. Suspender / Reactivar (Requiere USUARIOS_SUSPENDER y no ser admin raíz ni usuario actual) */}
+                        {!esAdminRaiz && !esUsuarioActual ? (
+                          puedeSuspender ? (
+                            u.activo !== false ? (
+                              <button
+                                onClick={() => handleToggleEstado(u)}
+                                className="p-1.5 hover:text-rose-600 transition cursor-pointer"
+                                title="Suspender acceso"
+                              >
+                                <XCircle className="w-4 h-4 text-rose-500" />
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => handleToggleEstado(u)}
+                                className="p-1.5 hover:text-emerald-600 transition cursor-pointer"
+                                title="Reactivar acceso"
+                              >
+                                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                              </button>
+                            )
+                          ) : (
+                            <span
+                              className="p-1.5 text-slate-300 cursor-not-allowed select-none"
+                              title="Requiere permiso USUARIOS_SUSPENDER"
+                            >
+                              <Lock className="w-4 h-4" />
+                            </span>
+                          )
+                        ) : (
+                          <span
+                            className="p-1.5 text-slate-300 cursor-not-allowed select-none"
+                            title="Cuenta protegida del sistema o sesión actual"
+                          >
+                            <Lock className="w-4 h-4" />
+                          </span>
                         )}
                       </div>
                     </td>
@@ -645,7 +725,7 @@ export default function GestionUsuarios() {
         empleadosSinUsuario={empleadosSinUsuario}
       />
 
-      {/*MODAL DE GESTION DE PERMISOS */}
+      {/* MODAL DE GESTIÓN DE PERMISOS */}
       <ModalMatrizPermisos
         isOpen={modalPermisos.isOpen}
         usuario={modalPermisos.usuario}

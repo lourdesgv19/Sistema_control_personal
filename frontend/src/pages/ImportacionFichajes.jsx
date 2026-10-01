@@ -25,6 +25,7 @@ import {
   UserX,
   ChevronLeft,
   ChevronRight,
+  Lock,
 } from "lucide-react";
 import {
   getHistorialImportaciones,
@@ -41,6 +42,7 @@ import { getEmpleados, createEmpleado } from "../services/empleadoService";
 import { getCategorias, getCargos } from "../services/configuracionService";
 import ModalAlerta from "../components/comunes/ModalAlerta";
 import ModalRegistroEmpleado from "../components/personal/ModalRegistroEmpleado";
+import { useAuth } from "../context/AuthContext";
 
 const formatearFechaHora24 = (fechaIso) => {
   if (!fechaIso) return "-";
@@ -79,6 +81,7 @@ function BuscadorEmpleadoSelect({
   onSeleccionar,
   disabled = false,
   onRegistrarNuevo,
+  puedeCrearEmpleado = false,
   sJobNo,
   sName,
 }) {
@@ -182,7 +185,7 @@ function BuscadorEmpleadoSelect({
                 <p className="text-slate-400 text-[11px]">
                   No se hallaron coincidencias
                 </p>
-                {onRegistrarNuevo && (
+                {onRegistrarNuevo && puedeCrearEmpleado && (
                   <button
                     type="button"
                     onClick={() => {
@@ -229,7 +232,7 @@ function BuscadorEmpleadoSelect({
                   );
                 })}
 
-                {onRegistrarNuevo && (
+                {onRegistrarNuevo && puedeCrearEmpleado && (
                   <div className="pt-1 mt-1 border-t border-slate-100">
                     <button
                       type="button"
@@ -253,6 +256,14 @@ function BuscadorEmpleadoSelect({
 }
 
 export default function ImportacionFichajes() {
+  const { tienePermiso } = useAuth();
+
+  // Permisos granulares del módulo FICHAJES
+  const puedeImportar = tienePermiso("FICHAJES_IMPORTAR");
+  const puedeVincular = tienePermiso("FICHAJES_VINCULAR");
+  const puedeEliminarLote = tienePermiso("FICHAJES_ELIMINAR_LOTE");
+  const puedeCrearEmpleado = tienePermiso("PERSONAL_CREAR");
+
   const [loading, setLoading] = useState(false);
   const [historial, setHistorial] = useState([]);
   const [empleados, setEmpleados] = useState([]);
@@ -324,20 +335,40 @@ export default function ImportacionFichajes() {
     setErrorGlobal("");
     try {
       const [histRes, empRes, sinVincularRes, catRes, cargoRes] =
-        await Promise.all([
+        await Promise.allSettled([
           getHistorialImportaciones(),
           getEmpleados(),
-          getSinVincularCount().catch(() => 0),
-          getCategorias ? getCategorias().catch(() => []) : [],
-          getCargos ? getCargos().catch(() => []) : [],
+          getSinVincularCount(),
+          getCategorias(),
+          getCargos(),
         ]);
-      setHistorial(Array.isArray(histRes) ? histRes : []);
-      setEmpleados(Array.isArray(empRes) ? empRes : []);
-      setConteoSinVincular(
-        typeof sinVincularRes === "number" ? sinVincularRes : 0,
+
+      setHistorial(
+        histRes.status === "fulfilled" && Array.isArray(histRes.value)
+          ? histRes.value
+          : [],
       );
-      setCategoriasActivas(Array.isArray(catRes) ? catRes : []);
-      setCargosActivos(Array.isArray(cargoRes) ? cargoRes : []);
+      setEmpleados(
+        empRes.status === "fulfilled" && Array.isArray(empRes.value)
+          ? empRes.value
+          : [],
+      );
+      setConteoSinVincular(
+        sinVincularRes.status === "fulfilled" &&
+          typeof sinVincularRes.value === "number"
+          ? sinVincularRes.value
+          : 0,
+      );
+      setCategoriasActivas(
+        catRes.status === "fulfilled" && Array.isArray(catRes.value)
+          ? catRes.value
+          : [],
+      );
+      setCargosActivos(
+        cargoRes.status === "fulfilled" && Array.isArray(cargoRes.value)
+          ? cargoRes.value
+          : [],
+      );
     } catch (err) {
       console.error("Error cargando datos:", err);
       setErrorGlobal("Error al sincronizar datos con el servidor.");
@@ -361,6 +392,7 @@ export default function ImportacionFichajes() {
       }
     } catch (err) {
       console.error("Error al cargar marcaciones paginadas:", err);
+      setFichajesPaginados([]);
     } finally {
       setCargandoFichajes(false);
     }
@@ -371,7 +403,7 @@ export default function ImportacionFichajes() {
     cargarDatos();
   }, [cargarDatos]);
 
-  // Sincronización automática ante restablecimiento de conexión (sin recarga manual)
+  // Sincronización automática ante restablecimiento de conexión
   useEffect(() => {
     const handleRecuperacion = () => {
       cargarDatos();
@@ -450,6 +482,7 @@ export default function ImportacionFichajes() {
   ]);
 
   const handleSeleccionarArchivo = (e) => {
+    if (!puedeImportar) return;
     if (e.target.files && e.target.files[0]) {
       setArchivo(e.target.files[0]);
       setResultadoSubida(null);
@@ -458,7 +491,7 @@ export default function ImportacionFichajes() {
   };
 
   const handleImportar = async () => {
-    if (!archivo) return;
+    if (!puedeImportar || !archivo) return;
     setLoading(true);
     setErrorGlobal("");
     try {
@@ -468,29 +501,31 @@ export default function ImportacionFichajes() {
       setArchivo(null);
       await cargarDatos();
 
-      try {
-        const previ = await previsualizarVinculaciones(archivoSubido);
-        const pendientes = previ.filter((p) => !p.yaVinculado);
-        setVinculaciones(previ);
+      if (puedeVincular) {
+        try {
+          const previ = await previsualizarVinculaciones(archivoSubido);
+          const pendientes = previ.filter((p) => !p.yaVinculado);
+          setVinculaciones(previ);
 
-        if (pendientes.length > 0) {
-          setModalAlerta({
-            isOpen: true,
-            tipo: "warning",
-            titulo: "Marcaciones Guardadas con Pendientes",
-            mensaje: `Se guardaron ${res.procesadasOk} marcaciones, pero se detectaron ${pendientes.length} colaboradores del reloj aún no vinculados. ¿Deseas vincularlos ahora?`,
-            textoConfirmar: "Vincular Ahora",
-            textoCancelar: "Más tarde",
-            mostrarCancelar: true,
-            onConfirmar: () => {
-              setModalAlerta((prev) => ({ ...prev, isOpen: false }));
-              setVistaActual("asistente");
-            },
-          });
-          return;
+          if (pendientes.length > 0) {
+            setModalAlerta({
+              isOpen: true,
+              tipo: "warning",
+              titulo: "Marcaciones Guardadas con Pendientes",
+              mensaje: `Se guardaron ${res.procesadasOk} marcaciones, pero se detectaron ${pendientes.length} colaboradores del reloj aún no vinculados. ¿Deseas vincularlos ahora?`,
+              textoConfirmar: "Vincular Ahora",
+              textoCancelar: "Más tarde",
+              mostrarCancelar: true,
+              onConfirmar: () => {
+                setModalAlerta((prev) => ({ ...prev, isOpen: false }));
+                setVistaActual("asistente");
+              },
+            });
+            return;
+          }
+        } catch (errAnalisis) {
+          console.warn("No se pudo previsualizar vinculaciones:", errAnalisis);
         }
-      } catch (errAnalisis) {
-        console.warn("No se pudo previsualizar vinculaciones:", errAnalisis);
       }
 
       mostrarAviso(
@@ -501,6 +536,7 @@ export default function ImportacionFichajes() {
     } catch (err) {
       const msg =
         err.response?.data?.mensajesErrores?.[0] ||
+        err.response?.data?.message ||
         "Error al procesar el archivo en el servidor.";
       setErrorGlobal(msg);
       mostrarAviso("danger", "Error de Procesamiento", msg);
@@ -510,6 +546,7 @@ export default function ImportacionFichajes() {
   };
 
   const handleEliminarHistorial = (id, nombre) => {
+    if (!puedeEliminarLote) return;
     setModalAlerta({
       isOpen: true,
       tipo: "danger",
@@ -535,7 +572,8 @@ export default function ImportacionFichajes() {
           mostrarAviso(
             "danger",
             "Error",
-            "No se pudo dar de baja el registro.",
+            err.response?.data?.message ||
+              "No se pudo dar de baja el registro.",
           );
         }
       },
@@ -543,6 +581,7 @@ export default function ImportacionFichajes() {
   };
 
   const handleAbrirAsistenteDesdeCabecera = async () => {
+    if (!puedeVincular) return;
     if (vistaActual === "asistente") {
       setVistaActual("historial");
       return;
@@ -571,6 +610,7 @@ export default function ImportacionFichajes() {
   };
 
   const handleCambiarEmpleadoAsignado = (sJobNo, nuevoEmpleadoId) => {
+    if (!puedeVincular) return;
     setVinculaciones((prev) =>
       prev.map((v) =>
         v.sJobNo === sJobNo
@@ -587,6 +627,7 @@ export default function ImportacionFichajes() {
 
   // Disparar alta rápida abriendo ModalRegistroEmpleado
   const handleAbrirRegistroNuevo = ({ sJobNo, sName }) => {
+    if (!puedeCrearEmpleado) return;
     const partes = (sName || "").trim().split(" ");
     const nombre = partes[0] || "";
     const apellido = partes.slice(1).join(" ") || "";
@@ -629,6 +670,7 @@ export default function ImportacionFichajes() {
   };
 
   const handleGuardarVinculaciones = async () => {
+    if (!puedeVincular) return;
     try {
       const payload = vinculaciones
         .filter(
@@ -661,7 +703,8 @@ export default function ImportacionFichajes() {
       mostrarAviso(
         "danger",
         "Error",
-        "Ocurrió un error al intentar guardar las vinculaciones.",
+        err.response?.data?.message ||
+          "Ocurrió un error al intentar guardar las vinculaciones.",
       );
     }
   };
@@ -700,6 +743,7 @@ export default function ImportacionFichajes() {
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Alternar entre Marcaciones e Historial (Accesible para FICHAJES_VER) */}
           <button
             onClick={() =>
               setVistaActual(
@@ -725,67 +769,94 @@ export default function ImportacionFichajes() {
             )}
           </button>
 
-          {(conteoSinVincular > 0 || vistaActual === "asistente") && (
-            <button
-              onClick={handleAbrirAsistenteDesdeCabecera}
-              disabled={cargandoAsistente}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold border transition cursor-pointer ${
-                vistaActual === "asistente"
-                  ? "bg-slate-100 border-slate-300 text-slate-700"
-                  : "bg-amber-500 hover:bg-amber-600 text-white border-amber-600 shadow-md shadow-amber-100 font-bold"
-              }`}
+          {/* Botón Asistente: Sujeto a FICHAJES_VINCULAR */}
+          {puedeVincular ? (
+            (conteoSinVincular > 0 || vistaActual === "asistente") && (
+              <button
+                onClick={handleAbrirAsistenteDesdeCabecera}
+                disabled={cargandoAsistente}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold border transition cursor-pointer ${
+                  vistaActual === "asistente"
+                    ? "bg-slate-100 border-slate-300 text-slate-700"
+                    : "bg-amber-500 hover:bg-amber-600 text-white border-amber-600 shadow-md shadow-amber-100 font-bold"
+                }`}
+              >
+                {cargandoAsistente ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : vistaActual === "asistente" ? (
+                  <UserCheck className="w-4 h-4 text-slate-600" />
+                ) : (
+                  <UserX className="w-4 h-4 text-white" />
+                )}
+                {vistaActual === "asistente"
+                  ? "Volver a Importaciones"
+                  : `Empleados sin vincular (${conteoSinVincular})`}
+              </button>
+            )
+          ) : (
+            <span
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-400 text-xs font-semibold select-none cursor-not-allowed"
+              title="Requiere permiso FICHAJES_VINCULAR"
             >
-              {cargandoAsistente ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : vistaActual === "asistente" ? (
-                <UserCheck className="w-4 h-4 text-slate-600" />
-              ) : (
-                <UserX className="w-4 h-4 text-white" />
-              )}
-              {vistaActual === "asistente"
-                ? "Volver a Importaciones"
-                : `Empleados sin vincular (${conteoSinVincular})`}
-            </button>
+              <Lock className="w-3.5 h-3.5" />
+              Vinculación Restringida
+            </span>
           )}
         </div>
       </div>
 
-      {/* 2. ZONA DE CARGA */}
+      {/* 2. ZONA DE CARGA (Controlada por FICHAJES_IMPORTAR) */}
       <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs">
-        <div className="flex flex-col md:flex-row items-center justify-between gap-6">
-          <label className="flex-1 w-full border-2 border-dashed border-slate-300 hover:border-indigo-500 rounded-2xl p-6 flex flex-col items-center justify-center cursor-pointer bg-slate-50 hover:bg-indigo-50/20 transition group">
-            <FileSpreadsheet className="w-10 h-10 text-indigo-500 group-hover:scale-110 transition duration-200 mb-2 stroke-[1.5]" />
-            <span className="font-semibold text-slate-700 text-sm">
-              {archivo
-                ? archivo.name
-                : "Haz clic para seleccionar o arrastra tu archivo aquí"}
-            </span>
-            <span className="text-[11px] text-slate-400 mt-1">
-              Admite exportaciones directas del reloj (.csv, .xlsx, .xls o .txt)
-            </span>
-            <input
-              type="file"
-              accept=".csv,.xlsx,.xls,.txt"
-              onChange={handleSeleccionarArchivo}
-              className="hidden"
-            />
-          </label>
+        {puedeImportar ? (
+          <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+            <label className="flex-1 w-full border-2 border-dashed border-slate-300 hover:border-indigo-500 rounded-2xl p-6 flex flex-col items-center justify-center cursor-pointer bg-slate-50 hover:bg-indigo-50/20 transition group">
+              <FileSpreadsheet className="w-10 h-10 text-indigo-500 group-hover:scale-110 transition duration-200 mb-2 stroke-[1.5]" />
+              <span className="font-semibold text-slate-700 text-sm">
+                {archivo
+                  ? archivo.name
+                  : "Haz clic para seleccionar o arrastra tu archivo aquí"}
+              </span>
+              <span className="text-[11px] text-slate-400 mt-1">
+                Admite exportaciones directas del reloj (.csv, .xlsx, .xls o
+                .txt)
+              </span>
+              <input
+                type="file"
+                accept=".csv,.xlsx,.xls,.txt"
+                onChange={handleSeleccionarArchivo}
+                className="hidden"
+              />
+            </label>
 
-          <div className="w-full md:w-56">
-            <button
-              onClick={handleImportar}
-              disabled={!archivo || loading}
-              className="flex items-center justify-center gap-2 w-full py-3 bg-[#4b35e6] hover:bg-[#3f2bc9] disabled:opacity-50 text-white rounded-xl text-xs font-semibold shadow-md shadow-indigo-100 transition cursor-pointer"
-            >
-              {loading ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <UploadCloud className="w-4 h-4" />
-              )}
-              Importar Marcaciones
-            </button>
+            <div className="w-full md:w-56">
+              <button
+                onClick={handleImportar}
+                disabled={!archivo || loading}
+                className="flex items-center justify-center gap-2 w-full py-3 bg-[#4b35e6] hover:bg-[#3f2bc9] disabled:opacity-50 text-white rounded-xl text-xs font-semibold shadow-md shadow-indigo-100 transition cursor-pointer"
+              >
+                {loading ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <UploadCloud className="w-4 h-4" />
+                )}
+                Importar Marcaciones
+              </button>
+            </div>
           </div>
-        </div>
+        ) : (
+          <div className="p-6 border-2 border-dashed border-slate-200 rounded-2xl bg-slate-50/60 flex flex-col items-center justify-center text-center">
+            <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center text-slate-400 mb-2">
+              <Lock className="w-5 h-5" />
+            </div>
+            <span className="text-xs font-bold text-slate-700">
+              Carga e Ingesta de Archivos Restringida
+            </span>
+            <span className="text-[11px] text-slate-400 mt-0.5">
+              Su cuenta tiene acceso de solo lectura (FICHAJES_VER). Se requiere
+              el permiso <strong>FICHAJES_IMPORTAR</strong> para subir lotes.
+            </span>
+          </div>
+        )}
 
         {errorGlobal && (
           <div className="mt-4 p-3 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl text-xs flex items-center gap-2">
@@ -863,12 +934,14 @@ export default function ImportacionFichajes() {
                 pulsa guardar.
               </p>
             </div>
-            <button
-              onClick={handleGuardarVinculaciones}
-              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold shadow-xs transition cursor-pointer self-start sm:self-auto"
-            >
-              Guardar Vinculaciones
-            </button>
+            {puedeVincular && (
+              <button
+                onClick={handleGuardarVinculaciones}
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold shadow-xs transition cursor-pointer self-start sm:self-auto"
+              >
+                Guardar Vinculaciones
+              </button>
+            )}
           </div>
 
           <div className="overflow-x-auto">
@@ -914,10 +987,11 @@ export default function ImportacionFichajes() {
                           onSeleccionar={(nuevoId) =>
                             handleCambiarEmpleadoAsignado(v.sJobNo, nuevoId)
                           }
-                          disabled={v.yaVinculado}
+                          disabled={v.yaVinculado || !puedeVincular}
                           sJobNo={v.sJobNo}
                           sName={v.sName}
                           onRegistrarNuevo={handleAbrirRegistroNuevo}
+                          puedeCrearEmpleado={puedeCrearEmpleado}
                         />
                       </td>
                       <td className="py-3 px-4">
@@ -1170,23 +1244,35 @@ export default function ImportacionFichajes() {
                         {h.usuarioResponsable || "Sistema"}
                       </td>
                       <td className="py-3.5 px-4 text-right">
-                        <div className="flex items-center justify-end gap-1">
+                        <div className="flex items-center justify-end gap-1 text-slate-400">
+                          {/* Ver Detalle del Lote (Accesible con FICHAJES_VER) */}
                           <button
                             onClick={() => handleAbrirModalLote(h)}
-                            className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition cursor-pointer"
+                            className="p-1.5 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition cursor-pointer"
                             title="Ver filas y detalle de esta importación"
                           >
                             <Eye className="w-4 h-4" />
                           </button>
-                          <button
-                            onClick={() =>
-                              handleEliminarHistorial(h.id, h.nombreArchivo)
-                            }
-                            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer"
-                            title="Dar de baja este registro de importación"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+
+                          {/* Eliminar Lote (Requiere FICHAJES_ELIMINAR_LOTE) */}
+                          {puedeEliminarLote ? (
+                            <button
+                              onClick={() =>
+                                handleEliminarHistorial(h.id, h.nombreArchivo)
+                              }
+                              className="p-1.5 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer"
+                              title="Dar de baja este registro de importación"
+                            >
+                              <Trash2 className="w-4 h-4 text-rose-500" />
+                            </button>
+                          ) : (
+                            <span
+                              className="p-1.5 text-slate-200 cursor-not-allowed"
+                              title="Requiere permiso FICHAJES_ELIMINAR_LOTE"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </span>
+                          )}
                         </div>
                       </td>
                     </tr>

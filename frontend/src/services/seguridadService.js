@@ -1,13 +1,18 @@
 import apiClient from "./api";
 
+// Obtener catálogo unificado de permisos desde la base de datos
+export const getCatalogoPermisos = async () => {
+  return (await apiClient.get("/seguridad/catalogo-permisos")).data;
+};
+
 // Obtener permisos efectivos asignados a un usuario
 export const getPermisosUsuario = async (usuarioId) => {
   return (await apiClient.get(`/seguridad/usuarios/${usuarioId}/permisos`))
     .data;
 };
 
-// Asignar o renovar permisos (soporta duracionDias para permisos temporales)
-export const asignarPermisosUsuario = async (usuarioId, solicitudes) => {
+// Asignar o renovar permisos (soporta sincronización total, incluso si solicitudes es [])
+export const asignarPermisosUsuario = async (usuarioId, solicitudes = []) => {
   return (
     await apiClient.post(
       `/seguridad/usuarios/${usuarioId}/permisos`,

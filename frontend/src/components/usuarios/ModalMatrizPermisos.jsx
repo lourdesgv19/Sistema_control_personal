@@ -6,8 +6,8 @@ import {
   Clock,
   ShieldCheck,
   ShieldAlert,
-  AlertCircle,
   Save,
+  Loader2,
 } from "lucide-react";
 import { MODULOS_PERMISOS } from "../../constants/permisosCatalogo";
 import {
@@ -29,25 +29,30 @@ export default function ModalMatrizPermisos({
   const [guardando, setGuardando] = useState(false);
   const [cargando, setCargando] = useState(false);
 
+  const usuarioId = usuario?.id || usuario?.idUsuario;
+
   useEffect(() => {
-    if (isOpen && usuario) {
+    if (isOpen && usuarioId) {
       cargarPermisos();
     }
-  }, [isOpen, usuario]);
+  }, [isOpen, usuarioId]);
 
   const cargarPermisos = async () => {
     setCargando(true);
     try {
-      const data = await getPermisosUsuario(usuario.id);
+      const data = await getPermisosUsuario(usuarioId);
       const mapa = {};
-      data.forEach((p) => {
-        if (p.activo && p.estaVigente) {
-          mapa[p.codigoPermiso] = {
-            esTemporal: p.esTemporal,
-            fechaExpiracion: p.fechaExpiracion,
-          };
-        }
-      });
+      if (Array.isArray(data)) {
+        data.forEach((p) => {
+          const esVigente = p.vigente !== undefined ? p.vigente : p.estaVigente;
+          if (p.activo !== false && esVigente !== false) {
+            mapa[p.codigoPermiso] = {
+              esTemporal: Boolean(p.esTemporal),
+              fechaExpiracion: p.fechaExpiracion,
+            };
+          }
+        });
+      }
       setPermisosSeleccionados(mapa);
     } catch (err) {
       console.error(err);
@@ -93,12 +98,15 @@ export default function ModalMatrizPermisos({
   };
 
   const handleGuardar = async () => {
+    if (!usuarioId) return;
+
     setGuardando(true);
     try {
+      // Si se desmarcaron todos, Object.keys produce [] y el backend desactiva todos los accesos
       const payload = Object.keys(permisosSeleccionados).map((codigo) => ({
         codigoPermiso: codigo,
         esTemporal: esTemporalGlobal,
-        duracionDias: esTemporalGlobal ? parseInt(duracionDias) : null,
+        duracionDias: esTemporalGlobal ? parseInt(duracionDias, 10) : null,
         motivo:
           motivo.trim() ||
           (esTemporalGlobal
@@ -106,20 +114,26 @@ export default function ModalMatrizPermisos({
             : "Permiso permanente"),
       }));
 
-      await asignarPermisosUsuario(usuario.id, payload);
+      await asignarPermisosUsuario(usuarioId, payload);
+
       mostrarAviso(
         "success",
         "Permisos Actualizados",
-        `Se actualizaron las facultades para ${usuario.nombreCompleto || usuario.username}.`,
+        `Se actualizaron las facultades para ${
+          usuario.nombreCompleto ||
+          usuario.nombreCompletoEmpleado ||
+          usuario.username
+        }.`,
       );
-      onExito();
+      if (onExito) onExito();
       onClose();
     } catch (err) {
       console.error(err);
       mostrarAviso(
         "danger",
         "Error",
-        "No se pudieron actualizar los permisos del usuario.",
+        err.response?.data?.message ||
+          "No se pudieron actualizar los permisos del usuario.",
       );
     } finally {
       setGuardando(false);
@@ -144,7 +158,9 @@ export default function ModalMatrizPermisos({
               <p className="text-xs text-slate-500">
                 Colaborador:{" "}
                 <span className="font-semibold text-slate-700">
-                  {usuario?.nombreCompleto || usuario?.username}
+                  {usuario?.nombreCompleto ||
+                    usuario?.nombreCompletoEmpleado ||
+                    usuario?.username}
                 </span>{" "}
                 • Rol:{" "}
                 <span className="font-semibold text-indigo-600">
@@ -181,7 +197,7 @@ export default function ModalMatrizPermisos({
                 <select
                   value={duracionDias}
                   onChange={(e) => setDuracionDias(Number(e.target.value))}
-                  className="bg-white border border-amber-300 rounded-lg px-2 py-1 font-bold text-amber-900 focus:outline-hidden"
+                  className="bg-white border border-amber-300 rounded-lg px-2 py-1 font-bold text-amber-900 outline-none"
                 >
                   <option value={1}>1 día (24 horas)</option>
                   <option value={3}>3 días</option>
@@ -192,10 +208,10 @@ export default function ModalMatrizPermisos({
 
               <input
                 type="text"
-                placeholder="Motivo (ej: Cubre vacaciones / Auditoría)"
+                placeholder="Motivo (ej: Cubre suplencia / Auditoría)"
                 value={motivo}
                 onChange={(e) => setMotivo(e.target.value)}
-                className="bg-white border border-amber-300 rounded-lg px-2.5 py-1 text-slate-700 placeholder-slate-400 w-56 focus:outline-hidden"
+                className="bg-white border border-amber-300 rounded-lg px-2.5 py-1 text-slate-700 placeholder-slate-400 w-56 outline-none"
               />
             </div>
           )}
@@ -204,8 +220,9 @@ export default function ModalMatrizPermisos({
         {/* Contenido Modular con Checkboxes */}
         <div className="flex-1 overflow-y-auto p-6 space-y-5">
           {cargando ? (
-            <div className="py-12 text-center text-slate-400 font-medium text-xs">
-              Cargando matriz de seguridad...
+            <div className="py-12 text-center text-slate-400 font-medium text-xs flex flex-col items-center justify-center gap-2">
+              <Loader2 className="w-5 h-5 animate-spin text-indigo-600" />
+              <span>Cargando matriz de seguridad...</span>
             </div>
           ) : (
             MODULOS_PERMISOS.map((mod) => {
@@ -310,7 +327,11 @@ export default function ModalMatrizPermisos({
               disabled={guardando}
               className="flex items-center gap-2 px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-xs transition disabled:opacity-50 cursor-pointer"
             >
-              <Save className="w-3.5 h-3.5" />
+              {guardando ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <Save className="w-3.5 h-3.5" />
+              )}
               <span>{guardando ? "Guardando..." : "Aplicar Matriz"}</span>
             </button>
           </div>

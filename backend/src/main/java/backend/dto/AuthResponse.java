@@ -8,5 +8,6 @@ public record AuthResponse(
     String username,
     String rol,
     List<String> permisos,
-    String nombreCompleto
+    String nombreCompleto,
+    Boolean debeCambiarPassword
 ) {}

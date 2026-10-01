@@ -4,13 +4,15 @@ import backend.dto.AuthResponse;
 import backend.dto.LoginRequest;
 import backend.model.Usuario;
 import backend.model.UsuarioPermiso;
-import backend.repositories.UsuarioRepository;
+import backend.repositories.PermisoRepository;
 import backend.repositories.UsuarioPermisoRepository;
+import backend.repositories.UsuarioRepository;
 import backend.security.JwtService;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
+
 import java.time.LocalDateTime;
 import java.util.*;
 
@@ -19,15 +21,20 @@ public class AuthService {
 
     private final UsuarioRepository usuarioRepo;
     private final UsuarioPermisoRepository usuarioPermRepo;
+    private final PermisoRepository permisoRepo;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
 
-
-    public AuthService(UsuarioRepository usuarioRepo, PasswordEncoder passwordEncoder, JwtService jwtService, UsuarioPermisoRepository usuariopermrepo ) {
+    public AuthService(UsuarioRepository usuarioRepo,
+                       UsuarioPermisoRepository usuarioPermRepo,
+                       PermisoRepository permisoRepo,
+                       PasswordEncoder passwordEncoder,
+                       JwtService jwtService) {
         this.usuarioRepo = usuarioRepo;
+        this.usuarioPermRepo = usuarioPermRepo;
+        this.permisoRepo = permisoRepo;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
-        this.usuarioPermRepo = usuariopermrepo;
     }
 
     public AuthResponse login(LoginRequest request) {
@@ -42,44 +49,35 @@ public class AuthService {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Usuario o contraseña incorrectos.");
         }
 
-        // Matriz de permisos asignados según el rol del sistema
-Set<String> permisos = new HashSet<>();
-String rol = usuario.getRol().toUpperCase();
+        Set<String> permisos = new HashSet<>();
+        String rol = usuario.getRol() != null ? usuario.getRol().trim().toUpperCase() : "CONSULTA";
 
-if ("ADMINISTRADOR_GENERAL".equals(rol) || "ADMIN".equals(rol)) {
-    // Administrador General tiene acceso total + auditoría + gestión de permisos
-    permisos.add("PERM_ADMIN_TOTAL");
-    permisos.add("AUDITORIA_VER");
-    permisos.add("USUARIOS_GESTIONAR_ACCESOS");
-    permisos.add("USUARIOS_RESET_PASSWORD");
-    permisos.add("PERSONAL_VER");
-    permisos.add("PERSONAL_CREAR");
-    permisos.add("PERSONAL_EDITAR");
-    permisos.add("PERSONAL_BAJA_REACTIVAR");
-    permisos.add("FICHAJES_VER");
-    permisos.add("FICHAJES_IMPORTAR");
-    permisos.add("FICHAJES_VINCULAR");
-    permisos.add("CONFIG_VER");
-    permisos.add("CONFIG_EDITAR_CATEGORIAS");
-    permisos.add("CONFIG_EDITAR_CARGOS");
-    permisos.add("CONFIG_EDITAR_MATERIAS_TURNOS");
-} else {
-    // Consulta los permisos granulares asignados en la tabla usuario_permisos que sigan VIGENTES
-    List<UsuarioPermiso> vigentes = usuarioPermRepo.findPermisosVigentes(usuario.getId(), LocalDateTime.now());
-    for (UsuarioPermiso up : vigentes) {
-        permisos.add(up.getCodigoPermiso());
-    }
-}
+        // Si es ADMINISTRADOR, se le asignan TODOS los permisos existentes en la base de datos
+        if (rol.contains("ADMIN")) {
+            permisos.addAll(permisoRepo.findAllCodigos());
+            // Comodín global para bypass en SecurityConfig
+            permisos.add("PERM_ADMIN_TOTAL");
+        } else {
+            // Usuarios regulares: lee de usuario_permisos únicamente los que estén activos y vigentes
+            List<UsuarioPermiso> vigentes = usuarioPermRepo.findPermisosVigentes(usuario.getId(), LocalDateTime.now());
+            for (UsuarioPermiso up : vigentes) {
+                permisos.add(up.getCodigoPermiso());
+            }
+        }
 
         String nombreCompleto = usuario.getEmpleado() != null
                 ? usuario.getEmpleado().getNombre() + " " + usuario.getEmpleado().getApellido()
                 : usuario.getUsername();
 
+        boolean debeCambiar = Boolean.TRUE.equals(usuario.getDebeCambiarPassword());
+
+        // Claims dentro del token JWT
         Map<String, Object> extraClaims = new HashMap<>();
         extraClaims.put("idUsuario", usuario.getId());
         extraClaims.put("rol", usuario.getRol());
         extraClaims.put("permisos", new ArrayList<>(permisos));
         extraClaims.put("nombre", nombreCompleto);
+        extraClaims.put("debeCambiarPassword", debeCambiar);
 
         String token = jwtService.generarToken(extraClaims, usuario.getUsername());
 
@@ -89,7 +87,8 @@ if ("ADMINISTRADOR_GENERAL".equals(rol) || "ADMIN".equals(rol)) {
                 usuario.getUsername(),
                 usuario.getRol(),
                 new ArrayList<>(permisos),
-                nombreCompleto
+                nombreCompleto,
+                debeCambiar
         );
     }
 }

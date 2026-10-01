@@ -1,5 +1,6 @@
 import React from "react";
-import { X, Calendar, Plus, Sliders, AlertTriangle } from "lucide-react";
+import { X, Calendar, Plus, Sliders, AlertTriangle, Lock } from "lucide-react";
+import { useAuth } from "../../context/AuthContext";
 
 export default function ModalDetalleCronograma({
   isOpen,
@@ -12,6 +13,9 @@ export default function ModalDetalleCronograma({
   onEliminarClase,
   onOpenAsignarTurno,
 }) {
+  const { tienePermiso } = useAuth();
+  const puedeEditar = tienePermiso("PERSONAL_EDITAR");
+
   if (!isOpen || !empleado) return null;
 
   const isActivo = empleado.activo !== false;
@@ -140,29 +144,37 @@ export default function ModalDetalleCronograma({
                 <span>Cronograma de Clases y Jornadas por Día:</span>
               </div>
 
-              {esDocente && (
-                <button
-                  type="button"
-                  disabled={!isActivo}
-                  onClick={() => onOpenAsignarClase()}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold shadow-xs transition ${
-                    !isActivo
-                      ? "bg-slate-200 text-slate-400 cursor-not-allowed"
-                      : "bg-purple-600 hover:bg-purple-700 text-white cursor-pointer"
-                  }`}
-                  title={
-                    !isActivo ? "Empleado inactivo" : "Asignar Nueva Clase"
-                  }
-                >
-                  <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
-                  Asignar Nueva Clase
-                </button>
-              )}
+              {esDocente &&
+                (puedeEditar ? (
+                  <button
+                    type="button"
+                    disabled={!isActivo}
+                    onClick={() => onOpenAsignarClase()}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold shadow-xs transition ${
+                      !isActivo
+                        ? "bg-slate-200 text-slate-400 cursor-not-allowed"
+                        : "bg-purple-600 hover:bg-purple-700 text-white cursor-pointer"
+                    }`}
+                    title={
+                      !isActivo ? "Empleado inactivo" : "Asignar Nueva Clase"
+                    }
+                  >
+                    <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+                    Asignar Nueva Clase
+                  </button>
+                ) : (
+                  <span
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 border border-slate-200 text-slate-400 text-xs font-semibold select-none cursor-not-allowed"
+                    title="Requiere permiso PERSONAL_EDITAR"
+                  >
+                    <Lock className="w-3.5 h-3.5" />
+                    Asignación Restringida
+                  </span>
+                ))}
             </div>
 
             <div className="grid grid-cols-7 gap-2.5">
               {diasMap.map(({ nombre, diaNumero }) => {
-                // Filtro unificado por diaNumero (1=Lunes, ..., 7=Domingo)
                 const franjasDia = clases.filter(
                   (c) => c.diaSemana === diaNumero,
                 );
@@ -203,7 +215,8 @@ export default function ModalDetalleCronograma({
                                   : "bg-indigo-50/70 border-indigo-100"
                               }`}
                             >
-                              {isActivo && (
+                              {/* Botón de baja de la franja (Controlado por PERSONAL_EDITAR) */}
+                              {isActivo && puedeEditar && (
                                 <button
                                   type="button"
                                   onClick={(e) => {
@@ -259,21 +272,31 @@ export default function ModalDetalleCronograma({
                       </div>
                     </div>
 
-                    {esDocente && (
-                      <button
-                        type="button"
-                        disabled={!isActivo}
-                        onClick={() => onOpenAsignarClase(nombre)}
-                        className={`w-full mt-2 py-1.5 border border-dashed rounded-xl text-[10px] font-bold transition flex items-center justify-center gap-1 ${
-                          !isActivo
-                            ? "border-slate-200 text-slate-300 cursor-not-allowed bg-slate-50"
-                            : "border-purple-300 hover:border-purple-500 hover:bg-purple-50 text-purple-700 cursor-pointer"
-                        }`}
-                      >
-                        <Plus className="w-3 h-3" />
-                        Clase
-                      </button>
-                    )}
+                    {/* Botón rápido "+ Clase" (Controlado por PERSONAL_EDITAR) */}
+                    {esDocente &&
+                      (puedeEditar ? (
+                        <button
+                          type="button"
+                          disabled={!isActivo}
+                          onClick={() => onOpenAsignarClase(nombre)}
+                          className={`w-full mt-2 py-1.5 border border-dashed rounded-xl text-[10px] font-bold transition flex items-center justify-center gap-1 ${
+                            !isActivo
+                              ? "border-slate-200 text-slate-300 cursor-not-allowed bg-slate-50"
+                              : "border-purple-300 hover:border-purple-500 hover:bg-purple-50 text-purple-700 cursor-pointer"
+                          }`}
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          Clase
+                        </button>
+                      ) : (
+                        <div
+                          className="w-full mt-2 py-1.5 border border-dashed border-slate-200 rounded-xl text-[10px] text-slate-300 flex items-center justify-center gap-1 select-none"
+                          title="Requiere permiso PERSONAL_EDITAR"
+                        >
+                          <Lock className="w-3 h-3" />
+                          Clase
+                        </div>
+                      ))}
                   </div>
                 );
               })}
@@ -289,23 +312,34 @@ export default function ModalDetalleCronograma({
           >
             Cerrar
           </button>
-          <button
-            type="button"
-            disabled={!isActivo}
-            onClick={() => {
-              onClose();
-              onOpenAsignarTurno(empleado);
-            }}
-            className={`flex items-center gap-2 px-5 py-2 rounded-xl text-xs font-semibold shadow-md transition ${
-              !isActivo
-                ? "bg-slate-200 text-slate-400 cursor-not-allowed shadow-none"
-                : "bg-[#4b35e6] hover:bg-[#3e2bc0] text-white cursor-pointer"
-            }`}
-            title={!isActivo ? "Empleado inactivo" : "Modificar Turno"}
-          >
-            <Sliders className="w-3.5 h-3.5" />
-            Modificar / Asignar Horario
-          </button>
+
+          {puedeEditar ? (
+            <button
+              type="button"
+              disabled={!isActivo}
+              onClick={() => {
+                onClose();
+                onOpenAsignarTurno(empleado);
+              }}
+              className={`flex items-center gap-2 px-5 py-2 rounded-xl text-xs font-semibold shadow-md transition ${
+                !isActivo
+                  ? "bg-slate-200 text-slate-400 cursor-not-allowed shadow-none"
+                  : "bg-[#4b35e6] hover:bg-[#3e2bc0] text-white cursor-pointer"
+              }`}
+              title={!isActivo ? "Empleado inactivo" : "Modificar Turno"}
+            >
+              <Sliders className="w-3.5 h-3.5" />
+              Modificar / Asignar Horario
+            </button>
+          ) : (
+            <span
+              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-200 text-slate-400 text-xs font-semibold select-none cursor-not-allowed"
+              title="Requiere permiso PERSONAL_EDITAR"
+            >
+              <Lock className="w-3.5 h-3.5" />
+              Modificación de Horarios Restringida
+            </span>
+          )}
         </div>
       </div>
     </div>

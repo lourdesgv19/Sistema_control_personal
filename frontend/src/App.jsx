@@ -14,10 +14,9 @@ export default function App() {
   return (
     <AuthProvider>
       <Routes>
-        {/* Login fuera del layout del sistema */}
         <Route path="/login" element={<Login />} />
 
-        {/* Todas las pantallas del sistema con Header y Sidebar */}
+        {/* Layout principal con Header y Sidebar */}
         <Route
           element={
             <ProtectedRoute>
@@ -25,38 +24,47 @@ export default function App() {
             </ProtectedRoute>
           }
         >
+          {/* 1. Personal: Requiere PERSONAL_VER */}
           <Route
             path="/personal"
             element={
-              <ProtectedRoute permisoRequerido="PERM_GESTION_PERSONAL">
+              <ProtectedRoute permisoRequerido="PERSONAL_VER">
                 <GestionPersonal />
               </ProtectedRoute>
             }
           />
+
+          {/* 2. Fichajes: Requiere FICHAJES_VER */}
           <Route
             path="/fichajes"
             element={
-              <ProtectedRoute permisoRequerido="PERM_IMPORTAR_FICHAJES">
+              <ProtectedRoute permisoRequerido="FICHAJES_VER">
                 <ImportacionFichajes />
               </ProtectedRoute>
             }
           />
+
+          {/* 3. Configuración: Requiere CONFIG_VER */}
           <Route
             path="/configuracion"
             element={
-              <ProtectedRoute permisoRequerido="PERM_GESTION_CONFIGURACION">
+              <ProtectedRoute permisoRequerido="CONFIG_VER">
                 <TiposConfiguracion />
               </ProtectedRoute>
             }
           />
+
+          {/* 4. Usuarios: Requiere USUARIOS_VER */}
           <Route
             path="/usuarios"
             element={
-              <ProtectedRoute permisoRequerido="PERM_GESTION_USUARIOS">
+              <ProtectedRoute permisoRequerido="USUARIOS_VER">
                 <GestionUsuarios />
               </ProtectedRoute>
             }
           />
+
+          {/* 5. Auditoría: Requiere AUDITORIA_VER */}
           <Route
             path="/auditoria"
             element={
@@ -67,6 +75,7 @@ export default function App() {
           />
         </Route>
 
+        {/* Redirección por defecto */}
         <Route path="*" element={<Navigate to="/personal" replace />} />
       </Routes>
     </AuthProvider>

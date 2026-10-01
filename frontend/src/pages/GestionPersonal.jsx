@@ -14,6 +14,7 @@ import {
   Loader2,
   ChevronLeft,
   ChevronRight,
+  Lock,
 } from "lucide-react";
 import {
   getEmpleadosPaginados,
@@ -41,6 +42,7 @@ import ModalRegistroEmpleado from "../components/personal/ModalRegistroEmpleado"
 import ModalDetalleCronograma from "../components/personal/ModalDetalleCronograma";
 import ModalAsignarClase from "../components/personal/ModalAsignarClase";
 import ModalAsignarTurno from "../components/personal/ModalAsignarTurno";
+import { useAuth } from "../context/AuthContext";
 
 const FORM_EMP_INICIAL = {
   nombre: "",
@@ -95,6 +97,13 @@ const MAPA_DIAS_NUMERO = {
 const ITEMS_POR_PAGINA = 15;
 
 export default function GestionPersonal() {
+  const { tienePermiso } = useAuth();
+
+  // Evaluación de facultades del usuario autenticado
+  const puedeCrear = tienePermiso("PERSONAL_CREAR");
+  const puedeEditar = tienePermiso("PERSONAL_EDITAR");
+  const puedeBajaReactivar = tienePermiso("PERSONAL_BAJA_REACTIVAR");
+
   const [loading, setLoading] = useState(true);
   const [empleados, setEmpleados] = useState([]);
   const [categorias, setCategorias] = useState([]);
@@ -185,19 +194,35 @@ export default function GestionPersonal() {
     }
   }, []);
 
-  // 2. Cargar catálogos maestros
+  // 2. Cargar catálogos maestros con tolerancia a fallas
   const cargarCatalogos = useCallback(async () => {
     try {
-      const [catRes, carRes, horRes, matRes] = await Promise.all([
+      const [catRes, carRes, horRes, matRes] = await Promise.allSettled([
         getCategorias(),
         getCargos(),
         getHorarios(),
         getMaterias(),
       ]);
-      setCategorias(Array.isArray(catRes) ? catRes : []);
-      setCargos(Array.isArray(carRes) ? carRes : []);
-      setHorarios(Array.isArray(horRes) ? horRes : []);
-      setMaterias(Array.isArray(matRes) ? matRes : []);
+      setCategorias(
+        catRes.status === "fulfilled" && Array.isArray(catRes.value)
+          ? catRes.value
+          : [],
+      );
+      setCargos(
+        carRes.status === "fulfilled" && Array.isArray(carRes.value)
+          ? carRes.value
+          : [],
+      );
+      setHorarios(
+        horRes.status === "fulfilled" && Array.isArray(horRes.value)
+          ? horRes.value
+          : [],
+      );
+      setMaterias(
+        matRes.status === "fulfilled" && Array.isArray(matRes.value)
+          ? matRes.value
+          : [],
+      );
     } catch (err) {
       console.error("Error al cargar catálogos:", err);
     }
@@ -233,6 +258,7 @@ export default function GestionPersonal() {
         }
       } catch (err) {
         console.error("Error al cargar empleados del servidor:", err);
+        setEmpleados([]);
       } finally {
         setLoading(false);
       }
@@ -246,7 +272,7 @@ export default function GestionPersonal() {
     cargarResumenGlobal();
   }, [cargarCatalogos, cargarResumenGlobal]);
 
-  // Recarga automática y silenciosa al recuperarse la conexión
+  // Recarga silenciosa al recuperarse la conexión
   useEffect(() => {
     const handleRecuperacion = () => {
       cargarCatalogos();
@@ -265,7 +291,7 @@ export default function GestionPersonal() {
     paginaActual,
   ]);
 
-  // Sincronización y debounce de búsqueda
+  // Debounce de búsqueda y sincronización de página
   useEffect(() => {
     const timer = setTimeout(() => {
       cargarEmpleadosServidor(paginaActual - 1);
@@ -311,6 +337,7 @@ export default function GestionPersonal() {
 
   // --- HANDLERS: EMPLEADOS ---
   const abrirModalCrear = () => {
+    if (!puedeCrear) return;
     setEditandoEmpleadoId(null);
     setFormEmpleado({
       ...FORM_EMP_INICIAL,
@@ -321,6 +348,7 @@ export default function GestionPersonal() {
   };
 
   const abrirModalEditar = (emp) => {
+    if (!puedeEditar) return;
     setEditandoEmpleadoId(emp.id);
     const catIds = Array.isArray(emp.categorias)
       ? emp.categorias.map((c) => c.id)
@@ -338,7 +366,6 @@ export default function GestionPersonal() {
       idBiometrico: emp.idBiometrico || "",
       categoriasIds: catIds,
       cargosIds: Array.isArray(emp.cargos) ? emp.cargos.map((c) => c.id) : [],
-      rolSistema: emp.rolSistema || "Consulta / Empleado (Visualiza su ficha)",
       toleranciaIngresoMin: emp.toleranciaIngresoMin ?? 15,
       toleranciaEgresoMin: emp.toleranciaEgresoMin ?? 10,
     });
@@ -356,14 +383,13 @@ export default function GestionPersonal() {
         telefono: formEmpleado.telefono,
         nroLegajo: formEmpleado.nroLegajo,
         idBiometrico: formEmpleado.idBiometrico,
-        rolSistema: formEmpleado.rolSistema,
-        toleranciaIngresoMin: parseInt(formEmpleado.toleranciaIngresoMin),
-        toleranciaEgresoMin: parseInt(formEmpleado.toleranciaEgresoMin),
+        toleranciaIngresoMin: parseInt(formEmpleado.toleranciaIngresoMin, 10),
+        toleranciaEgresoMin: parseInt(formEmpleado.toleranciaEgresoMin, 10),
         categorias: (formEmpleado.categoriasIds || []).map((id) => ({
-          id: parseInt(id),
+          id: parseInt(id, 10),
         })),
         cargos: (formEmpleado.cargosIds || []).map((id) => ({
-          id: parseInt(id),
+          id: parseInt(id, 10),
         })),
       };
 
@@ -390,12 +416,14 @@ export default function GestionPersonal() {
       mostrarAviso(
         "danger",
         "Error",
-        "No se pudo registrar el empleado. Verifique que DNI, Legajo o ID Biométrico no existan previamente.",
+        err.response?.data?.message ||
+          "No se pudo registrar el empleado. Verifique que DNI, Legajo o ID Biométrico no existan previamente.",
       );
     }
   };
 
   const handleEliminarEmpleado = (id, nombre) => {
+    if (!puedeBajaReactivar) return;
     setModalAlerta({
       isOpen: true,
       tipo: "danger",
@@ -419,7 +447,8 @@ export default function GestionPersonal() {
           mostrarAviso(
             "danger",
             "Error",
-            "No se pudo dar de baja al empleado.",
+            err.response?.data?.message ||
+              "No se pudo dar de baja al empleado.",
           );
         }
       },
@@ -427,6 +456,7 @@ export default function GestionPersonal() {
   };
 
   const handleReactivarEmpleado = (id, nombre) => {
+    if (!puedeBajaReactivar) return;
     setModalAlerta({
       isOpen: true,
       tipo: "info",
@@ -447,7 +477,11 @@ export default function GestionPersonal() {
             `El empleado ${nombre} está activo nuevamente.`,
           );
         } catch (err) {
-          mostrarAviso("danger", "Error", "No se pudo reactivar al empleado.");
+          mostrarAviso(
+            "danger",
+            "Error",
+            err.response?.data?.message || "No se pudo reactivar al empleado.",
+          );
         }
       },
     });
@@ -472,6 +506,7 @@ export default function GestionPersonal() {
   };
 
   const handleAbrirAsignarClase = (diaPreseleccionado = null) => {
+    if (!puedeEditar) return;
     setFormClase({
       ...FORM_CLASE_INICIAL,
       diasSemana: diaPreseleccionado ? [diaPreseleccionado] : ["Lunes"],
@@ -481,7 +516,7 @@ export default function GestionPersonal() {
 
   const handleGuardarClase = async (e, forzar = false) => {
     if (e && e.preventDefault) e.preventDefault();
-    if (!empleadoSeleccionado) return;
+    if (!empleadoSeleccionado || !puedeEditar) return;
 
     const dias = formClase.diasSemana || [];
     if (dias.length === 0) {
@@ -508,7 +543,9 @@ export default function GestionPersonal() {
           formClase.horaFin.length === 5
             ? `${formClase.horaFin}:00`
             : formClase.horaFin,
-        materiaId: formClase.materiaId ? parseInt(formClase.materiaId) : null,
+        materiaId: formClase.materiaId
+          ? parseInt(formClase.materiaId, 10)
+          : null,
         etiqueta: formClase.materia || "Cátedra",
         aula: formClase.aula || null,
         forzarGuardado: forzar,
@@ -559,6 +596,7 @@ export default function GestionPersonal() {
   };
 
   const handleEliminarHorario = async (horarioId) => {
+    if (!puedeEditar) return;
     try {
       await removeEmpleadoHorario(horarioId);
       const [horariosActualizados, metricasActualizadas] = await Promise.all([
@@ -574,12 +612,17 @@ export default function GestionPersonal() {
         "La franja horaria fue dada de baja.",
       );
     } catch (err) {
-      mostrarAviso("danger", "Error", "No se pudo eliminar el bloque horario.");
+      mostrarAviso(
+        "danger",
+        "Error",
+        err.response?.data?.message || "No se pudo eliminar el bloque horario.",
+      );
     }
   };
 
   // --- ASIGNACIÓN DE TURNO ---
   const abrirModalTurno = (emp) => {
+    if (!puedeEditar) return;
     setEmpleadoSeleccionado(emp);
     setTipoAsignacionTurno("PREESTABLECIDO");
     setHorarioGeneralSeleccionado(horariosActivos[0]?.id || "");
@@ -590,12 +633,12 @@ export default function GestionPersonal() {
 
   const handleGuardarTurno = async (forzar = false) => {
     const esForzado = typeof forzar === "boolean" ? forzar : false;
-    if (!empleadoSeleccionado) return;
+    if (!empleadoSeleccionado || !puedeEditar) return;
 
     try {
       if (tipoAsignacionTurno === "PREESTABLECIDO") {
         const plantilla = horarios.find(
-          (h) => h.id === parseInt(horarioGeneralSeleccionado),
+          (h) => h.id === parseInt(horarioGeneralSeleccionado, 10),
         );
         if (!plantilla) {
           mostrarAviso(
@@ -699,13 +742,24 @@ export default function GestionPersonal() {
           </div>
         </div>
 
-        <button
-          onClick={abrirModalCrear}
-          className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#4b35e6] hover:bg-[#3f2bc9] text-white text-xs font-semibold shadow-md shadow-indigo-100 transition self-start md:self-auto cursor-pointer"
-        >
-          <Plus className="w-4 h-4 stroke-[2.5]" />
-          Registrar Empleado
-        </button>
+        {/* Botón Registrar Empleado: Controlado por PERSONAL_CREAR */}
+        {puedeCrear ? (
+          <button
+            onClick={abrirModalCrear}
+            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#4b35e6] hover:bg-[#3f2bc9] text-white text-xs font-semibold shadow-md shadow-indigo-100 transition self-start md:self-auto cursor-pointer"
+          >
+            <Plus className="w-4 h-4 stroke-[2.5]" />
+            Registrar Empleado
+          </button>
+        ) : (
+          <span
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-100 text-slate-400 text-xs font-semibold border border-slate-200 cursor-not-allowed select-none"
+            title="Requiere permiso PERSONAL_CREAR"
+          >
+            <Lock className="w-3.5 h-3.5" />
+            Alta de Personal Restringida
+          </span>
+        )}
       </div>
 
       {/* 2. TARJETAS DE CANTIDADES GLOBALES */}
@@ -1025,8 +1079,10 @@ export default function GestionPersonal() {
                       </span>
                     </td>
 
+                    {/* Acciones granulares controladas por PBAC */}
                     <td className="px-6 py-4 text-right">
                       <div className="flex items-center justify-end gap-2 text-slate-400">
+                        {/* 1. Ver Ficha / Cronograma (Accesible para cualquiera con acceso al módulo) */}
                         <button
                           onClick={() => handleVerDetalle(emp)}
                           className="p-1 hover:text-indigo-600 transition cursor-pointer"
@@ -1035,91 +1091,130 @@ export default function GestionPersonal() {
                           <Eye className="w-4 h-4" />
                         </button>
 
-                        <button
-                          onClick={() =>
-                            verificarEmpleadoActivo(emp, () =>
-                              abrirModalTurno(emp),
-                            )
-                          }
-                          className={`p-1 transition ${
-                            emp.activo === false
-                              ? "opacity-30 cursor-not-allowed hover:text-slate-400"
-                              : "hover:text-indigo-600 cursor-pointer"
-                          }`}
-                          title={
-                            emp.activo === false
-                              ? "Empleado inactivo"
-                              : "Asignar Horario / Turno"
-                          }
-                        >
-                          <Clock className="w-4 h-4" />
-                        </button>
-
-                        {esDocente && (
+                        {/* 2. Asignar Turno (Requiere PERSONAL_EDITAR) */}
+                        {puedeEditar ? (
                           <button
                             onClick={() =>
-                              verificarEmpleadoActivo(emp, () => {
-                                setEmpleadoSeleccionado(emp);
-                                handleAbrirAsignarClase();
-                              })
+                              verificarEmpleadoActivo(emp, () =>
+                                abrirModalTurno(emp),
+                              )
                             }
                             className={`p-1 transition ${
                               emp.activo === false
                                 ? "opacity-30 cursor-not-allowed hover:text-slate-400"
-                                : "hover:text-purple-600 cursor-pointer"
+                                : "hover:text-indigo-600 cursor-pointer"
                             }`}
                             title={
                               emp.activo === false
                                 ? "Empleado inactivo"
-                                : "Asignar Cátedra a Docente"
+                                : "Asignar Horario / Turno"
                             }
                           >
-                            <Plus className="w-4 h-4 text-purple-600 stroke-[2.5]" />
-                          </button>
-                        )}
-
-                        <button
-                          onClick={() =>
-                            verificarEmpleadoActivo(emp, () =>
-                              abrirModalEditar(emp),
-                            )
-                          }
-                          className={`p-1 transition ${
-                            emp.activo === false
-                              ? "opacity-30 cursor-not-allowed hover:text-slate-400"
-                              : "hover:text-indigo-600 cursor-pointer"
-                          }`}
-                          title="Editar Empleado"
-                        >
-                          <Pencil className="w-4 h-4" />
-                        </button>
-
-                        {emp.activo !== false ? (
-                          <button
-                            onClick={() =>
-                              handleEliminarEmpleado(
-                                emp.id,
-                                `${emp.nombre} ${emp.apellido}`,
-                              )
-                            }
-                            className="p-1 hover:text-rose-600 transition cursor-pointer"
-                            title="Dar de baja"
-                          >
-                            <Trash2 className="w-4 h-4" />
+                            <Clock className="w-4 h-4" />
                           </button>
                         ) : (
+                          <span
+                            className="p-1 text-slate-200 cursor-not-allowed"
+                            title="Requiere permiso PERSONAL_EDITAR"
+                          >
+                            <Clock className="w-4 h-4" />
+                          </span>
+                        )}
+
+                        {/* 3. Asignar Cátedra a Docente (Requiere PERSONAL_EDITAR) */}
+                        {esDocente &&
+                          (puedeEditar ? (
+                            <button
+                              onClick={() =>
+                                verificarEmpleadoActivo(emp, () => {
+                                  setEmpleadoSeleccionado(emp);
+                                  handleAbrirAsignarClase();
+                                })
+                              }
+                              className={`p-1 transition ${
+                                emp.activo === false
+                                  ? "opacity-30 cursor-not-allowed hover:text-slate-400"
+                                  : "hover:text-purple-600 cursor-pointer"
+                              }`}
+                              title={
+                                emp.activo === false
+                                  ? "Empleado inactivo"
+                                  : "Asignar Cátedra a Docente"
+                              }
+                            >
+                              <Plus className="w-4 h-4 text-purple-600 stroke-[2.5]" />
+                            </button>
+                          ) : (
+                            <span
+                              className="p-1 text-slate-200 cursor-not-allowed"
+                              title="Requiere permiso PERSONAL_EDITAR"
+                            >
+                              <Plus className="w-4 h-4" />
+                            </span>
+                          ))}
+
+                        {/* 4. Editar Empleado (Requiere PERSONAL_EDITAR) */}
+                        {puedeEditar ? (
                           <button
                             onClick={() =>
-                              handleReactivarEmpleado(
-                                emp.id,
-                                `${emp.nombre} ${emp.apellido}`,
+                              verificarEmpleadoActivo(emp, () =>
+                                abrirModalEditar(emp),
                               )
                             }
-                            className="p-1 hover:text-emerald-600 transition cursor-pointer"
-                            title="Reactivar Empleado"
+                            className={`p-1 transition ${
+                              emp.activo === false
+                                ? "opacity-30 cursor-not-allowed hover:text-slate-400"
+                                : "hover:text-indigo-600 cursor-pointer"
+                            }`}
+                            title="Editar Empleado"
                           >
-                            <RotateCcw className="w-4 h-4 text-emerald-600" />
+                            <Pencil className="w-4 h-4" />
                           </button>
+                        ) : (
+                          <span
+                            className="p-1 text-slate-200 cursor-not-allowed"
+                            title="Requiere permiso PERSONAL_EDITAR"
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </span>
+                        )}
+
+                        {/* 5. Baja Lógica y Reactivación (Requiere PERSONAL_BAJA_REACTIVAR) */}
+                        {puedeBajaReactivar ? (
+                          emp.activo !== false ? (
+                            <button
+                              onClick={() =>
+                                handleEliminarEmpleado(
+                                  emp.id,
+                                  `${emp.nombre} ${emp.apellido}`,
+                                )
+                              }
+                              className="p-1 hover:text-rose-600 transition cursor-pointer"
+                              title="Dar de baja"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() =>
+                                handleReactivarEmpleado(
+                                  emp.id,
+                                  `${emp.nombre} ${emp.apellido}`,
+                                )
+                              }
+                              className="p-1 hover:text-emerald-600 transition cursor-pointer"
+                              title="Reactivar Empleado"
+                            >
+                              <RotateCcw className="w-4 h-4 text-emerald-600" />
+                            </button>
+                          )
+                        ) : (
+                          <span
+                            className="p-1 text-slate-200 cursor-not-allowed"
+                            title="Requiere permiso PERSONAL_BAJA_REACTIVAR"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </span>
                         )}
                       </div>
                     </td>
@@ -1223,6 +1318,7 @@ export default function GestionPersonal() {
         onOpenAsignarTurno={(emp) =>
           verificarEmpleadoActivo(emp, () => abrirModalTurno(emp))
         }
+        puedeEditar={puedeEditar}
       />
 
       <ModalAsignarClase

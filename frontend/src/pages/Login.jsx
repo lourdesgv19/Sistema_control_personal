@@ -70,7 +70,7 @@ export default function Login() {
         <form onSubmit={handleSubmit} className="space-y-4 text-xs">
           <div>
             <label className="block font-semibold text-slate-700 mb-1">
-              Usuario o Identificador
+              Usuario o Email
             </label>
             <div className="relative">
               <User className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -79,7 +79,7 @@ export default function Login() {
                 name="username"
                 type="text"
                 required
-                placeholder="Ej: santiago.jorge o LEG-002"
+                placeholder="Ej: santiago.perez o santiago.perez@gmail.com"
                 className="w-full pl-9 pr-3 py-2.5 border border-slate-200 rounded-xl outline-none focus:border-indigo-600 font-medium"
               />
             </div>
