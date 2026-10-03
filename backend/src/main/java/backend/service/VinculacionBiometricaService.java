@@ -23,10 +23,12 @@ public class VinculacionBiometricaService {
 
     private final EmpleadoRepository empleadoRepo;
     private final EmpleadoFichajeRepository fichajeRepo;
+    private final AuditorHelperService auditor;
 
-    public VinculacionBiometricaService(EmpleadoRepository empleadoRepo, EmpleadoFichajeRepository fichajeRepo) {
+    public VinculacionBiometricaService(EmpleadoRepository empleadoRepo, EmpleadoFichajeRepository fichajeRepo, AuditorHelperService auditor) {
         this.empleadoRepo = empleadoRepo;
         this.fichajeRepo = fichajeRepo;
+        this.auditor = auditor;
     }
 
     public record DispositivoUsuarioDTO(
@@ -168,6 +170,18 @@ public class VinculacionBiometricaService {
                     for (EmpleadoFichaje f : marcasPrevias) {
                         f.setEmpleado(emp);
                     }
+
+                    auditor.registrar(
+                "VINCULACION_BIOMETRICA",
+                "FICHAJES",
+                String.format("Vinculación del ID Biométrico '%s' al colaborador %s, %s (Legajo: %s). Se asociaron %d marcaciones históricas.",
+                    idBio,
+                    emp.getApellido(),
+                    emp.getNombre(),
+                    emp.getNroLegajo(),
+                    marcasPrevias.size()
+                )
+            );
                     fichajeRepo.saveAll(marcasPrevias);
                 });
             }

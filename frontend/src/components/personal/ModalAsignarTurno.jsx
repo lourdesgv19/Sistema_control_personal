@@ -1,11 +1,22 @@
 import React from "react";
-import { X, Clock, Sliders, Plus, Trash2 } from "lucide-react";
+import {
+  X,
+  Clock,
+  Sliders,
+  Plus,
+  Trash2,
+  CalendarCheck,
+  UserCheck,
+} from "lucide-react";
 
 export default function ModalAsignarTurno({
   isOpen,
   onClose,
   onSubmit,
   empleado,
+  empleadoSeleccionadoId,
+  setEmpleadoSeleccionadoId,
+  empleadosDisponibles = [],
   tipoAsignacionTurno,
   setTipoAsignacionTurno,
   horarioGeneralSeleccionado,
@@ -22,20 +33,30 @@ export default function ModalAsignarTurno({
   tolEgresoEsp,
   setTolEgresoEsp,
   diasMap = [],
+  tipoFrecuencia = "SEMANAL",
+  setTipoFrecuencia,
+  repeticionesPeriodo = 1,
+  setRepeticionesPeriodo,
+  semanaAlterna = "PAR",
+  setSemanaAlterna,
 }) {
-  if (!isOpen || !empleado) return null;
+  if (!isOpen) return null;
+
+  const esFijado = Boolean(empleado && empleado.id);
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
       <div className="bg-white rounded-3xl w-full max-w-xl overflow-hidden shadow-2xl animate-in zoom-in-95 flex flex-col max-h-[92vh]">
+        {/* Cabecera */}
         <div className="bg-[#111827] px-6 py-4 text-white flex items-center justify-between">
           <div>
             <h3 className="font-bold text-sm">
               Asignar Turno y Franjas Horarias
             </h3>
             <p className="text-[11px] text-slate-400">
-              {empleado.apellido}, {empleado.nombre} •{" "}
-              {(empleado.cargos || []).map((c) => c.nombre).join(", ")}
+              {esFijado
+                ? `${empleado.apellido}, ${empleado.nombre} • Legajo: ${empleado.nroLegajo || "S/L"}`
+                : "Asignación individual o múltiple de turnos laborales"}
             </p>
           </div>
           <button
@@ -47,6 +68,34 @@ export default function ModalAsignarTurno({
         </div>
 
         <div className="p-6 space-y-5 text-xs overflow-y-auto">
+          {/* SELECTOR DE EMPLEADO: Visible si no viene prefijado desde la lista lateral */}
+          {!esFijado && (
+            <div className="bg-indigo-50/60 border border-indigo-100 rounded-2xl p-3.5 space-y-2">
+              <label className="font-bold text-indigo-950 flex items-center gap-1.5">
+                <UserCheck className="w-4 h-4 text-indigo-600" />
+                Seleccionar Empleado Destino *
+              </label>
+              <select
+                value={empleadoSeleccionadoId || ""}
+                onChange={(e) => setEmpleadoSeleccionadoId(e.target.value)}
+                className="w-full bg-white border border-indigo-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 outline-none focus:border-indigo-600"
+              >
+                <option value="">
+                  Seleccione un colaborador del padrón...
+                </option>
+                {empleadosDisponibles.map((emp) => (
+                  <option key={emp.id} value={emp.id}>
+                    {emp.apellido}, {emp.nombre} (Legajo:{" "}
+                    {emp.nroLegajo || "S/L"} •{" "}
+                    {(emp.cargos || []).map((c) => c.nombre || c).join(", ") ||
+                      "General"}
+                    )
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
           <div className="text-[10px] font-bold uppercase text-slate-400">
             Modalidad de Carga de Horario
           </div>
@@ -68,7 +117,7 @@ export default function ModalAsignarTurno({
                   Turno Plantilla General
                 </div>
                 <div className="text-[10px] text-slate-500 mt-0.5">
-                  Copiar franja horaria desde un turno preestablecido.
+                  Copiar franja horaria desde un turno preestablecido
                 </div>
               </div>
             </button>
@@ -120,52 +169,6 @@ export default function ModalAsignarTurno({
                   ))
                 )}
               </select>
-
-              {(() => {
-                const sel = horariosActivos.find(
-                  (h) => String(h.id) === String(horarioGeneralSeleccionado),
-                );
-                if (!sel) return null;
-                return (
-                  <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-2 mt-2">
-                    <div className="flex items-center justify-between">
-                      <span className="font-bold text-slate-900">
-                        {sel.nombre}
-                      </span>
-                      <span className="bg-indigo-50 text-indigo-700 font-bold px-2 py-0.5 rounded-lg text-[11px]">
-                        {sel.horaEntrada?.substring(0, 5)} →{" "}
-                        {sel.horaEgreso?.substring(0, 5)} hs
-                      </span>
-                    </div>
-                    <div className="grid grid-cols-3 gap-2 pt-2 border-t border-slate-200/60 text-[10px]">
-                      <div>
-                        <span className="text-slate-400 block uppercase font-semibold">
-                          Categoría
-                        </span>
-                        <span className="font-bold text-slate-700">
-                          {sel.categoria?.nombre || "General"}
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-slate-400 block uppercase font-semibold">
-                          Días
-                        </span>
-                        <span className="font-bold text-slate-700">
-                          {sel.diasLaborables || "Lun-Vie"}
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-slate-400 block uppercase font-semibold">
-                          Tol. Entrada
-                        </span>
-                        <span className="font-bold text-slate-700">
-                          {sel.tolEntradaMin ?? 15} min
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })()}
             </div>
           )}
 
@@ -177,7 +180,7 @@ export default function ModalAsignarTurno({
                     Bloques de Horario (Ej: Turno Mañana y Tarde)
                   </div>
                   <div className="text-[10px] text-slate-400">
-                    Puede definir 1, 2 o más bloques horarios por jornada.
+                    Defina 1, 2 o más bloques por jornada.
                   </div>
                 </div>
                 <button
@@ -224,7 +227,7 @@ export default function ModalAsignarTurno({
                         />
                         <input
                           type="text"
-                          placeholder="Etiqueta (ej: Mañana, Tarde)"
+                          placeholder="Etiqueta (ej: Turno Mañana)"
                           value={rango.etiqueta}
                           onChange={(e) =>
                             onCambiarRango(idx, "etiqueta", e.target.value)
@@ -232,13 +235,10 @@ export default function ModalAsignarTurno({
                           className="bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 outline-none flex-1"
                         />
                       </div>
-
-                      {/* Botón de eliminación siempre visible por bloque */}
                       <button
                         type="button"
                         onClick={() => onEliminarRango(idx)}
                         className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer shrink-0"
-                        title="Eliminar este bloque"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
@@ -246,30 +246,121 @@ export default function ModalAsignarTurno({
                   ))
                 )}
               </div>
+            </div>
+          )}
 
-              <div>
-                <div className="font-bold text-slate-700 mb-2">
-                  Días en que Aplica
+          {/* Periodicidad / Frecuencia */}
+          <div className="space-y-2.5 pt-2 border-t border-slate-100">
+            <div className="flex items-center justify-between">
+              <label className="font-bold text-slate-700 flex items-center gap-1.5">
+                <CalendarCheck className="w-4 h-4 text-indigo-600" />
+                Frecuencia de Cumplimiento
+              </label>
+              <span className="text-[10px] text-slate-400">
+                Pauta de asistencia
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              {[
+                { id: "SEMANAL", label: "Todas las semanas" },
+                { id: "SEMANA_POR_MEDIO", label: "Semana por medio" },
+                { id: "MENSUAL", label: "Veces al mes" },
+                { id: "ANUAL", label: "Veces al año" },
+              ].map((frec) => (
+                <button
+                  key={frec.id}
+                  type="button"
+                  onClick={() => setTipoFrecuencia(frec.id)}
+                  className={`px-2.5 py-2 text-xs font-semibold rounded-xl border text-center transition cursor-pointer ${
+                    tipoFrecuencia === frec.id
+                      ? "bg-indigo-600 text-white border-indigo-600 shadow-xs"
+                      : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+                  }`}
+                >
+                  {frec.label}
+                </button>
+              ))}
+            </div>
+
+            {tipoFrecuencia === "SEMANA_POR_MEDIO" && (
+              <div className="flex items-center gap-4 p-3 bg-indigo-50/50 border border-indigo-100 rounded-xl mt-2 text-xs">
+                <span className="text-slate-700 font-medium">Rotación:</span>
+                <label className="flex items-center gap-1.5 cursor-pointer text-slate-700 font-medium">
+                  <input
+                    type="radio"
+                    name="modalSemanaAlterna"
+                    value="PAR"
+                    checked={semanaAlterna === "PAR"}
+                    onChange={(e) => setSemanaAlterna(e.target.value)}
+                    className="text-indigo-600 focus:ring-indigo-500"
+                  />
+                  Semanas Pares
+                </label>
+                <label className="flex items-center gap-1.5 cursor-pointer text-slate-700 font-medium">
+                  <input
+                    type="radio"
+                    name="modalSemanaAlterna"
+                    value="IMPAR"
+                    checked={semanaAlterna === "IMPAR"}
+                    onChange={(e) => setSemanaAlterna(e.target.value)}
+                    className="text-indigo-600 focus:ring-indigo-500"
+                  />
+                  Semanas Impares
+                </label>
+              </div>
+            )}
+
+            {(tipoFrecuencia === "MENSUAL" || tipoFrecuencia === "ANUAL") && (
+              <div className="flex items-center gap-3 p-3 bg-indigo-50/40 border border-indigo-100 rounded-xl mt-2">
+                <span className="text-xs text-slate-700 font-medium shrink-0">
+                  Cantidad requerida:
+                </span>
+                <div className="flex items-center gap-2 shrink-0">
+                  <input
+                    type="number"
+                    min="1"
+                    max={tipoFrecuencia === "MENSUAL" ? 31 : 365}
+                    value={repeticionesPeriodo}
+                    onChange={(e) =>
+                      setRepeticionesPeriodo(parseInt(e.target.value, 10) || 1)
+                    }
+                    className="w-16 px-2.5 py-1 text-xs border border-indigo-200 rounded-lg text-center font-bold text-indigo-700 bg-white outline-none focus:border-indigo-600"
+                  />
+                  <span className="text-xs text-slate-600 font-semibold">
+                    {tipoFrecuencia === "MENSUAL"
+                      ? "jornada(s) al mes"
+                      : "jornada(s) al año"}
+                  </span>
                 </div>
-                <div className="flex gap-1.5">
-                  {diasMap.map(({ clave }) => {
-                    const sel = (diasEspecificos || []).includes(clave);
-                    return (
-                      <button
-                        type="button"
-                        key={clave}
-                        onClick={() => onToggleDiaEspecifico(clave)}
-                        className={`flex-1 py-2 rounded-xl font-bold transition cursor-pointer ${
-                          sel
-                            ? "bg-[#4b35e6] text-white shadow-xs"
-                            : "bg-white border border-slate-200 text-slate-600 hover:bg-slate-50"
-                        }`}
-                      >
-                        {clave}
-                      </button>
-                    );
-                  })}
-                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Días en que Aplica */}
+          {tipoAsignacionTurno === "ESPECIFICO" && (
+            <div className="pt-2">
+              <div className="font-bold text-slate-700 mb-2">
+                Días en que Aplica
+              </div>
+              <div className="flex gap-1.5">
+                {diasMap.map(({ clave }) => {
+                  const sel = (diasEspecificos || []).includes(clave);
+                  return (
+                    <button
+                      type="button"
+                      key={clave}
+                      onClick={() => onToggleDiaEspecifico(clave)}
+                      className={`flex-1 py-2 rounded-xl font-bold transition cursor-pointer ${
+                        sel
+                          ? "bg-[#4b35e6] text-white shadow-xs"
+                          : "bg-white border border-slate-200 text-slate-600 hover:bg-slate-50"
+                      }`}
+                    >
+                      {clave}
+                    </button>
+                  );
+                })}
               </div>
             </div>
           )}

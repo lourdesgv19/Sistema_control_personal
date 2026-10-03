@@ -55,6 +55,15 @@ public class EmpleadoHorario {
     @Column(name = "fecha_baja")
     private LocalDateTime fechaBaja;
 
+    @Column(name = "tipo_frecuencia", nullable = false, length = 30)
+    private String tipoFrecuencia = "SEMANAL";
+
+    @Column(name = "repeticiones_periodo")
+    private Integer repeticionesPeriodo = 1;
+
+    @Column(name = "semana_alterna", length = 10)
+    private String semanaAlterna; // "PAR", "IMPAR" o null
+
     public EmpleadoHorario() {}
 
     // Getters y Setters
@@ -93,4 +102,13 @@ public class EmpleadoHorario {
 
     public LocalDateTime getFechaBaja() { return fechaBaja; }
     public void setFechaBaja(LocalDateTime fechaBaja) { this.fechaBaja = fechaBaja; }
+
+    public String getTipoFrecuencia() { return tipoFrecuencia; }
+    public void setTipoFrecuencia(String tipoFrecuencia) { this.tipoFrecuencia = tipoFrecuencia; }
+
+    public Integer getRepeticionesPeriodo() { return repeticionesPeriodo; }
+    public void setRepeticionesPeriodo(Integer repeticionesPeriodo) { this.repeticionesPeriodo = repeticionesPeriodo; }
+
+    public String getSemanaAlterna() { return semanaAlterna; }
+    public void setSemanaAlterna(String semanaAlterna) { this.semanaAlterna = semanaAlterna; }
 }

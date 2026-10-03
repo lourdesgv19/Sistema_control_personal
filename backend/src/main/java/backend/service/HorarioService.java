@@ -1,0 +1,292 @@
+package backend.service;
+
+import backend.dto.EmpleadoHorarioResumenDTO;
+import backend.dto.MetricasPersonalDTO;
+import backend.model.Empleado;
+import backend.model.EmpleadoHorario;
+import backend.model.Materia;
+import backend.repositories.EmpleadoHorarioRepository;
+import backend.repositories.EmpleadoRepository;
+import backend.repositories.MateriaRepository;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.Duration;
+import java.time.LocalTime;
+import java.util.*;
+
+@Service
+public class HorarioService {
+
+    private final EmpleadoHorarioRepository horarioRepo;
+    private final EmpleadoRepository empleadoRepo;
+    private final MateriaRepository materiaRepo;
+    private final AuditorHelperService auditor;
+
+    public HorarioService(EmpleadoHorarioRepository horarioRepo,
+                          EmpleadoRepository empleadoRepo,
+                          MateriaRepository materiaRepo,
+                          AuditorHelperService auditor) {
+        this.horarioRepo = horarioRepo;
+        this.empleadoRepo = empleadoRepo;
+        this.materiaRepo = materiaRepo;
+        this.auditor = auditor;
+    }
+
+    @Transactional(readOnly = true)
+    public Page<EmpleadoHorarioResumenDTO> listarHorariosPaginados(String q, Long categoriaId, Long empleadoId, Pageable pageable) {
+        Page<EmpleadoHorario> pageResult = horarioRepo.buscarHorariosPaginados(q, categoriaId, empleadoId, pageable);
+
+        return pageResult.map(h -> new EmpleadoHorarioResumenDTO(
+            h.getId(),
+            h.getEmpleado().getId(),
+            h.getEmpleado().getNombre(),
+            h.getEmpleado().getApellido(),
+            h.getEmpleado().getNroLegajo(),
+            h.getEmpleado().getCargos() != null
+                ? h.getEmpleado().getCargos().stream().map(c -> c.getNombre()).toList()
+                : List.of(),
+            h.getEmpleado().getCategorias() != null && !h.getEmpleado().getCategorias().isEmpty()
+                ? h.getEmpleado().getCategorias().get(0).getNombre()
+                : "General",
+            h.getMateria() != null ? h.getMateria().getNombre() : null,
+            h.getMateria() != null ? h.getMateria().getCodigo() : null,
+            h.getAula(),
+            h.getDiaSemana(),
+            h.getHoraEntrada(),
+            h.getHoraSalida(),
+            h.getEtiqueta(),
+            h.getTipoFrecuencia(),
+            h.getRepeticionesPeriodo(),
+            h.getSemanaAlterna(),
+            h.getActivo()
+        ));
+    }
+
+    @Transactional(readOnly = true)
+    public List<EmpleadoHorario> listarHorariosEmpleado(Long empleadoId) {
+        return horarioRepo.findByEmpleadoId(empleadoId);
+    }
+
+    @Transactional
+    public List<EmpleadoHorario> agregarHorariosMultiples(Long empleadoId,
+                                                         List<Integer> diasSemana,
+                                                         String horaEntradaStr,
+                                                         String horaSalidaStr,
+                                                         Long materiaId,
+                                                         String etiqueta,
+                                                         String aula,
+                                                         String tipoFrecuencia,
+                                                         Integer repeticionesPeriodo,
+                                                         String semanaAlterna,
+                                                         Boolean forzarGuardado) {
+        Empleado emp = empleadoRepo.findById(empleadoId)
+                .orElseThrow(() -> new RuntimeException("Empleado no encontrado con ID: " + empleadoId));
+
+        LocalTime nuevaEntrada = LocalTime.parse(horaEntradaStr);
+        LocalTime nuevaSalida = LocalTime.parse(horaSalidaStr);
+
+        if (!nuevaSalida.isAfter(nuevaEntrada)) {
+            throw new IllegalArgumentException("La hora de salida debe ser posterior a la de entrada.");
+        }
+
+        Materia mat = (materiaId != null) ? materiaRepo.findById(materiaId).orElse(null) : null;
+        List<EmpleadoHorario> existentes = horarioRepo.findByEmpleadoId(empleadoId);
+
+        if (!Boolean.TRUE.equals(forzarGuardado)) {
+            for (Integer dia : diasSemana) {
+                for (EmpleadoHorario h : existentes) {
+                    if (h.getDiaSemana().equals(dia)) {
+                        LocalTime exEntrada = h.getHoraEntrada();
+                        LocalTime exSalida = h.getHoraSalida();
+
+                        if (nuevaEntrada.isBefore(exSalida) && nuevaSalida.isAfter(exEntrada)) {
+                            String nombreDia = diaNumeroANombre(dia);
+                            String info = h.getMateria() != null ? h.getMateria().getNombre() : (h.getEtiqueta() != null ? h.getEtiqueta() : "Turno");
+
+                            throw new IllegalStateException(String.format(
+                                "SOLAPAMIENTO: El día %s coincide parcialmente con '%s' (%s a %s hs).",
+                                nombreDia, info,
+                                exEntrada.toString().substring(0, 5), exSalida.toString().substring(0, 5)
+                            ));
+                        }
+                    }
+                }
+            }
+        }
+
+        List<EmpleadoHorario> creados = new ArrayList<>();
+        List<String> nombresDias = new ArrayList<>();
+
+        for (Integer dia : diasSemana) {
+            EmpleadoHorario nuevo = new EmpleadoHorario();
+            nuevo.setEmpleado(emp);
+            nuevo.setDiaSemana(dia);
+            nuevo.setHoraEntrada(nuevaEntrada);
+            nuevo.setHoraSalida(nuevaSalida);
+            nuevo.setMateria(mat);
+            nuevo.setEtiqueta(etiqueta);
+            nuevo.setAula(aula != null && !aula.isBlank() ? aula : (mat != null ? mat.getAulaPredeterminada() : null));
+            nuevo.setToleranciaIngresoMin(emp.getToleranciaIngresoMin() != null ? emp.getToleranciaIngresoMin() : 15);
+            nuevo.setToleranciaEgresoMin(emp.getToleranciaEgresoMin() != null ? emp.getToleranciaEgresoMin() : 10);
+            nuevo.setActivo(true);
+            nuevo.setTipoFrecuencia(tipoFrecuencia != null ? tipoFrecuencia : "SEMANAL");
+            nuevo.setRepeticionesPeriodo(repeticionesPeriodo != null ? repeticionesPeriodo : 1);
+            nuevo.setSemanaAlterna(semanaAlterna != null && !semanaAlterna.isBlank() ? semanaAlterna.toUpperCase() : null);
+
+            creados.add(horarioRepo.save(nuevo));
+            nombresDias.add(diaNumeroANombre(dia));
+        }
+
+        String tipoFranja = mat != null ? "Cátedra: " + mat.getNombre() : (etiqueta != null ? etiqueta : "Turno");
+        String detalleDias = String.join(", ", nombresDias);
+        String franjaHoras = nuevaEntrada.toString().substring(0, 5) + " a " + nuevaSalida.toString().substring(0, 5) + " hs";
+        String avisoForzado = Boolean.TRUE.equals(forzarGuardado) ? " [Asignación con solapamiento forzado]" : "";
+
+        auditor.registrar(
+            "ASIGNAR_HORARIO_EMPLEADO",
+            "HORARIOS",
+            "Asignación de horario (" + tipoFranja + " | " + detalleDias + " de " + franjaHoras + avisoForzado + ") al colaborador: " +
+            emp.getNombre() + " " + emp.getApellido() + " (Legajo: " + emp.getNroLegajo() + ")"
+        );
+
+        return creados;
+    }
+
+    @Transactional
+    public void eliminarHorario(Long horarioId) {
+        EmpleadoHorario h = horarioRepo.findById(horarioId)
+                .orElseThrow(() -> new RuntimeException("Horario no encontrado con ID: " + horarioId));
+
+        h.setActivo(false);
+        h.setFechaBaja(java.time.LocalDateTime.now());
+        horarioRepo.save(h);
+
+        Empleado emp = h.getEmpleado();
+        String detalleFranja = diaNumeroANombre(h.getDiaSemana()) + " " +
+                               h.getHoraEntrada().toString().substring(0, 5) + " a " +
+                               h.getHoraSalida().toString().substring(0, 5) + " hs";
+
+        String infoExtra = h.getMateria() != null
+                ? " [Cátedra: " + h.getMateria().getNombre() + "]"
+                : (h.getEtiqueta() != null ? " [" + h.getEtiqueta() + "]" : "");
+
+        auditor.registrar(
+            "BAJA_HORARIO_EMPLEADO",
+            "HORARIOS",
+            "Baja de franja horaria (" + detalleFranja + infoExtra + ") del colaborador: " +
+            emp.getNombre() + " " + emp.getApellido() + " (Legajo: " + emp.getNroLegajo() + ")"
+        );
+    }
+
+    @Transactional(readOnly = true)
+    public MetricasPersonalDTO calcularMetricas(Long empleadoId) {
+        Empleado emp = empleadoRepo.findById(empleadoId)
+                .orElseThrow(() -> new RuntimeException("Empleado no encontrado con ID: " + empleadoId));
+        List<EmpleadoHorario> franjas = horarioRepo.findByEmpleadoId(empleadoId);
+
+        double totalHorasSemana = 0.0;
+        Set<String> diasSet = new LinkedHashSet<>();
+        boolean tieneMaterias = false;
+        boolean tieneSemanaPorMedio = false;
+        boolean tieneMensual = false;
+        boolean tieneAnual = false;
+        int repeticionesMensuales = 0;
+
+        for (EmpleadoHorario f : franjas) {
+            String diaNombre = diaNumeroANombre(f.getDiaSemana());
+            diasSet.add(diaNombre);
+
+            if (f.getMateria() != null) {
+                tieneMaterias = true;
+            }
+
+            String frec = f.getTipoFrecuencia() != null ? f.getTipoFrecuencia().toUpperCase() : "SEMANAL";
+            int reps = (f.getRepeticionesPeriodo() != null && f.getRepeticionesPeriodo() > 0)
+                       ? f.getRepeticionesPeriodo() : 1;
+
+            if ("SEMANA_POR_MEDIO".equals(frec)) tieneSemanaPorMedio = true;
+            if ("MENSUAL".equals(frec)) {
+                tieneMensual = true;
+                repeticionesMensuales = Math.max(repeticionesMensuales, reps);
+            }
+            if ("ANUAL".equals(frec)) tieneAnual = true;
+
+            if (f.getHoraEntrada() != null && f.getHoraSalida() != null) {
+                long minutos = Duration.between(f.getHoraEntrada(), f.getHoraSalida()).toMinutes();
+                if (minutos > 0) {
+                    double horasBase = minutos / 60.0;
+                    switch (frec) {
+                        case "SEMANA_POR_MEDIO" -> totalHorasSemana += (horasBase * 0.5);
+                        case "MENSUAL"          -> totalHorasSemana += (horasBase * reps) / 4.33;
+                        case "ANUAL"            -> totalHorasSemana += (horasBase * reps) / 52.0;
+                        default                 -> totalHorasSemana += horasBase;
+                    }
+                }
+            }
+        }
+
+        String regimenDesc;
+        String regimenSub;
+
+        if (franjas.isEmpty()) {
+            regimenDesc = "Sin Horario Fijado";
+            regimenSub = "Pendiente de asignar";
+        } else if (tieneMaterias) {
+            regimenDesc = "Docente Por Cátedras";
+            regimenSub = franjas.size() + " bloques semanales";
+        } else if (tieneMensual) {
+            regimenDesc = "Esquema Mensual";
+            regimenSub = repeticionesMensuales + " jornada(s) requerida(s) al mes";
+        } else if (tieneSemanaPorMedio) {
+            regimenDesc = "Semana de por Medio";
+            regimenSub = "Rotación quincenal alternada";
+        } else if (tieneAnual) {
+            regimenDesc = "Esquema Anual / Eventual";
+            regimenSub = "Cumplimiento por jornadas fijadas al año";
+        } else {
+            regimenDesc = "Jornada Regular";
+            regimenSub = franjas.size() + " bloques semanales";
+        }
+
+        return new MetricasPersonalDTO(
+                Math.round(totalHorasSemana * 10.0) / 10.0,
+                diasSet.size(),
+                formatearTextoDias(diasSet),
+                regimenDesc,
+                regimenSub,
+                emp.getToleranciaIngresoMin() != null ? emp.getToleranciaIngresoMin() : 15,
+                emp.getToleranciaEgresoMin() != null ? emp.getToleranciaEgresoMin() : 10,
+                new ArrayList<>(diasSet)
+        );
+    }
+
+    private String diaNumeroANombre(Integer dia) {
+        return switch (dia) {
+            case 1 -> "Lunes";
+            case 2 -> "Martes";
+            case 3 -> "Miércoles";
+            case 4 -> "Jueves";
+            case 5 -> "Viernes";
+            case 6 -> "Sábado";
+            case 7 -> "Domingo";
+            default -> "Día " + dia;
+        };
+    }
+
+    private String formatearTextoDias(Set<String> dias) {
+        if (dias.isEmpty()) return "Sin días asignados";
+        if (dias.size() == 5 && dias.contains("Lunes") && dias.contains("Viernes") && !dias.contains("Sábado")) {
+            return "De Lunes a Viernes";
+        }
+        if (dias.size() == 6 && dias.contains("Lunes") && dias.contains("Sábado")) {
+            return "De Lunes a Sábado";
+        }
+        if (dias.size() == 7) {
+            return "De Lunes a Domingo";
+        }
+        return String.join(", ", dias);
+    }
+}

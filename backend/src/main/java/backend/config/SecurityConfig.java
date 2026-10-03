@@ -41,15 +41,15 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                 .requestMatchers("/api/auth/**", "/api/public/**").permitAll()
 
-                // 2. CAMBIO DE CONTRASEÑA (Primer inicio o desde el perfil): permitido a cualquier usuario logueado
+                // 2. Cambio de contraseña propio (Cualquier usuario autenticado)
                 .requestMatchers(HttpMethod.PUT, "/api/usuarios/*/primer-cambio-password").authenticated()
                 .requestMatchers(HttpMethod.PUT, "/api/usuarios/mi-perfil/cambiar-password").authenticated()
 
-                // 3. LECTURA DE CATÁLOGOS Y TABLAS MAESTRAS (Requerido para alimentar filtros y selects)
+                // 3. Catálogos maestros de solo lectura (Lectura permitida para alimentar filtros y selects)
                 .requestMatchers(HttpMethod.GET, "/api/configuracion/**").authenticated()
                 .requestMatchers(HttpMethod.GET, "/api/seguridad/catalogo-permisos").authenticated()
 
-                // 4. MUTACIONES DE CONFIGURACIÓN (Restringido a quienes pueden editar)
+                // 4. Edición de tablas de configuración (Requiere permisos específicos de configuración)
                 .requestMatchers(HttpMethod.POST, "/api/configuracion/categorias/**").hasAnyAuthority("CONFIG_EDITAR_CATEGORIAS", "PERM_ADMIN_TOTAL")
                 .requestMatchers(HttpMethod.PUT, "/api/configuracion/categorias/**").hasAnyAuthority("CONFIG_EDITAR_CATEGORIAS", "PERM_ADMIN_TOTAL")
                 .requestMatchers(HttpMethod.DELETE, "/api/configuracion/categorias/**").hasAnyAuthority("CONFIG_EDITAR_CATEGORIAS", "PERM_ADMIN_TOTAL")
@@ -62,36 +62,59 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.PUT, "/api/configuracion/materias/**", "/api/configuracion/horarios/**").hasAnyAuthority("CONFIG_EDITAR_MATERIAS_TURNOS", "PERM_ADMIN_TOTAL")
                 .requestMatchers(HttpMethod.DELETE, "/api/configuracion/materias/**", "/api/configuracion/horarios/**").hasAnyAuthority("CONFIG_EDITAR_MATERIAS_TURNOS", "PERM_ADMIN_TOTAL")
 
-                // 5. MÓDULO PERSONAL & HORARIOS
+                // =========================================================================
+                // 5. MÓDULO HORARIOS (Endpoints dedicados /api/horarios/** y subrutas)
+                // =========================================================================
+                // Lectura de horarios (cronograma, paginados y métricas calculadas)
+                .requestMatchers(HttpMethod.GET, "/api/horarios/**", "/api/empleados/*/horarios/**", "/api/empleados/*/horarios")
+                    .hasAnyAuthority("HORARIOS_VER", "PERSONAL_VER", "PERM_ADMIN_TOTAL")
+                .requestMatchers(HttpMethod.GET, "/api/empleados/*/metricas")
+                    .hasAnyAuthority("HORARIOS_VER", "PERSONAL_VER", "PERM_ADMIN_TOTAL")
+
+                // Alta / Asignación de franjas y cátedras
+                .requestMatchers(HttpMethod.POST, "/api/horarios/**", "/api/empleados/*/horarios/**", "/api/empleados/*/horarios")
+                    .hasAnyAuthority("HORARIOS_GESTIONAR", "PERM_ADMIN_TOTAL")
+
+                // Modificación de franjas
+                .requestMatchers(HttpMethod.PUT, "/api/horarios/**", "/api/empleados/*/horarios/**", "/api/empleados/*/horarios")
+                    .hasAnyAuthority("HORARIOS_GESTIONAR", "PERM_ADMIN_TOTAL")
+
+                // Eliminación / Baja de franjas horarias y cátedras
+                .requestMatchers(HttpMethod.DELETE, "/api/horarios/**", "/api/empleados/*/horarios/**", "/api/empleados/horarios/**")
+                    .hasAnyAuthority("HORARIOS_ELIMINAR", "PERM_ADMIN_TOTAL")
+
+                // =========================================================================
+                // 6. MÓDULO PERSONAL (/api/empleados/**)
+                // =========================================================================
                 .requestMatchers(HttpMethod.GET, "/api/empleados/**").hasAnyAuthority("PERSONAL_VER", "PERM_ADMIN_TOTAL")
                 .requestMatchers(HttpMethod.POST, "/api/empleados/**").hasAnyAuthority("PERSONAL_CREAR", "PERM_ADMIN_TOTAL")
                 .requestMatchers(HttpMethod.PUT, "/api/empleados/**").hasAnyAuthority("PERSONAL_EDITAR", "PERM_ADMIN_TOTAL")
-                .requestMatchers(HttpMethod.PATCH, "/api/empleados/*/estado").hasAnyAuthority("PERSONAL_BAJA_REACTIVAR", "PERM_ADMIN_TOTAL")
+                .requestMatchers(HttpMethod.PATCH, "/api/empleados/*/reactivar", "/api/empleados/*/estado").hasAnyAuthority("PERSONAL_BAJA_REACTIVAR", "PERM_ADMIN_TOTAL")
                 .requestMatchers(HttpMethod.DELETE, "/api/empleados/**").hasAnyAuthority("PERSONAL_BAJA_REACTIVAR", "PERM_ADMIN_TOTAL")
 
-                // 6. MÓDULO FICHAJES & BIOMETRÍA
+                // 7. MÓDULO FICHAJES & BIOMETRÍA
                 .requestMatchers(HttpMethod.GET, "/api/fichajes/**", "/api/importacion/**").hasAnyAuthority("FICHAJES_VER", "PERM_ADMIN_TOTAL")
                 .requestMatchers(HttpMethod.POST, "/api/fichajes/importar", "/api/importacion/subir").hasAnyAuthority("FICHAJES_IMPORTAR", "PERM_ADMIN_TOTAL")
                 .requestMatchers(HttpMethod.POST, "/api/fichajes/vincular").hasAnyAuthority("FICHAJES_VINCULAR", "PERM_ADMIN_TOTAL")
                 .requestMatchers(HttpMethod.DELETE, "/api/fichajes/lotes/**").hasAnyAuthority("FICHAJES_ELIMINAR_LOTE", "PERM_ADMIN_TOTAL")
 
-                // 7. MÓDULO USUARIOS & SEGURIDAD
+                // 8. MÓDULO USUARIOS & SEGURIDAD
                 .requestMatchers(HttpMethod.GET, "/api/usuarios/**").hasAnyAuthority("USUARIOS_VER", "PERM_ADMIN_TOTAL")
                 .requestMatchers(HttpMethod.POST, "/api/usuarios/**").hasAnyAuthority("USUARIOS_GESTIONAR_ACCESOS", "PERM_ADMIN_TOTAL")
                 .requestMatchers(HttpMethod.PUT, "/api/usuarios/*/reset-password").hasAnyAuthority("USUARIOS_RESET_PASSWORD", "PERM_ADMIN_TOTAL")
                 .requestMatchers(HttpMethod.PATCH, "/api/usuarios/*/estado").hasAnyAuthority("USUARIOS_SUSPENDER", "PERM_ADMIN_TOTAL")
                 .requestMatchers("/api/seguridad/usuarios/*/permisos/**").hasAnyAuthority("USUARIOS_GESTIONAR_ACCESOS", "PERM_ADMIN_TOTAL")
 
-                // 8. MÓDULO AUDITORÍA
+                // 9. MÓDULO AUDITORÍA
                 .requestMatchers("/api/seguridad/auditoria/**").hasAnyAuthority("AUDITORIA_VER", "PERM_ADMIN_TOTAL")
 
+                // Cualquier otra solicitud requiere autenticación válida
                 .anyRequest().authenticated()
             )
             .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }
-
     @Bean
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();

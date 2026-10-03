@@ -3,15 +3,15 @@ package backend.controller;
 import backend.dto.MetricasPersonalDTO;
 import backend.dto.PersonalResumenDTO;
 import backend.model.Empleado;
-import backend.model.EmpleadoHorario;
 import backend.repositories.EmpleadoRepository;
 import backend.service.EmpleadoService;
+import backend.service.HorarioService;
 import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+
 import java.util.List;
-import java.util.Map;
 
 @RestController
 @RequestMapping("/api/empleados")
@@ -19,14 +19,17 @@ import java.util.Map;
 public class EmpleadoController {
 
     private final EmpleadoService empleadoService;
+    private final HorarioService horarioService;
     private final EmpleadoRepository empleadoRepo;
 
-    public EmpleadoController(EmpleadoService empleadoService, EmpleadoRepository empleadoRepository) {
+    public EmpleadoController(EmpleadoService empleadoService, 
+                              HorarioService horarioService, 
+                              EmpleadoRepository empleadoRepo) {
         this.empleadoService = empleadoService;
-        this.empleadoRepo = empleadoRepository;
+        this.horarioService = horarioService;
+        this.empleadoRepo = empleadoRepo;
     }
 
-    // Listado paginado con filtros para la grilla principal
     @GetMapping
     public ResponseEntity<Page<Empleado>> listar(
             @RequestParam(value = "q", required = false, defaultValue = "") String q,
@@ -37,7 +40,6 @@ public class EmpleadoController {
         return ResponseEntity.ok(empleadoService.listarPaginado(q, categoriaId, estado, page, size));
     }
 
-    // Lista simple para selectores desplegables de modales (solo activos)
     @GetMapping("/activos")
     public ResponseEntity<List<Empleado>> listarActivos() {
         return ResponseEntity.ok(empleadoService.listarTodosActivos());
@@ -70,51 +72,10 @@ public class EmpleadoController {
         return ResponseEntity.noContent().build();
     }
 
+    // Consulta de métricas calculadas delegada a HorarioService
     @GetMapping("/{id}/metricas")
     public ResponseEntity<MetricasPersonalDTO> obtenerMetricas(@PathVariable Long id) {
-        return ResponseEntity.ok(empleadoService.calcularMetricas(id));
-    }
-
-    @GetMapping("/{id}/horarios")
-    public ResponseEntity<List<EmpleadoHorario>> listarHorarios(@PathVariable Long id) {
-        return ResponseEntity.ok(empleadoService.listarHorariosEmpleado(id));
-    }
-
-    public record AsignarHorarioRequest(
-        List<Integer> diasSemana,
-        String horaEntrada,
-        String horaSalida,
-        Long materiaId,
-        String etiqueta,
-        String aula,
-        Boolean forzarGuardado
-    ) {}
-
-    @PostMapping("/{id}/horarios")
-    public ResponseEntity<?> agregarHorarios(
-            @PathVariable Long id,
-            @RequestBody AsignarHorarioRequest req) {
-        try {
-            List<EmpleadoHorario> creados = empleadoService.agregarHorariosMultiples(
-                    id,
-                    req.diasSemana(),
-                    req.horaEntrada().length() == 5 ? req.horaEntrada() + ":00" : req.horaEntrada(),
-                    req.horaSalida().length() == 5 ? req.horaSalida() + ":00" : req.horaSalida(),
-                    req.materiaId(),
-                    req.etiqueta(),
-                    req.aula(),
-                    req.forzarGuardado() != null && req.forzarGuardado()
-            );
-            return ResponseEntity.status(HttpStatus.CREATED).body(creados);
-        } catch (IllegalArgumentException | IllegalStateException e) {
-            return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
-        }
-    }
-
-    @DeleteMapping("/horarios/{horarioId}")
-    public ResponseEntity<Void> eliminarHorario(@PathVariable Long horarioId) {
-        empleadoService.eliminarHorario(horarioId);
-        return ResponseEntity.noContent().build();
+        return ResponseEntity.ok(horarioService.calcularMetricas(id));
     }
 
     @GetMapping("/resumen-metricas")
@@ -124,7 +85,7 @@ public class EmpleadoController {
         long docentes = empleadoRepo.countDocentes();
         long administrativos = empleadoRepo.countAdministrativos();
 
-        return ResponseEntity.ok(new backend.dto.PersonalResumenDTO(
+        return ResponseEntity.ok(new PersonalResumenDTO(
             activos + inactivos,
             docentes,
             administrativos,

@@ -1,12 +1,13 @@
 export const MODULOS_PERMISOS = [
   {
     id: "PERSONAL",
-    nombre: "Gestión de Personal & Horarios",
-    descripcion: "Control de altas, bajas, asignación de regímenes y legajos",
+    nombre: "Gestión de Personal",
+    descripcion:
+      "Control de altas, bajas, datos personales y legajos biométricos",
     permisos: [
       {
         codigo: "PERSONAL_VER",
-        label: "Ver padrón y cronogramas",
+        label: "Ver padrón de colaboradores",
         critico: false,
       },
       {
@@ -16,12 +17,40 @@ export const MODULOS_PERMISOS = [
       },
       {
         codigo: "PERSONAL_EDITAR",
-        label: "Modificar datos y turnos",
+        label: "Modificar datos personales y legajos",
         critico: false,
       },
       {
         codigo: "PERSONAL_BAJA_REACTIVAR",
         label: "Baja lógica y reactivación",
+        critico: true,
+      },
+    ],
+  },
+  {
+    id: "HORARIOS",
+    nombre: "Gestión de Horarios & Clases",
+    descripcion:
+      "Asignación de turnos laborales, cátedras docentes y cronogramas",
+    permisos: [
+      {
+        codigo: "HORARIOS_VER",
+        label: "Ver cronogramas y turnos asignados",
+        critico: false,
+      },
+      {
+        codigo: "HORARIOS_GESTIONAR",
+        label: "Asignar turnos o clases",
+        critico: false,
+      },
+      {
+        codigo: "HORARIOS_EDITAR",
+        label: "Modificar turnos o clases existentes",
+        critico: false,
+      },
+      {
+        codigo: "HORARIOS_ELIMINAR",
+        label: "Eliminar bloques horarios o cátedras",
         critico: true,
       },
     ],

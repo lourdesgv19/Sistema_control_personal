@@ -6,7 +6,6 @@ import org.springframework.boot.CommandLineRunner;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
-
 import java.util.List;
 
 @Component
@@ -57,7 +56,14 @@ public class DataInitializer implements CommandLineRunner {
             new Permiso("USUARIOS_SUSPENDER", "USUARIOS", "Bloquear o habilitar cuentas de usuario"),
 
             // Auditoría
-            new Permiso("AUDITORIA_VER", "AUDITORIA", "Permite consultar el padrón de auditoría inmutable y métricas")
+            new Permiso("AUDITORIA_VER", "AUDITORIA", "Permite consultar el padrón de auditoría inmutable y métricas"),
+            
+            // Horarios
+            new Permiso("HORARIOS_VER", "HORARIOS", "Visualizar horarios y cátedras asignadas a empleados"),
+            new Permiso("HORARIOS_GESTIONAR", "HORARIOS", "Crear horarios y cátedras"),
+            new Permiso("HORARIOS_EDITAR", "HORARIOS", "Editar horarios y cátedras asignadas a empleados"),
+            new Permiso("HORARIOS_ELIMINAR", "HORARIOS", "Eliminar horarios y cátedras asignadas a empleados")
+        
         );
 
         permisoRepo.saveAll(catalogo);

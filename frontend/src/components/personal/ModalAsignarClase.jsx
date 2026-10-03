@@ -1,5 +1,12 @@
 import React, { useState } from "react";
-import { X, Plus, BookOpen, Check } from "lucide-react";
+import {
+  X,
+  Plus,
+  BookOpen,
+  Check,
+  CalendarCheck,
+  UserCheck,
+} from "lucide-react";
 import { createMateria } from "../../services/configuracionService";
 
 export default function ModalAsignarClase({
@@ -9,6 +16,9 @@ export default function ModalAsignarClase({
   formClase,
   setFormClase,
   empleado,
+  docenteSeleccionadoId,
+  setDocenteSeleccionadoId,
+  docentesDisponibles = [],
   materiasActivas = [],
   onMateriaCreada,
 }) {
@@ -23,7 +33,9 @@ export default function ModalAsignarClase({
     departamento: "",
   });
 
-  if (!isOpen || !empleado) return null;
+  if (!isOpen) return null;
+
+  const esFijado = Boolean(empleado && empleado.id);
 
   const handleCrearYMateriaRapida = async (e) => {
     e.preventDefault();
@@ -72,16 +84,23 @@ export default function ModalAsignarClase({
     }
   };
 
+  const tipoFrecuencia = formClase.tipoFrecuencia || "SEMANAL";
+  const repeticionesPeriodo = formClase.repeticionesPeriodo || 1;
+  const semanaAlterna = formClase.semanaAlterna || "PAR";
+
   return (
     <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-      <div className="bg-white rounded-3xl w-full max-w-md overflow-hidden shadow-2xl animate-in zoom-in-95">
+      <div className="bg-white rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl animate-in zoom-in-95 max-h-[92vh] flex flex-col">
+        {/* Cabecera */}
         <div className="bg-[#6b21a8] px-6 py-4 text-white flex items-center justify-between">
           <div>
             <h3 className="font-bold text-sm">
-              Asignar Clase al Cronograma Docente
+              Asignar Cátedra / Clase Docente
             </h3>
             <p className="text-[11px] text-purple-200">
-              {empleado.apellido}, {empleado.nombre}
+              {esFijado
+                ? `${empleado.apellido}, ${empleado.nombre} • Legajo: ${empleado.nroLegajo || "S/L"}`
+                : "Planificación de comisiones y cátedras docentes"}
             </p>
           </div>
           <button
@@ -92,7 +111,40 @@ export default function ModalAsignarClase({
           </button>
         </div>
 
-        <form onSubmit={onSubmit} className="p-6 space-y-4 text-xs">
+        <form
+          onSubmit={onSubmit}
+          className="p-6 space-y-4 text-xs overflow-y-auto"
+        >
+          {/* SELECTOR DE DOCENTE: Si no viene fijado desde la fila o lateral */}
+          {!esFijado && (
+            <div className="bg-purple-50/70 border border-purple-200 rounded-2xl p-3.5 space-y-2">
+              <label className="font-bold text-purple-950 flex items-center gap-1.5">
+                <UserCheck className="w-4 h-4 text-purple-600" />
+                Seleccionar Docente Titular / Responsable *
+              </label>
+              <select
+                required
+                value={docenteSeleccionadoId || ""}
+                onChange={(e) => setDocenteSeleccionadoId(e.target.value)}
+                className="w-full bg-white border border-purple-300 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 outline-none focus:border-purple-600"
+              >
+                <option value="">
+                  Seleccione un profesor del catálogo docente...
+                </option>
+                {docentesDisponibles.map((doc) => (
+                  <option key={doc.id} value={doc.id}>
+                    {doc.apellido}, {doc.nombre} (Legajo:{" "}
+                    {doc.nroLegajo || "S/L"} •{" "}
+                    {(doc.cargos || []).map((c) => c.nombre || c).join(", ") ||
+                      "Docente"}
+                    )
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* Materia / Cátedra */}
           <div>
             <div className="flex items-center justify-between mb-1">
               <label className="font-semibold text-slate-700">
@@ -150,7 +202,7 @@ export default function ModalAsignarClase({
           </div>
 
           {creandoNuevaMateria && (
-            <div className="bg-purple-50/70 border border-purple-200 rounded-2xl p-3.5 space-y-3 animate-in fade-in slide-in-from-top-2">
+            <div className="bg-purple-50/70 border border-purple-200 rounded-2xl p-3.5 space-y-3">
               <div className="flex items-center gap-1.5 font-bold text-purple-900 text-xs">
                 <BookOpen className="w-3.5 h-3.5" />
                 <span>Registrar Cátedra en Catálogo</span>
@@ -238,7 +290,7 @@ export default function ModalAsignarClase({
             </div>
           )}
 
-          {/* Días de Dictado (Lunes a Sábado) */}
+          {/* DÍAS DE DICTADO */}
           <div>
             <label className="block font-semibold text-slate-700 mb-1.5">
               Días de Dictado (Selección Múltiple) *
@@ -285,7 +337,7 @@ export default function ModalAsignarClase({
             </span>
           </div>
 
-          {/* Horas */}
+          {/* HORARIOS */}
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block font-semibold text-slate-700 mb-1">
@@ -317,7 +369,108 @@ export default function ModalAsignarClase({
             </div>
           </div>
 
-          {/* Aula */}
+          {/* FRECUENCIA */}
+          <div className="space-y-2 pt-2 border-t border-slate-100">
+            <div className="flex items-center justify-between">
+              <label className="font-bold text-slate-700 flex items-center gap-1.5">
+                <CalendarCheck className="w-4 h-4 text-purple-600" />
+                Frecuencia de Dictado
+              </label>
+              <span className="text-[10px] text-slate-400">Periodicidad</span>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              {[
+                { id: "SEMANAL", label: "Todas las semanas" },
+                { id: "SEMANA_POR_MEDIO", label: "Semana por medio" },
+                { id: "MENSUAL", label: "Veces al mes" },
+                { id: "ANUAL", label: "Veces al año" },
+              ].map((frec) => (
+                <button
+                  key={frec.id}
+                  type="button"
+                  onClick={() =>
+                    setFormClase({ ...formClase, tipoFrecuencia: frec.id })
+                  }
+                  className={`px-2.5 py-2 text-xs font-semibold rounded-xl border text-center transition cursor-pointer ${
+                    tipoFrecuencia === frec.id
+                      ? "bg-purple-600 text-white border-purple-600 shadow-xs"
+                      : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+                  }`}
+                >
+                  {frec.label}
+                </button>
+              ))}
+            </div>
+
+            {tipoFrecuencia === "SEMANA_POR_MEDIO" && (
+              <div className="flex items-center gap-4 p-3 bg-purple-50/50 border border-purple-100 rounded-xl mt-2 text-xs">
+                <span className="text-slate-700 font-medium">Rotación:</span>
+                <label className="flex items-center gap-1.5 cursor-pointer text-slate-700 font-medium">
+                  <input
+                    type="radio"
+                    name="claseSemanaAlterna"
+                    value="PAR"
+                    checked={semanaAlterna === "PAR"}
+                    onChange={(e) =>
+                      setFormClase({
+                        ...formClase,
+                        semanaAlterna: e.target.value,
+                      })
+                    }
+                    className="text-purple-600 focus:ring-purple-500"
+                  />
+                  Semanas Pares
+                </label>
+                <label className="flex items-center gap-1.5 cursor-pointer text-slate-700 font-medium">
+                  <input
+                    type="radio"
+                    name="claseSemanaAlterna"
+                    value="IMPAR"
+                    checked={semanaAlterna === "IMPAR"}
+                    onChange={(e) =>
+                      setFormClase({
+                        ...formClase,
+                        semanaAlterna: e.target.value,
+                      })
+                    }
+                    className="text-purple-600 focus:ring-purple-500"
+                  />
+                  Semanas Impares
+                </label>
+              </div>
+            )}
+
+            {(tipoFrecuencia === "MENSUAL" || tipoFrecuencia === "ANUAL") && (
+              <div className="flex items-center gap-3 p-3 bg-purple-50/40 border border-purple-100 rounded-xl mt-2">
+                <span className="text-xs text-slate-700 font-medium shrink-0">
+                  Cantidad requerida:
+                </span>
+                <div className="flex items-center gap-2 shrink-0">
+                  <input
+                    type="number"
+                    min="1"
+                    max={tipoFrecuencia === "MENSUAL" ? 31 : 365}
+                    value={repeticionesPeriodo}
+                    onChange={(e) =>
+                      setFormClase({
+                        ...formClase,
+                        repeticionesPeriodo: parseInt(e.target.value, 10) || 1,
+                      })
+                    }
+                    className="w-16 px-2.5 py-1 text-xs border border-purple-200 rounded-lg text-center font-bold text-purple-700 bg-white outline-none focus:border-purple-600"
+                  />
+                  <span className="text-xs text-slate-600 font-semibold">
+                    {tipoFrecuencia === "MENSUAL"
+                      ? "clase(s) al mes"
+                      : "clase(s) al año"}
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* AULA */}
           <div>
             <label className="block font-semibold text-slate-700 mb-1">
               Aula / Laboratorio (Opcional)

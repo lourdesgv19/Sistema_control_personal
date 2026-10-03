@@ -9,6 +9,7 @@ import ImportacionFichajes from "./pages/ImportacionFichajes";
 import GestionUsuarios from "./pages/GestionUsuarios";
 import TiposConfiguracion from "./pages/TiposConfiguracion";
 import PanelAuditoria from "./pages/PanelAuditoria";
+import GestionHorarios from "./pages/GestionHorarios";
 
 export default function App() {
   return (
@@ -30,6 +31,16 @@ export default function App() {
             element={
               <ProtectedRoute permisoRequerido="PERSONAL_VER">
                 <GestionPersonal />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* 2. Horarios: Requiere HORARIOS_VER */}
+          <Route
+            path="/horarios-catedras"
+            element={
+              <ProtectedRoute permisoRequerido="HORARIOS_VER">
+                <GestionHorarios />
               </ProtectedRoute>
             }
           />

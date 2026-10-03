@@ -65,6 +65,9 @@ const FORM_CLASE_INICIAL = {
   horaInicio: "18:00",
   horaFin: "21:00",
   aula: "",
+  tipoFrecuencia: "SEMANAL",
+  repeticionesPeriodo: 1,
+  semanaAlterna: "PAR",
 };
 
 const DIAS_MAP = [
@@ -99,10 +102,16 @@ const ITEMS_POR_PAGINA = 15;
 export default function GestionPersonal() {
   const { tienePermiso } = useAuth();
 
-  // Evaluación de facultades del usuario autenticado
-  const puedeCrear = tienePermiso("PERSONAL_CREAR");
-  const puedeEditar = tienePermiso("PERSONAL_EDITAR");
-  const puedeBajaReactivar = tienePermiso("PERSONAL_BAJA_REACTIVAR");
+  // Permisos para la entidad Personal
+  const puedePersonalCrear = tienePermiso("PERSONAL_CREAR");
+  const puedePersonalEditar = tienePermiso("PERSONAL_EDITAR");
+  const puedePersonalBajaReactivar = tienePermiso("PERSONAL_BAJA_REACTIVAR");
+
+  // Permisos para la entidad Horarios
+  const puedeHorariosVer =
+    tienePermiso("HORARIOS_VER") || tienePermiso("PERSONAL_VER");
+  const puedeHorariosGestionar = tienePermiso("HORARIOS_GESTIONAR");
+  const puedeHorariosEliminar = tienePermiso("HORARIOS_ELIMINAR");
 
   const [loading, setLoading] = useState(true);
   const [empleados, setEmpleados] = useState([]);
@@ -110,6 +119,11 @@ export default function GestionPersonal() {
   const [cargos, setCargos] = useState([]);
   const [horarios, setHorarios] = useState([]);
   const [materias, setMaterias] = useState([]);
+
+  // Estados de Frecuencia / Periodicidad
+  const [tipoFrecuencia, setTipoFrecuencia] = useState("SEMANAL");
+  const [repeticionesPeriodo, setRepeticionesPeriodo] = useState(1);
+  const [semanaAlterna, setSemanaAlterna] = useState("PAR");
 
   // Paginación y conteos del Servidor
   const [paginaActual, setPaginaActual] = useState(1);
@@ -184,7 +198,6 @@ export default function GestionPersonal() {
     totalInactivos: 0,
   });
 
-  // 1. Cargar métricas de tarjetas globales
   const cargarResumenGlobal = useCallback(async () => {
     try {
       const data = await getPersonalResumen();
@@ -194,7 +207,6 @@ export default function GestionPersonal() {
     }
   }, []);
 
-  // 2. Cargar catálogos maestros con tolerancia a fallas
   const cargarCatalogos = useCallback(async () => {
     try {
       const [catRes, carRes, horRes, matRes] = await Promise.allSettled([
@@ -228,7 +240,6 @@ export default function GestionPersonal() {
     }
   }, []);
 
-  // 3. Consulta paginada y filtrada desde el backend
   const cargarEmpleadosServidor = useCallback(
     async (page = 0) => {
       setLoading(true);
@@ -266,32 +277,11 @@ export default function GestionPersonal() {
     [categorias, filterCategoria, filterEstado, searchTerm],
   );
 
-  // Carga inicial
   useEffect(() => {
     cargarCatalogos();
     cargarResumenGlobal();
   }, [cargarCatalogos, cargarResumenGlobal]);
 
-  // Recarga silenciosa al recuperarse la conexión
-  useEffect(() => {
-    const handleRecuperacion = () => {
-      cargarCatalogos();
-      cargarResumenGlobal();
-      cargarEmpleadosServidor(paginaActual - 1);
-    };
-
-    window.addEventListener("conexion:restaurada", handleRecuperacion);
-    return () => {
-      window.removeEventListener("conexion:restaurada", handleRecuperacion);
-    };
-  }, [
-    cargarCatalogos,
-    cargarResumenGlobal,
-    cargarEmpleadosServidor,
-    paginaActual,
-  ]);
-
-  // Debounce de búsqueda y sincronización de página
   useEffect(() => {
     const timer = setTimeout(() => {
       cargarEmpleadosServidor(paginaActual - 1);
@@ -327,7 +317,7 @@ export default function GestionPersonal() {
       mostrarAviso(
         "warning",
         "Empleado Inactivo",
-        `El empleado ${emp.apellido}, ${emp.nombre} se encuentra dado de baja lógica. Debe reactivarlo para modificar sus horarios o asignarle cátedras.`,
+        `El colaborador ${emp.apellido}, ${emp.nombre} se encuentra dado de baja lógica. Debe reactivarlo antes de asignarle horarios o cátedras.`,
       );
       return false;
     }
@@ -335,9 +325,9 @@ export default function GestionPersonal() {
     return true;
   };
 
-  // --- HANDLERS: EMPLEADOS ---
+  // --- HANDLERS: PERSONAL ---
   const abrirModalCrear = () => {
-    if (!puedeCrear) return;
+    if (!puedePersonalCrear) return;
     setEditandoEmpleadoId(null);
     setFormEmpleado({
       ...FORM_EMP_INICIAL,
@@ -348,7 +338,7 @@ export default function GestionPersonal() {
   };
 
   const abrirModalEditar = (emp) => {
-    if (!puedeEditar) return;
+    if (!puedePersonalEditar) return;
     setEditandoEmpleadoId(emp.id);
     const catIds = Array.isArray(emp.categorias)
       ? emp.categorias.map((c) => c.id)
@@ -405,7 +395,7 @@ export default function GestionPersonal() {
         mostrarAviso(
           "success",
           "Empleado Registrado",
-          "El nuevo empleado fue dado de alta.",
+          "El nuevo colaborador fue dado de alta.",
         );
       }
 
@@ -417,17 +407,17 @@ export default function GestionPersonal() {
         "danger",
         "Error",
         err.response?.data?.message ||
-          "No se pudo registrar el empleado. Verifique que DNI, Legajo o ID Biométrico no existan previamente.",
+          "No se pudo registrar el colaborador. Verifique los datos ingresados.",
       );
     }
   };
 
   const handleEliminarEmpleado = (id, nombre) => {
-    if (!puedeBajaReactivar) return;
+    if (!puedePersonalBajaReactivar) return;
     setModalAlerta({
       isOpen: true,
       tipo: "danger",
-      titulo: "¿Dar de baja empleado?",
+      titulo: "¿Dar de baja colaborador?",
       mensaje: `¿Desea dar de baja lógica al empleado ${nombre}? Podrá reactivarlo en cualquier momento.`,
       textoConfirmar: "Sí, dar de baja",
       textoCancelar: "Cancelar",
@@ -456,7 +446,7 @@ export default function GestionPersonal() {
   };
 
   const handleReactivarEmpleado = (id, nombre) => {
-    if (!puedeBajaReactivar) return;
+    if (!puedePersonalBajaReactivar) return;
     setModalAlerta({
       isOpen: true,
       tipo: "info",
@@ -487,8 +477,9 @@ export default function GestionPersonal() {
     });
   };
 
-  // --- CRONOGRAMA & HORARIOS UNIFICADOS ---
+  // --- HANDLERS: HORARIOS Y CRONOGRAMA ---
   const handleVerDetalle = async (emp) => {
+    if (!puedeHorariosVer) return;
     setEmpleadoSeleccionado(emp);
     try {
       const [horariosRes, metricasRes] = await Promise.all([
@@ -506,7 +497,7 @@ export default function GestionPersonal() {
   };
 
   const handleAbrirAsignarClase = (diaPreseleccionado = null) => {
-    if (!puedeEditar) return;
+    if (!puedeHorariosGestionar) return;
     setFormClase({
       ...FORM_CLASE_INICIAL,
       diasSemana: diaPreseleccionado ? [diaPreseleccionado] : ["Lunes"],
@@ -516,7 +507,7 @@ export default function GestionPersonal() {
 
   const handleGuardarClase = async (e, forzar = false) => {
     if (e && e.preventDefault) e.preventDefault();
-    if (!empleadoSeleccionado || !puedeEditar) return;
+    if (!empleadoSeleccionado || !puedeHorariosGestionar) return;
 
     const dias = formClase.diasSemana || [];
     if (dias.length === 0) {
@@ -532,6 +523,15 @@ export default function GestionPersonal() {
       const diasNumericos = dias.map((d) =>
         typeof d === "number" ? d : MAPA_DIAS_NUMERO[d] || 1,
       );
+      const tipoFrec = formClase.tipoFrecuencia || "SEMANAL";
+      const reps =
+        tipoFrec === "MENSUAL" || tipoFrec === "ANUAL"
+          ? parseInt(formClase.repeticionesPeriodo, 10) || 1
+          : 1;
+      const semanaAlt =
+        tipoFrec === "SEMANA_POR_MEDIO"
+          ? formClase.semanaAlterna || "PAR"
+          : null;
 
       const payload = {
         diasSemana: diasNumericos,
@@ -549,6 +549,9 @@ export default function GestionPersonal() {
         etiqueta: formClase.materia || "Cátedra",
         aula: formClase.aula || null,
         forzarGuardado: forzar,
+        tipoFrecuencia: tipoFrec,
+        repeticionesPeriodo: reps,
+        semanaAlterna: semanaAlt,
       };
 
       await addEmpleadoHorario(empleadoSeleccionado.id, payload);
@@ -570,7 +573,6 @@ export default function GestionPersonal() {
       );
     } catch (err) {
       const mensaje = err.response?.data?.message || "";
-
       if (mensaje.includes("SOLAPAMIENTO")) {
         setModalAlerta({
           isOpen: true,
@@ -596,7 +598,14 @@ export default function GestionPersonal() {
   };
 
   const handleEliminarHorario = async (horarioId) => {
-    if (!puedeEditar) return;
+    if (!puedeHorariosEliminar) {
+      mostrarAviso(
+        "danger",
+        "Acceso Denegado",
+        "No posee permiso (HORARIOS_ELIMINAR) para quitar horarios asignados.",
+      );
+      return;
+    }
     try {
       await removeEmpleadoHorario(horarioId);
       const [horariosActualizados, metricasActualizadas] = await Promise.all([
@@ -620,20 +629,22 @@ export default function GestionPersonal() {
     }
   };
 
-  // --- ASIGNACIÓN DE TURNO ---
   const abrirModalTurno = (emp) => {
-    if (!puedeEditar) return;
+    if (!puedeHorariosGestionar) return;
     setEmpleadoSeleccionado(emp);
     setTipoAsignacionTurno("PREESTABLECIDO");
     setHorarioGeneralSeleccionado(horariosActivos[0]?.id || "");
     setTolIngresoEsp(emp.toleranciaIngresoMin ?? 15);
     setTolEgresoEsp(emp.toleranciaEgresoMin ?? 10);
+    setTipoFrecuencia("SEMANAL");
+    setRepeticionesPeriodo(1);
+    setSemanaAlterna("PAR");
     setModalAsignarTurno(true);
   };
 
   const handleGuardarTurno = async (forzar = false) => {
     const esForzado = typeof forzar === "boolean" ? forzar : false;
-    if (!empleadoSeleccionado || !puedeEditar) return;
+    if (!empleadoSeleccionado || !puedeHorariosGestionar) return;
 
     try {
       if (tipoAsignacionTurno === "PREESTABLECIDO") {
@@ -663,6 +674,13 @@ export default function GestionPersonal() {
           etiqueta: plantilla.nombre,
           aula: null,
           forzarGuardado: esForzado,
+          tipoFrecuencia,
+          repeticionesPeriodo:
+            tipoFrecuencia === "MENSUAL" || tipoFrecuencia === "ANUAL"
+              ? repeticionesPeriodo
+              : 1,
+          semanaAlterna:
+            tipoFrecuencia === "SEMANA_POR_MEDIO" ? semanaAlterna : null,
         });
       } else {
         const diasNumericos = diasEspecificos.map(
@@ -680,6 +698,13 @@ export default function GestionPersonal() {
             etiqueta: r.etiqueta || "Turno Específico",
             aula: null,
             forzarGuardado: esForzado,
+            tipoFrecuencia,
+            repeticionesPeriodo:
+              tipoFrecuencia === "MENSUAL" || tipoFrecuencia === "ANUAL"
+                ? repeticionesPeriodo
+                : 1,
+            semanaAlterna:
+              tipoFrecuencia === "SEMANA_POR_MEDIO" ? semanaAlterna : null,
           });
         }
       }
@@ -695,7 +720,7 @@ export default function GestionPersonal() {
       mostrarAviso(
         "success",
         "Turno Asignado",
-        "Se generaron las franjas horarias del empleado.",
+        "Se generaron las franjas horarias con la periodicidad establecida.",
       );
     } catch (err) {
       const mensaje = err.response?.data?.message || "";
@@ -736,14 +761,14 @@ export default function GestionPersonal() {
               Gestión de Personal & Carga Horaria
             </h1>
             <p className="text-xs text-slate-500">
-              Padrón de empleados, carga horaria semanal y acceso al cronograma
-              detallado por empleado.
+              Padrón de colaboradores, asignación de regímenes y cronograma de
+              horarios.
             </p>
           </div>
         </div>
 
-        {/* Botón Registrar Empleado: Controlado por PERSONAL_CREAR */}
-        {puedeCrear ? (
+        {/* ALTA DE PERSONAL: PERSONAL_CREAR */}
+        {puedePersonalCrear ? (
           <button
             onClick={abrirModalCrear}
             className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#4b35e6] hover:bg-[#3f2bc9] text-white text-xs font-semibold shadow-md shadow-indigo-100 transition self-start md:self-auto cursor-pointer"
@@ -762,9 +787,8 @@ export default function GestionPersonal() {
         )}
       </div>
 
-      {/* 2. TARJETAS DE CANTIDADES GLOBALES */}
+      {/* 2. TARJETAS GLOBALES */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        {/* TOTAL PERSONAL */}
         <button
           type="button"
           onClick={() => {
@@ -794,7 +818,6 @@ export default function GestionPersonal() {
           </div>
         </button>
 
-        {/* DOCENTES */}
         <button
           type="button"
           onClick={() => {
@@ -824,7 +847,6 @@ export default function GestionPersonal() {
           </div>
         </button>
 
-        {/* ADMINISTRATIVOS */}
         <button
           type="button"
           onClick={() => {
@@ -858,7 +880,6 @@ export default function GestionPersonal() {
           </div>
         </button>
 
-        {/* BAJAS LÓGICAS */}
         <button
           type="button"
           onClick={() => {
@@ -964,7 +985,7 @@ export default function GestionPersonal() {
                   colSpan={5}
                   className="text-center py-12 text-slate-400 text-xs italic"
                 >
-                  No se encontraron empleados con los filtros seleccionados.
+                  No se encontraron colaboradores con los filtros seleccionados.
                 </td>
               </tr>
             ) : (
@@ -989,11 +1010,7 @@ export default function GestionPersonal() {
                 return (
                   <tr
                     key={emp.id}
-                    className={`transition-colors ${
-                      emp.activo === false
-                        ? "bg-slate-50/60 opacity-80"
-                        : "hover:bg-slate-50/70"
-                    }`}
+                    className={`transition-colors ${emp.activo === false ? "bg-slate-50/60 opacity-80" : "hover:bg-slate-50/70"}`}
                   >
                     <td className="px-6 py-4">
                       <div className="font-bold text-slate-900 text-sm">
@@ -1050,14 +1067,25 @@ export default function GestionPersonal() {
                       </div>
                     </td>
 
+                    {/* BOTÓN CRONOGRAMA: HORARIOS_VER */}
                     <td className="px-6 py-4">
-                      <button
-                        onClick={() => handleVerDetalle(emp)}
-                        className="inline-flex items-center gap-1.5 px-3 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg text-xs font-semibold transition cursor-pointer"
-                      >
-                        <Calendar className="w-3.5 h-3.5" />
-                        Ver cronograma
-                      </button>
+                      {puedeHorariosVer ? (
+                        <button
+                          onClick={() => handleVerDetalle(emp)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg text-xs font-semibold transition cursor-pointer"
+                        >
+                          <Calendar className="w-3.5 h-3.5" />
+                          Ver cronograma
+                        </button>
+                      ) : (
+                        <span
+                          className="inline-flex items-center gap-1.5 px-3 py-1 bg-slate-100 text-slate-400 rounded-lg text-xs font-semibold cursor-not-allowed select-none"
+                          title="Requiere permiso HORARIOS_VER"
+                        >
+                          <Lock className="w-3.5 h-3.5" />
+                          Cronograma Restringido
+                        </span>
+                      )}
                     </td>
 
                     <td className="px-6 py-4">
@@ -1069,30 +1097,35 @@ export default function GestionPersonal() {
                         }`}
                       >
                         <span
-                          className={`w-1.5 h-1.5 rounded-full ${
-                            emp.activo !== false
-                              ? "bg-emerald-500"
-                              : "bg-rose-500"
-                          }`}
+                          className={`w-1.5 h-1.5 rounded-full ${emp.activo !== false ? "bg-emerald-500" : "bg-rose-500"}`}
                         ></span>
                         {emp.activo !== false ? "ACTIVO" : "INACTIVO"}
                       </span>
                     </td>
 
-                    {/* Acciones granulares controladas por PBAC */}
+                    {/* ACCIONES GRANULARES */}
                     <td className="px-6 py-4 text-right">
                       <div className="flex items-center justify-end gap-2 text-slate-400">
-                        {/* 1. Ver Ficha / Cronograma (Accesible para cualquiera con acceso al módulo) */}
-                        <button
-                          onClick={() => handleVerDetalle(emp)}
-                          className="p-1 hover:text-indigo-600 transition cursor-pointer"
-                          title="Ver Cronograma y Ficha"
-                        >
-                          <Eye className="w-4 h-4" />
-                        </button>
+                        {/* 1. Ver Ficha / Cronograma: HORARIOS_VER */}
+                        {puedeHorariosVer ? (
+                          <button
+                            onClick={() => handleVerDetalle(emp)}
+                            className="p-1 hover:text-indigo-600 transition cursor-pointer"
+                            title="Ver Cronograma y Ficha"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </button>
+                        ) : (
+                          <span
+                            className="p-1 text-slate-200 cursor-not-allowed"
+                            title="Requiere HORARIOS_VER"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </span>
+                        )}
 
-                        {/* 2. Asignar Turno (Requiere PERSONAL_EDITAR) */}
-                        {puedeEditar ? (
+                        {/* 2. Asignar Turno: HORARIOS_GESTIONAR */}
+                        {puedeHorariosGestionar ? (
                           <button
                             onClick={() =>
                               verificarEmpleadoActivo(emp, () =>
@@ -1115,15 +1148,15 @@ export default function GestionPersonal() {
                         ) : (
                           <span
                             className="p-1 text-slate-200 cursor-not-allowed"
-                            title="Requiere permiso PERSONAL_EDITAR"
+                            title="Requiere permiso HORARIOS_GESTIONAR"
                           >
                             <Clock className="w-4 h-4" />
                           </span>
                         )}
 
-                        {/* 3. Asignar Cátedra a Docente (Requiere PERSONAL_EDITAR) */}
+                        {/* 3. Asignar Cátedra a Docente: HORARIOS_GESTIONAR */}
                         {esDocente &&
-                          (puedeEditar ? (
+                          (puedeHorariosGestionar ? (
                             <button
                               onClick={() =>
                                 verificarEmpleadoActivo(emp, () => {
@@ -1147,14 +1180,14 @@ export default function GestionPersonal() {
                           ) : (
                             <span
                               className="p-1 text-slate-200 cursor-not-allowed"
-                              title="Requiere permiso PERSONAL_EDITAR"
+                              title="Requiere permiso HORARIOS_GESTIONAR"
                             >
                               <Plus className="w-4 h-4" />
                             </span>
                           ))}
 
-                        {/* 4. Editar Empleado (Requiere PERSONAL_EDITAR) */}
-                        {puedeEditar ? (
+                        {/* 4. Editar Empleado (Datos Personales): PERSONAL_EDITAR */}
+                        {puedePersonalEditar ? (
                           <button
                             onClick={() =>
                               verificarEmpleadoActivo(emp, () =>
@@ -1166,7 +1199,11 @@ export default function GestionPersonal() {
                                 ? "opacity-30 cursor-not-allowed hover:text-slate-400"
                                 : "hover:text-indigo-600 cursor-pointer"
                             }`}
-                            title="Editar Empleado"
+                            title={
+                              emp.activo === false
+                                ? "Empleado inactivo"
+                                : "Editar Empleado"
+                            }
                           >
                             <Pencil className="w-4 h-4" />
                           </button>
@@ -1179,8 +1216,8 @@ export default function GestionPersonal() {
                           </span>
                         )}
 
-                        {/* 5. Baja Lógica y Reactivación (Requiere PERSONAL_BAJA_REACTIVAR) */}
-                        {puedeBajaReactivar ? (
+                        {/* 5. Baja Lógica y Reactivación: PERSONAL_BAJA_REACTIVAR */}
+                        {puedePersonalBajaReactivar ? (
                           emp.activo !== false ? (
                             <button
                               onClick={() =>
@@ -1190,7 +1227,7 @@ export default function GestionPersonal() {
                                 )
                               }
                               className="p-1 hover:text-rose-600 transition cursor-pointer"
-                              title="Dar de baja"
+                              title="Dar de baja colaborador"
                             >
                               <Trash2 className="w-4 h-4" />
                             </button>
@@ -1203,7 +1240,7 @@ export default function GestionPersonal() {
                                 )
                               }
                               className="p-1 hover:text-emerald-600 transition cursor-pointer"
-                              title="Reactivar Empleado"
+                              title="Reactivar Colaborador"
                             >
                               <RotateCcw className="w-4 h-4 text-emerald-600" />
                             </button>
@@ -1225,7 +1262,7 @@ export default function GestionPersonal() {
           </tbody>
         </table>
 
-        {/* 5. PAGINACIÓN DESDE EL SERVIDOR */}
+        {/* 5. PAGINACIÓN */}
         <div className="bg-white px-6 py-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
           <div className="text-slate-500">
             Mostrando{" "}
@@ -1303,12 +1340,11 @@ export default function GestionPersonal() {
         clases={horariosEmpleado}
         metricas={metricasEmpleado}
         diasMap={DIAS_MAP}
-        diasEspecificos={diasEspecificos}
-        rangosEspecificos={rangosEspecificos}
         onOpenAsignarClase={(dia) =>
-          verificarEmpleadoActivo(empleadoSeleccionado, () =>
-            handleAbrirAsignarClase(dia),
-          )
+          verificarEmpleadoActivo(empleadoSeleccionado, () => {
+            setModalDetalle(false);
+            handleAbrirAsignarClase(dia);
+          })
         }
         onEliminarClase={(horarioId) =>
           verificarEmpleadoActivo(empleadoSeleccionado, () =>
@@ -1316,9 +1352,13 @@ export default function GestionPersonal() {
           )
         }
         onOpenAsignarTurno={(emp) =>
-          verificarEmpleadoActivo(emp, () => abrirModalTurno(emp))
+          verificarEmpleadoActivo(emp, () => {
+            setModalDetalle(false);
+            abrirModalTurno(emp);
+          })
         }
-        puedeEditar={puedeEditar}
+        puedeEditar={puedeHorariosGestionar}
+        puedeEliminar={puedeHorariosEliminar}
       />
 
       <ModalAsignarClase
@@ -1328,6 +1368,9 @@ export default function GestionPersonal() {
         formClase={formClase}
         setFormClase={setFormClase}
         empleado={empleadoSeleccionado}
+        docenteSeleccionadoId={empleadoSeleccionado?.id}
+        setDocenteSeleccionadoId={() => {}}
+        docentesDisponibles={empleados}
         materiasActivas={materiasActivas}
         onMateriaCreada={(nueva) => setMaterias((prev) => [...prev, nueva])}
       />
@@ -1337,6 +1380,9 @@ export default function GestionPersonal() {
         onClose={() => setModalAsignarTurno(false)}
         onSubmit={handleGuardarTurno}
         empleado={empleadoSeleccionado}
+        empleadoSeleccionadoId={empleadoSeleccionado?.id}
+        setEmpleadoSeleccionadoId={() => {}}
+        empleadosDisponibles={empleados}
         tipoAsignacionTurno={tipoAsignacionTurno}
         setTipoAsignacionTurno={setTipoAsignacionTurno}
         horarioGeneralSeleccionado={horarioGeneralSeleccionado}
@@ -1370,6 +1416,12 @@ export default function GestionPersonal() {
         tolEgresoEsp={tolEgresoEsp}
         setTolEgresoEsp={setTolEgresoEsp}
         diasMap={DIAS_MAP}
+        tipoFrecuencia={tipoFrecuencia}
+        setTipoFrecuencia={setTipoFrecuencia}
+        repeticionesPeriodo={repeticionesPeriodo}
+        setRepeticionesPeriodo={setRepeticionesPeriodo}
+        semanaAlterna={semanaAlterna}
+        setSemanaAlterna={setSemanaAlterna}
       />
 
       <ModalAlerta

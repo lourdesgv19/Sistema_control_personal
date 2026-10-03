@@ -1,5 +1,13 @@
 import React from "react";
-import { X, Calendar, Plus, Sliders, AlertTriangle, Lock } from "lucide-react";
+import {
+  X,
+  Calendar,
+  Plus,
+  Sliders,
+  AlertTriangle,
+  Lock,
+  Repeat,
+} from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 
 export default function ModalDetalleCronograma({
@@ -12,9 +20,22 @@ export default function ModalDetalleCronograma({
   onOpenAsignarClase,
   onEliminarClase,
   onOpenAsignarTurno,
+  puedeEditar: puedeEditarProp,
+  puedeEliminar: puedeEliminarProp,
 }) {
   const { tienePermiso } = useAuth();
-  const puedeEditar = tienePermiso("PERSONAL_EDITAR");
+
+  // Control granular de permisos: se prioriza la prop del componente padre si fue enviada;
+  // de lo contrario, se consultan directamente los permisos específicos de Horarios.
+  const puedeEditar =
+    typeof puedeEditarProp === "boolean"
+      ? puedeEditarProp
+      : tienePermiso("HORARIOS_GESTIONAR");
+
+  const puedeEliminar =
+    typeof puedeEliminarProp === "boolean"
+      ? puedeEliminarProp
+      : tienePermiso("HORARIOS_ELIMINAR");
 
   if (!isOpen || !empleado) return null;
 
@@ -25,6 +46,44 @@ export default function ModalDetalleCronograma({
       (c.codigoTag || c.nombre || "").toLowerCase().includes("docente"),
     ) ||
     (empleado.categoria?.codigoTag || "").toLowerCase().includes("docente");
+
+  // Helper para formatear visualmente la periodicidad de cada bloque
+  const renderDetalleFrecuencia = (f) => {
+    const frec = (f.tipoFrecuencia || "SEMANAL").toUpperCase();
+    const reps = f.repeticionesPeriodo || 1;
+    const alterna = f.semanaAlterna || "PAR";
+
+    switch (frec) {
+      case "SEMANA_POR_MEDIO":
+        return (
+          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-amber-50 text-amber-700 font-semibold border border-amber-200/60 text-[9px] mt-1">
+            <Repeat className="w-2.5 h-2.5" />
+            Quincenal (Sem. {alterna})
+          </span>
+        );
+      case "MENSUAL":
+        return (
+          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-blue-50 text-blue-700 font-semibold border border-blue-200/60 text-[9px] mt-1">
+            <Repeat className="w-2.5 h-2.5" />
+            {reps} {reps === 1 ? "vez" : "veces"} al mes
+          </span>
+        );
+      case "ANUAL":
+        return (
+          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-purple-50 text-purple-700 font-semibold border border-purple-200/60 text-[9px] mt-1">
+            <Repeat className="w-2.5 h-2.5" />
+            {reps} {reps === 1 ? "vez" : "veces"} al año
+          </span>
+        );
+      case "SEMANAL":
+      default:
+        return (
+          <span className="text-[9px] text-slate-400 block mt-0.5 font-medium">
+            Todas las semanas
+          </span>
+        );
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
@@ -75,7 +134,7 @@ export default function ModalDetalleCronograma({
             <span>
               <strong>Empleado Inactivo:</strong> Las opciones de asignación de
               turnos, alta y eliminación de horarios están deshabilitadas hasta
-              que se reactive al empleado.
+              que se reactive al colaborador.
             </span>
           </div>
         )}
@@ -85,13 +144,13 @@ export default function ModalDetalleCronograma({
           <div className="grid grid-cols-4 gap-4 text-xs">
             <div className="bg-slate-50 border border-slate-200 p-4 rounded-2xl">
               <div className="text-[10px] font-bold uppercase text-slate-400">
-                Carga Semanal Total
+                Carga Semanal Estimada
               </div>
               <div className="text-xl font-bold text-slate-900 mt-1">
                 {metricas ? metricas.cargaSemanalHoras : 0} horas
               </div>
               <div className="text-[10px] text-slate-500">
-                Calculadas semanalmente
+                Ponderada según periodicidad
               </div>
             </div>
 
@@ -102,7 +161,10 @@ export default function ModalDetalleCronograma({
               <div className="text-sm font-bold text-purple-900 mt-1">
                 {metricas ? metricas.regimenHorarioDescripcion : "Sin Asignar"}
               </div>
-              <div className="text-[10px] text-purple-700">
+              <div
+                className="text-[10px] text-purple-700 truncate"
+                title={metricas?.regimenHorarioSubtitulo}
+              >
                 {metricas ? metricas.regimenHorarioSubtitulo : ""}
               </div>
             </div>
@@ -141,7 +203,7 @@ export default function ModalDetalleCronograma({
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2 text-xs font-bold text-slate-900">
                 <Calendar className="w-4 h-4 text-indigo-600" />
-                <span>Cronograma de Clases y Jornadas por Día:</span>
+                <span>Cronograma de Jornadas por Día:</span>
               </div>
 
               {esDocente &&
@@ -165,7 +227,7 @@ export default function ModalDetalleCronograma({
                 ) : (
                   <span
                     className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 border border-slate-200 text-slate-400 text-xs font-semibold select-none cursor-not-allowed"
-                    title="Requiere permiso PERSONAL_EDITAR"
+                    title="Requiere permiso HORARIOS_GESTIONAR"
                   >
                     <Lock className="w-3.5 h-3.5" />
                     Asignación Restringida
@@ -215,8 +277,8 @@ export default function ModalDetalleCronograma({
                                   : "bg-indigo-50/70 border-indigo-100"
                               }`}
                             >
-                              {/* Botón de baja de la franja (Controlado por PERSONAL_EDITAR) */}
-                              {isActivo && puedeEditar && (
+                              {/* Botón de baja de la franja (Controlado por HORARIOS_ELIMINAR) */}
+                              {isActivo && puedeEliminar && (
                                 <button
                                   type="button"
                                   onClick={(e) => {
@@ -255,8 +317,11 @@ export default function ModalDetalleCronograma({
                                 {f.horaSalida?.substring(0, 5)} hs
                               </div>
 
+                              {/* DETALLE DE FRECUENCIA / PERIODICIDAD */}
+                              {renderDetalleFrecuencia(f)}
+
                               {f.aula && (
-                                <div className="text-slate-500 mt-0.5">
+                                <div className="text-slate-500 mt-1">
                                   Aula: {f.aula}
                                 </div>
                               )}
@@ -272,7 +337,7 @@ export default function ModalDetalleCronograma({
                       </div>
                     </div>
 
-                    {/* Botón rápido "+ Clase" (Controlado por PERSONAL_EDITAR) */}
+                    {/* Botón rápido "+ Clase" para docentes (Controlado por HORARIOS_GESTIONAR) */}
                     {esDocente &&
                       (puedeEditar ? (
                         <button
@@ -291,7 +356,7 @@ export default function ModalDetalleCronograma({
                       ) : (
                         <div
                           className="w-full mt-2 py-1.5 border border-dashed border-slate-200 rounded-xl text-[10px] text-slate-300 flex items-center justify-center gap-1 select-none"
-                          title="Requiere permiso PERSONAL_EDITAR"
+                          title="Requiere permiso HORARIOS_GESTIONAR"
                         >
                           <Lock className="w-3 h-3" />
                           Clase
@@ -334,7 +399,7 @@ export default function ModalDetalleCronograma({
           ) : (
             <span
               className="flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-200 text-slate-400 text-xs font-semibold select-none cursor-not-allowed"
-              title="Requiere permiso PERSONAL_EDITAR"
+              title="Requiere permiso HORARIOS_GESTIONAR"
             >
               <Lock className="w-3.5 h-3.5" />
               Modificación de Horarios Restringida
