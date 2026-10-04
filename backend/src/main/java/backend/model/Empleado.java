@@ -23,7 +23,7 @@ public class Empleado {
     @Column(nullable = false, length = 80)
     private String apellido;
 
-    @Column(nullable = false, unique = true, length = 20)
+    @Column(nullable = true, unique = true, length = 20)
     private String dni;
 
     @Column(length = 120)
@@ -32,7 +32,7 @@ public class Empleado {
     @Column(length = 30)
     private String telefono;
 
-    @Column(name = "nro_legajo", nullable = false, unique = true, length = 30)
+    @Column(name = "nro_legajo", nullable = true, unique = true, length = 30)
     private String nroLegajo;
 
     @Column(name = "id_biometrico", nullable = true, unique = true, length = 30)

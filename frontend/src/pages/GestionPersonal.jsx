@@ -15,9 +15,12 @@ import {
   ChevronLeft,
   ChevronRight,
   Lock,
+  UserCheck,
+  AlertCircle,
 } from "lucide-react";
 import {
   getEmpleadosPaginados,
+  getEmpleados,
   createEmpleado,
   updateEmpleado,
   deleteEmpleado,
@@ -37,7 +40,6 @@ import {
 import { getBadgeColorClasses } from "./TiposConfiguracion";
 import ModalAlerta from "../components/comunes/ModalAlerta";
 
-// Modales del módulo de personal
 import ModalRegistroEmpleado from "../components/personal/ModalRegistroEmpleado";
 import ModalDetalleCronograma from "../components/personal/ModalDetalleCronograma";
 import ModalAsignarClase from "../components/personal/ModalAsignarClase";
@@ -99,15 +101,22 @@ const MAPA_DIAS_NUMERO = {
 
 const ITEMS_POR_PAGINA = 15;
 
+// Helper: determina si un empleado tiene datos incompletos
+export const esEmpleadoIncompleto = (emp) => {
+  if (!emp) return false;
+  const sinDni = !emp.dni || String(emp.dni).trim() === "";
+  const sinLegajo = !emp.nroLegajo || String(emp.nroLegajo).trim() === "";
+  const sinCat =
+    (!emp.categorias || emp.categorias.length === 0) && !emp.categoria;
+  return sinDni || sinLegajo || sinCat;
+};
+
 export default function GestionPersonal() {
   const { tienePermiso } = useAuth();
 
-  // Permisos para la entidad Personal
   const puedePersonalCrear = tienePermiso("PERSONAL_CREAR");
   const puedePersonalEditar = tienePermiso("PERSONAL_EDITAR");
   const puedePersonalBajaReactivar = tienePermiso("PERSONAL_BAJA_REACTIVAR");
-
-  // Permisos para la entidad Horarios
   const puedeHorariosVer =
     tienePermiso("HORARIOS_VER") || tienePermiso("PERSONAL_VER");
   const puedeHorariosGestionar = tienePermiso("HORARIOS_GESTIONAR");
@@ -115,6 +124,7 @@ export default function GestionPersonal() {
 
   const [loading, setLoading] = useState(true);
   const [empleados, setEmpleados] = useState([]);
+  const [todosLosEmpleados, setTodosLosEmpleados] = useState([]); // Para conteo global y duplicados
   const [categorias, setCategorias] = useState([]);
   const [cargos, setCargos] = useState([]);
   const [horarios, setHorarios] = useState([]);
@@ -130,22 +140,21 @@ export default function GestionPersonal() {
   const [totalPaginas, setTotalPaginas] = useState(1);
   const [totalElementos, setTotalElementos] = useState(0);
 
-  // Métricas y franjas unificadas del empleado en consulta
-  const [metricasEmpleado, setMetricasEmpleado] = useState(null);
-  const [horariosEmpleado, setHorariosEmpleado] = useState([]);
-
   // Filtros
   const [searchTerm, setSearchTerm] = useState("");
   const [filterCategoria, setFilterCategoria] = useState("TODAS");
   const [filterEstado, setFilterEstado] = useState("TODOS");
+  const [soloIncompletos, setSoloIncompletos] = useState(false); // <-- Nuevo filtro
 
-  // Estados de modales
+  // Modales
   const [modalRegistro, setModalRegistro] = useState(false);
   const [editandoEmpleadoId, setEditandoEmpleadoId] = useState(null);
   const [formEmpleado, setFormEmpleado] = useState(FORM_EMP_INICIAL);
 
   const [modalDetalle, setModalDetalle] = useState(false);
   const [empleadoSeleccionado, setEmpleadoSeleccionado] = useState(null);
+  const [metricasEmpleado, setMetricasEmpleado] = useState(null);
+  const [horariosEmpleado, setHorariosEmpleado] = useState([]);
 
   const [modalAsignarClase, setModalAsignarClase] = useState(false);
   const [formClase, setFormClase] = useState(FORM_CLASE_INICIAL);
@@ -202,6 +211,8 @@ export default function GestionPersonal() {
     try {
       const data = await getPersonalResumen();
       if (data) setResumenGlobal(data);
+      const todos = await getEmpleados();
+      if (Array.isArray(todos)) setTodosLosEmpleados(todos);
     } catch (err) {
       console.error("Error al cargar resumen global:", err);
     }
@@ -312,6 +323,17 @@ export default function GestionPersonal() {
     return cargosActivos.filter((c) => cats.includes(c.categoria?.id));
   }, [formEmpleado.categoriasIds, cargosActivos]);
 
+  // Total de empleados con datos incompletos en el sistema
+  const totalIncompletos = useMemo(() => {
+    return todosLosEmpleados.filter(esEmpleadoIncompleto).length;
+  }, [todosLosEmpleados]);
+
+  // Lista para renderizar (aplica el filtro de incompletos si está activado)
+  const empleadosRenderizados = useMemo(() => {
+    if (!soloIncompletos) return empleados;
+    return empleados.filter(esEmpleadoIncompleto);
+  }, [empleados, soloIncompletos]);
+
   const verificarEmpleadoActivo = (emp, accionPermitida) => {
     if (emp.activo === false) {
       mostrarAviso(
@@ -325,7 +347,6 @@ export default function GestionPersonal() {
     return true;
   };
 
-  // --- HANDLERS: PERSONAL ---
   const abrirModalCrear = () => {
     if (!puedePersonalCrear) return;
     setEditandoEmpleadoId(null);
@@ -366,15 +387,17 @@ export default function GestionPersonal() {
     e.preventDefault();
     try {
       const payload = {
-        nombre: formEmpleado.nombre,
-        apellido: formEmpleado.apellido,
-        dni: formEmpleado.dni,
-        email: formEmpleado.email,
-        telefono: formEmpleado.telefono,
-        nroLegajo: formEmpleado.nroLegajo,
-        idBiometrico: formEmpleado.idBiometrico,
-        toleranciaIngresoMin: parseInt(formEmpleado.toleranciaIngresoMin, 10),
-        toleranciaEgresoMin: parseInt(formEmpleado.toleranciaEgresoMin, 10),
+        nombre: formEmpleado.nombre?.trim(),
+        apellido: formEmpleado.apellido?.trim(),
+        dni: formEmpleado.dni?.trim() || null,
+        email: formEmpleado.email?.trim() || null,
+        telefono: formEmpleado.telefono?.trim() || null,
+        nroLegajo: formEmpleado.nroLegajo?.trim() || null,
+        idBiometrico: formEmpleado.idBiometrico?.trim() || null,
+        toleranciaIngresoMin:
+          parseInt(formEmpleado.toleranciaIngresoMin, 10) || 15,
+        toleranciaEgresoMin:
+          parseInt(formEmpleado.toleranciaEgresoMin, 10) || 10,
         categorias: (formEmpleado.categoriasIds || []).map((id) => ({
           id: parseInt(id, 10),
         })),
@@ -477,7 +500,6 @@ export default function GestionPersonal() {
     });
   };
 
-  // --- HANDLERS: HORARIOS Y CRONOGRAMA ---
   const handleVerDetalle = async (emp) => {
     if (!puedeHorariosVer) return;
     setEmpleadoSeleccionado(emp);
@@ -686,7 +708,6 @@ export default function GestionPersonal() {
         const diasNumericos = diasEspecificos.map(
           (d) => MAPA_DIAS_NUMERO[d] || 1,
         );
-
         for (const r of rangosEspecificos) {
           await addEmpleadoHorario(empleadoSeleccionado.id, {
             diasSemana: diasNumericos,
@@ -767,24 +788,48 @@ export default function GestionPersonal() {
           </div>
         </div>
 
-        {/* ALTA DE PERSONAL: PERSONAL_CREAR */}
-        {puedePersonalCrear ? (
-          <button
-            onClick={abrirModalCrear}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#4b35e6] hover:bg-[#3f2bc9] text-white text-xs font-semibold shadow-md shadow-indigo-100 transition self-start md:self-auto cursor-pointer"
-          >
-            <Plus className="w-4 h-4 stroke-[2.5]" />
-            Registrar Empleado
-          </button>
-        ) : (
-          <span
-            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-100 text-slate-400 text-xs font-semibold border border-slate-200 cursor-not-allowed select-none"
-            title="Requiere permiso PERSONAL_CREAR"
-          >
-            <Lock className="w-3.5 h-3.5" />
-            Alta de Personal Restringida
-          </span>
-        )}
+        <div className="flex flex-wrap items-center gap-2.5">
+          {/* BOTÓN ALERTA: COMPLETAR CAMPOS DE EMPLEADOS PENDIENTES */}
+          {totalIncompletos > 0 && (
+            <button
+              onClick={() => {
+                setSoloIncompletos(!soloIncompletos);
+                setPaginaActual(1);
+              }}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition shadow-xs cursor-pointer border ${
+                soloIncompletos
+                  ? "bg-amber-600 text-white border-amber-600 ring-2 ring-amber-300"
+                  : "bg-amber-50 hover:bg-amber-100 text-amber-800 border-amber-200 animate-pulse"
+              }`}
+            >
+              <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+              <span>
+                {soloIncompletos
+                  ? "Ver Todos los Empleados"
+                  : `Faltan completar datos (${totalIncompletos})`}
+              </span>
+            </button>
+          )}
+
+          {/* ALTA DE PERSONAL: PERSONAL_CREAR */}
+          {puedePersonalCrear ? (
+            <button
+              onClick={abrirModalCrear}
+              className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#4b35e6] hover:bg-[#3f2bc9] text-white text-xs font-semibold shadow-md shadow-indigo-100 transition cursor-pointer"
+            >
+              <Plus className="w-4 h-4 stroke-[2.5]" />
+              Registrar Empleado
+            </button>
+          ) : (
+            <span
+              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-100 text-slate-400 text-xs font-semibold border border-slate-200 cursor-not-allowed select-none"
+              title="Requiere permiso PERSONAL_CREAR"
+            >
+              <Lock className="w-3.5 h-3.5" />
+              Alta Restringida
+            </span>
+          )}
+        </div>
       </div>
 
       {/* 2. TARJETAS GLOBALES */}
@@ -794,10 +839,13 @@ export default function GestionPersonal() {
           onClick={() => {
             setFilterEstado("TODOS");
             setFilterCategoria("TODAS");
+            setSoloIncompletos(false);
             setPaginaActual(1);
           }}
           className={`p-5 rounded-2xl flex flex-col justify-between text-left transition-all border cursor-pointer ${
-            filterEstado === "TODOS" && filterCategoria === "TODAS"
+            filterEstado === "TODOS" &&
+            filterCategoria === "TODAS" &&
+            !soloIncompletos
               ? "bg-slate-50/90 border-slate-700 ring-4 ring-slate-400/20 shadow-md scale-[1.02]"
               : "bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50/50"
           }`}
@@ -823,10 +871,12 @@ export default function GestionPersonal() {
           onClick={() => {
             setFilterCategoria("Docentes");
             setFilterEstado("ACTIVOS");
+            setSoloIncompletos(false);
             setPaginaActual(1);
           }}
           className={`p-5 rounded-2xl flex flex-col justify-between text-left transition-all border cursor-pointer ${
-            filterCategoria.toLowerCase().includes("docente")
+            filterCategoria.toLowerCase().includes("docente") &&
+            !soloIncompletos
               ? "bg-purple-50/80 border-purple-500 ring-4 ring-purple-500/20 shadow-md scale-[1.02]"
               : "bg-white border-slate-200 hover:border-purple-300 hover:bg-purple-50/30"
           }`}
@@ -855,11 +905,13 @@ export default function GestionPersonal() {
             )?.nombre;
             setFilterCategoria(catAdmin || "TODAS");
             setFilterEstado("ACTIVOS");
+            setSoloIncompletos(false);
             setPaginaActual(1);
           }}
           className={`p-5 rounded-2xl flex flex-col justify-between text-left transition-all border cursor-pointer ${
             filterEstado === "ACTIVOS" &&
-            filterCategoria.toLowerCase().includes("administrativ")
+            filterCategoria.toLowerCase().includes("administrativ") &&
+            !soloIncompletos
               ? "bg-indigo-50/80 border-indigo-500 ring-4 ring-indigo-500/20 shadow-md scale-[1.02]"
               : "bg-white border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/30"
           }`}
@@ -885,10 +937,11 @@ export default function GestionPersonal() {
           onClick={() => {
             setFilterEstado("INACTIVOS");
             setFilterCategoria("TODAS");
+            setSoloIncompletos(false);
             setPaginaActual(1);
           }}
           className={`p-5 rounded-2xl flex flex-col justify-between text-left transition-all border cursor-pointer ${
-            filterEstado === "INACTIVOS"
+            filterEstado === "INACTIVOS" && !soloIncompletos
               ? "bg-rose-50/80 border-rose-500 ring-4 ring-rose-500/20 shadow-md scale-[1.02]"
               : "bg-white border-slate-200 hover:border-rose-300 hover:bg-rose-50/30"
           }`}
@@ -979,17 +1032,19 @@ export default function GestionPersonal() {
                   Cargando nómina de empleados...
                 </td>
               </tr>
-            ) : empleados.length === 0 ? (
+            ) : empleadosRenderizados.length === 0 ? (
               <tr>
                 <td
                   colSpan={5}
                   className="text-center py-12 text-slate-400 text-xs italic"
                 >
-                  No se encontraron colaboradores con los filtros seleccionados.
+                  {soloIncompletos
+                    ? "¡Excelente! No hay colaboradores con datos incompletos en esta vista."
+                    : "No se encontraron colaboradores con los filtros seleccionados."}
                 </td>
               </tr>
             ) : (
-              empleados.map((emp) => {
+              empleadosRenderizados.map((emp) => {
                 const esDocente =
                   (emp.categorias || []).some((c) =>
                     (c.codigoTag || c.nombre || "")
@@ -1007,19 +1062,48 @@ export default function GestionPersonal() {
                       ? [emp.categoria]
                       : [];
 
+                const incompleto = esEmpleadoIncompleto(emp);
+
                 return (
                   <tr
                     key={emp.id}
-                    className={`transition-colors ${emp.activo === false ? "bg-slate-50/60 opacity-80" : "hover:bg-slate-50/70"}`}
+                    className={`transition-colors ${
+                      emp.activo === false
+                        ? "bg-slate-50/60 opacity-80"
+                        : incompleto
+                          ? "bg-amber-50/30 hover:bg-amber-50/60"
+                          : "hover:bg-slate-50/70"
+                    }`}
                   >
                     <td className="px-6 py-4">
-                      <div className="font-bold text-slate-900 text-sm">
-                        {emp.apellido}, {emp.nombre}
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-slate-900 text-sm">
+                          {emp.apellido}, {emp.nombre}
+                        </span>
+                        {incompleto && (
+                          <span
+                            title="Faltan datos obligatorios (DNI, Legajo o Categoría)"
+                            className="bg-amber-100 text-amber-800 border border-amber-300 text-[10px] font-bold px-2 py-0.5 rounded-full inline-flex items-center gap-1"
+                          >
+                            <AlertCircle className="w-3 h-3 text-amber-600" />
+                            Incompleto
+                          </span>
+                        )}
                       </div>
                       <div className="text-[11px] text-slate-500 mt-0.5">
-                        DNI: {emp.dni} •{" "}
+                        DNI:{" "}
+                        {emp.dni || (
+                          <span className="text-amber-600 font-bold">
+                            Sin DNI
+                          </span>
+                        )}{" "}
+                        •{" "}
                         <span className="font-mono text-slate-700">
-                          {emp.nroLegajo}
+                          {emp.nroLegajo || (
+                            <span className="text-amber-600 font-bold">
+                              Sin Legajo
+                            </span>
+                          )}
                         </span>
                       </div>
                       {emp.email && (
@@ -1043,8 +1127,8 @@ export default function GestionPersonal() {
                             </span>
                           ))
                         ) : (
-                          <span className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-wider uppercase border bg-slate-50 text-slate-600 border-slate-200">
-                            GENERAL
+                          <span className="inline-block px-2 py-0.5 rounded-md text-[10px] font-bold tracking-wider uppercase bg-amber-50 border border-amber-200 text-amber-700">
+                            Sin Categoría
                           </span>
                         )}
                       </div>
@@ -1067,7 +1151,6 @@ export default function GestionPersonal() {
                       </div>
                     </td>
 
-                    {/* BOTÓN CRONOGRAMA: HORARIOS_VER */}
                     <td className="px-6 py-4">
                       {puedeHorariosVer ? (
                         <button
@@ -1103,11 +1186,22 @@ export default function GestionPersonal() {
                       </span>
                     </td>
 
-                    {/* ACCIONES GRANULARES */}
+                    {/* ACCIONES */}
                     <td className="px-6 py-4 text-right">
                       <div className="flex items-center justify-end gap-2 text-slate-400">
-                        {/* 1. Ver Ficha / Cronograma: HORARIOS_VER */}
-                        {puedeHorariosVer ? (
+                        {/* Botón rápido "Completar Datos" si faltan campos */}
+                        {incompleto && puedePersonalEditar && (
+                          <button
+                            onClick={() => abrirModalEditar(emp)}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-lg text-[11px] shadow-xs cursor-pointer transition mr-1"
+                            title="Completar DNI, legajo y categorías"
+                          >
+                            <Pencil className="w-3 h-3" />
+                            Completar
+                          </button>
+                        )}
+
+                        {puedeHorariosVer && (
                           <button
                             onClick={() => handleVerDetalle(emp)}
                             className="p-1 hover:text-indigo-600 transition cursor-pointer"
@@ -1115,17 +1209,9 @@ export default function GestionPersonal() {
                           >
                             <Eye className="w-4 h-4" />
                           </button>
-                        ) : (
-                          <span
-                            className="p-1 text-slate-200 cursor-not-allowed"
-                            title="Requiere HORARIOS_VER"
-                          >
-                            <Eye className="w-4 h-4" />
-                          </span>
                         )}
 
-                        {/* 2. Asignar Turno: HORARIOS_GESTIONAR */}
-                        {puedeHorariosGestionar ? (
+                        {puedeHorariosGestionar && (
                           <button
                             onClick={() =>
                               verificarEmpleadoActivo(emp, () =>
@@ -1145,49 +1231,32 @@ export default function GestionPersonal() {
                           >
                             <Clock className="w-4 h-4" />
                           </button>
-                        ) : (
-                          <span
-                            className="p-1 text-slate-200 cursor-not-allowed"
-                            title="Requiere permiso HORARIOS_GESTIONAR"
-                          >
-                            <Clock className="w-4 h-4" />
-                          </span>
                         )}
 
-                        {/* 3. Asignar Cátedra a Docente: HORARIOS_GESTIONAR */}
-                        {esDocente &&
-                          (puedeHorariosGestionar ? (
-                            <button
-                              onClick={() =>
-                                verificarEmpleadoActivo(emp, () => {
-                                  setEmpleadoSeleccionado(emp);
-                                  handleAbrirAsignarClase();
-                                })
-                              }
-                              className={`p-1 transition ${
-                                emp.activo === false
-                                  ? "opacity-30 cursor-not-allowed hover:text-slate-400"
-                                  : "hover:text-purple-600 cursor-pointer"
-                              }`}
-                              title={
-                                emp.activo === false
-                                  ? "Empleado inactivo"
-                                  : "Asignar Cátedra a Docente"
-                              }
-                            >
-                              <Plus className="w-4 h-4 text-purple-600 stroke-[2.5]" />
-                            </button>
-                          ) : (
-                            <span
-                              className="p-1 text-slate-200 cursor-not-allowed"
-                              title="Requiere permiso HORARIOS_GESTIONAR"
-                            >
-                              <Plus className="w-4 h-4" />
-                            </span>
-                          ))}
+                        {esDocente && puedeHorariosGestionar && (
+                          <button
+                            onClick={() =>
+                              verificarEmpleadoActivo(emp, () => {
+                                setEmpleadoSeleccionado(emp);
+                                handleAbrirAsignarClase();
+                              })
+                            }
+                            className={`p-1 transition ${
+                              emp.activo === false
+                                ? "opacity-30 cursor-not-allowed hover:text-slate-400"
+                                : "hover:text-purple-600 cursor-pointer"
+                            }`}
+                            title={
+                              emp.activo === false
+                                ? "Empleado inactivo"
+                                : "Asignar Cátedra a Docente"
+                            }
+                          >
+                            <Plus className="w-4 h-4 text-purple-600 stroke-[2.5]" />
+                          </button>
+                        )}
 
-                        {/* 4. Editar Empleado (Datos Personales): PERSONAL_EDITAR */}
-                        {puedePersonalEditar ? (
+                        {puedePersonalEditar && (
                           <button
                             onClick={() =>
                               verificarEmpleadoActivo(emp, () =>
@@ -1207,18 +1276,10 @@ export default function GestionPersonal() {
                           >
                             <Pencil className="w-4 h-4" />
                           </button>
-                        ) : (
-                          <span
-                            className="p-1 text-slate-200 cursor-not-allowed"
-                            title="Requiere permiso PERSONAL_EDITAR"
-                          >
-                            <Pencil className="w-4 h-4" />
-                          </span>
                         )}
 
-                        {/* 5. Baja Lógica y Reactivación: PERSONAL_BAJA_REACTIVAR */}
-                        {puedePersonalBajaReactivar ? (
-                          emp.activo !== false ? (
+                        {puedePersonalBajaReactivar &&
+                          (emp.activo !== false ? (
                             <button
                               onClick={() =>
                                 handleEliminarEmpleado(
@@ -1244,15 +1305,7 @@ export default function GestionPersonal() {
                             >
                               <RotateCcw className="w-4 h-4 text-emerald-600" />
                             </button>
-                          )
-                        ) : (
-                          <span
-                            className="p-1 text-slate-200 cursor-not-allowed"
-                            title="Requiere permiso PERSONAL_BAJA_REACTIVAR"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </span>
-                        )}
+                          ))}
                       </div>
                     </td>
                   </tr>
@@ -1285,7 +1338,6 @@ export default function GestionPersonal() {
               onClick={() => setPaginaActual((prev) => Math.max(prev - 1, 1))}
               disabled={paginaActual === 1 || loading}
               className="p-2 border border-slate-200 rounded-xl hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer"
-              title="Página Anterior"
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
@@ -1313,7 +1365,6 @@ export default function GestionPersonal() {
               }
               disabled={paginaActual === totalPaginas || loading}
               className="p-2 border border-slate-200 rounded-xl hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer"
-              title="Página Siguiente"
             >
               <ChevronRight className="w-4 h-4" />
             </button>
@@ -1321,7 +1372,7 @@ export default function GestionPersonal() {
         </div>
       </div>
 
-      {/* RENDERIZADO DE MODALES */}
+      {/* RENDERIZADO DE MODAL CON CONTROL DE DUPLICADOS */}
       <ModalRegistroEmpleado
         isOpen={modalRegistro}
         onClose={() => setModalRegistro(false)}
@@ -1331,6 +1382,7 @@ export default function GestionPersonal() {
         editandoEmpleadoId={editandoEmpleadoId}
         categoriasActivas={categoriasActivas}
         cargosFiltradosForm={cargosFiltradosForm}
+        empleadosExistentes={todosLosEmpleados} // <-- Se pasa para advertir nombres duplicados/similares
       />
 
       <ModalDetalleCronograma

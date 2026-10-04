@@ -1481,6 +1481,7 @@ export default function ImportacionFichajes() {
         editandoEmpleadoId={null}
         categoriasActivas={categoriasActivas}
         cargosFiltradosForm={cargosActivos}
+        empleadosExistentes={empleados}
       />
 
       {/* MODAL ALERTA */}

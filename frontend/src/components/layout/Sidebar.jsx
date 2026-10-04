@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { NavLink } from "react-router-dom";
+import React, { useState, useEffect } from "react";
+import { NavLink, useNavigate } from "react-router-dom";
 import {
   UploadCloud,
   Users,
@@ -12,29 +12,67 @@ import {
   History,
   LogOut,
   User,
+  AlertCircle,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import ModalAlerta from "../comunes/ModalAlerta";
-import { useNavigate } from "react-router-dom";
+import { getEmpleados } from "../../services/empleadoService";
 
 export default function Sidebar() {
   const { user, logout, tienePermiso } = useAuth();
   const [modalLogout, setModalLogout] = useState(false);
+  const [incompletosCount, setIncompletosCount] = useState(0);
   const navigate = useNavigate();
 
-  // Cada opción del menú está vinculada estrictamente a su permiso de visualización
+  // Consultar colaboradores con datos faltantes para mostrar la alerta
+  useEffect(() => {
+    let montado = true;
+    const verificarIncompletos = async () => {
+      try {
+        const emps = await getEmpleados();
+        if (montado && Array.isArray(emps)) {
+          const faltanDatos = emps.filter(
+            (e) =>
+              !e.dni ||
+              !e.nroLegajo ||
+              (Array.isArray(e.categorias) &&
+                e.categorias.length === 0 &&
+                !e.categoria),
+          ).length;
+          setIncompletosCount(faltanDatos);
+        }
+      } catch (err) {
+        // En caso de error de red o no autorizado se ignora silenciosamente
+      }
+    };
+
+    if (tienePermiso("PERSONAL_VER")) {
+      verificarIncompletos();
+    }
+
+    const interval = setInterval(() => {
+      if (tienePermiso("PERSONAL_VER")) verificarIncompletos();
+    }, 45000); // Chequeo periódico cada 45s
+
+    return () => {
+      montado = false;
+      clearInterval(interval);
+    };
+  }, [tienePermiso]);
+
   const menuItems = [
     {
       to: "/dashboard",
       label: "Dashboard General",
       icon: LayoutDashboard,
-      permiso: "DASHBOARD_VER", // O PERM_ADMIN_TOTAL
+      permiso: "DASHBOARD_VER",
     },
     {
       to: "/personal",
       label: "Gestión de Personal",
       icon: Users,
       permiso: "PERSONAL_VER",
+      badgeCount: incompletosCount,
     },
     {
       to: "/horarios-catedras",
@@ -80,7 +118,6 @@ export default function Sidebar() {
     },
   ];
 
-  // Solo se renderizan los enlaces para los cuales el usuario tiene el permiso específico o PERM_ADMIN_TOTAL
   const menuVisible = menuItems.filter(
     (item) => item.permiso && tienePermiso(item.permiso),
   );
@@ -103,22 +140,34 @@ export default function Sidebar() {
                   key={item.to}
                   to={item.to}
                   className={({ isActive }) =>
-                    `flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                    `flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
                       isActive
                         ? "bg-[#eef2ff] text-[#4b35e6]"
                         : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
                     }`
                   }
                 >
-                  <Icon className="w-4 h-4 stroke-[1.8] shrink-0" />
-                  <span>{item.label}</span>
+                  <div className="flex items-center gap-3 truncate">
+                    <Icon className="w-4 h-4 stroke-[1.8] shrink-0" />
+                    <span className="truncate">{item.label}</span>
+                  </div>
+
+                  {/* CÍRCULO ROJO / BADGE DE ALERTA DE DATOS PENDIENTES */}
+                  {item.badgeCount > 0 && (
+                    <span
+                      title={`${item.badgeCount} empleado(s) con datos incompletos`}
+                      className="ml-2 px-1.5 py-0.5 text-[10px] font-bold text-white bg-rose-500 rounded-full shrink-0 shadow-xs animate-pulse flex items-center justify-center min-w-[18px]"
+                    >
+                      {item.badgeCount}
+                    </span>
+                  )}
                 </NavLink>
               );
             })}
           </nav>
         </div>
 
-        {/* Zona Inferior: Perfil Dinámico + Cerrar Sesión */}
+        {/* Perfil Dinámico + Cerrar Sesión */}
         <div className="p-4 border-t border-slate-100 space-y-2">
           <div
             onClick={() => navigate("/perfil")}
@@ -139,7 +188,6 @@ export default function Sidebar() {
               </div>
             </div>
 
-            {/* Aviso visual en el sidebar si la contraseña aún es la provisoria */}
             {user?.debeCambiarPassword && (
               <span className="flex items-center gap-1 text-[10px] font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full animate-pulse">
                 <AlertCircle className="w-3 h-3" />

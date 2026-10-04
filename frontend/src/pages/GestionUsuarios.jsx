@@ -536,7 +536,7 @@ export default function GestionUsuarios() {
 
                     <td className="px-6 py-4">
                       <div className="font-semibold text-slate-800">
-                        {u.nombreCompletoEmpleado || "Sin Empleado Asociado"}
+                        {u.nombreCompleto || "Sin Empleado Asociado"}
                       </div>
                     </td>
 
