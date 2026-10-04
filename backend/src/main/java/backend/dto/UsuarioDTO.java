@@ -6,5 +6,9 @@ public record UsuarioDTO(
     String rol,
     Boolean activo,
     Long empleadoId,
-    String nombreCompletoEmpleado
+    String nombreCompleto,
+    String email,
+    String telefono,
+    String idBiometrico,
+    Boolean debeCambiarPassword
 ) {}

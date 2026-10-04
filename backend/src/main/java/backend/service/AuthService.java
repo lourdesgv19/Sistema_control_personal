@@ -38,27 +38,28 @@ public class AuthService {
     }
 
     public AuthResponse login(LoginRequest request) {
+        // 1. Validar existencia del usuario
         Usuario usuario = usuarioRepo.findByUsername(request.username().trim())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Usuario o contraseña incorrectos."));
 
-        if (!Boolean.TRUE.equals(usuario.getActivo())) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "La cuenta se encuentra suspendida.");
-        }
-
+        // 2. PRIMERO VALIDAR CONTRASEÑA (Evita delatar el estado si la clave está mal)
         if (!passwordEncoder.matches(request.password(), usuario.getPasswordHash())) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Usuario o contraseña incorrectos.");
         }
 
+        // 3. RECIÉN DESPUÉS VALIDAR SI LA CUENTA ESTÁ ACTIVA
+        if (!Boolean.TRUE.equals(usuario.getActivo())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "La cuenta se encuentra suspendida. Contacte al Administrador.");
+        }
+
+        // 4. Continuar con la generación de token y permisos...
         Set<String> permisos = new HashSet<>();
         String rol = usuario.getRol() != null ? usuario.getRol().trim().toUpperCase() : "CONSULTA";
 
-        // Si es ADMINISTRADOR, se le asignan TODOS los permisos existentes en la base de datos
         if (rol.contains("ADMIN")) {
             permisos.addAll(permisoRepo.findAllCodigos());
-            // Comodín global para bypass en SecurityConfig
             permisos.add("PERM_ADMIN_TOTAL");
         } else {
-            // Usuarios regulares: lee de usuario_permisos únicamente los que estén activos y vigentes
             List<UsuarioPermiso> vigentes = usuarioPermRepo.findPermisosVigentes(usuario.getId(), LocalDateTime.now());
             for (UsuarioPermiso up : vigentes) {
                 permisos.add(up.getCodigoPermiso());
@@ -71,7 +72,6 @@ public class AuthService {
 
         boolean debeCambiar = Boolean.TRUE.equals(usuario.getDebeCambiarPassword());
 
-        // Claims dentro del token JWT
         Map<String, Object> extraClaims = new HashMap<>();
         extraClaims.put("idUsuario", usuario.getId());
         extraClaims.put("rol", usuario.getRol());

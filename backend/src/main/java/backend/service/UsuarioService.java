@@ -117,17 +117,32 @@ public class UsuarioService {
         usuario.setDebeCambiarPassword(false);
         usuarioRepo.save(usuario);
 
-        // Registro de Auditoría
-        auditoriaService.registrarMovimiento(
-            usuario.getId(),
-            usuario.getUsername(),
-            usuario.getRol(),
-            "CAMBIO_PASSWORD",
-            "SEGURIDAD",
-            "El usuario " + usuario.getUsername() + " actualizó su contraseña (primer inicio o perfil).",
-            null
-        );
     }
+
+    @Transactional
+    public void cambiarPasswordPerfil(String username, String passActual, String passNueva) {
+    Usuario usuario = usuarioRepo.findByUsername(username)
+            .orElseThrow(() -> new IllegalArgumentException("Usuario no encontrado"));
+
+    // 1. Verificación obligatoria de contraseña actual
+    if (!passwordEncoder.matches(passActual, usuario.getPasswordHash())) {
+        throw new IllegalArgumentException("La contraseña actual ingresada es incorrecta.");
+    }
+
+    // 2. Validación de complejidad
+    if (passNueva == null || passNueva.trim().length() < 6) {
+        throw new IllegalArgumentException("La nueva contraseña debe tener al menos 6 caracteres.");
+    }
+
+    if (passwordEncoder.matches(passNueva, usuario.getPasswordHash())) {
+        throw new IllegalArgumentException("La nueva contraseña no puede ser igual a la anterior.");
+    }
+
+    // 3. Persistir y desactivar el requerimiento
+    usuario.setPasswordHash(passwordEncoder.encode(passNueva.trim()));
+    usuario.setDebeCambiarPassword(false);
+    usuarioRepo.save(usuario);
+}
 
     @Transactional
     public UsuarioDTO crearUsuarioParaEmpleado(CrearUsuarioRequest req) {
@@ -230,19 +245,58 @@ public class UsuarioService {
         );
     }
 
-    private UsuarioDTO convertirADTO(Usuario u) {
-        String nombreCompleto = u.getEmpleado() != null 
-                ? (u.getEmpleado().getApellido() + ", " + u.getEmpleado().getNombre()) 
-                : "Sin Empleado Asociado";
-        Long empId = u.getEmpleado() != null ? u.getEmpleado().getId() : null;
+    public UsuarioDTO convertirADTO(Usuario u) {
+    boolean esAdminRaiz = (u.getEmpleado() == null && "admin".equalsIgnoreCase(u.getUsername()));
 
-        return new UsuarioDTO(
-                u.getId(),
-                u.getUsername(),
-                u.getRol(),
-                u.getActivo(),
-                empId,
-                nombreCompleto
+    String nombreCompleto = u.getEmpleado() != null 
+            ? (u.getEmpleado().getNombre() + " " + u.getEmpleado().getApellido()) 
+            : (esAdminRaiz ? "Administrador General del Sistema" : "Sin Empleado Asociado");
+
+    Long empId = u.getEmpleado() != null ? u.getEmpleado().getId() : null;
+    String email = u.getEmpleado() != null ? u.getEmpleado().getEmail() : null;
+    String telefono = u.getEmpleado() != null ? u.getEmpleado().getTelefono() : null;
+    String idBiometrico = u.getEmpleado() != null ? u.getEmpleado().getIdBiometrico() : null;
+
+    return new UsuarioDTO(
+            u.getId(),
+            u.getUsername(), // Asegurar que pase u.getUsername()
+            u.getRol(),
+            u.getActivo(),
+            empId,
+            nombreCompleto,
+            email,
+            telefono,
+            idBiometrico,
+            Boolean.TRUE.equals(u.getDebeCambiarPassword())
+    );
+}
+
+    @Transactional
+public void actualizarContacto(String usernameActual, String email, String telefono) {
+    Usuario usuario = usuarioRepo.findByUsername(usernameActual)
+            .orElseThrow(() -> new IllegalArgumentException("Usuario no encontrado: " + usernameActual));
+
+    Empleado emp = usuario.getEmpleado();
+
+    // 1. Caso especial: Usuario raíz del sistema (sin empleado vinculado)
+    if (emp == null) {
+        // Si el admin no tiene empleado, podemos actualizar su username si fuera email, 
+        // o simplemente registrar el movimiento en auditoría.
+        auditoriaService.registrarMovimiento(
+            usuario.getId(),
+            usuario.getUsername(),
+            usuario.getRol(),
+            "ACTUALIZAR_CONTACTO_ADMIN",
+            "SEGURIDAD",
+            "Actualización de contacto de cuenta de sistema: " + email + " / Tel: " + telefono,
+            null
         );
+        return;
     }
+
+    // 2. Flujo estándar para usuarios vinculados a empleados
+    emp.setEmail(email != null ? email.trim().toLowerCase() : null);
+    emp.setTelefono(telefono != null ? telefono.trim() : null);
+    empleadoRepo.save(emp);
+}
 }

@@ -42,8 +42,9 @@ public class SecurityConfig {
                 .requestMatchers("/api/auth/**", "/api/public/**").permitAll()
 
                 // 2. Cambio de contraseña propio (Cualquier usuario autenticado)
+                .requestMatchers(HttpMethod.GET, "/api/usuarios/mi-perfil").authenticated()
+                .requestMatchers(HttpMethod.PUT, "/api/usuarios/mi-perfil/**").authenticated()
                 .requestMatchers(HttpMethod.PUT, "/api/usuarios/*/primer-cambio-password").authenticated()
-                .requestMatchers(HttpMethod.PUT, "/api/usuarios/mi-perfil/cambiar-password").authenticated()
 
                 // 3. Catálogos maestros de solo lectura (Lectura permitida para alimentar filtros y selects)
                 .requestMatchers(HttpMethod.GET, "/api/configuracion/**").authenticated()

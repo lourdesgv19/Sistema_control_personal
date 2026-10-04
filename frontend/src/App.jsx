@@ -10,6 +10,7 @@ import GestionUsuarios from "./pages/GestionUsuarios";
 import TiposConfiguracion from "./pages/TiposConfiguracion";
 import PanelAuditoria from "./pages/PanelAuditoria";
 import GestionHorarios from "./pages/GestionHorarios";
+import Perfil from "./pages/Perfil";
 
 export default function App() {
   return (
@@ -25,6 +26,7 @@ export default function App() {
             </ProtectedRoute>
           }
         >
+          <Route path="/perfil" element={<Perfil />} />
           {/* 1. Personal: Requiere PERSONAL_VER */}
           <Route
             path="/personal"

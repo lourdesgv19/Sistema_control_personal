@@ -15,10 +15,12 @@ import {
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import ModalAlerta from "../comunes/ModalAlerta";
+import { useNavigate } from "react-router-dom";
 
 export default function Sidebar() {
   const { user, logout, tienePermiso } = useAuth();
   const [modalLogout, setModalLogout] = useState(false);
+  const navigate = useNavigate();
 
   // Cada opción del menú está vinculada estrictamente a su permiso de visualización
   const menuItems = [
@@ -94,48 +96,56 @@ export default function Sidebar() {
           </div>
 
           <nav className="px-3 space-y-1">
-            {menuVisible.length === 0 ? (
-              <div className="px-3 py-4 text-xs text-slate-400 italic text-center">
-                Sin módulos habilitados
-              </div>
-            ) : (
-              menuVisible.map((item) => {
-                const Icon = item.icon;
-                return (
-                  <NavLink
-                    key={item.to}
-                    to={item.to}
-                    className={({ isActive }) =>
-                      `flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-                        isActive
-                          ? "bg-[#eef2ff] text-[#4b35e6]"
-                          : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
-                      }`
-                    }
-                  >
-                    <Icon className="w-4 h-4 stroke-[1.8] shrink-0" />
-                    <span>{item.label}</span>
-                  </NavLink>
-                );
-              })
-            )}
+            {menuVisible.map((item) => {
+              const Icon = item.icon;
+              return (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  className={({ isActive }) =>
+                    `flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                      isActive
+                        ? "bg-[#eef2ff] text-[#4b35e6]"
+                        : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
+                    }`
+                  }
+                >
+                  <Icon className="w-4 h-4 stroke-[1.8] shrink-0" />
+                  <span>{item.label}</span>
+                </NavLink>
+              );
+            })}
           </nav>
         </div>
 
-        {/* Tarjeta inferior con el usuario conectado y botón de salida */}
-        <div className="p-4 border-t border-slate-100 space-y-3">
-          <div className="flex items-center gap-3 p-2 bg-slate-50 border border-slate-200/60 rounded-xl">
-            <div className="w-8 h-8 rounded-full bg-indigo-50 border border-indigo-200 flex items-center justify-center text-indigo-600 shrink-0">
-              <User className="w-4 h-4 stroke-[2]" />
+        {/* Zona Inferior: Perfil Dinámico + Cerrar Sesión */}
+        <div className="p-4 border-t border-slate-100 space-y-2">
+          <div
+            onClick={() => navigate("/perfil")}
+            title="Ir a mi perfil"
+            className="flex items-center justify-between p-2 rounded-xl border border-slate-200/70 hover:bg-slate-50 cursor-pointer transition"
+          >
+            <div className="flex items-center gap-2.5 overflow-hidden">
+              <div className="w-8 h-8 rounded-full bg-indigo-50 border border-indigo-200 flex items-center justify-center text-indigo-600 shrink-0">
+                <User className="w-4 h-4 stroke-[2]" />
+              </div>
+              <div className="truncate">
+                <span className="text-xs font-bold text-slate-800 block truncate">
+                  {user?.nombre || user?.username || "Usuario"}
+                </span>
+                <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block truncate">
+                  {user?.rol || "OPERADOR"}
+                </span>
+              </div>
             </div>
-            <div className="overflow-hidden">
-              <span className="text-xs font-bold text-slate-800 block truncate">
-                {user?.nombre || user?.username || "Usuario"}
+
+            {/* Aviso visual en el sidebar si la contraseña aún es la provisoria */}
+            {user?.debeCambiarPassword && (
+              <span className="flex items-center gap-1 text-[10px] font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full animate-pulse">
+                <AlertCircle className="w-3 h-3" />
+                Clave
               </span>
-              <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block truncate">
-                {user?.rol || "OPERADOR"}
-              </span>
-            </div>
+            )}
           </div>
 
           <button

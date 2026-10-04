@@ -19,10 +19,10 @@ import java.util.Map;
 @CrossOrigin(origins = "http://localhost:5173")
 public class UsuarioController {
 
-private final UsuarioService usuarioService;
-    private final UsuarioRepository usuarioRepo; // <-- AGREGAR
+    private final UsuarioService usuarioService;
+    private final UsuarioRepository usuarioRepo;
 
-    public UsuarioController(UsuarioService usuarioService, UsuarioRepository usuarioRepo) { // <-- INYECTAR
+    public UsuarioController(UsuarioService usuarioService, UsuarioRepository usuarioRepo) { 
         this.usuarioService = usuarioService;
         this.usuarioRepo = usuarioRepo;
     }
@@ -92,5 +92,34 @@ private final UsuarioService usuarioService;
     public ResponseEntity<Void> cambiarEstado(@PathVariable Long id, @RequestParam boolean activo) {
         usuarioService.cambiarEstado(id, activo);
         return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping("/mi-perfil")
+    public ResponseEntity<?> obtenerMiPerfil(Authentication auth) {
+    Usuario usuario = usuarioRepo.findByUsername(auth.getName())
+            .orElseThrow(() -> new IllegalArgumentException("Usuario no encontrado"));
+    return ResponseEntity.ok(usuarioService.convertirADTO(usuario));
+    }
+
+    @PutMapping("/mi-perfil/contacto")
+    public ResponseEntity<?> actualizarDatosContacto(
+        @RequestBody Map<String, String> body,
+        Authentication auth) {
+    String email = body.get("email");
+    String telefono = body.get("telefono");
+    usuarioService.actualizarContacto(auth.getName(), email, telefono);
+    return ResponseEntity.ok(Map.of("message", "Datos de contacto actualizados correctamente."));
+    }
+
+    @PutMapping("/mi-perfil/cambiar-password")
+    public ResponseEntity<?> cambiarPasswordPerfil(
+        @RequestBody CambioPasswordRequest req,
+        Authentication auth) {
+    try {
+        usuarioService.cambiarPasswordPerfil(auth.getName(), req.passwordActual(), req.passwordNueva());
+        return ResponseEntity.ok(Map.of("message", "Contraseña actualizada exitosamente."));
+    } catch (IllegalArgumentException e) {
+        return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
+    }
     }
 }

@@ -1,16 +1,23 @@
 import React, { useState } from "react";
-import { Clock, Lock, User, AlertCircle, Loader2 } from "lucide-react";
+import {
+  Clock,
+  Lock,
+  User,
+  AlertCircle,
+  ShieldAlert,
+  Loader2,
+} from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import apiClient from "../services/api";
 
 export default function Login() {
   const { login } = useAuth();
-  const [error, setError] = useState(null);
+  const [errorInfo, setErrorInfo] = useState(null); // { tipo: 'credenciales' | 'suspendida' | 'servidor', mensaje: '' }
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError(null);
+    setErrorInfo(null);
     setLoading(true);
 
     const form = new FormData(e.target);
@@ -28,16 +35,35 @@ export default function Login() {
         login(token);
       }
     } catch (err) {
-      if (err.response?.status === 401) {
-        setError("Usuario o contraseña incorrectos.");
-      } else if (err.response?.status === 403) {
-        setError(
-          err.response.data?.message || "La cuenta se encuentra suspendida.",
-        );
+      const status = err.response?.status;
+      const mensajeServidor =
+        err.response?.data?.message || err.response?.data?.reason || "";
+
+      const esCuentaSuspendida =
+        status === 403 && mensajeServidor.toLowerCase().includes("suspendid");
+
+      if (esCuentaSuspendida) {
+        setErrorInfo({
+          tipo: "suspendida",
+          mensaje:
+            mensajeServidor ||
+            "La cuenta se encuentra suspendida. Contacte al Administrador.",
+        });
+      } else if (status === 401 || status === 403) {
+        // Si es 401 o un 403 sin mensaje de suspensión explícito, es credencial errónea
+        setErrorInfo({
+          tipo: "credenciales",
+          mensaje:
+            mensajeServidor && !esCuentaSuspendida
+              ? mensajeServidor
+              : "Usuario o contraseña incorrectos.",
+        });
       } else {
-        setError(
-          err.response?.data?.message || "Error al conectar con el servidor.",
-        );
+        setErrorInfo({
+          tipo: "servidor",
+          mensaje:
+            "No se pudo conectar con el servidor. Intente nuevamente más tarde.",
+        });
       }
     } finally {
       setLoading(false);
@@ -60,17 +86,35 @@ export default function Login() {
           </p>
         </div>
 
-        {error && (
-          <div className="mb-6 p-3.5 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 flex items-center gap-2">
-            <AlertCircle className="w-4 h-4 shrink-0" />
-            <span>{error}</span>
+        {/* ALERTA DE ERROR DIFERENCIADA */}
+        {errorInfo && (
+          <div
+            className={`mb-6 p-3.5 rounded-xl text-xs flex items-start gap-2.5 border ${
+              errorInfo.tipo === "suspendida"
+                ? "bg-amber-50 border-amber-300 text-amber-900"
+                : "bg-rose-50 border-rose-200 text-rose-700"
+            }`}
+          >
+            {errorInfo.tipo === "suspendida" ? (
+              <ShieldAlert className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+            ) : (
+              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+            )}
+            <div>
+              <span className="font-bold block">
+                {errorInfo.tipo === "suspendida"
+                  ? "Acceso Inhabilitado"
+                  : "Error de Autenticación"}
+              </span>
+              <span>{errorInfo.mensaje}</span>
+            </div>
           </div>
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4 text-xs">
           <div>
             <label className="block font-semibold text-slate-700 mb-1">
-              Usuario o Email
+              Usuario o Identificador
             </label>
             <div className="relative">
               <User className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -79,7 +123,7 @@ export default function Login() {
                 name="username"
                 type="text"
                 required
-                placeholder="Ej: santiago.perez o santiago.perez@gmail.com"
+                placeholder="Ej: santiago.jorge o admin"
                 className="w-full pl-9 pr-3 py-2.5 border border-slate-200 rounded-xl outline-none focus:border-indigo-600 font-medium"
               />
             </div>

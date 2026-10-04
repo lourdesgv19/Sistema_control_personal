@@ -16,6 +16,8 @@ public interface EmpleadoRepository extends JpaRepository<Empleado, Long> {
 
     Optional<Empleado> findByIdBiometrico(String idBiometrico);
 
+    Optional<Empleado> findByEmail(String email);
+
     // Consulta de padrón optimizada con filtros y paginación
     @Query("SELECT DISTINCT e FROM Empleado e " +
            "LEFT JOIN e.categorias cat " +
