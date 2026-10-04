@@ -181,11 +181,15 @@ public class HorarioService {
         );
     }
 
-    @Transactional(readOnly = true)
+@Transactional(readOnly = true)
     public MetricasPersonalDTO calcularMetricas(Long empleadoId) {
         Empleado emp = empleadoRepo.findById(empleadoId)
                 .orElseThrow(() -> new RuntimeException("Empleado no encontrado con ID: " + empleadoId));
-        List<EmpleadoHorario> franjas = horarioRepo.findByEmpleadoId(empleadoId);
+
+        // 1. Filtrar únicamente las franjas activas en la BD
+        List<EmpleadoHorario> franjas = horarioRepo.findByEmpleadoId(empleadoId).stream()
+                .filter(h -> Boolean.TRUE.equals(h.getActivo()))
+                .toList();
 
         double totalHorasSemana = 0.0;
         Set<String> diasSet = new LinkedHashSet<>();
@@ -194,6 +198,7 @@ public class HorarioService {
         boolean tieneMensual = false;
         boolean tieneAnual = false;
         int repeticionesMensuales = 0;
+        String etiquetaDetectada = null;
 
         for (EmpleadoHorario f : franjas) {
             String diaNombre = diaNumeroANombre(f.getDiaSemana());
@@ -201,6 +206,11 @@ public class HorarioService {
 
             if (f.getMateria() != null) {
                 tieneMaterias = true;
+            }
+
+            // Capturar la etiqueta o nombre del turno asignado
+            if (f.getEtiqueta() != null && !f.getEtiqueta().isBlank() && etiquetaDetectada == null) {
+                etiquetaDetectada = f.getEtiqueta().trim();
             }
 
             String frec = f.getTipoFrecuencia() != null ? f.getTipoFrecuencia().toUpperCase() : "SEMANAL";
@@ -232,11 +242,14 @@ public class HorarioService {
         String regimenSub;
 
         if (franjas.isEmpty()) {
-            regimenDesc = "Sin Horario Fijado";
-            regimenSub = "Pendiente de asignar";
+            regimenDesc = "Sin Horario Asignado";
+            regimenSub = "Pendiente de configuración";
         } else if (tieneMaterias) {
-            regimenDesc = "Docente Por Cátedras";
+            regimenDesc = "Por Cátedra";
             regimenSub = franjas.size() + " bloques semanales";
+        } else if (etiquetaDetectada != null) {
+            regimenDesc = etiquetaDetectada;
+            regimenSub = franjas.size() + " días asignados";
         } else if (tieneMensual) {
             regimenDesc = "Esquema Mensual";
             regimenSub = repeticionesMensuales + " jornada(s) requerida(s) al mes";
@@ -244,10 +257,10 @@ public class HorarioService {
             regimenDesc = "Semana de por Medio";
             regimenSub = "Rotación quincenal alternada";
         } else if (tieneAnual) {
-            regimenDesc = "Esquema Anual / Eventual";
-            regimenSub = "Cumplimiento por jornadas fijadas al año";
+            regimenDesc = "Esquema Anual";
+            regimenSub = "Jornadas fijadas al año";
         } else {
-            regimenDesc = "Jornada Regular";
+            regimenDesc = "Personalizado";
             regimenSub = franjas.size() + " bloques semanales";
         }
 
