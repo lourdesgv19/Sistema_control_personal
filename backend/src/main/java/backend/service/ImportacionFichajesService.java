@@ -15,7 +15,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
-
+import backend.service.EvaluadorIncidentesService;
 import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
 import java.io.InputStreamReader;
@@ -33,14 +33,16 @@ public class ImportacionFichajesService {
     private final EmpleadoRepository empleadoRepo;
     private final EmpleadoFichajeRepository fichajeRepo;
     private final ImportacionHistorialRepository historialRepo;
-
+    private final EvaluadorIncidentesService evaluadorIncidentes;
     public ImportacionFichajesService(
             EmpleadoRepository empleadoRepo,
             EmpleadoFichajeRepository fichajeRepo,
-            ImportacionHistorialRepository historialRepo) {
+            ImportacionHistorialRepository historialRepo,
+            EvaluadorIncidentesService evaluadorIncidentesService) {
         this.empleadoRepo = empleadoRepo;
         this.fichajeRepo = fichajeRepo;
         this.historialRepo = historialRepo;
+        this.evaluadorIncidentes = evaluadorIncidentesService;
     }
 
     private String limpiar(String val) {
@@ -79,6 +81,23 @@ public class ImportacionFichajesService {
         historial.setDuplicadasIgnoradas(resumen.duplicadasIgnoradas());
         historial.setErrores(resumen.errores());
         historialRepo.save(historial);
+
+        try {
+        Set<LocalDate> fechasDelArchivo = new HashSet<>();
+        for (FilaFichajeRaw f : filas) {
+            if (!esVacioONulo(f.fecha())) {
+                try {
+                    fechasDelArchivo.add(parsearFechaSegura(f.fecha()));
+                } catch (Exception ignored) {}
+            }
+        }
+
+        for (LocalDate fecha : fechasDelArchivo) {
+            evaluadorIncidentes.evaluarFecha(fecha);
+        }
+    } catch (Exception e) {
+        log.error("Error al auditar incidentes tras importación: {}", e.getMessage());
+    }
 
         return resumen;
     }

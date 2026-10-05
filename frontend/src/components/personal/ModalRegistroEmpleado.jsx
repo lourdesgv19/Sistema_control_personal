@@ -2,14 +2,12 @@ import React, { useState, useEffect, useMemo } from "react";
 import { X, AlertTriangle } from "lucide-react";
 import MultiSelectDropdown from "../comunes/MultiSelectDropdown";
 
-// Algoritmo de distancia de Levenshtein optimizado en memoria O(M)
 function calcularSimilitudOptimizada(s1 = "", s2 = "") {
   const a = s1.trim().toLowerCase();
   const b = s2.trim().toLowerCase();
   if (!a || !b) return 0;
   if (a === b) return 1;
 
-  // Descarte rápido por diferencia de longitud
   if (Math.abs(a.length - b.length) > 4 && !a.includes(b) && !b.includes(a)) {
     return 0;
   }
@@ -47,7 +45,6 @@ export default function ModalRegistroEmpleado({
 }) {
   if (!isOpen) return null;
 
-  // Estado con debounce para no sobrecargar el hilo de render al escribir
   const [textoDebounced, setTextoDebounced] = useState("");
 
   useEffect(() => {
@@ -62,7 +59,6 @@ export default function ModalRegistroEmpleado({
     return () => clearTimeout(handler);
   }, [formEmpleado.nombre, formEmpleado.apellido]);
 
-  // Detección de duplicados o nombres similares
   const coincidenciasSimilares = useMemo(() => {
     if (textoDebounced.length < 3) return [];
 
@@ -114,14 +110,12 @@ export default function ModalRegistroEmpleado({
         </div>
 
         <form onSubmit={onSubmit} className="p-6 space-y-4 text-xs">
-          {/* ADVERTENCIA DE NOMBRES DUPLICADOS O MUY PARECIDOS */}
           {coincidenciasSimilares.length > 0 && (
             <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl space-y-1.5 animate-in fade-in">
               <div className="flex items-center gap-2 text-amber-800 font-bold text-xs">
                 <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
                 <span>
-                  Advertencia: Se detectaron empleados con nombres coincidentes
-                  o similares
+                  Advertencia: Se detectaron colaboradores con nombres similares
                 </span>
               </div>
               <ul className="text-[11px] text-amber-900 space-y-1 pl-6 list-disc">
@@ -140,10 +134,6 @@ export default function ModalRegistroEmpleado({
                   </li>
                 ))}
               </ul>
-              <p className="text-[10px] text-amber-700 italic pt-0.5">
-                Compruebe si no se trata de la misma persona antes de crear un
-                nuevo registro.
-              </p>
             </div>
           )}
 
@@ -183,7 +173,7 @@ export default function ModalRegistroEmpleado({
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block font-semibold text-slate-700 mb-1">
-                DNI / Documento (Opcional)
+                DNI / Documento
               </label>
               <input
                 type="text"
@@ -201,7 +191,7 @@ export default function ModalRegistroEmpleado({
               </label>
               <input
                 type="email"
-                placeholder="carlos.benitez@instituto.edu.ar"
+                placeholder="carlos.benitez@empresa.com"
                 value={formEmpleado.email || ""}
                 onChange={(e) =>
                   setFormEmpleado({ ...formEmpleado, email: e.target.value })
@@ -228,7 +218,7 @@ export default function ModalRegistroEmpleado({
             </div>
             <div>
               <label className="block font-semibold text-slate-700 mb-1">
-                Nº Legajo (Opcional)
+                Nº Legajo
               </label>
               <input
                 type="text"
@@ -285,39 +275,85 @@ export default function ModalRegistroEmpleado({
             }
           />
 
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block font-semibold text-slate-700 mb-1">
-                Tolerancia Ingreso (min)
-              </label>
-              <input
-                type="number"
-                value={formEmpleado.toleranciaIngresoMin}
-                onChange={(e) =>
-                  setFormEmpleado({
-                    ...formEmpleado,
-                    toleranciaIngresoMin: e.target.value,
-                  })
-                }
-                className="w-full border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-indigo-600"
-              />
-            </div>
+          {/* TOLERANCIAS Y SALIDAS INTERMEDIAS */}
+          <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-3.5 space-y-3">
+            <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-500">
+              Parámetros de Auditoría y Tolerancias
+            </span>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1 text-[11px]">
+                  Tol. Ingreso (min)
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  value={formEmpleado.toleranciaIngresoMin}
+                  onChange={(e) =>
+                    setFormEmpleado({
+                      ...formEmpleado,
+                      toleranciaIngresoMin: e.target.value,
+                    })
+                  }
+                  className="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 outline-none focus:border-indigo-600"
+                />
+              </div>
 
-            <div>
-              <label className="block font-semibold text-slate-700 mb-1">
-                Tolerancia Salida (min)
-              </label>
-              <input
-                type="number"
-                value={formEmpleado.toleranciaEgresoMin}
-                onChange={(e) =>
-                  setFormEmpleado({
-                    ...formEmpleado,
-                    toleranciaEgresoMin: e.target.value,
-                  })
-                }
-                className="w-full border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-indigo-600"
-              />
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1 text-[11px]">
+                  Tol. Salida (min)
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  value={formEmpleado.toleranciaEgresoMin}
+                  onChange={(e) =>
+                    setFormEmpleado({
+                      ...formEmpleado,
+                      toleranciaEgresoMin: e.target.value,
+                    })
+                  }
+                  className="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 outline-none focus:border-indigo-600"
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1 text-[11px]">
+                  Máx. Tiempo Fuera (min)
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  placeholder="45"
+                  value={formEmpleado.tiempoMaxFueraMin}
+                  onChange={(e) =>
+                    setFormEmpleado({
+                      ...formEmpleado,
+                      tiempoMaxFueraMin: e.target.value,
+                    })
+                  }
+                  className="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 outline-none focus:border-indigo-600 font-semibold text-indigo-700"
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1 text-[11px]">
+                  Máx. Salidas Interm.
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  placeholder="2"
+                  value={formEmpleado.maxSalidasIntermedias}
+                  onChange={(e) =>
+                    setFormEmpleado({
+                      ...formEmpleado,
+                      maxSalidasIntermedias: e.target.value,
+                    })
+                  }
+                  className="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 outline-none focus:border-indigo-600 font-semibold text-indigo-700"
+                />
+              </div>
             </div>
           </div>
 

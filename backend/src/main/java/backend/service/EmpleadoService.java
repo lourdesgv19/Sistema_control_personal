@@ -68,6 +68,8 @@ public class EmpleadoService {
         emp.setToleranciaEgresoMin(empActualizado.getToleranciaEgresoMin());
         emp.setCategorias(empActualizado.getCategorias() != null ? empActualizado.getCategorias() : new ArrayList<>());
         emp.setCargos(empActualizado.getCargos() != null ? empActualizado.getCargos() : new ArrayList<>());
+        emp.setTiempoMaxFueraMin(empActualizado.getTiempoMaxFueraMin() != null ? empActualizado.getTiempoMaxFueraMin() : 45);
+        emp.setMaxSalidasIntermedias(empActualizado.getMaxSalidasIntermedias() != null ? empActualizado.getMaxSalidasIntermedias() : 2);
 
         if (Boolean.TRUE.equals(empActualizado.getActivo())) {
             emp.setActivo(true);

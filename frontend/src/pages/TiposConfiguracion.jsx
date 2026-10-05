@@ -128,7 +128,6 @@ const StatusBadge = ({ activo }) => {
 export default function TiposConfiguracion() {
   const { tienePermiso } = useAuth();
 
-  // Facultades de mutación PBAC
   const puedeEditarCategorias = tienePermiso("CONFIG_EDITAR_CATEGORIAS");
   const puedeEditarCargos = tienePermiso("CONFIG_EDITAR_CARGOS");
   const puedeEditarMateriasTurnos = tienePermiso(
@@ -138,25 +137,21 @@ export default function TiposConfiguracion() {
   const [activeTab, setActiveTab] = useState("categorias");
   const [loading, setLoading] = useState(true);
 
-  // Listas de datos
   const [categorias, setCategorias] = useState([]);
   const [cargos, setCargos] = useState([]);
   const [horarios, setHorarios] = useState([]);
   const [materias, setMaterias] = useState([]);
 
-  // Filtros por estado
   const [filtroEstadoCat, setFiltroEstadoCat] = useState("TODOS");
   const [filtroEstadoCargo, setFiltroEstadoCargo] = useState("TODOS");
   const [filtroEstadoHorario, setFiltroEstadoHorario] = useState("TODOS");
   const [filtroEstadoMateria, setFiltroEstadoMateria] = useState("TODOS");
 
-  // Otros filtros
   const [cargoSearch, setCargoSearch] = useState("");
   const [cargoCategoryFilter, setCargoCategoryFilter] = useState("TODAS");
   const [horarioCategoryFilter, setHorarioCategoryFilter] = useState("TODOS");
   const [materiaSearch, setMateriaSearch] = useState("");
 
-  // Modales
   const [modalCat, setModalCat] = useState(false);
   const [editandoCatId, setEditandoCatId] = useState(null);
 
@@ -169,7 +164,6 @@ export default function TiposConfiguracion() {
   const [modalMateria, setModalMateria] = useState(false);
   const [editandoMateriaId, setEditandoMateriaId] = useState(null);
 
-  // Modal Alerta Centralizado
   const [modalAlerta, setModalAlerta] = useState({
     isOpen: false,
     tipo: "info",
@@ -181,7 +175,6 @@ export default function TiposConfiguracion() {
     onConfirmar: () => {},
   });
 
-  // Formularios
   const [formCat, setFormCat] = useState(FORM_CAT_INICIAL);
   const [formCargo, setFormCargo] = useState(FORM_CARGO_INICIAL);
   const [formHorario, setFormHorario] = useState(FORM_HORARIO_INICIAL);
@@ -259,17 +252,6 @@ export default function TiposConfiguracion() {
     cargarDatos();
   }, [cargarDatos]);
 
-  useEffect(() => {
-    const handleRecuperacion = () => {
-      cargarDatos();
-    };
-
-    window.addEventListener("conexion:restaurada", handleRecuperacion);
-    return () => {
-      window.removeEventListener("conexion:restaurada", handleRecuperacion);
-    };
-  }, [cargarDatos]);
-
   const categoriasActivas = categorias.filter((c) => c.activo !== false);
 
   // --- HANDLERS: CATEGORÍAS ---
@@ -345,23 +327,21 @@ export default function TiposConfiguracion() {
       categorias,
       editandoCatId,
     );
-
     if (coincidencia) {
       if (coincidencia.tipo === "EXACTO") {
         mostrarAviso(
           "danger",
           "Categoría Duplicada",
-          `Ya existe una categoría registrada exactamente como "${coincidencia.item.nombre}".`,
+          `Ya existe una categoría registrada como "${coincidencia.item.nombre}".`,
         );
         return;
       }
-
       if (coincidencia.tipo === "SIMILAR") {
         setModalAlerta({
           isOpen: true,
           tipo: "warning",
           titulo: "¿Desea continuar?",
-          mensaje: `El nombre "${formCat.nombre}" es muy similar a la categoría existente "${coincidencia.item.nombre}". ¿Desea guardarlo de todas formas?`,
+          mensaje: `El nombre "${formCat.nombre}" es similar a "${coincidencia.item.nombre}". ¿Desea guardarlo de todas formas?`,
           textoConfirmar: "Sí, registrar de todos modos",
           textoCancelar: "Revisar nombre",
           mostrarCancelar: true,
@@ -373,7 +353,6 @@ export default function TiposConfiguracion() {
         return;
       }
     }
-
     await procederGuardarCategoria();
   };
 
@@ -383,7 +362,7 @@ export default function TiposConfiguracion() {
       isOpen: true,
       tipo: "danger",
       titulo: "¿Dar de baja categoría?",
-      mensaje: `¿Desea dar de baja lógica la categoría "${nombre}"? Sus registros históricos permanecerán guardados.`,
+      mensaje: `¿Desea dar de baja la categoría "${nombre}"?`,
       textoConfirmar: "Sí, dar de baja",
       textoCancelar: "Cancelar",
       mostrarCancelar: true,
@@ -415,7 +394,7 @@ export default function TiposConfiguracion() {
       isOpen: true,
       tipo: "info",
       titulo: "¿Reactivar categoría?",
-      mensaje: `¿Desea reactivar la categoría "${nombre}" para volver a habilitarla en el sistema?`,
+      mensaje: `¿Desea reactivar la categoría "${nombre}"?`,
       textoConfirmar: "Sí, reactivar",
       textoCancelar: "Cancelar",
       mostrarCancelar: true,
@@ -473,7 +452,6 @@ export default function TiposConfiguracion() {
       );
       return;
     }
-
     if (!formCargo.categoriaId) {
       mostrarAviso(
         "warning",
@@ -488,7 +466,6 @@ export default function TiposConfiguracion() {
       cargos,
       editandoCargoId,
     );
-
     const ejecutarPeticion = async () => {
       try {
         const payload = {
@@ -503,14 +480,14 @@ export default function TiposConfiguracion() {
           mostrarAviso(
             "success",
             "Cargo Actualizado",
-            "Los cambios del cargo se guardaron exitosamente.",
+            "Los cambios se guardaron exitosamente.",
           );
         } else {
           await createCargo(payload);
           mostrarAviso(
             "success",
             "Cargo Registrado",
-            "El nuevo cargo se ha creado correctamente.",
+            "El cargo se ha creado correctamente.",
           );
         }
 
@@ -522,8 +499,7 @@ export default function TiposConfiguracion() {
         mostrarAviso(
           "danger",
           "Error",
-          err.response?.data?.message ||
-            "No se pudo guardar el cargo en el servidor.",
+          err.response?.data?.message || "No se pudo guardar el cargo.",
         );
       }
     };
@@ -533,17 +509,16 @@ export default function TiposConfiguracion() {
         mostrarAviso(
           "danger",
           "Cargo Duplicado",
-          `Ya existe un cargo registrado con el nombre "${coincidencia.item.nombre}".`,
+          `Ya existe un cargo registrado como "${coincidencia.item.nombre}".`,
         );
         return;
       }
-
       if (coincidencia.tipo === "SIMILAR") {
         setModalAlerta({
           isOpen: true,
           tipo: "warning",
           titulo: "¿Desea continuar?",
-          mensaje: `El nombre "${formCargo.nombre}" es muy similar al cargo existente "${coincidencia.item.nombre}". ¿Desea guardarlo de todas formas?`,
+          mensaje: `El nombre "${formCargo.nombre}" es similar a "${coincidencia.item.nombre}". ¿Desea guardarlo?`,
           textoConfirmar: "Sí, registrar de todos modos",
           textoCancelar: "Revisar nombre",
           mostrarCancelar: true,
@@ -555,7 +530,6 @@ export default function TiposConfiguracion() {
         return;
       }
     }
-
     await ejecutarPeticion();
   };
 
@@ -613,7 +587,7 @@ export default function TiposConfiguracion() {
     });
   };
 
-  // --- HANDLERS: HORARIOS ---
+  // --- HANDLERS: HORARIOS PREESTABLECIDOS ---
   const abrirModalCrearHorario = () => {
     if (!puedeEditarMateriasTurnos) return;
     setEditandoHorarioId(null);
@@ -656,7 +630,6 @@ export default function TiposConfiguracion() {
       );
       return;
     }
-
     if (!formHorario.categoriaId) {
       mostrarAviso(
         "warning",
@@ -665,7 +638,6 @@ export default function TiposConfiguracion() {
       );
       return;
     }
-
     if (!formHorario.dias || formHorario.dias.length === 0) {
       mostrarAviso(
         "warning",
@@ -674,12 +646,11 @@ export default function TiposConfiguracion() {
       );
       return;
     }
-
     if (formHorario.horaEntrada >= formHorario.horaEgreso) {
       mostrarAviso(
         "danger",
         "Rango Inválido",
-        "La hora de egreso debe ser posterior a la hora de entrada.",
+        "La hora de egreso debe ser posterior a la de entrada.",
       );
       return;
     }
@@ -689,7 +660,6 @@ export default function TiposConfiguracion() {
       horarios,
       editandoHorarioId,
     );
-
     const ejecutarPeticion = async () => {
       try {
         const payload = {
@@ -705,10 +675,10 @@ export default function TiposConfiguracion() {
               ? `${formHorario.horaEgreso}:00`
               : formHorario.horaEgreso,
           diasLaborables: formHorario.dias.join(","),
-          tolEntradaMin: parseInt(formHorario.tolEntrada, 10),
-          tolEgresoMin: parseInt(formHorario.tolEgreso, 10),
-          maxSalidasIntermedias: parseInt(formHorario.maxSalidas || 2, 10),
-          tiempoMaxFueraMin: parseInt(formHorario.tiempoMaxFuera || 45, 10),
+          tolEntradaMin: parseInt(formHorario.tolEntrada, 10) || 15,
+          tolEgresoMin: parseInt(formHorario.tolEgreso, 10) || 10,
+          maxSalidasIntermedias: parseInt(formHorario.maxSalidas, 10) || 2,
+          tiempoMaxFueraMin: parseInt(formHorario.tiempoMaxFuera, 10) || 45,
         };
 
         if (editandoHorarioId) {
@@ -746,17 +716,16 @@ export default function TiposConfiguracion() {
         mostrarAviso(
           "danger",
           "Horario Duplicado",
-          `Ya existe un horario registrado con el nombre "${coincidencia.item.nombre}".`,
+          `Ya existe un horario registrado como "${coincidencia.item.nombre}".`,
         );
         return;
       }
-
       if (coincidencia.tipo === "SIMILAR") {
         setModalAlerta({
           isOpen: true,
           tipo: "warning",
           titulo: "¿Desea continuar?",
-          mensaje: `El nombre "${formHorario.nombre}" es muy similar al horario existente "${coincidencia.item.nombre}". ¿Desea guardarlo de todas formas?`,
+          mensaje: `El nombre "${formHorario.nombre}" es similar al horario "${coincidencia.item.nombre}". ¿Desea guardarlo?`,
           textoConfirmar: "Sí, registrar de todos modos",
           textoCancelar: "Revisar nombre",
           mostrarCancelar: true,
@@ -768,7 +737,6 @@ export default function TiposConfiguracion() {
         return;
       }
     }
-
     await ejecutarPeticion();
   };
 
@@ -876,7 +844,6 @@ export default function TiposConfiguracion() {
       materias,
       editandoMateriaId,
     );
-
     const ejecutarPeticion = async () => {
       try {
         const payload = {
@@ -892,14 +859,14 @@ export default function TiposConfiguracion() {
           mostrarAviso(
             "success",
             "Cátedra Actualizada",
-            "Los datos de la materia se actualizaron correctamente.",
+            "Los datos se actualizaron correctamente.",
           );
         } else {
           await createMateria(payload);
           mostrarAviso(
             "success",
             "Cátedra Registrada",
-            "La nueva materia se ha registrado en el catálogo.",
+            "La materia se registró con éxito.",
           );
         }
 
@@ -911,8 +878,7 @@ export default function TiposConfiguracion() {
         mostrarAviso(
           "danger",
           "Error",
-          err.response?.data?.message ||
-            "No se pudo guardar la materia o cátedra.",
+          err.response?.data?.message || "No se pudo guardar la materia.",
         );
       }
     };
@@ -922,17 +888,16 @@ export default function TiposConfiguracion() {
         mostrarAviso(
           "danger",
           "Materia Duplicada",
-          `Ya existe una materia registrada con el nombre "${coincidencia.item.nombre}".`,
+          `Ya existe una materia registrada como "${coincidencia.item.nombre}".`,
         );
         return;
       }
-
       if (coincidencia.tipo === "SIMILAR") {
         setModalAlerta({
           isOpen: true,
           tipo: "warning",
           titulo: "¿Desea continuar?",
-          mensaje: `El nombre "${formMateria.nombre}" es muy similar a la materia existente "${coincidencia.item.nombre}". ¿Desea guardarla de todas formas?`,
+          mensaje: `El nombre "${formMateria.nombre}" es similar a "${coincidencia.item.nombre}". ¿Desea guardarla?`,
           textoConfirmar: "Sí, registrar de todos modos",
           textoCancelar: "Revisar nombre",
           mostrarCancelar: true,
@@ -944,7 +909,6 @@ export default function TiposConfiguracion() {
         return;
       }
     }
-
     await ejecutarPeticion();
   };
 
@@ -954,7 +918,7 @@ export default function TiposConfiguracion() {
       isOpen: true,
       tipo: "danger",
       titulo: "¿Dar de baja cátedra?",
-      mensaje: `¿Desea dar de baja lógica la cátedra "${nombre}"?`,
+      mensaje: `¿Desea dar de baja la cátedra "${nombre}"?`,
       textoConfirmar: "Sí, dar de baja",
       textoCancelar: "Cancelar",
       mostrarCancelar: true,
@@ -981,7 +945,7 @@ export default function TiposConfiguracion() {
       isOpen: true,
       tipo: "info",
       titulo: "¿Reactivar cátedra?",
-      mensaje: `¿Desea reactivar la materia "${nombre}" en el catálogo institucional?`,
+      mensaje: `¿Desea reactivar la materia "${nombre}"?`,
       textoConfirmar: "Sí, reactivar",
       textoCancelar: "Cancelar",
       mostrarCancelar: true,
@@ -1002,7 +966,7 @@ export default function TiposConfiguracion() {
     });
   };
 
-  // --- FILTROS DE LISTADO ---
+  // --- FILTROS DE LISTAS ---
   const filteredCategorias = categorias.filter((cat) => {
     if (filtroEstadoCat === "ACTIVOS") return cat.activo !== false;
     if (filtroEstadoCat === "INACTIVOS") return cat.activo === false;
@@ -1187,7 +1151,7 @@ export default function TiposConfiguracion() {
               {puedeEditarCategorias ? (
                 <button
                   onClick={abrirModalCrearCategoria}
-                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#4b35e6] hover:bg-[#3f2bc9] text-white text-xs font-semibold shadow-md shadow-indigo-100 transition cursor-pointer"
+                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#4b35e6] hover:bg-[#3f2bc9] text-white text-xs font-semibold shadow-md transition cursor-pointer"
                 >
                   <Plus className="w-4 h-4 stroke-[2.5]" />
                   Nueva Categoría
@@ -1310,7 +1274,7 @@ export default function TiposConfiguracion() {
             {puedeEditarCargos ? (
               <button
                 onClick={abrirModalCrearCargo}
-                className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#4b35e6] hover:bg-[#3f2bc9] text-white text-xs font-semibold shadow-md shadow-indigo-100 transition cursor-pointer"
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#4b35e6] hover:bg-[#3f2bc9] text-white text-xs font-semibold shadow-md transition cursor-pointer"
               >
                 <Plus className="w-4 h-4 stroke-[2.5]" />
                 Nuevo Cargo
@@ -1404,9 +1368,7 @@ export default function TiposConfiguracion() {
                       <div className="flex items-center gap-2">
                         <AlignLeft className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                         <span className="line-clamp-2">
-                          {cg.descripcion ? (
-                            cg.descripcion
-                          ) : (
+                          {cg.descripcion || (
                             <em className="text-slate-400">Sin descripción</em>
                           )}
                         </span>
@@ -1488,14 +1450,14 @@ export default function TiposConfiguracion() {
                 Tabla de Horarios Preestablecidos
               </h2>
               <p className="text-xs text-slate-500">
-                Horarios corporativos y de cátedra preestablecidos para
-                asignación directa o general
+                Horarios corporativos y parámetros de tolerancia para asignación
+                directa o por régimen
               </p>
             </div>
             {puedeEditarMateriasTurnos ? (
               <button
                 onClick={abrirModalCrearHorario}
-                className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#4b35e6] hover:bg-[#3f2bc9] text-white text-xs font-semibold shadow-md shadow-indigo-100 transition cursor-pointer"
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#4b35e6] hover:bg-[#3f2bc9] text-white text-xs font-semibold shadow-md transition cursor-pointer"
               >
                 <Plus className="w-4 h-4 stroke-[2.5]" />
                 Nuevo Horario Preestablecido
@@ -1657,21 +1619,38 @@ export default function TiposConfiguracion() {
                     </div>
                   </div>
 
+                  {/* BLOQUE INFERIOR: TOLERANCIAS Y SALIDAS INTERMEDIAS AUDITABLES */}
                   <div className="grid grid-cols-2 gap-2 pt-3 border-t border-slate-100 text-center">
                     <div className="bg-[#f8fafc] p-2 rounded-xl">
                       <div className="text-[9px] font-bold uppercase text-slate-400">
-                        Tolerancia Entrada
+                        Tol. Entrada
                       </div>
                       <div className="text-xs font-bold text-slate-800 mt-0.5">
-                        {h.tolEntradaMin}m
+                        {h.tolEntradaMin ?? 15}m
                       </div>
                     </div>
                     <div className="bg-[#f8fafc] p-2 rounded-xl">
                       <div className="text-[9px] font-bold uppercase text-slate-400">
-                        Tolerancia Salida
+                        Tol. Salida
                       </div>
                       <div className="text-xs font-bold text-slate-800 mt-0.5">
-                        {h.tolEgresoMin}m
+                        {h.tolEgresoMin ?? 10}m
+                      </div>
+                    </div>
+                    <div className="bg-indigo-50/50 p-2 rounded-xl border border-indigo-100/60">
+                      <div className="text-[9px] font-bold uppercase text-indigo-700">
+                        Máx. Salidas
+                      </div>
+                      <div className="text-xs font-bold text-indigo-900 mt-0.5">
+                        {h.maxSalidasIntermedias ?? 2}
+                      </div>
+                    </div>
+                    <div className="bg-indigo-50/50 p-2 rounded-xl border border-indigo-100/60">
+                      <div className="text-[9px] font-bold uppercase text-indigo-700">
+                        Tiempo Fuera
+                      </div>
+                      <div className="text-xs font-bold text-indigo-900 mt-0.5">
+                        {h.tiempoMaxFueraMin ?? 45}m
                       </div>
                     </div>
                   </div>
@@ -1835,7 +1814,7 @@ export default function TiposConfiguracion() {
                 ) : (
                   <tr>
                     <td
-                      colSpan={6}
+                      colSpan={5}
                       className="text-center py-12 text-slate-400 text-xs"
                     >
                       No se encontraron materias con los filtros seleccionados.
@@ -2101,7 +2080,7 @@ export default function TiposConfiguracion() {
         </div>
       )}
 
-      {/* Modal 3: Horario */}
+      {/* Modal 3: Horario Preestablecido */}
       {modalHorario && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl">
@@ -2244,73 +2223,80 @@ export default function TiposConfiguracion() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">
-                    Tolerancia Entrada (minutos)
-                  </label>
-                  <input
-                    type="number"
-                    value={formHorario.tolEntrada}
-                    onChange={(e) =>
-                      setFormHorario({
-                        ...formHorario,
-                        tolEntrada: e.target.value,
-                      })
-                    }
-                    className="w-full border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-indigo-600"
-                  />
-                </div>
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">
-                    Tolerancia Salida (minutos)
-                  </label>
-                  <input
-                    type="number"
-                    value={formHorario.tolEgreso}
-                    onChange={(e) =>
-                      setFormHorario({
-                        ...formHorario,
-                        tolEgreso: e.target.value,
-                      })
-                    }
-                    className="w-full border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-indigo-600"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">
-                    Máx. Salidas Intermedias
-                  </label>
-                  <input
-                    type="number"
-                    value={formHorario.maxSalidas}
-                    onChange={(e) =>
-                      setFormHorario({
-                        ...formHorario,
-                        maxSalidas: e.target.value,
-                      })
-                    }
-                    className="w-full border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-indigo-600"
-                  />
-                </div>
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">
-                    Tiempo Máx. Fuera (min)
-                  </label>
-                  <input
-                    type="number"
-                    value={formHorario.tiempoMaxFuera}
-                    onChange={(e) =>
-                      setFormHorario({
-                        ...formHorario,
-                        tiempoMaxFuera: e.target.value,
-                      })
-                    }
-                    className="w-full border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-indigo-600"
-                  />
+              {/* SECCIÓN DE TOLERANCIAS Y SALIDAS INTERMEDIAS */}
+              <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-4 space-y-3">
+                <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                  Parámetros de Auditoría y Salidas Intermedias (RF11)
+                </span>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1 text-[11px]">
+                      Tolerancia Entrada (minutos)
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={formHorario.tolEntrada}
+                      onChange={(e) =>
+                        setFormHorario({
+                          ...formHorario,
+                          tolEntrada: e.target.value,
+                        })
+                      }
+                      className="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 outline-none focus:border-indigo-600"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1 text-[11px]">
+                      Tolerancia Salida (minutos)
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={formHorario.tolEgreso}
+                      onChange={(e) =>
+                        setFormHorario({
+                          ...formHorario,
+                          tolEgreso: e.target.value,
+                        })
+                      }
+                      className="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 outline-none focus:border-indigo-600"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1 text-[11px]">
+                      Máx. Salidas Intermedias
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={formHorario.maxSalidas}
+                      onChange={(e) =>
+                        setFormHorario({
+                          ...formHorario,
+                          maxSalidas: e.target.value,
+                        })
+                      }
+                      className="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 outline-none focus:border-indigo-600 font-semibold text-indigo-700"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1 text-[11px]">
+                      Tiempo Máx. Fuera (minutos)
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={formHorario.tiempoMaxFuera}
+                      onChange={(e) =>
+                        setFormHorario({
+                          ...formHorario,
+                          tiempoMaxFuera: e.target.value,
+                        })
+                      }
+                      className="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 outline-none focus:border-indigo-600 font-semibold text-indigo-700"
+                    />
+                  </div>
                 </div>
               </div>
 
@@ -2410,7 +2396,7 @@ export default function TiposConfiguracion() {
 
               <div>
                 <label className="block font-semibold text-slate-700 mb-1">
-                  Aula / Laboratorio Predeterminado
+                  Aula Predeterminada
                 </label>
                 <input
                   type="text"

@@ -69,4 +69,18 @@ public interface EmpleadoFichajeRepository extends JpaRepository<EmpleadoFichaje
     // Cantidad de fichajes huérfanos sin empleado asignado
     @Query("SELECT COUNT(DISTINCT f.idBiometrico) FROM EmpleadoFichaje f WHERE f.activo = true AND f.empleado IS NULL")
     long countIdentificadoresSinVincular();
+
+    // Empleados únicos con fichaje de ingreso (checkIn / overtimeIn) en el día
+    @Query("""
+        SELECT COUNT(DISTINCT f.empleado.id) 
+        FROM EmpleadoFichaje f 
+        WHERE f.horaFichaje BETWEEN :inicio AND :fin 
+          AND f.tipoEvento IN ('checkIn', 'overtimeIn', 'ENTRADA')
+          AND f.estadoFichaje = 'valido'
+          AND f.activo = true
+    """)
+    long contarEmpleadosIngresados(
+        @Param("inicio") LocalDateTime inicio, 
+        @Param("fin") LocalDateTime fin
+    );
 }

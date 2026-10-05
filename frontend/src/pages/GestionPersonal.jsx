@@ -15,7 +15,6 @@ import {
   ChevronLeft,
   ChevronRight,
   Lock,
-  UserCheck,
   AlertCircle,
 } from "lucide-react";
 import {
@@ -58,6 +57,8 @@ const FORM_EMP_INICIAL = {
   cargosIds: [],
   toleranciaIngresoMin: 15,
   toleranciaEgresoMin: 10,
+  tiempoMaxFueraMin: 45,
+  maxSalidasIntermedias: 2,
 };
 
 const FORM_CLASE_INICIAL = {
@@ -101,7 +102,7 @@ const MAPA_DIAS_NUMERO = {
 
 const ITEMS_POR_PAGINA = 15;
 
-// Helper: determina si un empleado tiene datos incompletos
+// Helper: determina si a un empleado le faltan datos esenciales
 export const esEmpleadoIncompleto = (emp) => {
   if (!emp) return false;
   const sinDni = !emp.dni || String(emp.dni).trim() === "";
@@ -114,9 +115,12 @@ export const esEmpleadoIncompleto = (emp) => {
 export default function GestionPersonal() {
   const { tienePermiso } = useAuth();
 
+  // Permisos granulares de Personal
   const puedePersonalCrear = tienePermiso("PERSONAL_CREAR");
   const puedePersonalEditar = tienePermiso("PERSONAL_EDITAR");
   const puedePersonalBajaReactivar = tienePermiso("PERSONAL_BAJA_REACTIVAR");
+
+  // Permisos granulares de Horarios
   const puedeHorariosVer =
     tienePermiso("HORARIOS_VER") || tienePermiso("PERSONAL_VER");
   const puedeHorariosGestionar = tienePermiso("HORARIOS_GESTIONAR");
@@ -124,18 +128,18 @@ export default function GestionPersonal() {
 
   const [loading, setLoading] = useState(true);
   const [empleados, setEmpleados] = useState([]);
-  const [todosLosEmpleados, setTodosLosEmpleados] = useState([]); // Para conteo global y duplicados
+  const [todosLosEmpleados, setTodosLosEmpleados] = useState([]);
   const [categorias, setCategorias] = useState([]);
   const [cargos, setCargos] = useState([]);
   const [horarios, setHorarios] = useState([]);
   const [materias, setMaterias] = useState([]);
 
-  // Estados de Frecuencia / Periodicidad
+  // Periodicidad de franjas
   const [tipoFrecuencia, setTipoFrecuencia] = useState("SEMANAL");
   const [repeticionesPeriodo, setRepeticionesPeriodo] = useState(1);
   const [semanaAlterna, setSemanaAlterna] = useState("PAR");
 
-  // Paginación y conteos del Servidor
+  // Paginación del Servidor
   const [paginaActual, setPaginaActual] = useState(1);
   const [totalPaginas, setTotalPaginas] = useState(1);
   const [totalElementos, setTotalElementos] = useState(0);
@@ -144,7 +148,7 @@ export default function GestionPersonal() {
   const [searchTerm, setSearchTerm] = useState("");
   const [filterCategoria, setFilterCategoria] = useState("TODAS");
   const [filterEstado, setFilterEstado] = useState("TODOS");
-  const [soloIncompletos, setSoloIncompletos] = useState(false); // <-- Nuevo filtro
+  const [soloIncompletos, setSoloIncompletos] = useState(false);
 
   // Modales
   const [modalRegistro, setModalRegistro] = useState(false);
@@ -323,12 +327,10 @@ export default function GestionPersonal() {
     return cargosActivos.filter((c) => cats.includes(c.categoria?.id));
   }, [formEmpleado.categoriasIds, cargosActivos]);
 
-  // Total de empleados con datos incompletos en el sistema
   const totalIncompletos = useMemo(() => {
     return todosLosEmpleados.filter(esEmpleadoIncompleto).length;
   }, [todosLosEmpleados]);
 
-  // Lista para renderizar (aplica el filtro de incompletos si está activado)
   const empleadosRenderizados = useMemo(() => {
     if (!soloIncompletos) return empleados;
     return empleados.filter(esEmpleadoIncompleto);
@@ -339,7 +341,7 @@ export default function GestionPersonal() {
       mostrarAviso(
         "warning",
         "Empleado Inactivo",
-        `El colaborador ${emp.apellido}, ${emp.nombre} se encuentra dado de baja lógica. Debe reactivarlo antes de asignarle horarios o cátedras.`,
+        `El empleado ${emp.apellido}, ${emp.nombre} se encuentra dado de baja lógica. Debe reactivarlo antes de modificar sus horarios o cátedras.`,
       );
       return false;
     }
@@ -379,6 +381,8 @@ export default function GestionPersonal() {
       cargosIds: Array.isArray(emp.cargos) ? emp.cargos.map((c) => c.id) : [],
       toleranciaIngresoMin: emp.toleranciaIngresoMin ?? 15,
       toleranciaEgresoMin: emp.toleranciaEgresoMin ?? 10,
+      tiempoMaxFueraMin: emp.tiempoMaxFueraMin ?? 45,
+      maxSalidasIntermedias: emp.maxSalidasIntermedias ?? 2,
     });
     setModalRegistro(true);
   };
@@ -398,6 +402,9 @@ export default function GestionPersonal() {
           parseInt(formEmpleado.toleranciaIngresoMin, 10) || 15,
         toleranciaEgresoMin:
           parseInt(formEmpleado.toleranciaEgresoMin, 10) || 10,
+        tiempoMaxFueraMin: parseInt(formEmpleado.tiempoMaxFueraMin, 10) || 45,
+        maxSalidasIntermedias:
+          parseInt(formEmpleado.maxSalidasIntermedias, 10) || 2,
         categorias: (formEmpleado.categoriasIds || []).map((id) => ({
           id: parseInt(id, 10),
         })),
@@ -418,7 +425,7 @@ export default function GestionPersonal() {
         mostrarAviso(
           "success",
           "Empleado Registrado",
-          "El nuevo colaborador fue dado de alta.",
+          "El nuevo empleado fue dado de alta con éxito.",
         );
       }
 
@@ -430,7 +437,7 @@ export default function GestionPersonal() {
         "danger",
         "Error",
         err.response?.data?.message ||
-          "No se pudo registrar el colaborador. Verifique los datos ingresados.",
+          "No se pudo guardar la información del empleado.",
       );
     }
   };
@@ -440,7 +447,7 @@ export default function GestionPersonal() {
     setModalAlerta({
       isOpen: true,
       tipo: "danger",
-      titulo: "¿Dar de baja colaborador?",
+      titulo: "¿Dar de baja empleado?",
       mensaje: `¿Desea dar de baja lógica al empleado ${nombre}? Podrá reactivarlo en cualquier momento.`,
       textoConfirmar: "Sí, dar de baja",
       textoCancelar: "Cancelar",
@@ -591,7 +598,7 @@ export default function GestionPersonal() {
       mostrarAviso(
         "success",
         "Clases Asignadas",
-        "Las cátedras fueron agregadas con éxito.",
+        "Las cátedras fueron asignadas con éxito.",
       );
     } catch (err) {
       const mensaje = err.response?.data?.message || "";
@@ -704,6 +711,15 @@ export default function GestionPersonal() {
           semanaAlterna:
             tipoFrecuencia === "SEMANA_POR_MEDIO" ? semanaAlterna : null,
         });
+
+        // Herencia de tolerancias de salidas intermedias de la plantilla
+        if (plantilla.tiempoMaxFueraMin || plantilla.maxSalidasIntermedias) {
+          await updateEmpleado(empleadoSeleccionado.id, {
+            ...empleadoSeleccionado,
+            tiempoMaxFueraMin: plantilla.tiempoMaxFueraMin || 45,
+            maxSalidasIntermedias: plantilla.maxSalidasIntermedias || 2,
+          });
+        }
       } else {
         const diasNumericos = diasEspecificos.map(
           (d) => MAPA_DIAS_NUMERO[d] || 1,
@@ -782,14 +798,14 @@ export default function GestionPersonal() {
               Gestión de Personal & Carga Horaria
             </h1>
             <p className="text-xs text-slate-500">
-              Padrón de colaboradores, asignación de regímenes y cronograma de
+              Padrón de empleados, asignación de regímenes y cronograma de
               horarios.
             </p>
           </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-2.5">
-          {/* BOTÓN ALERTA: COMPLETAR CAMPOS DE EMPLEADOS PENDIENTES */}
+          {/* BOTÓN ALERTA: COMPLETAR CAMPOS FALTANTES */}
           {totalIncompletos > 0 && (
             <button
               onClick={() => {
@@ -1039,8 +1055,8 @@ export default function GestionPersonal() {
                   className="text-center py-12 text-slate-400 text-xs italic"
                 >
                   {soloIncompletos
-                    ? "¡Excelente! No hay colaboradores con datos incompletos en esta vista."
-                    : "No se encontraron colaboradores con los filtros seleccionados."}
+                    ? "¡Excelente! No hay empleados con datos pendientes."
+                    : "No se encontraron empleados con los filtros seleccionados."}
                 </td>
               </tr>
             ) : (
@@ -1180,21 +1196,24 @@ export default function GestionPersonal() {
                         }`}
                       >
                         <span
-                          className={`w-1.5 h-1.5 rounded-full ${emp.activo !== false ? "bg-emerald-500" : "bg-rose-500"}`}
+                          className={`w-1.5 h-1.5 rounded-full ${
+                            emp.activo !== false
+                              ? "bg-emerald-500"
+                              : "bg-rose-500"
+                          }`}
                         ></span>
                         {emp.activo !== false ? "ACTIVO" : "INACTIVO"}
                       </span>
                     </td>
 
-                    {/* ACCIONES */}
                     <td className="px-6 py-4 text-right">
                       <div className="flex items-center justify-end gap-2 text-slate-400">
-                        {/* Botón rápido "Completar Datos" si faltan campos */}
+                        {/* Botón rápido Completar Datos */}
                         {incompleto && puedePersonalEditar && (
                           <button
                             onClick={() => abrirModalEditar(emp)}
                             className="inline-flex items-center gap-1 px-2.5 py-1 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-lg text-[11px] shadow-xs cursor-pointer transition mr-1"
-                            title="Completar DNI, legajo y categorías"
+                            title="Completar datos pendientes"
                           >
                             <Pencil className="w-3 h-3" />
                             Completar
@@ -1288,7 +1307,7 @@ export default function GestionPersonal() {
                                 )
                               }
                               className="p-1 hover:text-rose-600 transition cursor-pointer"
-                              title="Dar de baja colaborador"
+                              title="Dar de baja empleado"
                             >
                               <Trash2 className="w-4 h-4" />
                             </button>
@@ -1301,7 +1320,7 @@ export default function GestionPersonal() {
                                 )
                               }
                               className="p-1 hover:text-emerald-600 transition cursor-pointer"
-                              title="Reactivar Colaborador"
+                              title="Reactivar Empleado"
                             >
                               <RotateCcw className="w-4 h-4 text-emerald-600" />
                             </button>
@@ -1372,7 +1391,7 @@ export default function GestionPersonal() {
         </div>
       </div>
 
-      {/* RENDERIZADO DE MODAL CON CONTROL DE DUPLICADOS */}
+      {/* RENDERIZADO DE MODALES */}
       <ModalRegistroEmpleado
         isOpen={modalRegistro}
         onClose={() => setModalRegistro(false)}
@@ -1382,7 +1401,7 @@ export default function GestionPersonal() {
         editandoEmpleadoId={editandoEmpleadoId}
         categoriasActivas={categoriasActivas}
         cargosFiltradosForm={cargosFiltradosForm}
-        empleadosExistentes={todosLosEmpleados} // <-- Se pasa para advertir nombres duplicados/similares
+        empleadosExistentes={todosLosEmpleados}
       />
 
       <ModalDetalleCronograma

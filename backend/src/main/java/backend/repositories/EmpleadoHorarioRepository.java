@@ -41,4 +41,13 @@ public interface EmpleadoHorarioRepository extends JpaRepository<EmpleadoHorario
         @Param("empleadoId") Long empleadoId,
         Pageable pageable
     );
+
+@Query("""
+        SELECT DISTINCT h.empleado.id 
+        FROM EmpleadoHorario h 
+        WHERE h.diaSemana = :diaSemana 
+          AND h.activo = true 
+          AND h.empleado.activo = true
+    """)
+    List<Long> findEmpleadosEsperadosPorDia(@Param("diaSemana") Integer diaSemana);
 }

@@ -60,6 +60,12 @@ public class Empleado {
     @Column(name = "tolerancia_egreso_min")
     private Integer toleranciaEgresoMin = 10;
 
+    @Column(name = "tiempo_max_fuera_min")
+    private Integer tiempoMaxFueraMin = 45;
+
+    @Column(name = "max_salidas_intermedias")
+    private Integer maxSalidasIntermedias = 2;
+
     @Column(nullable = false)
     private Boolean activo = true;
 
@@ -118,4 +124,18 @@ public class Empleado {
 
     public Usuario getUsuario() { return usuario; }
     public void setUsuario(Usuario usuario) { this.usuario = usuario; }
+
+    public Integer getTiempoMaxFueraMin() {
+        return tiempoMaxFueraMin != null ? tiempoMaxFueraMin : 45;
+    }
+    public void setTiempoMaxFueraMin(Integer tiempoMaxFueraMin) {
+        this.tiempoMaxFueraMin = tiempoMaxFueraMin;
+    }
+
+    public Integer getMaxSalidasIntermedias() {
+        return maxSalidasIntermedias != null ? maxSalidasIntermedias : 2;
+    }
+    public void setMaxSalidasIntermedias(Integer maxSalidasIntermedias) {
+        this.maxSalidasIntermedias = maxSalidasIntermedias;
+    }
 }

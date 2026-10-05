@@ -28,6 +28,24 @@ export const MODULOS_PERMISOS = [
     ],
   },
   {
+    id: "INCIDENTES",
+    nombre: "Incidentes & Auditoría Diaria",
+    descripcion:
+      "Supervisión de infracciones, desvíos y auditoría de justificaciones",
+    permisos: [
+      {
+        codigo: "INCIDENTES_VER",
+        label: "Visualizar tablero y métricas de incidentes diarios",
+        critico: false,
+      },
+      {
+        codigo: "INCIDENTES_JUSTIFICAR",
+        label: "Justificar, observar o rechazar incidentes de asistencia",
+        critico: true,
+      },
+    ],
+  },
+  {
     id: "HORARIOS",
     nombre: "Gestión de Horarios & Clases",
     descripcion:

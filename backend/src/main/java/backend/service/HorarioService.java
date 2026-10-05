@@ -272,6 +272,8 @@ public class HorarioService {
                 regimenSub,
                 emp.getToleranciaIngresoMin() != null ? emp.getToleranciaIngresoMin() : 15,
                 emp.getToleranciaEgresoMin() != null ? emp.getToleranciaEgresoMin() : 10,
+                emp.getTiempoMaxFueraMin() != null ? emp.getTiempoMaxFueraMin() : 45,
+                emp.getMaxSalidasIntermedias() != null ? emp.getMaxSalidasIntermedias() : 2,
                 new ArrayList<>(diasSet)
         );
     }

@@ -62,10 +62,10 @@ export default function Sidebar() {
 
   const menuItems = [
     {
-      to: "/dashboard",
-      label: "Dashboard General",
-      icon: LayoutDashboard,
-      permiso: "DASHBOARD_VER",
+      to: "/incidentes",
+      label: "Incidentes Diarios",
+      icon: AlertTriangle,
+      permiso: "INCIDENTES_VER",
     },
     {
       to: "/personal",
@@ -85,12 +85,6 @@ export default function Sidebar() {
       label: "Fichajes y Biometría",
       icon: UploadCloud,
       permiso: "FICHAJES_VER",
-    },
-    {
-      to: "/alertas",
-      label: "Alertas e Infracciones",
-      icon: AlertTriangle,
-      permiso: "ALERTAS_VER",
     },
     {
       to: "/reportes",

@@ -11,13 +11,17 @@ public class MetricasPersonalDTO {
     private String regimenHorarioSubtitulo;
     private Integer toleranciaIngresoMin;
     private Integer toleranciaEgresoMin;
+    private Integer tiempoMaxFueraMin;
+    private Integer maxSalidasIntermedias;
     private List<String> diasActivos;
 
     public MetricasPersonalDTO() {}
 
     public MetricasPersonalDTO(Double cargaSemanalHoras, Integer diasConAsistencia, String textoRangoDias,
                                String regimenHorarioDescripcion, String regimenHorarioSubtitulo,
-                               Integer toleranciaIngresoMin, Integer toleranciaEgresoMin, List<String> diasActivos) {
+                               Integer toleranciaIngresoMin, Integer toleranciaEgresoMin,
+                               Integer tiempoMaxFueraMin, Integer maxSalidasIntermedias,
+                               List<String> diasActivos) {
         this.cargaSemanalHoras = cargaSemanalHoras;
         this.diasConAsistencia = diasConAsistencia;
         this.textoRangoDias = textoRangoDias;
@@ -25,6 +29,8 @@ public class MetricasPersonalDTO {
         this.regimenHorarioSubtitulo = regimenHorarioSubtitulo;
         this.toleranciaIngresoMin = toleranciaIngresoMin;
         this.toleranciaEgresoMin = toleranciaEgresoMin;
+        this.tiempoMaxFueraMin = tiempoMaxFueraMin;
+        this.maxSalidasIntermedias = maxSalidasIntermedias;
         this.diasActivos = diasActivos;
     }
 
@@ -48,6 +54,12 @@ public class MetricasPersonalDTO {
 
     public Integer getToleranciaEgresoMin() { return toleranciaEgresoMin; }
     public void setToleranciaEgresoMin(Integer toleranciaEgresoMin) { this.toleranciaEgresoMin = toleranciaEgresoMin; }
+
+    public Integer getTiempoMaxFueraMin() { return tiempoMaxFueraMin; }
+    public void setTiempoMaxFueraMin(Integer tiempoMaxFueraMin) { this.tiempoMaxFueraMin = tiempoMaxFueraMin; }
+
+    public Integer getMaxSalidasIntermedias() { return maxSalidasIntermedias; }
+    public void setMaxSalidasIntermedias(Integer maxSalidasIntermedias) { this.maxSalidasIntermedias = maxSalidasIntermedias; }
 
     public List<String> getDiasActivos() { return diasActivos; }
     public void setDiasActivos(List<String> diasActivos) { this.diasActivos = diasActivos; }

@@ -10,6 +10,7 @@ import GestionUsuarios from "./pages/GestionUsuarios";
 import TiposConfiguracion from "./pages/TiposConfiguracion";
 import PanelAuditoria from "./pages/PanelAuditoria";
 import GestionHorarios from "./pages/GestionHorarios";
+import TableroIncidentesDiarios from "./pages/TableroIncidentesDiarios";
 import Perfil from "./pages/Perfil";
 
 export default function App() {
@@ -86,10 +87,19 @@ export default function App() {
               </ProtectedRoute>
             }
           />
+          {/* 6. Incidentes: Requiere INCIDENTES_VER */}
+          <Route
+            path="/incidentes"
+            element={
+              <ProtectedRoute permisoRequerido="INCIDENTES_VER">
+                <TableroIncidentesDiarios />
+              </ProtectedRoute>
+            }
+          />
         </Route>
 
         {/* Redirección por defecto */}
-        <Route path="*" element={<Navigate to="/personal" replace />} />
+        <Route path="*" element={<Navigate to="/incidentes" replace />} />
       </Routes>
     </AuthProvider>
   );

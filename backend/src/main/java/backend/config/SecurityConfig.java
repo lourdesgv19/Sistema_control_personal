@@ -109,6 +109,10 @@ public class SecurityConfig {
                 // 9. MÓDULO AUDITORÍA
                 .requestMatchers("/api/seguridad/auditoria/**").hasAnyAuthority("AUDITORIA_VER", "PERM_ADMIN_TOTAL")
 
+                // 10. Incidentes Diarios & Auditoría de Justificaciones
+                .requestMatchers(HttpMethod.GET, "/api/incidentes/**").hasAnyAuthority("INCIDENTES_VER", "PERM_ADMIN_TOTAL")
+                .requestMatchers(HttpMethod.PUT, "/api/incidentes/*/resolver").hasAnyAuthority("INCIDENTES_JUSTIFICAR", "PERM_ADMIN_TOTAL")
+
                 // Cualquier otra solicitud requiere autenticación válida
                 .anyRequest().authenticated()
             )

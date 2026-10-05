@@ -6,6 +6,7 @@ import org.springframework.boot.CommandLineRunner;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
+
 import java.util.List;
 
 @Component
@@ -25,11 +26,10 @@ public class DataInitializer implements CommandLineRunner {
     public void run(String... args) {
         inicializarCatalogo();
         inicializarAdminSiNoExiste();
+        actualizarPermisosAdmin();
     }
 
     private void inicializarCatalogo() {
-        if (permisoRepo.count() > 0) return;
-
         List<Permiso> catalogo = List.of(
             // Personal & Horarios
             new Permiso("PERSONAL_VER", "PERSONAL", "Visualizar padrón general y cronogramas semanales"),
@@ -57,17 +57,30 @@ public class DataInitializer implements CommandLineRunner {
 
             // Auditoría
             new Permiso("AUDITORIA_VER", "AUDITORIA", "Permite consultar el padrón de auditoría inmutable y métricas"),
-            
+
             // Horarios
             new Permiso("HORARIOS_VER", "HORARIOS", "Visualizar horarios y cátedras asignadas a empleados"),
             new Permiso("HORARIOS_GESTIONAR", "HORARIOS", "Crear horarios y cátedras"),
             new Permiso("HORARIOS_EDITAR", "HORARIOS", "Editar horarios y cátedras asignadas a empleados"),
-            new Permiso("HORARIOS_ELIMINAR", "HORARIOS", "Eliminar horarios y cátedras asignadas a empleados")
-        
+            new Permiso("HORARIOS_ELIMINAR", "HORARIOS", "Eliminar horarios y cátedras asignadas a empleados"),
+
+            // Incidentes Diarios & Auditoría de Marcación
+            new Permiso("INCIDENTES_VER", "INCIDENTES", "Consultar el tablero de incidentes diarios y desvíos de asistencia"),
+            new Permiso("INCIDENTES_JUSTIFICAR", "INCIDENTES", "Auditar, justificar o rechazar incidentes y anomalías de marcación")
         );
 
-        permisoRepo.saveAll(catalogo);
-        System.out.println(">>> Catálogo maestro de " + catalogo.size() + " permisos inicializado en base de datos.");
+        // Inserta o actualiza cada permiso del catálogo en la base de datos
+        for (Permiso p : catalogo) {
+            jdbcTemplate.update("""
+                INSERT INTO permisos (codigo, modulo, descripcion)
+                VALUES (?, ?, ?)
+                ON DUPLICATE KEY UPDATE 
+                    modulo = VALUES(modulo),
+                    descripcion = VALUES(descripcion)
+            """, p.getCodigo(), p.getModulo(), p.getDescripcion());
+        }
+
+        System.out.println(">>> Catálogo maestro de " + catalogo.size() + " permisos sincronizado en base de datos.");
     }
 
     private void inicializarAdminSiNoExiste() {
@@ -83,13 +96,25 @@ public class DataInitializer implements CommandLineRunner {
 
             jdbcTemplate.update("""
                 INSERT INTO usuarios (username, password_hash, rol, activo, debe_cambiar_password, id_empleado, fecha_creacion, fecha_modificacion)
-                VALUES ('admin', ?, 'ADMINISTRADOR', 1, 1, NULL, NOW(), NOW())
+                VALUES ('admin', ?, 'ADMINISTRADOR', 1, 0, NULL, NOW(), NOW())
             """, hash);
 
-            Long idAdmin = jdbcTemplate.queryForObject("SELECT id_usuario FROM usuarios WHERE username = 'admin'", Long.class);
+            System.out.println(">>> Usuario 'admin' inicial creado con éxito.");
+        } catch (Exception e) {
+            System.err.println("Error al inicializar usuario administrador: " + e.getMessage());
+        }
+    }
+
+    private void actualizarPermisosAdmin() {
+        try {
+            Long idAdmin = jdbcTemplate.queryForObject(
+                "SELECT id_usuario FROM usuarios WHERE username = 'admin'",
+                Long.class
+            );
+
             if (idAdmin == null) return;
 
-            // Inserta en usuario_permisos todos los códigos que hoy existan en la tabla permisos
+            // Asigna o activa todos los permisos existentes en el catálogo al usuario 'admin'
             List<String> codigos = permisoRepo.findAllCodigos();
             for (String cod : codigos) {
                 jdbcTemplate.update("""
@@ -99,9 +124,9 @@ public class DataInitializer implements CommandLineRunner {
                 """, idAdmin, cod);
             }
 
-            System.out.println(">>> Usuario 'admin' inicial creado con todos los permisos del catálogo asignados.");
+            System.out.println(">>> Permisos actualizados para usuario 'admin' (" + codigos.size() + " permisos en total).");
         } catch (Exception e) {
-            System.err.println("Error en DataInitializer: " + e.getMessage());
+            System.err.println("Aviso al actualizar permisos de admin: " + e.getMessage());
         }
     }
 }

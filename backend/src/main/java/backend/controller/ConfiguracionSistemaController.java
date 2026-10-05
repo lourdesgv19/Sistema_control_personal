@@ -9,6 +9,7 @@ import backend.repositories.HorarioRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+
 import java.util.List;
 
 @RestController
@@ -20,7 +21,6 @@ public class ConfiguracionSistemaController {
     private final CargoRepository cargoRepo;
     private final HorarioRepository horarioRepo;
 
-    // Constructor explícito para inyección de dependencias
     public ConfiguracionSistemaController(CategoriaRepository categoriaRepo, 
                                           CargoRepository cargoRepo, 
                                           HorarioRepository horarioRepo) {
@@ -60,7 +60,7 @@ public class ConfiguracionSistemaController {
         return ResponseEntity.noContent().build();
     }
 
-    @PatchMapping ("/categorias/{id}/activar")
+    @PatchMapping("/categorias/{id}/activar")
     public ResponseEntity<Categoria> activarCategoria(@PathVariable Long id) {
         return categoriaRepo.findById(id).map(c -> {
             c.setActivo(true);
@@ -95,7 +95,7 @@ public class ConfiguracionSistemaController {
         return ResponseEntity.noContent().build();
     }
 
-    @PatchMapping ("/cargos/{id}/activar")
+    @PatchMapping("/cargos/{id}/activar")
     public ResponseEntity<Cargo> activarCargo(@PathVariable Long id) {
         return cargoRepo.findById(id).map(c -> {
             c.setActivo(true);
@@ -111,6 +111,12 @@ public class ConfiguracionSistemaController {
 
     @PostMapping("/horarios")
     public ResponseEntity<Horario> crearHorario(@RequestBody Horario horario) {
+        if (horario.getMaxSalidasIntermedias() == null) {
+            horario.setMaxSalidasIntermedias(2);
+        }
+        if (horario.getTiempoMaxFueraMin() == null) {
+            horario.setTiempoMaxFueraMin(45);
+        }
         return new ResponseEntity<>(horarioRepo.save(horario), HttpStatus.CREATED);
     }
 
@@ -124,8 +130,8 @@ public class ConfiguracionSistemaController {
             h.setDiasLaborables(horario.getDiasLaborables());
             h.setTolEntradaMin(horario.getTolEntradaMin());
             h.setTolEgresoMin(horario.getTolEgresoMin());
-            h.setMaxSalidasIntermedias(horario.getMaxSalidasIntermedias());
-            h.setTiempoMaxFueraMin(horario.getTiempoMaxFueraMin());
+            h.setMaxSalidasIntermedias(horario.getMaxSalidasIntermedias() != null ? horario.getMaxSalidasIntermedias() : 2);
+            h.setTiempoMaxFueraMin(horario.getTiempoMaxFueraMin() != null ? horario.getTiempoMaxFueraMin() : 45);
             return ResponseEntity.ok(horarioRepo.save(h));
         }).orElse(ResponseEntity.notFound().build());
     }
@@ -136,7 +142,7 @@ public class ConfiguracionSistemaController {
         return ResponseEntity.noContent().build();
     }
 
-    @PatchMapping ("/horarios/{id}/activar")
+    @PatchMapping("/horarios/{id}/activar")
     public ResponseEntity<Horario> activarHorario(@PathVariable Long id) {
         return horarioRepo.findById(id).map(h -> {
             h.setActivo(true);
