@@ -3,6 +3,7 @@ package backend.service;
 import backend.model.Empleado;
 import backend.model.EmpleadoFichaje;
 import backend.model.EmpleadoHorario;
+import backend.service.HorarioService;
 import backend.model.IncidenteAsistencia;
 import backend.repositories.EmpleadoFichajeRepository;
 import backend.repositories.EmpleadoHorarioRepository;
@@ -12,7 +13,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
+import backend.dto.ResumenPresenciaFichajesDTO;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -29,16 +30,19 @@ public class EvaluadorIncidentesService {
     private final EmpleadoHorarioRepository horarioRepo;
     private final EmpleadoFichajeRepository fichajeRepo;
     private final IncidenteAsistenciaRepository incidenteRepo;
+    private final HorarioService horarioService;
 
     public EvaluadorIncidentesService(
             EmpleadoRepository empleadoRepo,
             EmpleadoHorarioRepository horarioRepo,
             EmpleadoFichajeRepository fichajeRepo,
-            IncidenteAsistenciaRepository incidenteRepo) {
+            IncidenteAsistenciaRepository incidenteRepo,
+            HorarioService horarioService) {
         this.empleadoRepo = empleadoRepo;
         this.horarioRepo = horarioRepo;
         this.fichajeRepo = fichajeRepo;
         this.incidenteRepo = incidenteRepo;
+        this.horarioService = horarioService;
     }
 
     /**
@@ -268,5 +272,199 @@ public class EvaluadorIncidentesService {
      */
     private boolean existeIncidente(LocalDate fecha, Long idEmpleado, String categoria) {
         return incidenteRepo.existeIncidentePorFechaEmpleadoYCategoria(fecha, idEmpleado, categoria);
+    }
+
+    /**
+     * Calcula las horas trabajadas netas para un día específico deduciendo salidas intermedias.
+     */
+    @Transactional(readOnly = true)
+    public ResumenPresenciaFichajesDTO calcularHorasRealesDia(Long empleadoId, LocalDate fecha) {
+        if (empleadoId == null || fecha == null) {
+            return new ResumenPresenciaFichajesDTO(0.0, 0.0, 0, false, List.of());
+        }
+
+        Empleado emp = empleadoRepo.findById(empleadoId).orElse(null);
+        int maxSalidasPermitidas = (emp != null && emp.getMaxSalidasIntermedias() != null) ? emp.getMaxSalidasIntermedias() : 2;
+        int maxTiempoFueraMin = (emp != null && emp.getTiempoMaxFueraMin() != null) ? emp.getTiempoMaxFueraMin() : 45;
+
+        LocalDateTime inicioDia = fecha.atStartOfDay();
+        LocalDateTime finDia = fecha.atTime(LocalTime.MAX);
+
+        List<EmpleadoFichaje> fichajes = fichajeRepo.findAll().stream()
+                .filter(f -> f.getEmpleado() != null && f.getEmpleado().getId().equals(empleadoId))
+                .filter(f -> Boolean.TRUE.equals(f.getActivo()))
+                .filter(f -> "valido".equalsIgnoreCase(f.getEstadoFichaje()))
+                .filter(f -> f.getHoraFichaje() != null &&
+                        !f.getHoraFichaje().isBefore(inicioDia) &&
+                        !f.getHoraFichaje().isAfter(finDia))
+                .sorted(Comparator.comparing(EmpleadoFichaje::getHoraFichaje))
+                .toList();
+
+        if (fichajes.isEmpty()) {
+            return new ResumenPresenciaFichajesDTO(0.0, 0.0, 0, false, List.of("Sin marcaciones registradas en la fecha."));
+        }
+
+        long minutosPresencia = 0;
+        long minutosFuera = 0;
+        int cantidadSalidas = 0;
+        List<String> advertencias = new ArrayList<>();
+
+        for (int i = 0; i < fichajes.size() - 1; i++) {
+            EmpleadoFichaje actual = fichajes.get(i);
+            EmpleadoFichaje siguiente = fichajes.get(i + 1);
+
+            long lapso = Duration.between(actual.getHoraFichaje(), siguiente.getHoraFichaje()).toMinutes();
+            if (lapso <= 0) continue;
+
+            boolean actualEsSalida = esTipoSalida(actual.getTipoEvento());
+            boolean siguienteEsIngreso = esTipoIngreso(siguiente.getTipoEvento());
+
+            if (!actualEsSalida) {
+                // Intervalo de presencia efectiva
+                minutosPresencia += lapso;
+            } else if (siguienteEsIngreso) {
+                // Intervalo fuera de la institución
+                cantidadSalidas++;
+                minutosFuera += lapso;
+
+                if (lapso > maxTiempoFueraMin) {
+                    advertencias.add(String.format("Salida intermedia de %d min (%s a %s) excede el máximo permitido de %d min.",
+                            lapso, actual.getHoraFichaje().toLocalTime().toString().substring(0, 5),
+                            siguiente.getHoraFichaje().toLocalTime().toString().substring(0, 5), maxTiempoFueraMin));
+                }
+            }
+        }
+
+        boolean excedeSalidas = cantidadSalidas > maxSalidasPermitidas || minutosFuera > maxTiempoFueraMin;
+        if (cantidadSalidas > maxSalidasPermitidas) {
+            advertencias.add(String.format("Se registraron %d salidas intermedias (límite permitido: %d).", cantidadSalidas, maxSalidasPermitidas));
+        }
+
+        EmpleadoFichaje ultimo = fichajes.get(fichajes.size() - 1);
+        if (esTipoIngreso(ultimo.getTipoEvento())) {
+            advertencias.add("Fichada abierta: No se registró egreso al finalizar el turno.");
+        }
+
+        double horasNetas = Math.round((minutosPresencia / 60.0) * 100.0) / 100.0;
+        double horasFuera = Math.round((minutosFuera / 60.0) * 100.0) / 100.0;
+
+        return new ResumenPresenciaFichajesDTO(horasNetas, horasFuera, cantidadSalidas, excedeSalidas, advertencias);
+    }
+
+    /**
+     * Calcula las horas reales trabajadas para un rango arbitrario de fechas.
+     */
+    @Transactional(readOnly = true)
+    public ResumenPresenciaFichajesDTO calcularHorasRealesRango(Long empleadoId, LocalDate desde, LocalDate hasta) {
+        if (empleadoId == null || desde == null || hasta == null || hasta.isBefore(desde)) {
+            return new ResumenPresenciaFichajesDTO(0.0, 0.0, 0, false, List.of());
+        }
+
+        double totalHorasNetas = 0.0;
+        double totalHorasFuera = 0.0;
+        int totalSalidas = 0;
+        boolean huboExceso = false;
+        List<String> todasAdvertencias = new ArrayList<>();
+
+        LocalDate actual = desde;
+        while (!actual.isAfter(hasta)) {
+            ResumenPresenciaFichajesDTO resDia = calcularHorasRealesDia(empleadoId, actual);
+            totalHorasNetas += resDia.horasNetasTrabajadas();
+            totalHorasFuera += resDia.horasSalidasIntermedias();
+            totalSalidas += resDia.cantidadSalidasIntermedias();
+
+            if (resDia.excedeSalidasIntermedias()) {
+                huboExceso = true;
+            }
+            if (!resDia.advertencias().isEmpty()) {
+                for (String adv : resDia.advertencias()) {
+                    todasAdvertencias.add(actual + ": " + adv);
+                }
+            }
+            actual = actual.plusDays(1);
+        }
+
+        return new ResumenPresenciaFichajesDTO(
+                Math.round(totalHorasNetas * 100.0) / 100.0,
+                Math.round(totalHorasFuera * 100.0) / 100.0,
+                totalSalidas,
+                huboExceso,
+                todasAdvertencias
+        );
+    }
+
+    /**
+     * Calcula las horas reales trabajadas para la semana de la fecha indicada.
+     */
+    @Transactional(readOnly = true)
+    public ResumenPresenciaFichajesDTO calcularHorasRealesSemanal(Long empleadoId, LocalDate fechaEnSemana) {
+        if (fechaEnSemana == null) return new ResumenPresenciaFichajesDTO(0.0, 0.0, 0, false, List.of());
+        LocalDate inicioSemana = fechaEnSemana.minusDays(fechaEnSemana.getDayOfWeek().getValue() - 1);
+        LocalDate finSemana = inicioSemana.plusDays(6);
+        return calcularHorasRealesRango(empleadoId, inicioSemana, finSemana);
+    }
+
+    /**
+     * Calcula las horas reales trabajadas para el mes y año indicados.
+     */
+    @Transactional(readOnly = true)
+    public ResumenPresenciaFichajesDTO calcularHorasRealesMensual(Long empleadoId, int anio, int mes) {
+        LocalDate inicioMes = LocalDate.of(anio, mes, 1);
+        LocalDate finMes = inicioMes.withDayOfMonth(inicioMes.lengthOfMonth());
+        return calcularHorasRealesRango(empleadoId, inicioMes, finMes);
+    }
+
+    // =========================================================================
+    // 3. CÁLCULO DE PORCENTAJE DE CUMPLIMIENTO DE JORNADA
+    // =========================================================================
+
+    /**
+     * Compara horas reales netas vs horas teóricas programadas en HorarioService.
+     */
+    @Transactional(readOnly = true)
+    public int calcularPorcentajeCumplimiento(Long empleadoId, String modalidad, LocalDate fechaConsulta) {
+        if (empleadoId == null) return 0;
+        if (fechaConsulta == null) fechaConsulta = LocalDate.now();
+
+        LocalDate fechaInicio;
+        LocalDate fechaFin;
+
+        switch (modalidad != null ? modalidad.toUpperCase() : "DIARIO") {
+            case "SEMANAL" -> {
+                fechaInicio = fechaConsulta.minusDays(fechaConsulta.getDayOfWeek().getValue() - 1);
+                fechaFin = fechaInicio.plusDays(6);
+            }
+            case "MENSUAL" -> {
+                fechaInicio = fechaConsulta.withDayOfMonth(1);
+                fechaFin = fechaConsulta.withDayOfMonth(fechaConsulta.lengthOfMonth());
+            }
+            default -> {
+                fechaInicio = fechaConsulta;
+                fechaFin = fechaConsulta;
+            }
+        }
+
+        double horasTeoricas = horarioService.calcularHorasTeoricasRango(empleadoId, fechaInicio, fechaFin);
+        ResumenPresenciaFichajesDTO resumenFichajes = calcularHorasRealesRango(empleadoId, fechaInicio, fechaFin);
+        double horasRealesNetas = resumenFichajes.horasNetasTrabajadas();
+
+        if (horasTeoricas <= 0.0) {
+            return horasRealesNetas > 0 ? 100 : 0;
+        }
+
+        int porcentaje = (int) Math.round((horasRealesNetas / horasTeoricas) * 100.0);
+        return Math.min(100, Math.max(0, porcentaje));
+    }
+
+    private boolean esTipoSalida(String tipo) {
+        if (tipo == null) return false;
+        String t = tipo.toLowerCase();
+        return t.contains("checkout") || t.contains("breakout") || t.contains("overtimeout");
+    }
+
+    private boolean esTipoIngreso(String tipo) {
+        if (tipo == null) return false;
+        String t = tipo.toLowerCase();
+        return t.contains("checkin") || t.contains("breakin") || t.contains("overtimein");
     }
 }

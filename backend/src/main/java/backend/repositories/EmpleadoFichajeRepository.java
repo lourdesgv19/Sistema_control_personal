@@ -83,4 +83,17 @@ public interface EmpleadoFichajeRepository extends JpaRepository<EmpleadoFichaje
         @Param("inicio") LocalDateTime inicio, 
         @Param("fin") LocalDateTime fin
     );
+
+    @Query("""
+        SELECT f FROM EmpleadoFichaje f
+        WHERE f.empleado.id = :empleadoId
+          AND f.activo = true
+          AND f.horaFichaje BETWEEN :inicio AND :fin
+        ORDER BY f.horaFichaje ASC
+    """)
+    List<EmpleadoFichaje> findFichajesPorEmpleadoYRango(
+        @Param("empleadoId") Long empleadoId,
+        @Param("inicio") LocalDateTime inicio,
+        @Param("fin") LocalDateTime fin
+    );
 }

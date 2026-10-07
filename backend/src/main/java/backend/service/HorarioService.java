@@ -2,7 +2,9 @@ package backend.service;
 
 import backend.dto.EmpleadoHorarioResumenDTO;
 import backend.dto.MetricasPersonalDTO;
+import backend.dto.ResumenPresenciaFichajesDTO;
 import backend.model.Empleado;
+import backend.model.EmpleadoFichaje;
 import backend.model.EmpleadoHorario;
 import backend.model.Materia;
 import backend.repositories.EmpleadoHorarioRepository;
@@ -12,8 +14,10 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import java.time.Duration;
+import java.time.temporal.IsoFields;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.*;
 
@@ -181,7 +185,7 @@ public class HorarioService {
         );
     }
 
-@Transactional(readOnly = true)
+    @Transactional(readOnly = true)
     public MetricasPersonalDTO calcularMetricas(Long empleadoId) {
         Empleado emp = empleadoRepo.findById(empleadoId)
                 .orElseThrow(() -> new RuntimeException("Empleado no encontrado con ID: " + empleadoId));
@@ -303,5 +307,119 @@ public class HorarioService {
             return "De Lunes a Domingo";
         }
         return String.join(", ", dias);
+    }
+
+    // CALCULO DE HORAS QUE DEBERÍA CUMPLIR EL EMPLEADO SEGÚN SU HORARIO ASIGNADO
+    /**
+     * 1. CÁLCULO PARA UN DÍA ESPECÍFICO
+     * Evalúa las horas planificadas considerando el día de la semana y si aplica
+     * por semana par/impar en casos de rotación quincenal.
+     */
+    @Transactional(readOnly = true)
+    public double calcularHorasTeoricasDia(Long empleadoId, LocalDate fecha) {
+        if (fecha == null || empleadoId == null) return 0.0;
+
+        List<EmpleadoHorario> franjas = horarioRepo.findByEmpleadoId(empleadoId).stream()
+                .filter(h -> Boolean.TRUE.equals(h.getActivo()))
+                .toList();
+
+        int diaSemana = fecha.getDayOfWeek().getValue(); // 1 = Lunes ... 7 = Domingo
+        int numeroSemana = fecha.get(IsoFields.WEEK_OF_WEEK_BASED_YEAR);
+        boolean esSemanaPar = (numeroSemana % 2 == 0);
+
+        double minutosTotales = 0.0;
+
+        for (EmpleadoHorario h : franjas) {
+            if (h.getDiaSemana() != null && h.getDiaSemana() == diaSemana) {
+                String frec = h.getTipoFrecuencia() != null ? h.getTipoFrecuencia().toUpperCase() : "SEMANAL";
+
+                // Verificación de semana par / impar en rotaciones quincenales
+                if ("SEMANA_POR_MEDIO".equals(frec)) {
+                    String alterna = h.getSemanaAlterna() != null ? h.getSemanaAlterna().toUpperCase() : "PAR";
+                    if ("PAR".equals(alterna) && !esSemanaPar) continue;
+                    if ("IMPAR".equals(alterna) && esSemanaPar) continue;
+                }
+
+                if (h.getHoraEntrada() != null && h.getHoraSalida() != null) {
+                    long duracion = Duration.between(h.getHoraEntrada(), h.getHoraSalida()).toMinutes();
+                    if (duracion > 0) {
+                        minutosTotales += duracion;
+                    }
+                }
+            }
+        }
+
+        return redondear(minutosTotales / 60.0);
+    }
+
+    /**
+     * 2. CÁLCULO SEMANAL
+     * Retorna la carga horaria semanal teórica contractual o ponderada del colaborador.
+     */
+    @Transactional(readOnly = true)
+    public double calcularHorasTeoricasSemanal(Long empleadoId) {
+        if (empleadoId == null) return 0.0;
+
+        List<EmpleadoHorario> franjas = horarioRepo.findByEmpleadoId(empleadoId).stream()
+                .filter(h -> Boolean.TRUE.equals(h.getActivo()))
+                .toList();
+
+        double totalHoras = 0.0;
+
+        for (EmpleadoHorario h : franjas) {
+            if (h.getHoraEntrada() != null && h.getHoraSalida() != null) {
+                long minutos = Duration.between(h.getHoraEntrada(), h.getHoraSalida()).toMinutes();
+                if (minutos > 0) {
+                    double horasBase = minutos / 60.0;
+                    String frec = h.getTipoFrecuencia() != null ? h.getTipoFrecuencia().toUpperCase() : "SEMANAL";
+                    int reps = (h.getRepeticionesPeriodo() != null && h.getRepeticionesPeriodo() > 0)
+                            ? h.getRepeticionesPeriodo() : 1;
+
+                    switch (frec) {
+                        case "SEMANA_POR_MEDIO" -> totalHoras += (horasBase * 0.5);
+                        case "MENSUAL"          -> totalHoras += (horasBase * reps) / 4.33; // Ponderación de 4.33 semanas/mes
+                        case "ANUAL"            -> totalHoras += (horasBase * reps) / 52.0; // Ponderación de 52 semanas/año
+                        default                 -> totalHoras += horasBase;
+                    }
+                }
+            }
+        }
+
+        return redondear(totalHoras);
+    }
+
+    /**
+     * 3. CÁLCULO MENSUAL
+     * Calcula la suma exacta de horas planificadas para todos los días del mes y año indicados.
+     */
+    @Transactional(readOnly = true)
+    public double calcularHorasTeoricasMensual(Long empleadoId, int anio, int mes) {
+        LocalDate inicioMes = LocalDate.of(anio, mes, 1);
+        LocalDate finMes = inicioMes.withDayOfMonth(inicioMes.lengthOfMonth());
+        return calcularHorasTeoricasRango(empleadoId, inicioMes, finMes);
+    }
+
+    /**
+     * 4. CÁLCULO PARA UN RANGO DE FECHAS (Desde - Hasta)
+     * Itera día por día en el período acumulando las horas exactas según el calendario.
+     */
+    @Transactional(readOnly = true)
+    public double calcularHorasTeoricasRango(Long empleadoId, LocalDate desde, LocalDate hasta) {
+        if (empleadoId == null || desde == null || hasta == null) return 0.0;
+        if (hasta.isBefore(desde)) return 0.0;
+
+        double acumuladorHoras = 0.0;
+        LocalDate fechaActual = desde;
+
+        while (!fechaActual.isAfter(hasta)) {
+            acumuladorHoras += calcularHorasTeoricasDia(empleadoId, fechaActual);
+            fechaActual = fechaActual.plusDays(1);
+        }
+
+        return redondear(acumuladorHoras);
+    }
+
+    private double redondear(double valor) {
+        return Math.round(valor * 100.0) / 100.0;
     }
 }

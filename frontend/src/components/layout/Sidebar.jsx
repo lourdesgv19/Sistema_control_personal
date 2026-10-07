@@ -75,6 +75,12 @@ export default function Sidebar() {
       badgeCount: incompletosCount,
     },
     {
+      to: "/fichas-comportamiento",
+      label: "Fichas de Comportamiento",
+      icon: AlertCircle,
+      permiso: "FICHAS_COMPORTAMIENTO_VER",
+    },
+    {
       to: "/horarios-catedras",
       label: "Horarios y Cátedras",
       icon: Clock,

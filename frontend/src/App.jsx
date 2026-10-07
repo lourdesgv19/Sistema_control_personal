@@ -12,6 +12,7 @@ import PanelAuditoria from "./pages/PanelAuditoria";
 import GestionHorarios from "./pages/GestionHorarios";
 import TableroIncidentesDiarios from "./pages/TableroIncidentesDiarios";
 import Perfil from "./pages/Perfil";
+import FichaComportamiento from "./pages/FichaComportamiento";
 
 export default function App() {
   return (
@@ -93,6 +94,15 @@ export default function App() {
             element={
               <ProtectedRoute permisoRequerido="INCIDENTES_VER">
                 <TableroIncidentesDiarios />
+              </ProtectedRoute>
+            }
+          />
+          {/* 7. Fichas de Comportamiento: Requiere FICHAS_COMPORTAMIENTO_VER */}
+          <Route
+            path="/fichas-comportamiento"
+            element={
+              <ProtectedRoute permisoRequerido="FICHAS_COMPORTAMIENTO_VER">
+                <FichaComportamiento />
               </ProtectedRoute>
             }
           />

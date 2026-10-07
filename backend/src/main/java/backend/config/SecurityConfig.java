@@ -37,6 +37,7 @@ public class SecurityConfig {
             .csrf(csrf -> csrf.disable())
             .sessionManagement(sess -> sess.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
+
                 // 1. CORS Preflight y Endpoints Públicos
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                 .requestMatchers("/api/auth/**", "/api/public/**").permitAll()
@@ -114,7 +115,8 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.PUT, "/api/incidentes/*/resolver").hasAnyAuthority("INCIDENTES_JUSTIFICAR", "PERM_ADMIN_TOTAL")
 
                 // Cualquier otra solicitud requiere autenticación válida
-                .anyRequest().authenticated()
+             //   .anyRequest().authenticated()
+                .anyRequest().permitAll() // Temporal: Permitir todas las solicitudes mientras se desarrolla el frontend
             )
             .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
 
