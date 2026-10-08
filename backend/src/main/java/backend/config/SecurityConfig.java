@@ -40,7 +40,7 @@ public class SecurityConfig {
 
                 // 1. CORS Preflight y Endpoints Públicos
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                .requestMatchers("/api/auth/**", "/api/public/**").permitAll()
+                .requestMatchers("/api/auth/**", "/auth/**", "/api/public/**", "/public/**", "/error").permitAll()
 
                 // 2. Cambio de contraseña propio (Cualquier usuario autenticado)
                 .requestMatchers(HttpMethod.GET, "/api/usuarios/mi-perfil").authenticated()
@@ -115,8 +115,8 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.PUT, "/api/incidentes/*/resolver").hasAnyAuthority("INCIDENTES_JUSTIFICAR", "PERM_ADMIN_TOTAL")
 
                 // Cualquier otra solicitud requiere autenticación válida
-             //   .anyRequest().authenticated()
-                .anyRequest().permitAll() // Temporal: Permitir todas las solicitudes mientras se desarrolla el frontend
+                .anyRequest().authenticated()
+             //   .anyRequest().permitAll() // Temporal: Permitir todas las solicitudes mientras se desarrolla el frontend
             )
             .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
 

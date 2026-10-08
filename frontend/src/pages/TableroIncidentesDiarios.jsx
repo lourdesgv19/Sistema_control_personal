@@ -25,22 +25,33 @@ import {
 } from "../services/incidenteService";
 import ModalJustificarIncidente from "../components/incidentes/ModalJustificarIncidente";
 import { useAuth } from "../context/AuthContext";
+import { useLocation } from "react-router-dom";
 
 const ITEMS_POR_PAGINA = 15;
 const STORAGE_KEY = "tablero_incidentes_filtros_v1";
 
 function formatearFechaVisual(fechaIso) {
-  if (!fechaIso) return "";
-  const partes = String(fechaIso).split("-");
+  if (!fechaIso) return "--/--/----";
+
+  // Limpiar si viene con timestamp (T o espacio)
+  const soloFecha = String(fechaIso).split("T")[0].split(" ")[0].trim();
+  const partes = soloFecha.split("-");
+
   if (partes.length === 3) {
-    return `${partes[2]}/${partes[1]}/${partes[0]}`;
+    const anio = partes[0].padStart(4, "0");
+    const mes = partes[1].padStart(2, "0");
+    const dia = partes[2].padStart(2, "0");
+    return `${dia}/${mes}/${anio}`;
   }
-  return fechaIso;
+
+  return soloFecha;
 }
 
 export default function TableroIncidentesDiarios() {
   const { tienePermiso } = useAuth();
   const puedeJustificar = tienePermiso("INCIDENTES_JUSTIFICAR");
+  const location = useLocation();
+  const filtroNavegado = location.state; // Datos enviados desde Ficha de Comportamiento
 
   // Recuperar filtros guardados en sessionStorage o usar defaults
   const filtrosGuardados = useMemo(() => {
@@ -54,21 +65,22 @@ export default function TableroIncidentesDiarios() {
 
   const hoyIso = useMemo(() => new Date().toISOString().split("T")[0], []);
 
-  // Estados persistentes
+  // Estados inicializados con prioridad al filtro que viene de la navegación
   const [modoFiltroFecha, setModoFiltroFecha] = useState(
-    () => filtrosGuardados?.modoFiltroFecha || "DIA",
+    () =>
+      filtroNavegado?.modoFiltroFecha ||
+      filtrosGuardados?.modoFiltroFecha ||
+      "DIA",
   );
   const [fechaDesde, setFechaDesde] = useState(
-    () => filtrosGuardados?.fechaDesde || hoyIso,
+    () => filtroNavegado?.fecha || filtrosGuardados?.fechaDesde || hoyIso,
   );
   const [fechaHasta, setFechaHasta] = useState(
-    () => filtrosGuardados?.fechaHasta || hoyIso,
+    () => filtroNavegado?.fecha || filtrosGuardados?.fechaHasta || hoyIso,
   );
-  const [paginaActual, setPaginaActual] = useState(
-    () => filtrosGuardados?.paginaActual || 1,
-  );
+  const [paginaActual, setPaginaActual] = useState(1);
   const [busqueda, setBusqueda] = useState(
-    () => filtrosGuardados?.busqueda || "",
+    () => filtroNavegado?.busqueda || filtrosGuardados?.busqueda || "",
   );
   const [severidad, setSeveridad] = useState(
     () => filtrosGuardados?.severidad || "",
@@ -76,7 +88,9 @@ export default function TableroIncidentesDiarios() {
   const [categoria, setCategoria] = useState(
     () => filtrosGuardados?.categoria || "",
   );
-  const [estado, setEstado] = useState(() => filtrosGuardados?.estado || "");
+  const [estado, setEstado] = useState(
+    () => filtroNavegado?.estado || filtrosGuardados?.estado || "",
+  );
   const [filtroRapido, setFiltroRapido] = useState(
     () => filtrosGuardados?.filtroRapido || "TODOS",
   );
@@ -118,6 +132,24 @@ export default function TableroIncidentesDiarios() {
     estado,
     filtroRapido,
   ]);
+
+  useEffect(() => {
+    if (location.state) {
+      const nav = location.state;
+      if (nav.fecha) {
+        setModoFiltroFecha("DIA");
+        setFechaDesde(nav.fecha);
+        setFechaHasta(nav.fecha);
+      }
+      if (nav.busqueda !== undefined) {
+        setBusqueda(nav.busqueda);
+      }
+      if (nav.estado !== undefined) {
+        setEstado(nav.estado);
+      }
+      setPaginaActual(1);
+    }
+  }, [location.state]);
 
   const cargarDatos = useCallback(
     async (pageIndex) => {
@@ -290,52 +322,78 @@ export default function TableroIncidentesDiarios() {
 
           {/* Selectores de Fecha */}
           {modoFiltroFecha === "DIA" ? (
-            <div className="flex items-center gap-2 border border-slate-200 rounded-xl px-3 py-1.5 bg-slate-50 hover:bg-white focus-within:bg-white focus-within:border-indigo-500 transition shadow-2xs">
+            <label className="relative flex items-center gap-2 border border-slate-200 rounded-xl px-3 py-1.5 bg-slate-50 hover:bg-white focus-within:bg-white focus-within:border-indigo-500 transition shadow-2xs cursor-pointer">
               <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider shrink-0 select-none">
                 Fecha:
               </span>
+              <span className="text-slate-800 text-xs font-semibold font-mono select-none">
+                {formatearFechaVisual(fechaDesde)}
+              </span>
+              <Calendar className="w-3.5 h-3.5 text-slate-400 pointer-events-none ml-1" />
               <input
                 type="date"
                 value={fechaDesde}
                 onChange={(e) => {
-                  setFechaDesde(e.target.value);
-                  setFechaHasta(e.target.value);
-                  setPaginaActual(1);
+                  if (e.target.value) {
+                    setFechaDesde(e.target.value);
+                    setFechaHasta(e.target.value);
+                    setPaginaActual(1);
+                  }
                 }}
-                className="outline-none text-slate-800 text-xs font-semibold font-mono bg-transparent cursor-pointer"
+                className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
               />
-            </div>
+            </label>
           ) : (
-            <div className="flex items-center gap-2 border border-slate-200 rounded-xl px-3 py-1.5 bg-slate-50 hover:bg-white focus-within:bg-white focus-within:border-indigo-500 transition shadow-2xs">
-              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider shrink-0 select-none">
-                Desde:
-              </span>
-              <input
-                type="date"
-                value={fechaDesde}
-                onChange={(e) => {
-                  setFechaDesde(e.target.value);
-                  setPaginaActual(1);
-                }}
-                className="outline-none text-slate-800 text-xs font-semibold font-mono bg-transparent cursor-pointer"
-              />
+            <div className="flex items-center gap-2">
+              <label className="relative flex items-center gap-2 border border-slate-200 rounded-xl px-3 py-1.5 bg-slate-50 hover:bg-white focus-within:bg-white focus-within:border-indigo-500 transition shadow-2xs cursor-pointer">
+                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider shrink-0 select-none">
+                  Desde:
+                </span>
+                <span className="text-slate-800 text-xs font-semibold font-mono select-none">
+                  {formatearFechaVisual(fechaDesde)}
+                </span>
+                <Calendar className="w-3.5 h-3.5 text-slate-400 pointer-events-none ml-1" />
+                <input
+                  type="date"
+                  value={fechaDesde}
+                  onChange={(e) => {
+                    if (e.target.value) {
+                      setFechaDesde(e.target.value);
+                      if (e.target.value > fechaHasta) {
+                        setFechaHasta(e.target.value);
+                      }
+                      setPaginaActual(1);
+                    }
+                  }}
+                  className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                />
+              </label>
+
               <ArrowRight className="w-3 h-3 text-slate-400" />
-              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider shrink-0 select-none">
-                Hasta:
-              </span>
-              <input
-                type="date"
-                value={fechaHasta}
-                min={fechaDesde}
-                onChange={(e) => {
-                  setFechaHasta(e.target.value);
-                  setPaginaActual(1);
-                }}
-                className="outline-none text-slate-800 text-xs font-semibold font-mono bg-transparent cursor-pointer"
-              />
+
+              <label className="relative flex items-center gap-2 border border-slate-200 rounded-xl px-3 py-1.5 bg-slate-50 hover:bg-white focus-within:bg-white focus-within:border-indigo-500 transition shadow-2xs cursor-pointer">
+                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider shrink-0 select-none">
+                  Hasta:
+                </span>
+                <span className="text-slate-800 text-xs font-semibold font-mono select-none">
+                  {formatearFechaVisual(fechaHasta)}
+                </span>
+                <Calendar className="w-3.5 h-3.5 text-slate-400 pointer-events-none ml-1" />
+                <input
+                  type="date"
+                  value={fechaHasta}
+                  min={fechaDesde}
+                  onChange={(e) => {
+                    if (e.target.value) {
+                      setFechaHasta(e.target.value);
+                      setPaginaActual(1);
+                    }
+                  }}
+                  className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                />
+              </label>
             </div>
           )}
-
           {/* Presentes (visible cuando se evalúa un día puntual) */}
           {modoFiltroFecha === "DIA" && (
             <div

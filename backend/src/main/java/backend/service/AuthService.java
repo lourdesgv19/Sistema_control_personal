@@ -37,20 +37,28 @@ public class AuthService {
         this.jwtService = jwtService;
     }
 
-    public AuthResponse login(LoginRequest request) {
-        // 1. Validar existencia del usuario
-        Usuario usuario = usuarioRepo.findByUsername(request.username().trim())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Usuario o contraseña incorrectos."));
+public AuthResponse login(LoginRequest request) {
+    System.out.println(">>> [AUTH SERVICE] 1. Buscando usuario: " + request.username());
 
-        // 2. PRIMERO VALIDAR CONTRASEÑA (Evita delatar el estado si la clave está mal)
-        if (!passwordEncoder.matches(request.password(), usuario.getPasswordHash())) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Usuario o contraseña incorrectos.");
-        }
+    Usuario usuario = usuarioRepo.findByUsername(request.username().trim())
+            .orElseThrow(() -> {
+                System.err.println(">>> [AUTH SERVICE] Falla: Usuario NO encontrado");
+                return new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Usuario o contraseña incorrectos.");
+            });
 
-        // 3. RECIÉN DESPUÉS VALIDAR SI LA CUENTA ESTÁ ACTIVA
-        if (!Boolean.TRUE.equals(usuario.getActivo())) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "La cuenta se encuentra suspendida. Contacte al Administrador.");
-        }
+    System.out.println(">>> [AUTH SERVICE] 2. Usuario hallado. Validando password...");
+    if (!passwordEncoder.matches(request.password(), usuario.getPasswordHash())) {
+        System.err.println(">>> [AUTH SERVICE] Falla: Password no coincide");
+        throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Usuario o contraseña incorrectos.");
+    }
+
+    System.out.println(">>> [AUTH SERVICE] 3. Password correcta. Chequeando activo: " + usuario.getActivo());
+    if (!Boolean.TRUE.equals(usuario.getActivo())) {
+        System.err.println(">>> [AUTH SERVICE] Falla: Usuario NO activo (activo = " + usuario.getActivo() + ")");
+        throw new ResponseStatusException(HttpStatus.FORBIDDEN, "La cuenta se encuentra suspendida.");
+    }
+
+    System.out.println(">>> [AUTH SERVICE] 4. Generando token...");
 
         // 4. Continuar con la generación de token y permisos...
         Set<String> permisos = new HashSet<>();

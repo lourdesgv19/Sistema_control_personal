@@ -24,9 +24,23 @@ public class DataInitializer implements CommandLineRunner {
 
     @Override
     public void run(String... args) {
+        // FORZAR RESINCRONIZACIÓN DE CLAVE PARA 'admin'
+        String clavePlana = "admin123";
+        String nuevoHash = passwordEncoder.encode(clavePlana);
+
+        jdbcTemplate.update("""
+            UPDATE usuarios 
+            SET password_hash = ?, activo = 1, debe_cambiar_password = 0 
+            WHERE username = 'admin'
+        """, nuevoHash);
+
+        System.out.println("=================================================");
+        System.out.println(">>> CLAVE SINCRONIZADA PARA admin: " + clavePlana);
+        System.out.println(">>> HASH GENERADO POR SPRING: " + nuevoHash);
+        System.out.println(">>> PRUEBA DE MATCH INMEDIATA: " + passwordEncoder.matches(clavePlana, nuevoHash));
+        System.out.println("=================================================");
         inicializarCatalogo();
         inicializarAdminSiNoExiste();
-        actualizarPermisosAdmin();
     }
 
     private void inicializarCatalogo() {

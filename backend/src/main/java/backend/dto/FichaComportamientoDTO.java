@@ -57,6 +57,7 @@ public record FichaComportamientoDTO(
 
     public record IncidenteFichaDTO(
         Long id,
+        LocalDate fecha,
         String hora,
         String severidad,
         String tipo,

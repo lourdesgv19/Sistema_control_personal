@@ -11,26 +11,90 @@ import {
   FileText,
   PanelLeftClose,
   PanelLeftOpen,
+  ChevronLeft,
+  ChevronRight,
+  X,
+  CheckCircle2,
+  AlertTriangle,
+  ChevronDown,
+  Palette,
 } from "lucide-react";
 import ListaEmpleadosSidebar from "../components/comunes/ListaEmpleadosSidebar";
 import { getFichaComportamiento } from "../services/fichaComportamientoService";
+import { useNavigate } from "react-router-dom";
+import { generarPdfFichaComportamiento } from "../utils/generadorPdfFicha";
 
 // Helper para convertir cualquier fecha ISO YYYY-MM-DD a formato estricto dd/mm/aaaa
 function formatearFechaVisual(fechaIso) {
   if (!fechaIso) return "--/--/----";
-  const str = String(fechaIso).split("T")[0];
+  const str = String(fechaIso).split("T")[0].split(" ")[0].trim();
   const partes = str.split("-");
   return partes.length === 3
     ? `${partes[2]}/${partes[1]}/${partes[0]}`
     : fechaIso;
 }
 
+// Helper para obtener el nombre del día en español
+function obtenerNombreDia(fechaIso) {
+  if (!fechaIso) return "";
+  const partes = fechaIso.split("-");
+  if (partes.length !== 3) return "";
+  const d = new Date(
+    parseInt(partes[0], 10),
+    parseInt(partes[1], 10) - 1,
+    parseInt(partes[2], 10),
+  );
+  const dias = [
+    "Domingo",
+    "Lunes",
+    "Martes",
+    "Miércoles",
+    "Jueves",
+    "Viernes",
+    "Sábado",
+  ];
+  return dias[d.getDay()];
+}
+
+// Helper para obtener el nombre del mes
+function obtenerNombreMes(fechaIso) {
+  if (!fechaIso) return "";
+  const partes = fechaIso.split("-");
+  if (partes.length !== 3) return "";
+  const meses = [
+    "Enero",
+    "Febrero",
+    "Marzo",
+    "Abril",
+    "Mayo",
+    "Junio",
+    "Julio",
+    "Agosto",
+    "Septiembre",
+    "Octubre",
+    "Noviembre",
+    "Diciembre",
+  ];
+  return `${meses[parseInt(partes[1], 10) - 1]} De ${partes[0]}`;
+}
+
+// Helper para formatear fecha completa con texto (ej: "Jueves, 1 De Octubre De 2026")
+function formatearFechaLarga(fechaIso) {
+  if (!fechaIso) return "";
+  const partes = fechaIso.split("-");
+  if (partes.length !== 3) return fechaIso;
+  const nombreDia = obtenerNombreDia(fechaIso);
+  const diaNum = parseInt(partes[2], 10);
+  const nombreMes = obtenerNombreMes(fechaIso);
+  return `${nombreDia}, ${diaNum} De ${nombreMes}`;
+}
+
 export default function FichaComportamiento() {
   const hoyIso = useMemo(() => new Date().toISOString().split("T")[0], []);
+  const navigate = useNavigate();
+  const [menuImpresionAbierto, setMenuImpresionAbierto] = useState(false);
 
   const [empleadoSeleccionado, setEmpleadoSeleccionado] = useState(null);
-
-  // Control de apertura del sidebar
   const [sidebarAbierto, setSidebarAbierto] = useState(true);
 
   // Modalidades: DIARIO | SEMANAL | MENSUAL | RANGO_FECHAS
@@ -38,10 +102,24 @@ export default function FichaComportamiento() {
   const [fechaConsulta, setFechaConsulta] = useState(hoyIso);
   const [fechaHastaRango, setFechaHastaRango] = useState(hoyIso);
 
+  // Estado para el modal de inspección diaria (usado en Semanal, Mensual y Rango)
+  const [diaInspeccionado, setDiaInspeccionado] = useState(null);
+
   const [tabInferior, setTabInferior] = useState("INTERVALOS");
 
   const [loadingFicha, setLoadingFicha] = useState(false);
   const [fichaData, setFichaData] = useState(null);
+
+  const emitirReportePdf = (modoColor) => {
+    setMenuImpresionAbierto(false);
+    generarPdfFichaComportamiento({
+      fichaData,
+      modalidad,
+      fechaConsulta,
+      fechaHastaRango,
+      esColor: modoColor,
+    });
+  };
 
   // Cargar datos de la ficha
   const cargarFicha = useCallback(async () => {
@@ -49,7 +127,7 @@ export default function FichaComportamiento() {
     setLoadingFicha(true);
     try {
       const params = {
-        modalidad: modalidad === "RANGO_FECHAS" ? "RANGO" : modalidad,
+        modalidad: modalidad === "RANGO_FECHAS" ? "RANGO_FECHAS" : modalidad,
         fecha: fechaConsulta,
       };
 
@@ -74,6 +152,20 @@ export default function FichaComportamiento() {
     cargarFicha();
   }, [cargarFicha]);
 
+  const irAIncidentesParaJustificar = (inc) => {
+    navigate("/incidentes", {
+      state: {
+        modoFiltroFecha: "DIA",
+        fecha: inc.fecha || diaInspeccionado?.fecha || fechaConsulta,
+        busqueda:
+          empleadoSeleccionado?.nroLegajo ||
+          empleadoSeleccionado?.apellido ||
+          "",
+        estado: "PENDIENTE",
+      },
+    });
+  };
+
   const metricas = fichaData?.metricas || {
     primeraEntrada: "--:--",
     ultimoEgreso: "--:--",
@@ -84,17 +176,82 @@ export default function FichaComportamiento() {
     incidentesJustificados: 0,
   };
 
-  // Función para exportar a Excel / CSV estructurado
+  // Navegación de fechas con flechas (< y >)
+  const moverFecha = (direccion) => {
+    const partes = fechaConsulta.split("-");
+    const actual = new Date(
+      parseInt(partes[0], 10),
+      parseInt(partes[1], 10) - 1,
+      parseInt(partes[2], 10),
+    );
+
+    if (modalidad === "DIARIO") {
+      actual.setDate(actual.getDate() + direccion);
+    } else if (modalidad === "SEMANAL") {
+      actual.setDate(actual.getDate() + direccion * 7);
+    } else if (modalidad === "MENSUAL") {
+      actual.setMonth(actual.getMonth() + direccion);
+    }
+
+    const y = actual.getFullYear();
+    const m = String(actual.getMonth() + 1).padStart(2, "0");
+    const d = String(actual.getDate()).padStart(2, "0");
+    setFechaConsulta(`${y}-${m}-${d}`);
+    setDiaInspeccionado(null);
+  };
+
+  // Cálculo del inicio y fin de la semana para el modo semanal
+  const { inicioSemanaStr, finSemanaStr } = useMemo(() => {
+    const partes = fechaConsulta.split("-");
+    const cur = new Date(
+      parseInt(partes[0], 10),
+      parseInt(partes[1], 10) - 1,
+      parseInt(partes[2], 10),
+    );
+    const day = cur.getDay();
+    const diff = cur.getDate() - day + (day === 0 ? -6 : 1);
+    const monday = new Date(cur.setDate(diff));
+    const sunday = new Date(cur.setDate(diff + 6));
+
+    const fIso = (dt) => {
+      const y = dt.getFullYear();
+      const m = String(dt.getMonth() + 1).padStart(2, "0");
+      const d = String(dt.getDate()).padStart(2, "0");
+      return `${y}-${m}-${d}`;
+    };
+
+    return {
+      inicioSemanaStr: fIso(monday),
+      finSemanaStr: fIso(sunday),
+    };
+  }, [fechaConsulta]);
+
+  // Cálculo del inicio y fin de mes para el modo mensual
+  const { inicioMesStr, finMesStr } = useMemo(() => {
+    const partes = fechaConsulta.split("-");
+    const y = parseInt(partes[0], 10);
+    const m = parseInt(partes[1], 10);
+    const primerDia = `${y}-${String(m).padStart(2, "0")}-01`;
+    const ultimoDiaNum = new Date(y, m, 0).getDate();
+    const ultimoDia = `${y}-${String(m).padStart(2, "0")}-${String(ultimoDiaNum).padStart(2, "0")}`;
+
+    return {
+      inicioMesStr: primerDia,
+      finMesStr: ultimoDia,
+    };
+  }, [fechaConsulta]);
+
+  // Manejo de exportación a Excel
   const handleExportarExcel = () => {
     if (!fichaData) return;
 
-    let csvContent = "\uFEFF"; // BOM UTF-8
+    let csvContent = "\uFEFF";
     csvContent += "REPORTE DE FICHA DE COMPORTAMIENTO Y ASISTENCIA\n";
     csvContent += `Empleado;${fichaData.nombreCompleto || ""};Legajo;${fichaData.nroLegajo || ""};DNI;${fichaData.dni || ""}\n`;
     csvContent += `Cargo;${fichaData.rolOArea || ""};Departamento;${fichaData.departamento || ""}\n`;
     csvContent += `Modalidad;${modalidad};Período;${
       modalidad === "RANGO_FECHAS"
-        ? `${formatearFechaVisual(fechaConsulta)} al${formatearFechaVisual(fechaHastaRango)}`
+        ? `${formatearFechaVisual(fechaConsulta)} al ${formatearFechaVisual(fechaHastaRango)}`
         : formatearFechaVisual(fechaConsulta)
     }\n`;
     csvContent += `Cumplimiento de Jornada;${fichaData.porcentajeCumplimiento || 0}%\n\n`;
@@ -144,9 +301,224 @@ export default function FichaComportamiento() {
     document.body.removeChild(link);
   };
 
-  // Función para disparar la vista de impresión o guardado en PDF
   const handleGenerarPdfImprimir = () => {
-    window.print();
+    generarPdfFichaComportamiento({
+      fichaData,
+      modalidad,
+      fechaConsulta,
+      fechaHastaRango,
+    });
+  };
+
+  // Renderizador del bloque modal de inspección diaria
+  const renderCardInspeccionDiaria = () => {
+    if (!diaInspeccionado) return null;
+
+    const fechaDiaStr = String(diaInspeccionado.fecha || "").split("T")[0];
+
+    return (
+      <div className="bg-white border-2 border-indigo-500/80 rounded-3xl p-5 shadow-sm space-y-4 transition-all animate-fadeIn">
+        <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600">
+              <CalendarIcon className="w-5 h-5" />
+            </div>
+            <div>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-600 block">
+                JORNADA ESPECÍFICA INSPECCIONADA
+              </span>
+              <h4 className="text-sm sm:text-base font-black text-slate-900 leading-tight">
+                {formatearFechaLarga(diaInspeccionado.fecha)}
+              </h4>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setFechaConsulta(diaInspeccionado.fecha);
+                setModalidad("DIARIO");
+                setDiaInspeccionado(null);
+              }}
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-xs transition cursor-pointer"
+            >
+              <Eye className="w-3.5 h-3.5" />
+              Ver en Ficha Diaria Completa
+            </button>
+            <button
+              type="button"
+              onClick={() => setDiaInspeccionado(null)}
+              className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition cursor-pointer"
+              title="Cerrar inspección"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+
+        {/* 4 Mini Cards de Métricas */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+          <div className="bg-slate-50 border border-slate-200/80 p-3 rounded-2xl flex flex-col justify-between">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+              1RA ENTRADA — ÚLTIMO EGRESO
+            </span>
+            <div className="font-mono font-bold text-slate-800 text-xs sm:text-sm mt-1">
+              {diaInspeccionado.primeraEntrada !== "--:--"
+                ? `${diaInspeccionado.primeraEntrada} a. m. → ${diaInspeccionado.ultimoEgreso} p. m.`
+                : "--:--"}
+            </div>
+          </div>
+
+          <div className="bg-emerald-50/50 border border-emerald-200/80 p-3 rounded-2xl flex flex-col justify-between">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700">
+              PRESENCIA NETA
+            </span>
+            <div className="font-black text-emerald-950 text-sm sm:text-base mt-1">
+              {diaInspeccionado.presenciaNetaTexto}
+            </div>
+          </div>
+
+          <div className="bg-amber-50/50 border border-amber-200/80 p-3 rounded-2xl flex flex-col justify-between">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-amber-800">
+              SALIDAS INTERMEDIAS
+            </span>
+            <div className="font-bold text-amber-950 text-xs sm:text-sm mt-1">
+              {diaInspeccionado.salidasIntermedias} (
+              {diaInspeccionado.minutosFuera} min)
+            </div>
+          </div>
+
+          <div className="bg-slate-50 border border-slate-200/80 p-3 rounded-2xl flex flex-col justify-between">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+              CUMPLIMIENTO
+            </span>
+            <div className="font-black text-slate-900 text-sm sm:text-base mt-1">
+              {diaInspeccionado.porcentajeCumplimiento}%
+            </div>
+          </div>
+        </div>
+
+        {/* Sección de Incidencias */}
+        <div className="space-y-2">
+          <div className="flex items-center gap-1.5 text-xs font-bold text-slate-800 uppercase tracking-wider">
+            <AlertTriangle className="w-3.5 h-3.5 text-rose-500" />
+            <span>
+              INCIDENCIAS Y DESVÍOS DE LA JORNADA (
+              {diaInspeccionado.totalIncidentes})
+            </span>
+          </div>
+
+          {diaInspeccionado.totalIncidentes === 0 ? (
+            <div className="p-3 bg-emerald-50/60 border border-emerald-200 rounded-2xl flex items-center gap-2 text-xs text-emerald-800 font-medium">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+              <span>
+                Jornada regular sin desvíos ni infracciones horarias
+                registradas.
+              </span>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {(fichaData?.incidentes || [])
+                .filter((inc) => {
+                  if (!inc.fecha) return true;
+                  const fechaInc = String(inc.fecha).split("T")[0];
+                  return fechaInc === fechaDiaStr;
+                })
+                .map((inc) => {
+                  const esCritica =
+                    inc.severidad === "CRÍTICA" || inc.severidad === "CRITICA";
+                  return (
+                    <div
+                      key={inc.id}
+                      className={`p-3 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs ${
+                        esCritica
+                          ? "bg-rose-50/80 border-rose-200"
+                          : "bg-amber-50/80 border-amber-200"
+                      }`}
+                    >
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono font-bold text-slate-700">
+                            {inc.hora} hs
+                          </span>
+                          <span
+                            className={`font-bold ${esCritica ? "text-rose-950" : "text-amber-950"}`}
+                          >
+                            {inc.tipo}
+                          </span>
+                          <span
+                            className={`text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${
+                              esCritica
+                                ? "bg-rose-600 text-white shadow-2xs"
+                                : "bg-amber-500 text-white shadow-2xs"
+                            }`}
+                          >
+                            {inc.severidad}
+                          </span>
+                        </div>
+                        <div className="text-[11px] text-slate-600 mt-0.5">
+                          {inc.detalle}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 self-end sm:self-center">
+                        {inc.estado === "PENDIENTE" ? (
+                          <button
+                            type="button"
+                            onClick={() => irAIncidentesParaJustificar(inc)}
+                            className="inline-flex items-center gap-1 text-[10px] font-bold px-2.5 py-1 rounded-lg bg-amber-500 hover:bg-amber-600 text-white shadow-xs transition-all cursor-pointer group"
+                            title="Ir al Tablero de Incidentes para auditar o justificar este caso"
+                          >
+                            <span>Pendiente</span>
+                            <ArrowRight className="w-3 h-3 transition-transform group-hover:translate-x-0.5" />
+                          </button>
+                        ) : (
+                          <span className="text-[10px] font-bold px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-slate-700 shadow-2xs">
+                            {inc.estado}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+            </div>
+          )}
+        </div>
+
+        {/* Sección de Intervalos Reconstruidos */}
+        <div className="space-y-1.5">
+          <div className="flex items-center gap-1.5 text-xs font-bold text-slate-800 uppercase tracking-wider">
+            <Clock className="w-3.5 h-3.5 text-indigo-600" />
+            <span>
+              INTERVALOS RECONSTRUIDOS DEL DÍA (
+              {diaInspeccionado.presenciaNetaMinutos > 0 ? "1" : "0"})
+            </span>
+          </div>
+
+          {diaInspeccionado.presenciaNetaMinutos > 0 ? (
+            <div className="p-3 bg-emerald-50/60 border border-emerald-200 rounded-2xl flex items-center justify-between text-xs max-w-sm">
+              <div>
+                <div className="font-bold text-emerald-900 flex items-center gap-1">
+                  <span>✓ PRESENCIA</span>
+                </div>
+                <div className="font-mono text-slate-600 text-[11px] mt-0.5">
+                  {diaInspeccionado.primeraEntrada} →{" "}
+                  {diaInspeccionado.ultimoEgreso}
+                </div>
+              </div>
+              <span className="font-bold text-emerald-950">
+                {diaInspeccionado.presenciaNetaTexto}
+              </span>
+            </div>
+          ) : (
+            <div className="p-3 bg-slate-50 border border-slate-200 rounded-2xl text-xs text-slate-500 italic">
+              Sin actividad ni intervalos de presencia registrados en este día.
+            </div>
+          )}
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -159,7 +531,7 @@ export default function FichaComportamiento() {
         }
       `}</style>
 
-      {/* BOTÓN FLOTANTE PARA TOGGLE DEL SIDEBAR */}
+      {/* TOGGLE SIDEBAR */}
       <div className="flex items-center justify-between no-print">
         <button
           type="button"
@@ -191,9 +563,7 @@ export default function FichaComportamiento() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
-        {/* ========================================================
-            1. SIDEBAR DESPLEGABLE
-           ======================================================== */}
+        {/* SIDEBAR */}
         <div
           className={`no-print transition-all duration-300 ${
             sidebarAbierto ? "lg:col-span-3 block" : "lg:hidden"
@@ -207,9 +577,7 @@ export default function FichaComportamiento() {
           />
         </div>
 
-        {/* ========================================================
-            2. CONTENIDO PRINCIPAL
-           ======================================================== */}
+        {/* CONTENIDO PRINCIPAL */}
         <div
           className={`print-full space-y-5 transition-all duration-300 ${
             sidebarAbierto ? "lg:col-span-9" : "lg:col-span-12"
@@ -236,7 +604,10 @@ export default function FichaComportamiento() {
                   <button
                     key={key}
                     type="button"
-                    onClick={() => setModalidad(key)}
+                    onClick={() => {
+                      setModalidad(key);
+                      setDiaInspeccionado(null);
+                    }}
                     className={`px-3.5 py-1.5 rounded-xl transition cursor-pointer whitespace-nowrap ${
                       activo
                         ? "bg-white text-indigo-700 shadow-xs border border-slate-200 font-bold"
@@ -250,10 +621,10 @@ export default function FichaComportamiento() {
             </div>
           </div>
 
-          {/* SELECTOR DE FECHAS Y ACCIONES */}
+          {/* BARRA DE DATEPICKER CON APERTURA CON UN SOLO CLIC */}
           <div className="bg-white border border-slate-200 rounded-2xl p-3 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="font-bold text-slate-500 uppercase text-[11px]">
+              <span className="font-semibold text-slate-600 text-xs">
                 {modalidad === "DIARIO"
                   ? "Jornada:"
                   : modalidad === "SEMANAL"
@@ -263,95 +634,250 @@ export default function FichaComportamiento() {
                       : "Período:"}
               </span>
 
-              {/* Selector para DIARIO / SEMANAL / MENSUAL */}
-              {modalidad !== "RANGO_FECHAS" ? (
-                <label className="relative flex items-center gap-2 border border-slate-200 rounded-xl px-3 py-1.5 bg-slate-50 hover:bg-white focus-within:border-indigo-500 font-mono font-bold text-slate-800 shadow-2xs cursor-pointer transition">
-                  <CalendarIcon className="w-3.5 h-3.5 text-slate-400" />
-                  <span>{formatearFechaVisual(fechaConsulta)}</span>
+              {modalidad !== "RANGO_FECHAS" && (
+                <button
+                  type="button"
+                  onClick={() => moverFecha(-1)}
+                  className="p-1 hover:bg-slate-100 rounded-lg text-slate-500 hover:text-slate-800 transition cursor-pointer"
+                  title="Anterior"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+              )}
+
+              {/* DIARIO */}
+              {modalidad === "DIARIO" && (
+                <div
+                  onClick={(e) =>
+                    e.currentTarget.querySelector("input")?.showPicker?.()
+                  }
+                  className="relative inline-flex items-center border border-slate-200 rounded-xl px-3 py-1.5 bg-white shadow-2xs hover:border-indigo-400 cursor-pointer"
+                >
+                  <span className="font-mono font-semibold text-slate-800 text-xs select-none">
+                    {formatearFechaVisual(fechaConsulta)}
+                  </span>
+                  <CalendarIcon className="w-4 h-4 text-slate-400 ml-2 pointer-events-none" />
                   <input
                     type="date"
                     value={fechaConsulta}
                     onChange={(e) => {
-                      if (e.target.value) {
-                        setFechaConsulta(e.target.value);
-                      }
+                      if (e.target.value) setFechaConsulta(e.target.value);
                     }}
                     className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
                     title="Seleccionar fecha"
                   />
-                </label>
-              ) : (
-                /* Selector para RANGO DE FECHAS (Desde - Hasta) */
+                </div>
+              )}
+
+              {/* SEMANAL */}
+              {modalidad === "SEMANAL" && (
+                <div
+                  onClick={(e) =>
+                    e.currentTarget.querySelector("input")?.showPicker?.()
+                  }
+                  className="relative inline-flex items-center border border-slate-200 rounded-xl px-3 py-1.5 bg-white shadow-2xs hover:border-indigo-400 cursor-pointer"
+                >
+                  <span className="font-mono font-semibold text-slate-800 text-xs select-none">
+                    {formatearFechaVisual(inicioSemanaStr)} →{" "}
+                    {formatearFechaVisual(finSemanaStr)}
+                  </span>
+                  <CalendarIcon className="w-4 h-4 text-slate-400 ml-2 pointer-events-none" />
+                  <input
+                    type="date"
+                    value={fechaConsulta}
+                    onChange={(e) => {
+                      if (e.target.value) setFechaConsulta(e.target.value);
+                    }}
+                    className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                    title="Seleccionar fecha de la semana"
+                  />
+                </div>
+              )}
+
+              {/* MENSUAL */}
+              {modalidad === "MENSUAL" && (
+                <div
+                  onClick={(e) =>
+                    e.currentTarget.querySelector("input")?.showPicker?.()
+                  }
+                  className="relative inline-flex items-center border border-slate-200 rounded-xl px-3 py-1.5 bg-white shadow-2xs hover:border-indigo-400 cursor-pointer"
+                >
+                  <span className="font-semibold text-slate-800 text-xs select-none">
+                    {obtenerNombreMes(fechaConsulta)} (
+                    {formatearFechaVisual(inicioMesStr)} Al{" "}
+                    {formatearFechaVisual(finMesStr)})
+                  </span>
+                  <CalendarIcon className="w-4 h-4 text-slate-400 ml-2 pointer-events-none" />
+                  <input
+                    type="month"
+                    value={fechaConsulta.substring(0, 7)}
+                    onChange={(e) => {
+                      if (e.target.value)
+                        setFechaConsulta(`${e.target.value}-01`);
+                    }}
+                    className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                    title="Seleccionar mes"
+                  />
+                </div>
+              )}
+
+              {/* RANGO DE FECHAS (DESDE / HASTA EN dd/mm/aaaa) */}
+              {modalidad === "RANGO_FECHAS" && (
                 <div className="flex items-center gap-2">
-                  <label className="relative flex items-center gap-2 border border-slate-200 rounded-xl px-3 py-1.5 bg-slate-50 hover:bg-white focus-within:border-indigo-500 font-mono font-bold text-slate-800 shadow-2xs cursor-pointer transition">
-                    <span className="text-[10px] uppercase font-sans text-slate-400">
+                  <div
+                    onClick={(e) =>
+                      e.currentTarget.querySelector("input")?.showPicker?.()
+                    }
+                    className="relative inline-flex items-center border border-slate-200 rounded-xl px-3 py-1.5 bg-white shadow-2xs hover:border-indigo-400 cursor-pointer"
+                  >
+                    <span className="text-[10px] text-slate-400 uppercase mr-1.5 select-none font-bold">
                       Desde:
                     </span>
-                    <span>{formatearFechaVisual(fechaConsulta)}</span>
+                    <span className="font-mono font-semibold text-slate-800 text-xs select-none">
+                      {formatearFechaVisual(fechaConsulta)}
+                    </span>
+                    <CalendarIcon className="w-3.5 h-3.5 text-slate-400 ml-2 pointer-events-none" />
                     <input
                       type="date"
                       value={fechaConsulta}
                       onChange={(e) => {
-                        if (e.target.value) {
-                          setFechaConsulta(e.target.value);
-                          if (e.target.value > fechaHastaRango) {
-                            setFechaHastaRango(e.target.value);
+                        const val = e.target.value;
+                        if (val) {
+                          setFechaConsulta(val);
+                          if (val > fechaHastaRango) {
+                            setFechaHastaRango(val);
                           }
                         }
                       }}
                       className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
                       title="Seleccionar fecha Desde"
                     />
-                  </label>
+                  </div>
 
                   <ArrowRight className="w-3.5 h-3.5 text-slate-400" />
 
-                  <label className="relative flex items-center gap-2 border border-slate-200 rounded-xl px-3 py-1.5 bg-slate-50 hover:bg-white focus-within:border-indigo-500 font-mono font-bold text-slate-800 shadow-2xs cursor-pointer transition">
-                    <span className="text-[10px] uppercase font-sans text-slate-400">
+                  <div
+                    onClick={(e) =>
+                      e.currentTarget.querySelector("input")?.showPicker?.()
+                    }
+                    className="relative inline-flex items-center border border-slate-200 rounded-xl px-3 py-1.5 bg-white shadow-2xs hover:border-indigo-400 cursor-pointer"
+                  >
+                    <span className="text-[10px] text-slate-400 uppercase mr-1.5 select-none font-bold">
                       Hasta:
                     </span>
-                    <span>{formatearFechaVisual(fechaHastaRango)}</span>
+                    <span className="font-mono font-semibold text-slate-800 text-xs select-none">
+                      {formatearFechaVisual(fechaHastaRango)}
+                    </span>
+                    <CalendarIcon className="w-3.5 h-3.5 text-slate-400 ml-2 pointer-events-none" />
                     <input
                       type="date"
                       value={fechaHastaRango}
                       min={fechaConsulta}
                       onChange={(e) => {
-                        if (e.target.value) {
-                          setFechaHastaRango(e.target.value);
+                        const val = e.target.value;
+                        if (val) {
+                          setFechaHastaRango(val);
                         }
                       }}
                       className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
                       title="Seleccionar fecha Hasta"
                     />
-                  </label>
+                  </div>
                 </div>
               )}
 
-              <span className="text-slate-400 font-medium">
-                ({formatearFechaVisual(fechaConsulta)})
-              </span>
+              {modalidad !== "RANGO_FECHAS" && (
+                <button
+                  type="button"
+                  onClick={() => moverFecha(1)}
+                  className="p-1 hover:bg-slate-100 rounded-lg text-slate-500 hover:text-slate-800 transition cursor-pointer"
+                  title="Siguiente"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              )}
+
+              {modalidad === "DIARIO" && (
+                <span className="text-slate-400 font-normal">
+                  ({obtenerNombreDia(fechaConsulta)})
+                </span>
+              )}
             </div>
 
-            <div className="flex items-center gap-2 no-print">
+            <div className="flex items-center gap-2 no-print relative">
               <button
                 type="button"
                 onClick={handleExportarExcel}
-                className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold transition shadow-xs cursor-pointer text-xs"
-                title="Descargar planilla en formato Excel"
+                className="flex items-center gap-1.5 px-3 py-1.5 border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 rounded-xl font-bold transition shadow-2xs cursor-pointer text-xs"
+                title="Exportar archivo CSV / Excel"
               >
-                <FileSpreadsheet className="w-4 h-4 stroke-[2.2]" />
-                Exportar Excel
+                <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-700" />
+                Exportar CSV
               </button>
 
-              <button
-                type="button"
-                onClick={handleGenerarPdfImprimir}
-                className="flex items-center gap-1.5 px-4 py-2 border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 rounded-xl font-bold transition shadow-xs cursor-pointer text-xs"
-                title="Generar documento imprimible o guardar en PDF"
-              >
-                <FileText className="w-4 h-4 text-indigo-600" />
-                Generar PDF / Imprimir
-              </button>
+              {/* DROPDOWN DE IMPRESIÓN / PDF */}
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setMenuImpresionAbierto(!menuImpresionAbierto)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 rounded-xl font-bold transition shadow-2xs cursor-pointer text-xs"
+                >
+                  <Printer className="w-3.5 h-3.5 text-slate-600" />
+                  <span>Imprimir / PDF</span>
+                  <ChevronDown className="w-3 h-3 text-slate-400 ml-0.5" />
+                </button>
+
+                {menuImpresionAbierto && (
+                  <>
+                    {/* Backdrop para cerrar haciendo clic afuera */}
+                    <div
+                      className="fixed inset-0 z-40"
+                      onClick={() => setMenuImpresionAbierto(false)}
+                    />
+
+                    {/* Menú Flotante con las 2 opciones */}
+                    <div className="absolute right-0 mt-1.5 w-56 bg-white border border-slate-200 rounded-2xl shadow-lg z-50 py-1.5 overflow-hidden animate-fadeIn">
+                      <button
+                        type="button"
+                        onClick={() => emitirReportePdf(false)}
+                        className="w-full text-left px-3.5 py-2 hover:bg-slate-50 flex items-center gap-2.5 text-xs text-slate-700 cursor-pointer transition font-medium"
+                      >
+                        <div className="p-1 rounded-lg bg-slate-100 text-slate-700">
+                          <Printer className="w-3.5 h-3.5" />
+                        </div>
+                        <div>
+                          <div className="font-bold text-slate-900">
+                            Imprimir (B&W)
+                          </div>
+                          <div className="text-[10px] text-slate-400">
+                            Apto blanco y negro / fotocopia
+                          </div>
+                        </div>
+                      </button>
+
+                      <div className="border-t border-slate-100 my-1" />
+
+                      <button
+                        type="button"
+                        onClick={() => emitirReportePdf(true)}
+                        className="w-full text-left px-3.5 py-2 hover:bg-indigo-50/60 flex items-center gap-2.5 text-xs text-slate-700 cursor-pointer transition font-medium"
+                      >
+                        <div className="p-1 rounded-lg bg-indigo-100 text-indigo-700">
+                          <Palette className="w-3.5 h-3.5" />
+                        </div>
+                        <div>
+                          <div className="font-bold text-indigo-950">
+                            Generar PDF Color
+                          </div>
+                          <div className="text-[10px] text-indigo-500">
+                            Diseño institucional en color
+                          </div>
+                        </div>
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
           </div>
 
@@ -649,24 +1175,31 @@ export default function FichaComportamiento() {
 
                   {tabInferior === "INCIDENTES" && (
                     <div className="space-y-2">
-                      {(fichaData?.incidentes || []).map((inc) => (
-                        <div
-                          key={inc.id}
-                          className="p-3 bg-rose-50/60 border border-rose-200 rounded-xl flex items-center justify-between text-xs"
-                        >
-                          <div>
-                            <div className="font-bold text-rose-900">
-                              {inc.tipo}
+                      {(fichaData?.incidentes || [])
+                        .filter((inc) => {
+                          const fechaInc = String(inc.fecha || "").split(
+                            "T",
+                          )[0];
+                          return !fechaInc || fechaInc === fechaConsulta;
+                        })
+                        .map((inc) => (
+                          <div
+                            key={inc.id}
+                            className="p-3 bg-rose-50/60 border border-rose-200 rounded-xl flex items-center justify-between text-xs"
+                          >
+                            <div>
+                              <div className="font-bold text-rose-900">
+                                {inc.tipo}
+                              </div>
+                              <div className="text-[11px] text-slate-600">
+                                {inc.detalle}
+                              </div>
                             </div>
-                            <div className="text-[11px] text-slate-600">
-                              {inc.detalle}
-                            </div>
+                            <span className="font-bold text-[10px] px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 uppercase">
+                              {inc.severidad}
+                            </span>
                           </div>
-                          <span className="font-bold text-[10px] px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 uppercase">
-                            {inc.severidad}
-                          </span>
-                        </div>
-                      ))}
+                        ))}
                     </div>
                   )}
 
@@ -711,12 +1244,12 @@ export default function FichaComportamiento() {
                   <h3 className="text-sm font-bold text-slate-900">
                     Desglose de Asistencia •{" "}
                     {modalidad === "SEMANAL"
-                      ? "Semanal"
+                      ? `Semanal (${formatearFechaVisual(inicioSemanaStr)} al ${formatearFechaVisual(finSemanaStr)})`
                       : `Rango (${formatearFechaVisual(fechaConsulta)} al ${formatearFechaVisual(fechaHastaRango)})`}
                   </h3>
                   <p className="text-[11px] text-slate-500">
-                    Haga clic en "Ver Día" para abrir los detalles y la línea de
-                    tiempo de cualquier jornada.
+                    Haga clic en "Ver Día" para abrir los detalles y la
+                    inspección de cualquier jornada.
                   </p>
                 </div>
                 <span className="px-3 py-1 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-xl font-bold text-xs">
@@ -724,11 +1257,14 @@ export default function FichaComportamiento() {
                 </span>
               </div>
 
+              {/* MODAL / TARJETA DE INSPECCIÓN AL TOCAR "VER DÍA" */}
+              {renderCardInspeccionDiaria()}
+
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs">
                   <thead className="bg-[#f8fafc] text-slate-500 uppercase text-[10px] font-bold border-b border-slate-100">
                     <tr>
-                      <th className="px-4 py-3">Fecha (dd/mm/aaaa)</th>
+                      <th className="px-4 py-3">Fecha</th>
                       <th className="px-4 py-3">Día</th>
                       <th className="px-4 py-3">1ra Entrada</th>
                       <th className="px-4 py-3">Último Egreso</th>
@@ -740,56 +1276,71 @@ export default function FichaComportamiento() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 text-slate-700">
-                    {(fichaData?.diasPeriodo || []).map((dia) => (
-                      <tr
-                        key={dia.fecha}
-                        className="hover:bg-slate-50/70 transition"
-                      >
-                        <td className="px-4 py-3 font-mono font-bold text-slate-900">
-                          {formatearFechaVisual(dia.fecha)}
-                        </td>
-                        <td className="px-4 py-3 font-semibold">
-                          {dia.diaSemana}
-                        </td>
-                        <td className="px-4 py-3 font-mono">
-                          {dia.primeraEntrada}
-                        </td>
-                        <td className="px-4 py-3 font-mono">
-                          {dia.ultimoEgreso}
-                        </td>
-                        <td className="px-4 py-3 font-bold text-emerald-700">
-                          {dia.presenciaNetaTexto}
-                        </td>
-                        <td className="px-4 py-3">
-                          {dia.salidasIntermedias} ({dia.minutosFuera} min)
-                        </td>
-                        <td className="px-4 py-3">
-                          {dia.totalIncidentes > 0 ? (
-                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200">
-                              ⚠ {dia.totalIncidentes} desvío(s)
-                            </span>
-                          ) : (
-                            <span className="text-slate-400">-</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 font-bold">
-                          {dia.porcentajeCumplimiento}%
-                        </td>
-                        <td className="px-4 py-3 text-right no-print">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setFechaConsulta(dia.fecha);
-                              setModalidad("DIARIO");
-                            }}
-                            className="inline-flex items-center gap-1 px-2.5 py-1 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-lg text-xs font-semibold cursor-pointer"
-                          >
-                            <Eye className="w-3.5 h-3.5" />
-                            Ver Día
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
+                    {(fichaData?.diasPeriodo || []).map((dia) => {
+                      const estaInspeccionado =
+                        diaInspeccionado?.fecha === dia.fecha;
+                      return (
+                        <tr
+                          key={dia.fecha}
+                          className={`transition ${
+                            estaInspeccionado
+                              ? "bg-indigo-50/70 font-semibold"
+                              : "hover:bg-slate-50/70"
+                          }`}
+                        >
+                          <td className="px-4 py-3 font-mono font-bold text-slate-900">
+                            {formatearFechaVisual(dia.fecha)}
+                          </td>
+                          <td className="px-4 py-3 font-semibold">
+                            {dia.diaSemana}
+                          </td>
+                          <td className="px-4 py-3 font-mono">
+                            {dia.primeraEntrada}
+                          </td>
+                          <td className="px-4 py-3 font-mono">
+                            {dia.ultimoEgreso}
+                          </td>
+                          <td className="px-4 py-3 font-bold text-emerald-700">
+                            {dia.presenciaNetaTexto}
+                          </td>
+                          <td className="px-4 py-3">
+                            {dia.salidasIntermedias} ({dia.minutosFuera} min)
+                          </td>
+                          <td className="px-4 py-3">
+                            {dia.totalIncidentes > 0 ? (
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200">
+                                ⚠ {dia.totalIncidentes} desvío(s)
+                              </span>
+                            ) : (
+                              <span className="text-slate-400">-</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 font-bold">
+                            {dia.porcentajeCumplimiento}%
+                          </td>
+                          <td className="px-4 py-3 text-right no-print">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (diaInspeccionado?.fecha === dia.fecha) {
+                                  setDiaInspeccionado(null);
+                                } else {
+                                  setDiaInspeccionado(dia);
+                                }
+                              }}
+                              className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold cursor-pointer transition ${
+                                estaInspeccionado
+                                  ? "bg-indigo-600 text-white shadow-xs"
+                                  : "bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200"
+                              }`}
+                            >
+                              <Eye className="w-3.5 h-3.5" />
+                              {estaInspeccionado ? "Cerrar" : "Ver Día"}
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -837,6 +1388,9 @@ export default function FichaComportamiento() {
                 </div>
               </div>
 
+              {/* MODAL / TARJETA EN MENSUAL */}
+              {renderCardInspeccionDiaria()}
+
               <div className="grid grid-cols-7 gap-2.5">
                 {["LUN", "MAR", "MIÉ", "JUE", "VIE", "SÁB", "DOM"].map((d) => (
                   <div
@@ -850,6 +1404,8 @@ export default function FichaComportamiento() {
                 {(fichaData?.diasPeriodo || []).map((dia) => {
                   const numDia = parseInt(dia.fecha.split("-")[2], 10);
                   const esHoy = dia.fecha === hoyIso;
+                  const estaSeleccionado =
+                    diaInspeccionado?.fecha === dia.fecha;
 
                   const esCritica =
                     dia.estadoGeneral === "INFRACCION" ||
@@ -874,7 +1430,10 @@ export default function FichaComportamiento() {
 
                   let cardBgClasses =
                     "bg-white border-slate-200 hover:border-slate-300";
-                  if (esCritica) {
+                  if (estaSeleccionado) {
+                    cardBgClasses =
+                      "bg-indigo-50/50 border-indigo-500 ring-2 ring-indigo-300 shadow-sm";
+                  } else if (esCritica) {
                     cardBgClasses =
                       "bg-rose-50/70 border-rose-300 hover:border-rose-400 hover:shadow-sm";
                   } else if (esDesvio) {
@@ -894,8 +1453,11 @@ export default function FichaComportamiento() {
                     <div
                       key={dia.fecha}
                       onClick={() => {
-                        setFechaConsulta(dia.fecha);
-                        setModalidad("DIARIO");
+                        if (diaInspeccionado?.fecha === dia.fecha) {
+                          setDiaInspeccionado(null);
+                        } else {
+                          setDiaInspeccionado(dia);
+                        }
                       }}
                       className={`border rounded-2xl p-2.5 min-h-[110px] flex flex-col justify-between transition-all cursor-pointer select-none ${cardBgClasses}`}
                     >
@@ -946,7 +1508,7 @@ export default function FichaComportamiento() {
                           </span>
                         ) : (
                           <span className="text-[10px] text-slate-400 italic">
-                            Franco
+                            Sin registros
                           </span>
                         )}
                       </div>

@@ -14,6 +14,7 @@ import org.springframework.security.web.authentication.WebAuthenticationDetailsS
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
+
 import java.io.IOException;
 import java.util.List;
 
@@ -28,19 +29,34 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         this.usuarioRepo = usuarioRepo;
     }
 
-    @Override
-    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
-            throws ServletException, IOException {
+    /**
+     * Omite la ejecución de este filtro para endpoints públicos y de autenticación.
+     */
+@Override
+protected boolean shouldNotFilter(HttpServletRequest request) {
+    String path = request.getServletPath();
+    boolean omitir = path.startsWith("/api/auth/") || path.startsWith("/auth/") 
+                  || path.startsWith("/api/public/") || path.startsWith("/public/");
+    System.out.println(">>> [FILTRO JWT] shouldNotFilter? " + omitir + " para ruta: " + path);
+    return omitir;
+}
 
-        final String token = getTokenFromRequest(request);
+@Override
+protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
+        throws ServletException, IOException {
 
-        if (token == null) {
-            filterChain.doFilter(request, response);
-            return;
-        }
+    System.out.println(">>> [FILTRO JWT] Procesando request: " + request.getMethod() + " " + request.getServletPath());
+    final String token = getTokenFromRequest(request);
+    System.out.println(">>> [FILTRO JWT] Token recibido: " + (token != null ? "PRESENTE" : "NULL"));
 
-        try {
-            String username = jwtService.getUsernameFromToken(token);
+    if (token == null) {
+        filterChain.doFilter(request, response);
+        return;
+    }
+
+    try {
+        String username = jwtService.getUsernameFromToken(token);
+        System.out.println(">>> [FILTRO JWT] Username en token: " + username);
 
             if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
                 Usuario usuario = usuarioRepo.findByUsername(username).orElse(null);
@@ -62,6 +78,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 }
             }
         } catch (Exception e) {
+           System.err.println(">>> [FILTRO JWT] Error procesando token: " + e.getMessage());
+            SecurityContextHolder.clearContext();
             System.err.println("Error procesando JWT: " + e.getMessage());
         }
 
@@ -71,7 +89,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private String getTokenFromRequest(HttpServletRequest request) {
         final String authHeader = request.getHeader(HttpHeaders.AUTHORIZATION);
         if (StringUtils.hasText(authHeader) && authHeader.startsWith("Bearer ")) {
-            return authHeader.substring(7);
+            String rawToken = authHeader.substring(7).trim();
+            // Evita procesar valores de token vacíos o serializaciones erróneas del frontend
+            if (!rawToken.isEmpty() && !"null".equalsIgnoreCase(rawToken) && !"undefined".equalsIgnoreCase(rawToken)) {
+                return rawToken;
+            }
         }
         return null;
     }

@@ -4,6 +4,8 @@ import backend.dto.FichaComportamientoDTO;
 import backend.dto.ResumenPresenciaFichajesDTO;
 import backend.model.*;
 import backend.repositories.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -15,6 +17,8 @@ import java.util.*;
 
 @Service
 public class FichaComportamientoService {
+
+    private static final Logger log = LoggerFactory.getLogger(FichaComportamientoService.class);
 
     private final EmpleadoRepository empleadoRepo;
     private final EmpleadoHorarioRepository horarioRepo;
@@ -39,11 +43,20 @@ public class FichaComportamientoService {
     }
 
     @Transactional(readOnly = true)
-    public FichaComportamientoDTO obtenerFicha(Long empleadoId, String modalidad, LocalDate fechaConsulta) {
+    public FichaComportamientoDTO obtenerFicha(
+            Long empleadoId,
+            String modalidad,
+            LocalDate fechaConsulta,
+            LocalDate fechaDesdeParam,
+            LocalDate fechaHastaParam) {
+
+        log.debug("[FichaService] Buscando empleado con ID: {}", empleadoId);
         Empleado emp = empleadoRepo.findById(empleadoId)
                 .orElseThrow(() -> new RuntimeException("Empleado no encontrado con ID: " + empleadoId));
 
-        // Variable efectivamente final para streams y lambdas
+        log.debug("[FichaService] Empleado encontrado: {} {} (Legajo: {})",
+                emp.getNombre(), emp.getApellido(), emp.getNroLegajo());
+
         final LocalDate fechaBase = (fechaConsulta != null) ? fechaConsulta : LocalDate.now();
 
         LocalDate fechaInicio;
@@ -53,6 +66,14 @@ public class FichaComportamientoService {
         String mod = (modalidad != null) ? modalidad.toUpperCase() : "DIARIO";
 
         switch (mod) {
+            case "RANGO", "RANGO_FECHAS" -> {
+                mod = "RANGO_FECHAS";
+                fechaInicio = (fechaDesdeParam != null) ? fechaDesdeParam : fechaBase;
+                fechaFin = (fechaHastaParam != null && !fechaHastaParam.isBefore(fechaInicio))
+                        ? fechaHastaParam
+                        : fechaInicio;
+                periodoTexto = fechaInicio + " → " + fechaFin;
+            }
             case "SEMANAL" -> {
                 fechaInicio = fechaBase.minusDays(fechaBase.getDayOfWeek().getValue() - 1);
                 fechaFin = fechaInicio.plusDays(6);
@@ -71,10 +92,14 @@ public class FichaComportamientoService {
             }
         }
 
-        // 1. Horarios activos del empleado
+        log.info("[FichaService] Procesando modalidad='{}', periodo='{}' (desde {} hasta {})",
+                mod, periodoTexto, fechaInicio, fechaFin);
+
+        // 1. Horarios activos
         List<EmpleadoHorario> horarios = horarioRepo.findByEmpleadoId(emp.getId()).stream()
                 .filter(h -> Boolean.TRUE.equals(h.getActivo()))
                 .toList();
+        log.debug("[FichaService] Horarios activos encontrados: {}", horarios.size());
 
         String etiquetaTurno = "Sin turno asignado";
         if (!horarios.isEmpty()) {
@@ -101,13 +126,15 @@ public class FichaComportamientoService {
                         !f.getHoraFichaje().isAfter(finT))
                 .sorted(Comparator.comparing(EmpleadoFichaje::getHoraFichaje))
                 .toList();
+        log.debug("[FichaService] Fichajes válidos en el período: {}", fichajesPeriodo.size());
 
         // 3. Incidentes del período
         List<IncidenteAsistencia> incsPeriodo = incidenteRepo.buscarFiltradoPaginadoRango(
                 fechaInicio, fechaFin, null, null, null, emp.getNroLegajo(), org.springframework.data.domain.Pageable.unpaged()
         ).getContent();
+        log.debug("[FichaService] Incidentes recuperados en el período: {}", incsPeriodo.size());
 
-        // 4. Detalle y línea de tiempo (Jornada del día consultado)
+        // 4. Detalle y línea de tiempo para la fecha base
         List<FichaComportamientoDTO.IntervaloLineaTiempoDTO> planificados = new ArrayList<>();
         List<FichaComportamientoDTO.IntervaloLineaTiempoDTO> presencias = new ArrayList<>();
         List<FichaComportamientoDTO.DesgloseIntervaloDTO> desglose = new ArrayList<>();
@@ -211,6 +238,7 @@ public class FichaComportamientoService {
         List<FichaComportamientoDTO.IncidenteFichaDTO> incidentesList = incsPeriodo.stream()
                 .map(i -> new FichaComportamientoDTO.IncidenteFichaDTO(
                         i.getId(),
+                        i.getFecha(),
                         i.getHora() != null ? i.getHora().toString().substring(0, 5) : "--:--",
                         i.getSeveridad(),
                         i.getTipo(),
@@ -219,13 +247,23 @@ public class FichaComportamientoService {
                 )).toList();
 
         // 5. Métricas globales y cumplimiento porcentual
+        log.debug("[FichaService] Calculando horas reales y teóricas del período...");
         ResumenPresenciaFichajesDTO resumenPeriodo = ("DIARIO".equals(mod))
                 ? evaluadorService.calcularHorasRealesDia(emp.getId(), fechaBase)
                 : evaluadorService.calcularHorasRealesRango(emp.getId(), fechaInicio, fechaFin);
 
-        int porcentajeCumplimiento = evaluadorService.calcularPorcentajeCumplimiento(emp.getId(), mod, fechaBase);
+        double horasTeoricasPeriodo = horarioService.calcularHorasTeoricasRango(emp.getId(), fechaInicio, fechaFin);
+        int porcentajeCumplimiento;
+        if (horasTeoricasPeriodo > 0) {
+            porcentajeCumplimiento = (int) Math.min(100, Math.round((resumenPeriodo.horasNetasTrabajadas() / horasTeoricasPeriodo) * 100.0));
+        } else {
+            porcentajeCumplimiento = resumenPeriodo.horasNetasTrabajadas() > 0 ? 100 : 0;
+        }
 
-        // 6. Desglose día por día para Semanal y Mensual
+        log.debug("[FichaService] Horas reales={:.2f}, Horas teóricas={:.2f}, Cumplimiento={}%",
+                resumenPeriodo.horasNetasTrabajadas(), horasTeoricasPeriodo, porcentajeCumplimiento);
+
+        // 6. Desglose día por día para Semanal, Mensual y Rango
         List<FichaComportamientoDTO.DiaDesgloseDTO> diasDesglose = new ArrayList<>();
         LocalDate cur = fechaInicio;
         int diasConPresencia = 0;
