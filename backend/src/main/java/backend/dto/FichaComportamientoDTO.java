@@ -1,7 +1,6 @@
 package backend.dto;
 
 import java.time.LocalDate;
-import java.time.LocalTime;
 import java.util.List;
 
 public record FichaComportamientoDTO(
@@ -13,7 +12,7 @@ public record FichaComportamientoDTO(
     String departamento,
     boolean activo,
     String etiquetaTurno,
-    String modalidad, // DIARIO, SEMANAL, MENSUAL
+    String modalidad,
     String periodoTexto,
     int porcentajeCumplimiento,
     MetricasFichaDTO metricas,
@@ -22,7 +21,7 @@ public record FichaComportamientoDTO(
     List<DesgloseIntervaloDTO> intervalosDetalle,
     List<IncidenteFichaDTO> incidentes,
     List<FichajeBrutoDTO> fichajesBrutos,
-    List<DiaDesgloseDTO> diasPeriodo // Para vista semanal y mensual
+    List<DiaDesgloseDTO> diasPeriodo
 ) {
     public record MetricasFichaDTO(
         String primeraEntrada,
@@ -34,20 +33,27 @@ public record FichaComportamientoDTO(
         int totalIncidentes,
         int incidentesJustificados,
         int diasEnSede,
-        int diasTotalesPeriodo
+        int diasTotalesPeriodo,
+        // --- NUEVAS MÉTRICAS AUDITORÍA PROFESIONAL ---
+        String horasAFavorTexto,
+        long minutosAFavor,
+        String horasEnContraTexto,
+        long minutosEnContra,
+        int diasConDeficit,
+        int diasConHorasExtra
     ) {}
 
     public record IntervaloLineaTiempoDTO(
         String etiqueta,
         String horaInicio,
         String horaFin,
-        double inicioMinutos, // Minutos desde las 00:00 para posición CSS
+        double inicioMinutos,
         double duracionMinutos,
-        String tipo // PLANIFICADO, PRESENCIA, SALIDA_INTERMEDIA, INFRACCION
+        String tipo
     ) {}
 
     public record DesgloseIntervaloDTO(
-        String tipo, // Presencia, Salida Intermedia
+        String tipo,
         String horaInicio,
         String horaFin,
         String duracionTexto,
@@ -84,6 +90,7 @@ public record FichaComportamientoDTO(
         long minutosFuera,
         int totalIncidentes,
         int porcentajeCumplimiento,
-        String estadoGeneral // NORMAL, INFRACCION, DESVIO, SIN_REGISTRO, FRANCO
+        String estadoGeneral, // NORMAL, INFRACCION, DESVIO, SIN_REGISTRO, FRANCO, EXTRA
+        long minutosDiferencia // Positivo: horas a favor en el día, Negativo: deuda/déficit en el día
     ) {}
 }

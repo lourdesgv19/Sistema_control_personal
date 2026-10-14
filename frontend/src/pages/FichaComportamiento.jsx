@@ -6,9 +6,7 @@ import {
   FileSpreadsheet,
   Eye,
   Users,
-  Sliders,
   ArrowRight,
-  FileText,
   PanelLeftClose,
   PanelLeftOpen,
   ChevronLeft,
@@ -23,105 +21,60 @@ import ListaEmpleadosSidebar from "../components/comunes/ListaEmpleadosSidebar";
 import { getFichaComportamiento } from "../services/fichaComportamientoService";
 import { useNavigate } from "react-router-dom";
 import { generarPdfFichaComportamiento } from "../utils/generadorPdfFicha";
-
-// Helper para convertir cualquier fecha ISO YYYY-MM-DD a formato estricto dd/mm/aaaa
-function formatearFechaVisual(fechaIso) {
-  if (!fechaIso) return "--/--/----";
-  const str = String(fechaIso).split("T")[0].split(" ")[0].trim();
-  const partes = str.split("-");
-  return partes.length === 3
-    ? `${partes[2]}/${partes[1]}/${partes[0]}`
-    : fechaIso;
-}
-
-// Helper para obtener el nombre del día en español
-function obtenerNombreDia(fechaIso) {
-  if (!fechaIso) return "";
-  const partes = fechaIso.split("-");
-  if (partes.length !== 3) return "";
-  const d = new Date(
-    parseInt(partes[0], 10),
-    parseInt(partes[1], 10) - 1,
-    parseInt(partes[2], 10),
-  );
-  const dias = [
-    "Domingo",
-    "Lunes",
-    "Martes",
-    "Miércoles",
-    "Jueves",
-    "Viernes",
-    "Sábado",
-  ];
-  return dias[d.getDay()];
-}
-
-// Helper para obtener el nombre del mes
-function obtenerNombreMes(fechaIso) {
-  if (!fechaIso) return "";
-  const partes = fechaIso.split("-");
-  if (partes.length !== 3) return "";
-  const meses = [
-    "Enero",
-    "Febrero",
-    "Marzo",
-    "Abril",
-    "Mayo",
-    "Junio",
-    "Julio",
-    "Agosto",
-    "Septiembre",
-    "Octubre",
-    "Noviembre",
-    "Diciembre",
-  ];
-  return `${meses[parseInt(partes[1], 10) - 1]} De ${partes[0]}`;
-}
-
-// Helper para formatear fecha completa con texto (ej: "Jueves, 1 De Octubre De 2026")
-function formatearFechaLarga(fechaIso) {
-  if (!fechaIso) return "";
-  const partes = fechaIso.split("-");
-  if (partes.length !== 3) return fechaIso;
-  const nombreDia = obtenerNombreDia(fechaIso);
-  const diaNum = parseInt(partes[2], 10);
-  const nombreMes = obtenerNombreMes(fechaIso);
-  return `${nombreDia}, ${diaNum} De ${nombreMes}`;
-}
+import { exportarFichaACsv } from "../utils/exportadorCsvFicha";
+import {
+  formatearFechaVisual,
+  obtenerNombreDia,
+  obtenerNombreMes,
+  formatearFechaLarga,
+  calcularRangoSemana,
+  calcularRangoMes,
+  calcularOffsetPrimerDia,
+} from "../utils/fechasFichaUtils";
 
 export default function FichaComportamiento() {
-  const hoyIso = useMemo(() => new Date().toISOString().split("T")[0], []);
+  const hoyIso = useMemo(() => {
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  }, []);
   const navigate = useNavigate();
-  const [menuImpresionAbierto, setMenuImpresionAbierto] = useState(false);
 
   const [empleadoSeleccionado, setEmpleadoSeleccionado] = useState(null);
   const [sidebarAbierto, setSidebarAbierto] = useState(true);
+  const [menuImpresionAbierto, setMenuImpresionAbierto] = useState(false);
 
   // Modalidades: DIARIO | SEMANAL | MENSUAL | RANGO_FECHAS
   const [modalidad, setModalidad] = useState("DIARIO");
   const [fechaConsulta, setFechaConsulta] = useState(hoyIso);
   const [fechaHastaRango, setFechaHastaRango] = useState(hoyIso);
 
-  // Estado para el modal de inspección diaria (usado en Semanal, Mensual y Rango)
+  // Estado para el modal de inspección diaria (Semanal, Mensual y Rango)
   const [diaInspeccionado, setDiaInspeccionado] = useState(null);
-
   const [tabInferior, setTabInferior] = useState("INTERVALOS");
 
   const [loadingFicha, setLoadingFicha] = useState(false);
   const [fichaData, setFichaData] = useState(null);
 
-  const emitirReportePdf = (modoColor) => {
-    setMenuImpresionAbierto(false);
-    generarPdfFichaComportamiento({
-      fichaData,
-      modalidad,
-      fechaConsulta,
-      fechaHastaRango,
-      esColor: modoColor,
-    });
-  };
+  // Rangos calculados modularmente
+  const { inicioSemanaStr, finSemanaStr } = useMemo(
+    () => calcularRangoSemana(fechaConsulta),
+    [fechaConsulta],
+  );
+  const { inicioMesStr, finMesStr } = useMemo(
+    () => calcularRangoMes(fechaConsulta),
+    [fechaConsulta],
+  );
 
-  // Cargar datos de la ficha
+  // Desfase para alinear el día 1 en el calendario mensual
+  const diasOffsetInicioMes = useMemo(() => {
+    if (!fichaData?.diasPeriodo || fichaData.diasPeriodo.length === 0) return 0;
+    return calcularOffsetPrimerDia(fichaData.diasPeriodo[0].fecha);
+  }, [fichaData]);
+
+  // Carga de datos desde la API
   const cargarFicha = useCallback(async () => {
     if (!empleadoSeleccionado?.id) return;
     setLoadingFicha(true);
@@ -166,17 +119,26 @@ export default function FichaComportamiento() {
     });
   };
 
-  const metricas = fichaData?.metricas || {
-    primeraEntrada: "--:--",
-    ultimoEgreso: "--:--",
-    presenciaNetaTexto: "0h 0m",
-    salidasIntermediasCantidad: 0,
-    salidasIntermediasMinutos: 0,
-    totalIncidentes: 0,
-    incidentesJustificados: 0,
+  const emitirReportePdf = (modoColor) => {
+    setMenuImpresionAbierto(false);
+    generarPdfFichaComportamiento({
+      fichaData,
+      modalidad,
+      fechaConsulta,
+      fechaHastaRango,
+      esColor: modoColor,
+    });
   };
 
-  // Navegación de fechas con flechas (< y >)
+  const handleExportarExcel = () => {
+    exportarFichaACsv({
+      fichaData,
+      modalidad,
+      fechaConsulta,
+      fechaHastaRango,
+    });
+  };
+
   const moverFecha = (direccion) => {
     const partes = fechaConsulta.split("-");
     const actual = new Date(
@@ -200,120 +162,23 @@ export default function FichaComportamiento() {
     setDiaInspeccionado(null);
   };
 
-  // Cálculo del inicio y fin de la semana para el modo semanal
-  const { inicioSemanaStr, finSemanaStr } = useMemo(() => {
-    const partes = fechaConsulta.split("-");
-    const cur = new Date(
-      parseInt(partes[0], 10),
-      parseInt(partes[1], 10) - 1,
-      parseInt(partes[2], 10),
-    );
-    const day = cur.getDay();
-    const diff = cur.getDate() - day + (day === 0 ? -6 : 1);
-    const monday = new Date(cur.setDate(diff));
-    const sunday = new Date(cur.setDate(diff + 6));
-
-    const fIso = (dt) => {
-      const y = dt.getFullYear();
-      const m = String(dt.getMonth() + 1).padStart(2, "0");
-      const d = String(dt.getDate()).padStart(2, "0");
-      return `${y}-${m}-${d}`;
-    };
-
-    return {
-      inicioSemanaStr: fIso(monday),
-      finSemanaStr: fIso(sunday),
-    };
-  }, [fechaConsulta]);
-
-  // Cálculo del inicio y fin de mes para el modo mensual
-  const { inicioMesStr, finMesStr } = useMemo(() => {
-    const partes = fechaConsulta.split("-");
-    const y = parseInt(partes[0], 10);
-    const m = parseInt(partes[1], 10);
-    const primerDia = `${y}-${String(m).padStart(2, "0")}-01`;
-    const ultimoDiaNum = new Date(y, m, 0).getDate();
-    const ultimoDia = `${y}-${String(m).padStart(2, "0")}-${String(ultimoDiaNum).padStart(2, "0")}`;
-
-    return {
-      inicioMesStr: primerDia,
-      finMesStr: ultimoDia,
-    };
-  }, [fechaConsulta]);
-
-  // Manejo de exportación a Excel
-  const handleExportarExcel = () => {
-    if (!fichaData) return;
-
-    let csvContent = "\uFEFF";
-    csvContent += "REPORTE DE FICHA DE COMPORTAMIENTO Y ASISTENCIA\n";
-    csvContent += `Empleado;${fichaData.nombreCompleto || ""};Legajo;${fichaData.nroLegajo || ""};DNI;${fichaData.dni || ""}\n`;
-    csvContent += `Cargo;${fichaData.rolOArea || ""};Departamento;${fichaData.departamento || ""}\n`;
-    csvContent += `Modalidad;${modalidad};Período;${
-      modalidad === "RANGO_FECHAS"
-        ? `${formatearFechaVisual(fechaConsulta)} al ${formatearFechaVisual(fechaHastaRango)}`
-        : formatearFechaVisual(fechaConsulta)
-    }\n`;
-    csvContent += `Cumplimiento de Jornada;${fichaData.porcentajeCumplimiento || 0}%\n\n`;
-
-    csvContent += "RESUMEN DE MÉTRICAS\n";
-    csvContent += `1ra Entrada / Último Egreso;${metricas.primeraEntrada} a ${metricas.ultimoEgreso}\n`;
-    csvContent += `Presencia Neta Total;${metricas.presenciaNetaTexto}\n`;
-    csvContent += `Salidas Intermedias;${metricas.salidasIntermediasCantidad} (${metricas.salidasIntermediasMinutos} min)\n`;
-    csvContent += `Incidentes Registrados;${metricas.totalIncidentes} (${metricas.incidentesJustificados} justificados)\n\n`;
-
-    if (modalidad !== "DIARIO" && fichaData.diasPeriodo?.length > 0) {
-      csvContent += "DESGLOSE DE JORNADAS DEL PERÍODO\n";
-      csvContent +=
-        "Fecha;Día;1ra Entrada;Último Egreso;Presencia Neta;Salidas Intermedias;Incidentes;Cumplimiento;Estado\n";
-      fichaData.diasPeriodo.forEach((d) => {
-        csvContent += `${formatearFechaVisual(d.fecha)};${d.diaSemana};${d.primeraEntrada};${d.ultimoEgreso};${d.presenciaNetaTexto};${d.salidasIntermedias} (${d.minutosFuera}m);${d.totalIncidentes};${d.porcentajeCumplimiento}%;${d.estadoGeneral}\n`;
-      });
-      csvContent += "\n";
-    }
-
-    if (modalidad === "DIARIO" && fichaData.intervalosDetalle?.length > 0) {
-      csvContent += "INTERVALOS DE JORNADA\n";
-      csvContent += "Tipo;Inicio;Fin;Duración;Detalle\n";
-      fichaData.intervalosDetalle.forEach((it) => {
-        csvContent += `${it.tipo};${it.horaInicio};${it.horaFin};${it.duracionTexto};${it.detalle}\n`;
-      });
-      csvContent += "\n";
-    }
-
-    if (fichaData.incidentes?.length > 0) {
-      csvContent += "DETALLE DE INCIDENTES\n";
-      csvContent += "Hora;Severidad;Tipo de Infracción;Detalle;Estado\n";
-      fichaData.incidentes.forEach((inc) => {
-        csvContent += `${inc.hora};${inc.severidad};${inc.tipo};${inc.detalle?.replace(/;/g, ",")};${inc.estado}\n`;
-      });
-      csvContent += "\n";
-    }
-
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    const nombreArchivo = `Ficha_Comportamiento_${fichaData.nroLegajo || "empleado"}_${modalidad}_${formatearFechaVisual(fechaConsulta).replace(/\//g, "-")}.csv`;
-    link.setAttribute("href", url);
-    link.setAttribute("download", nombreArchivo);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  const metricas = fichaData?.metricas || {
+    primeraEntrada: "--:--",
+    ultimoEgreso: "--:--",
+    presenciaNetaTexto: "0h 0m",
+    salidasIntermediasCantidad: 0,
+    salidasIntermediasMinutos: 0,
+    totalIncidentes: 0,
+    incidentesJustificados: 0,
+    horasAFavorTexto: "0h 0m",
+    horasEnContraTexto: "0h 0m",
+    diasConDeficit: 0,
+    diasConHorasExtra: 0,
   };
 
-  const handleGenerarPdfImprimir = () => {
-    generarPdfFichaComportamiento({
-      fichaData,
-      modalidad,
-      fechaConsulta,
-      fechaHastaRango,
-    });
-  };
-
-  // Renderizador del bloque modal de inspección diaria
+  // Render modal / tarjeta de inspección de día
   const renderCardInspeccionDiaria = () => {
     if (!diaInspeccionado) return null;
-
     const fechaDiaStr = String(diaInspeccionado.fecha || "").split("T")[0];
 
     return (
@@ -361,7 +226,7 @@ export default function FichaComportamiento() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
           <div className="bg-slate-50 border border-slate-200/80 p-3 rounded-2xl flex flex-col justify-between">
             <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-              1RA ENTRADA — ÚLTIMO EGRESO
+              1RA ENTRADA - ÚLTIMO EGRESO
             </span>
             <div className="font-mono font-bold text-slate-800 text-xs sm:text-sm mt-1">
               {diaInspeccionado.primeraEntrada !== "--:--"
@@ -399,7 +264,7 @@ export default function FichaComportamiento() {
           </div>
         </div>
 
-        {/* Sección de Incidencias */}
+        {/* Incidencias del día */}
         <div className="space-y-2">
           <div className="flex items-center gap-1.5 text-xs font-bold text-slate-800 uppercase tracking-wider">
             <AlertTriangle className="w-3.5 h-3.5 text-rose-500" />
@@ -486,7 +351,7 @@ export default function FichaComportamiento() {
           )}
         </div>
 
-        {/* Sección de Intervalos Reconstruidos */}
+        {/* Intervalos reconstruidos */}
         <div className="space-y-1.5">
           <div className="flex items-center gap-1.5 text-xs font-bold text-slate-800 uppercase tracking-wider">
             <Clock className="w-3.5 h-3.5 text-indigo-600" />
@@ -621,7 +486,7 @@ export default function FichaComportamiento() {
             </div>
           </div>
 
-          {/* BARRA DE DATEPICKER CON APERTURA CON UN SOLO CLIC */}
+          {/* BARRA DE DATEPICKER */}
           <div className="bg-white border border-slate-200 rounded-2xl p-3 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="font-semibold text-slate-600 text-xs">
@@ -647,12 +512,7 @@ export default function FichaComportamiento() {
 
               {/* DIARIO */}
               {modalidad === "DIARIO" && (
-                <div
-                  onClick={(e) =>
-                    e.currentTarget.querySelector("input")?.showPicker?.()
-                  }
-                  className="relative inline-flex items-center border border-slate-200 rounded-xl px-3 py-1.5 bg-white shadow-2xs hover:border-indigo-400 cursor-pointer"
-                >
+                <label className="relative inline-flex items-center border border-slate-200 rounded-xl px-3 py-1.5 bg-white shadow-2xs hover:border-indigo-400 cursor-pointer">
                   <span className="font-mono font-semibold text-slate-800 text-xs select-none">
                     {formatearFechaVisual(fechaConsulta)}
                   </span>
@@ -666,17 +526,12 @@ export default function FichaComportamiento() {
                     className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
                     title="Seleccionar fecha"
                   />
-                </div>
+                </label>
               )}
 
               {/* SEMANAL */}
               {modalidad === "SEMANAL" && (
-                <div
-                  onClick={(e) =>
-                    e.currentTarget.querySelector("input")?.showPicker?.()
-                  }
-                  className="relative inline-flex items-center border border-slate-200 rounded-xl px-3 py-1.5 bg-white shadow-2xs hover:border-indigo-400 cursor-pointer"
-                >
+                <label className="relative inline-flex items-center border border-slate-200 rounded-xl px-3 py-1.5 bg-white shadow-2xs hover:border-indigo-400 cursor-pointer">
                   <span className="font-mono font-semibold text-slate-800 text-xs select-none">
                     {formatearFechaVisual(inicioSemanaStr)} →{" "}
                     {formatearFechaVisual(finSemanaStr)}
@@ -691,17 +546,12 @@ export default function FichaComportamiento() {
                     className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
                     title="Seleccionar fecha de la semana"
                   />
-                </div>
+                </label>
               )}
 
               {/* MENSUAL */}
               {modalidad === "MENSUAL" && (
-                <div
-                  onClick={(e) =>
-                    e.currentTarget.querySelector("input")?.showPicker?.()
-                  }
-                  className="relative inline-flex items-center border border-slate-200 rounded-xl px-3 py-1.5 bg-white shadow-2xs hover:border-indigo-400 cursor-pointer"
-                >
+                <label className="relative inline-flex items-center border border-slate-200 rounded-xl px-3 py-1.5 bg-white shadow-2xs hover:border-indigo-400 cursor-pointer">
                   <span className="font-semibold text-slate-800 text-xs select-none">
                     {obtenerNombreMes(fechaConsulta)} (
                     {formatearFechaVisual(inicioMesStr)} Al{" "}
@@ -718,18 +568,13 @@ export default function FichaComportamiento() {
                     className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
                     title="Seleccionar mes"
                   />
-                </div>
+                </label>
               )}
 
-              {/* RANGO DE FECHAS (DESDE / HASTA EN dd/mm/aaaa) */}
+              {/* RANGO DE FECHAS */}
               {modalidad === "RANGO_FECHAS" && (
                 <div className="flex items-center gap-2">
-                  <div
-                    onClick={(e) =>
-                      e.currentTarget.querySelector("input")?.showPicker?.()
-                    }
-                    className="relative inline-flex items-center border border-slate-200 rounded-xl px-3 py-1.5 bg-white shadow-2xs hover:border-indigo-400 cursor-pointer"
-                  >
+                  <label className="relative inline-flex items-center border border-slate-200 rounded-xl px-3 py-1.5 bg-white shadow-2xs hover:border-indigo-400 cursor-pointer">
                     <span className="text-[10px] text-slate-400 uppercase mr-1.5 select-none font-bold">
                       Desde:
                     </span>
@@ -752,16 +597,11 @@ export default function FichaComportamiento() {
                       className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
                       title="Seleccionar fecha Desde"
                     />
-                  </div>
+                  </label>
 
                   <ArrowRight className="w-3.5 h-3.5 text-slate-400" />
 
-                  <div
-                    onClick={(e) =>
-                      e.currentTarget.querySelector("input")?.showPicker?.()
-                    }
-                    className="relative inline-flex items-center border border-slate-200 rounded-xl px-3 py-1.5 bg-white shadow-2xs hover:border-indigo-400 cursor-pointer"
-                  >
+                  <label className="relative inline-flex items-center border border-slate-200 rounded-xl px-3 py-1.5 bg-white shadow-2xs hover:border-indigo-400 cursor-pointer">
                     <span className="text-[10px] text-slate-400 uppercase mr-1.5 select-none font-bold">
                       Hasta:
                     </span>
@@ -782,7 +622,7 @@ export default function FichaComportamiento() {
                       className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
                       title="Seleccionar fecha Hasta"
                     />
-                  </div>
+                  </label>
                 </div>
               )}
 
@@ -829,13 +669,10 @@ export default function FichaComportamiento() {
 
                 {menuImpresionAbierto && (
                   <>
-                    {/* Backdrop para cerrar haciendo clic afuera */}
                     <div
                       className="fixed inset-0 z-40"
                       onClick={() => setMenuImpresionAbierto(false)}
                     />
-
-                    {/* Menú Flotante con las 2 opciones */}
                     <div className="absolute right-0 mt-1.5 w-56 bg-white border border-slate-200 rounded-2xl shadow-lg z-50 py-1.5 overflow-hidden animate-fadeIn">
                       <button
                         type="button"
@@ -926,73 +763,94 @@ export default function FichaComportamiento() {
           </div>
 
           {/* TARJETAS KPI ADAPTADAS */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
             <div className="bg-white border border-slate-200 p-4 rounded-2xl shadow-xs flex flex-col justify-between">
               <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
                 {modalidad === "DIARIO"
-                  ? "1RA ENTRADA → ÚLTIMO EGRESO"
-                  : "DÍAS EN SEDE / PERÍODO"}
+                  ? "1RA ENTRADA → EGRESO"
+                  : "DÍAS EN SEDE"}
               </span>
               <div className="text-sm font-black text-slate-900 mt-2 font-mono">
                 {modalidad === "DIARIO" ? (
                   `${metricas.primeraEntrada} hs → ${metricas.ultimoEgreso} hs`
                 ) : (
-                  <span className="text-xl font-bold font-sans text-slate-800">
+                  <span className="text-base font-bold font-sans text-slate-800">
                     {metricas.primeraEntrada}
                   </span>
                 )}
               </div>
             </div>
 
-            <div className="bg-emerald-50/50 border border-emerald-200/70 p-4 rounded-2xl shadow-xs flex flex-col justify-between">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 block">
-                {modalidad === "DIARIO"
-                  ? "PRESENCIA NETA"
-                  : "TOTAL HORAS NETAS"}
+            <div className="bg-slate-50 border border-slate-200 p-4 rounded-2xl shadow-xs flex flex-col justify-between">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">
+                TOTAL PRESENCIA NETA
               </span>
               <div>
-                <div className="text-2xl font-black text-emerald-950 mt-1">
+                <div className="text-xl font-black text-slate-900 mt-1">
                   {metricas.presenciaNetaTexto}
                 </div>
                 {modalidad !== "DIARIO" && (
-                  <div className="text-[10px] font-semibold text-emerald-700 mt-0.5">
+                  <div className="text-[10px] font-semibold text-slate-400 mt-0.5">
                     {metricas.ultimoEgreso}
                   </div>
                 )}
               </div>
             </div>
 
-            <div className="bg-amber-50/50 border border-amber-200/70 p-4 rounded-2xl shadow-xs flex flex-col justify-between">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-amber-800 block">
-                {modalidad === "DIARIO"
-                  ? "SALIDAS INTERMEDIAS"
-                  : "SALIDAS INTERMEDIAS TOTALES"}
+            <div className="bg-emerald-50/60 border border-emerald-200 p-4 rounded-2xl shadow-xs flex flex-col justify-between">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-800 block">
+                HORAS A FAVOR (EXTRA)
               </span>
-              <div className="text-lg font-black text-amber-950 mt-1">
-                {metricas.salidasIntermediasCantidad}{" "}
-                {metricas.salidasIntermediasCantidad === 1
-                  ? "salida"
-                  : "salidas"}{" "}
-                ({metricas.salidasIntermediasMinutos} min)
+              <div>
+                <div className="text-xl font-black text-emerald-950 mt-1">
+                  +{metricas.horasAFavorTexto || "0h 0m"}
+                </div>
+                <div className="text-[10px] font-semibold text-emerald-700 mt-0.5">
+                  {metricas.diasConHorasExtra || 0} día(s) con excedente
+                </div>
               </div>
             </div>
 
-            <div className="bg-rose-50/50 border border-rose-200/70 p-4 rounded-2xl shadow-xs flex flex-col justify-between">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-rose-700 block">
-                {modalidad === "DIARIO"
-                  ? "INCIDENTES DEL DÍA"
-                  : "INCIDENTES TOTALES"}
+            <div className="bg-rose-50/60 border border-rose-200 p-4 rounded-2xl shadow-xs flex flex-col justify-between">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-rose-800 block">
+                HORAS EN CONTRA (DEUDA)
               </span>
               <div>
-                <div className="text-lg font-black text-rose-950 mt-1">
-                  {metricas.totalIncidentes}{" "}
-                  {modalidad === "DIARIO" ? "desvío(s)" : "incidente(s)"}
+                <div className="text-xl font-black text-rose-950 mt-1">
+                  -{metricas.horasEnContraTexto || "0h 0m"}
                 </div>
-                {modalidad !== "DIARIO" && (
-                  <div className="text-[10px] font-semibold text-slate-400 mt-0.5">
-                    {metricas.incidentesJustificados} justificados
-                  </div>
-                )}
+                <div className="text-[10px] font-semibold text-rose-700 mt-0.5">
+                  {metricas.diasConDeficit || 0} día(s) con faltante
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-amber-50/50 border border-amber-200/70 p-4 rounded-2xl shadow-xs flex flex-col justify-between">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-amber-800 block">
+                SALIDAS INTERMEDIAS
+              </span>
+              <div className="text-base font-black text-amber-950 mt-1">
+                {metricas.salidasIntermediasCantidad}{" "}
+                {metricas.salidasIntermediasCantidad === 1
+                  ? "salida"
+                  : "salidas"}
+                <div className="text-[11px] font-bold text-amber-800">
+                  ({metricas.salidasIntermediasMinutos} min)
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white border border-slate-200 p-4 rounded-2xl shadow-xs flex flex-col justify-between">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
+                INCIDENTES REGISTRADOS
+              </span>
+              <div>
+                <div className="text-xl font-black text-slate-900 mt-1">
+                  {metricas.totalIncidentes}
+                </div>
+                <div className="text-[10px] font-semibold text-slate-400 mt-0.5">
+                  {metricas.incidentesJustificados} justificados
+                </div>
               </div>
             </div>
           </div>
@@ -1257,7 +1115,6 @@ export default function FichaComportamiento() {
                 </span>
               </div>
 
-              {/* MODAL / TARJETA DE INSPECCIÓN AL TOCAR "VER DÍA" */}
               {renderCardInspeccionDiaria()}
 
               <div className="overflow-x-auto">
@@ -1269,6 +1126,7 @@ export default function FichaComportamiento() {
                       <th className="px-4 py-3">1ra Entrada</th>
                       <th className="px-4 py-3">Último Egreso</th>
                       <th className="px-4 py-3">Presencia Neta</th>
+                      <th className="px-4 py-3">Saldo / Dif.</th>
                       <th className="px-4 py-3">Salidas Interm.</th>
                       <th className="px-4 py-3">Incidentes</th>
                       <th className="px-4 py-3">Cumplimiento</th>
@@ -1279,6 +1137,7 @@ export default function FichaComportamiento() {
                     {(fichaData?.diasPeriodo || []).map((dia) => {
                       const estaInspeccionado =
                         diaInspeccionado?.fecha === dia.fecha;
+                      const difMin = dia.minutosDiferencia || 0;
                       return (
                         <tr
                           key={dia.fecha}
@@ -1300,8 +1159,24 @@ export default function FichaComportamiento() {
                           <td className="px-4 py-3 font-mono">
                             {dia.ultimoEgreso}
                           </td>
-                          <td className="px-4 py-3 font-bold text-emerald-700">
+                          <td className="px-4 py-3 font-bold text-slate-800">
                             {dia.presenciaNetaTexto}
+                          </td>
+                          <td className="px-4 py-3 font-mono text-xs">
+                            {difMin > 0 ? (
+                              <span className="text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                                +{Math.floor(difMin / 60)}h {difMin % 60}m
+                              </span>
+                            ) : difMin < 0 ? (
+                              <span className="text-rose-700 font-bold bg-rose-50 px-2 py-0.5 rounded-md border border-rose-200">
+                                -{Math.floor(Math.abs(difMin) / 60)}h{" "}
+                                {Math.abs(difMin) % 60}m
+                              </span>
+                            ) : (
+                              <span className="text-slate-400 font-medium">
+                                0m
+                              </span>
+                            )}
                           </td>
                           <td className="px-4 py-3">
                             {dia.salidasIntermedias} ({dia.minutosFuera} min)
@@ -1316,7 +1191,15 @@ export default function FichaComportamiento() {
                             )}
                           </td>
                           <td className="px-4 py-3 font-bold">
-                            {dia.porcentajeCumplimiento}%
+                            <span
+                              className={
+                                dia.porcentajeCumplimiento < 100
+                                  ? "text-amber-700"
+                                  : "text-emerald-700"
+                              }
+                            >
+                              {dia.porcentajeCumplimiento}%
+                            </span>
                           </td>
                           <td className="px-4 py-3 text-right no-print">
                             <button
@@ -1355,7 +1238,8 @@ export default function FichaComportamiento() {
                   <div className="flex items-center gap-2">
                     <CalendarIcon className="w-4 h-4 text-indigo-600" />
                     <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800">
-                      Calendario Mensual • {fichaData?.periodoTexto}
+                      Calendario Mensual •{" "}
+                      {obtenerNombreMes(fechaConsulta).toUpperCase()}
                     </h3>
                   </div>
                   <p className="text-[11px] text-slate-500 mt-0.5">
@@ -1388,7 +1272,6 @@ export default function FichaComportamiento() {
                 </div>
               </div>
 
-              {/* MODAL / TARJETA EN MENSUAL */}
               {renderCardInspeccionDiaria()}
 
               <div className="grid grid-cols-7 gap-2.5">
@@ -1399,6 +1282,14 @@ export default function FichaComportamiento() {
                   >
                     {d}
                   </div>
+                ))}
+
+                {/* Casilleros vacíos de desfase para iniciar en la columna correcta */}
+                {Array.from({ length: diasOffsetInicioMes }).map((_, idx) => (
+                  <div
+                    key={`vacio-${idx}`}
+                    className="border border-transparent rounded-2xl min-h-[110px] hidden sm:block pointer-events-none opacity-0"
+                  />
                 ))}
 
                 {(fichaData?.diasPeriodo || []).map((dia) => {
@@ -1426,13 +1317,20 @@ export default function FichaComportamiento() {
                   const esNormal =
                     !esCritica && !esDesvio && dia.presenciaNetaMinutos > 0;
 
-                  const esSinRegistro = dia.estadoGeneral === "SIN_REGISTRO";
+                  const esFuturo =
+                    dia.estadoGeneral === "FUTURO" || dia.fecha > hoyIso;
+
+                  const esSinRegistro =
+                    !esFuturo && dia.estadoGeneral === "SIN_REGISTRO";
 
                   let cardBgClasses =
                     "bg-white border-slate-200 hover:border-slate-300";
                   if (estaSeleccionado) {
                     cardBgClasses =
                       "bg-indigo-50/50 border-indigo-500 ring-2 ring-indigo-300 shadow-sm";
+                  } else if (esFuturo) {
+                    cardBgClasses =
+                      "bg-slate-50/40 border-slate-200/60 opacity-60";
                   } else if (esCritica) {
                     cardBgClasses =
                       "bg-rose-50/70 border-rose-300 hover:border-rose-400 hover:shadow-sm";
@@ -1485,7 +1383,11 @@ export default function FichaComportamiento() {
                       </div>
 
                       <div className="mt-2">
-                        {esCritica ? (
+                        {esFuturo ? (
+                          <span className="text-[10px] text-slate-400 font-medium">
+                            Programado
+                          </span>
+                        ) : esCritica ? (
                           <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-rose-600 text-white text-[10px] font-bold shadow-2xs">
                             <span>⚠ Crítica ({dia.totalIncidentes})</span>
                           </div>
@@ -1503,8 +1405,8 @@ export default function FichaComportamiento() {
                             <span>✓ {dia.presenciaNetaTexto}</span>
                           </div>
                         ) : esSinRegistro ? (
-                          <span className="text-[10px] text-slate-400 italic">
-                            Sin Registro
+                          <span className="text-[10px] text-rose-500 font-semibold">
+                            Ausencia
                           </span>
                         ) : (
                           <span className="text-[10px] text-slate-400 italic">

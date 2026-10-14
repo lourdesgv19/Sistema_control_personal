@@ -10,14 +10,25 @@ function formatearFecha(fechaIso) {
     : fechaIso;
 }
 
+// Sanitiza caracteres Unicode conflictivos (evita que '→' se imprima como '!´')
+function sanitizarTextoParaPdf(texto) {
+  if (!texto) return "";
+  return String(texto)
+    .replace(/→/g, "a")
+    .replace(/←/g, "desde")
+    .replace(/•/g, "-")
+    .replace(/[✓✔]/g, "OK")
+    .replace(/[⚠!]/g, "[!]");
+}
+
 /**
  * Genera el documento PDF institucional en versión Blanco y Negro o Color.
  * @param {Object} params
- * @param {Object} params.fichaData Datos completos de la ficha.
+ * @param {Object} params.fichaData Datos completos de la ficha provenientes del backend.
  * @param {string} params.modalidad DIARIO | SEMANAL | MENSUAL | RANGO_FECHAS.
- * @param {string} params.fechaConsulta Fecha de inicio/base.
- * @param {string} params.fechaHastaRango Fecha límite para rangos.
- * @param {boolean} [params.esColor=false] true para PDF con colores vivos, false para monocromo B&W.
+ * @param {string} params.fechaConsulta Fecha de inicio o consulta base.
+ * @param {string} params.fechaHastaRango Fecha de fin en caso de rango.
+ * @param {boolean} [params.esColor=false] true para PDF a color, false para monocromo/B&W.
  */
 export function generarPdfFichaComportamiento({
   fichaData,
@@ -73,6 +84,10 @@ export function generarPdfFichaComportamiento({
     salidasIntermediasMinutos: 0,
     totalIncidentes: 0,
     incidentesJustificados: 0,
+    horasAFavorTexto: "0h 0m",
+    horasEnContraTexto: "0h 0m",
+    diasConDeficit: 0,
+    diasConHorasExtra: 0,
   };
 
   // ==========================================
@@ -141,7 +156,7 @@ export function generarPdfFichaComportamiento({
   doc.setFont("helvetica", "bold");
   doc.setTextColor(...theme.darkText);
   doc.text(
-    `${fichaData.rolOArea || "Personal"} — ${fichaData.departamento || "Dpto."}`,
+    `${fichaData.rolOArea || "Personal"} - ${fichaData.departamento || "Dpto."}`,
     42,
     47,
   );
@@ -153,7 +168,7 @@ export function generarPdfFichaComportamiento({
   doc.setTextColor(...theme.darkText);
   doc.text(`${fichaData.etiquetaTurno || "Jornada Regular"}`, 48, 54);
 
-  // Tarjeta de Cumplimiento a la derecha
+  // Tarjeta de Cumplimiento a la derecha (Topeada y sin flechas rotas)
   doc.setDrawColor(...theme.badgeBorder);
   doc.setLineWidth(0.5);
   doc.setFillColor(...theme.primaryLight);
@@ -173,34 +188,36 @@ export function generarPdfFichaComportamiento({
   doc.setFontSize(6.5);
   doc.setFont("helvetica", "normal");
   doc.setTextColor(...theme.subText);
-  doc.text("de horas teóricas", 171.5, 52, { align: "center" });
+  doc.text("de cronograma útil", 171.5, 52, { align: "center" });
 
   // ==========================================
   // 3. RESUMEN DE INDICADORES DEL PERÍODO
   // ==========================================
-  const periodoTextoVisual =
+  const periodoTextoVisual = sanitizarTextoParaPdf(
     modalidad === "RANGO_FECHAS"
       ? `${formatearFecha(fechaConsulta)} AL ${formatearFecha(fechaHastaRango)}`
       : modalidad === "SEMANAL"
         ? `SEMANA (${formatearFecha(fechaConsulta)})`
         : modalidad === "MENSUAL"
           ? `MES COMPLETO (${formatearFecha(fechaConsulta)})`
-          : `JORNADA (${formatearFecha(fechaConsulta)})`;
+          : `JORNADA (${formatearFecha(fechaConsulta)})`,
+  );
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(9);
   doc.setTextColor(...theme.darkText);
-  doc.text(`RESUMEN EJECUTIVO • PERÍODO: ${periodoTextoVisual}`, 14, 66);
+  doc.text(`RESUMEN EJECUTIVO - PERÍODO: ${periodoTextoVisual}`, 14, 66);
 
+  // Tabla con indicadores desglosados (incluye horas a favor y en contra)
   autoTable(doc, {
     startY: 69,
     margin: { left: 14, right: 14 },
     theme: "plain",
     styles: {
-      fontSize: 8,
+      fontSize: 7.5,
       font: "helvetica",
       textColor: theme.darkText,
-      cellPadding: 3,
+      cellPadding: 2.5,
       lineColor: theme.border,
       lineWidth: 0.3,
     },
@@ -213,20 +230,20 @@ export function generarPdfFichaComportamiento({
     },
     head: [
       [
-        "1ra Entrada / Último Egreso",
-        "Presencia Neta Total",
+        "Presencia Neta",
+        "Horas a Favor (Extra)",
+        "Horas en Contra (Deuda)",
         "Salidas Intermedias",
-        "Total Incidentes / Desvíos",
+        "Incidentes / Desvíos",
       ],
     ],
     body: [
       [
-        modalidad === "DIARIO"
-          ? `${metricas.primeraEntrada} hs a ${metricas.ultimoEgreso} hs`
-          : `${metricas.primeraEntrada} (${metricas.ultimoEgreso})`,
-        metricas.presenciaNetaTexto,
-        `${metricas.salidasIntermediasCantidad} (${metricas.salidasIntermediasMinutos} min)`,
-        `${metricas.totalIncidentes} (${metricas.incidentesJustificados} justificados)`,
+        metricas.presenciaNetaTexto || "0h 0m",
+        `+${metricas.horasAFavorTexto || "0h 0m"} (${metricas.diasConHorasExtra || 0} d)`,
+        `-${metricas.horasEnContraTexto || "0h 0m"} (${metricas.diasConDeficit || 0} d)`,
+        `${metricas.salidasIntermediasCantidad || 0} (${metricas.salidasIntermediasMinutos || 0} min)`,
+        `${metricas.totalIncidentes || 0} (${metricas.incidentesJustificados || 0} justif.)`,
       ],
     ],
   });
@@ -251,7 +268,9 @@ export function generarPdfFichaComportamiento({
       `${it.horaInicio} hs`,
       `${it.horaFin} hs`,
       it.duracionTexto || "-",
-      it.esInfraccion ? `[DESVÍO] ${it.detalle}` : it.detalle || "Normal",
+      it.esInfraccion
+        ? `[DESVÍO] ${sanitizarTextoParaPdf(it.detalle)}`
+        : sanitizarTextoParaPdf(it.detalle) || "Normal",
     ]);
 
     autoTable(doc, {
@@ -300,25 +319,36 @@ export function generarPdfFichaComportamiento({
       posY,
     );
 
-    const filasDias = (fichaData.diasPeriodo || []).map((dia) => [
-      formatearFecha(dia.fecha),
-      dia.diaSemana || "-",
-      dia.primeraEntrada || "--:--",
-      dia.ultimoEgreso || "--:--",
-      dia.presenciaNetaTexto || "0h 0m",
-      dia.salidasIntermedias > 0
-        ? `${dia.salidasIntermedias} (${dia.minutosFuera}m)`
-        : "0",
-      dia.totalIncidentes > 0 ? `[!] ${dia.totalIncidentes}` : "0",
-      `${dia.porcentajeCumplimiento}%`,
-    ]);
+    const filasDias = (fichaData.diasPeriodo || []).map((dia) => {
+      const dif = dia.minutosDiferencia || 0;
+      let saldoTexto = "0m";
+      if (dif > 0) {
+        saldoTexto = `+${Math.floor(dif / 60)}h ${dif % 60}m`;
+      } else if (dif < 0) {
+        saldoTexto = `-${Math.floor(Math.abs(dif) / 60)}h ${Math.abs(dif) % 60}m`;
+      }
+
+      return [
+        formatearFecha(dia.fecha),
+        dia.diaSemana || "-",
+        dia.primeraEntrada || "--:--",
+        dia.ultimoEgreso || "--:--",
+        dia.presenciaNetaTexto || "0h 0m",
+        saldoTexto,
+        dia.salidasIntermedias > 0
+          ? `${dia.salidasIntermedias} (${dia.minutosFuera}m)`
+          : "0",
+        dia.totalIncidentes > 0 ? `[!] ${dia.totalIncidentes}` : "0",
+        `${dia.porcentajeCumplimiento}%`,
+      ];
+    });
 
     autoTable(doc, {
       startY: posY + 2.5,
       margin: { left: 14, right: 14 },
       theme: esColor ? "striped" : "grid",
       styles: {
-        fontSize: 7.5,
+        fontSize: 7.2,
         font: "helvetica",
         textColor: theme.darkText,
         cellPadding: 2,
@@ -340,6 +370,7 @@ export function generarPdfFichaComportamiento({
           "1ra Entrada",
           "Último Egreso",
           "Presencia",
+          "Saldo",
           "Salidas Int.",
           "Incidentes",
           "Cumpl.",
@@ -348,7 +379,7 @@ export function generarPdfFichaComportamiento({
       body:
         filasDias.length > 0
           ? filasDias
-          : [["-", "-", "-", "-", "-", "-", "-", "-"]],
+          : [["-", "-", "-", "-", "-", "-", "-", "-", "-"]],
     });
 
     posY = doc.lastAutoTable.finalY + 7;
@@ -376,8 +407,8 @@ export function generarPdfFichaComportamiento({
       inc.fecha ? formatearFecha(inc.fecha) : "--/--/----",
       inc.hora ? `${inc.hora} hs` : "--:--",
       `[${(inc.severidad || "MEDIA").toUpperCase()}]`,
-      inc.tipo || "Desvío Horario",
-      inc.detalle || "-",
+      sanitizarTextoParaPdf(inc.tipo) || "Desvío Horario",
+      sanitizarTextoParaPdf(inc.detalle) || "-",
       inc.estado || "PENDIENTE",
     ]);
 
@@ -386,7 +417,7 @@ export function generarPdfFichaComportamiento({
       margin: { left: 14, right: 14 },
       theme: esColor ? "striped" : "grid",
       styles: {
-        fontSize: 7.5,
+        fontSize: 7.2,
         font: "helvetica",
         textColor: theme.darkText,
         cellPadding: 2,

@@ -82,7 +82,9 @@ public class FichaComportamientoService {
             case "MENSUAL" -> {
                 fechaInicio = fechaBase.withDayOfMonth(1);
                 fechaFin = fechaBase.withDayOfMonth(fechaBase.lengthOfMonth());
-                periodoTexto = fechaBase.getMonth().name() + " " + fechaBase.getYear();
+                String nombreMesEsp = fechaBase.getMonth()
+                    .getDisplayName(java.time.format.TextStyle.FULL, java.util.Locale.of("es", "ES"));
+                periodoTexto = nombreMesEsp.substring(0, 1).toUpperCase() + nombreMesEsp.substring(1) + " " + fechaBase.getYear();
             }
             default -> {
                 mod = "DIARIO";
@@ -113,7 +115,7 @@ public class FichaComportamientoService {
             }
         }
 
-        // 2. Fichajes del período
+        // 2. Fichajes válidos del período
         LocalDateTime inicioT = fechaInicio.atStartOfDay();
         LocalDateTime finT = fechaFin.atTime(LocalTime.MAX);
 
@@ -134,7 +136,7 @@ public class FichaComportamientoService {
         ).getContent();
         log.debug("[FichaService] Incidentes recuperados en el período: {}", incsPeriodo.size());
 
-        // 4. Detalle y línea de tiempo para la fecha base
+        // 4. Detalle y línea de tiempo para la fecha base (Jornada diaria específica)
         List<FichaComportamientoDTO.IntervaloLineaTiempoDTO> planificados = new ArrayList<>();
         List<FichaComportamientoDTO.IntervaloLineaTiempoDTO> presencias = new ArrayList<>();
         List<FichaComportamientoDTO.DesgloseIntervaloDTO> desglose = new ArrayList<>();
@@ -235,6 +237,7 @@ public class FichaComportamientoService {
             }
         }
 
+        // Listado completo de incidentes para auditoría (se listan todos para trazabilidad)
         List<FichaComportamientoDTO.IncidenteFichaDTO> incidentesList = incsPeriodo.stream()
                 .map(i -> new FichaComportamientoDTO.IncidenteFichaDTO(
                         i.getId(),
@@ -246,31 +249,28 @@ public class FichaComportamientoService {
                         i.getEstado()
                 )).toList();
 
-        // 5. Métricas globales y cumplimiento porcentual
-        log.debug("[FichaService] Calculando horas reales y teóricas del período...");
-        ResumenPresenciaFichajesDTO resumenPeriodo = ("DIARIO".equals(mod))
-                ? evaluadorService.calcularHorasRealesDia(emp.getId(), fechaBase)
-                : evaluadorService.calcularHorasRealesRango(emp.getId(), fechaInicio, fechaFin);
-
-        double horasTeoricasPeriodo = horarioService.calcularHorasTeoricasRango(emp.getId(), fechaInicio, fechaFin);
-        int porcentajeCumplimiento;
-        if (horasTeoricasPeriodo > 0) {
-            porcentajeCumplimiento = (int) Math.min(100, Math.round((resumenPeriodo.horasNetasTrabajadas() / horasTeoricasPeriodo) * 100.0));
-        } else {
-            porcentajeCumplimiento = resumenPeriodo.horasNetasTrabajadas() > 0 ? 100 : 0;
-        }
-
-        log.debug("[FichaService] Horas reales={:.2f}, Horas teóricas={:.2f}, Cumplimiento={}%",
-                resumenPeriodo.horasNetasTrabajadas(), horasTeoricasPeriodo, porcentajeCumplimiento);
-
-        // 6. Desglose día por día para Semanal, Mensual y Rango
+        // 5. Desglose día por día con control estricto y sin inflar eventos concurrentes
         List<FichaComportamientoDTO.DiaDesgloseDTO> diasDesglose = new ArrayList<>();
         LocalDate cur = fechaInicio;
+        LocalDate hoy = LocalDate.now();
+
         int diasConPresencia = 0;
+        int diasEvaluadosHastaHoy = 0;
+
+        double totalHorasUtilesPeriodo = 0.0;
+        double totalHorasTeoricasPeriodo = 0.0;
+        long totalMinutosAFavor = 0;
+        long totalMinutosEnContra = 0;
+        int diasConDeficit = 0;
+        int diasConHorasExtra = 0;
 
         while (!cur.isAfter(fechaFin)) {
             LocalDate d = cur;
+            boolean esFuturo = d.isAfter(hoy);
+
             double horasTeoricasDia = horarioService.calcularHorasTeoricasDia(emp.getId(), d);
+            long minutosTeoricosDia = Math.round(horasTeoricasDia * 60.0);
+
             ResumenPresenciaFichajesDTO resDia = evaluadorService.calcularHorasRealesDia(emp.getId(), d);
 
             List<EmpleadoFichaje> fDia = fichajesPeriodo.stream()
@@ -281,29 +281,75 @@ public class FichaComportamientoService {
             boolean huboPresencia = resDia.horasNetasTrabajadas() > 0 || !fDia.isEmpty();
             if (huboPresencia) diasConPresencia++;
 
-            int cumplimientoDia = 0;
-            if (horasTeoricasDia > 0) {
-                cumplimientoDia = (int) Math.min(100, Math.round((resDia.horasNetasTrabajadas() / horasTeoricasDia) * 100.0));
-            } else if (resDia.horasNetasTrabajadas() > 0) {
-                cumplimientoDia = 100;
-            }
+            long minNetosDia = (long) (resDia.horasNetasTrabajadas() * 60);
 
-            int incsDia = (int) incsPeriodo.stream().filter(i -> i.getFecha().equals(d)).count();
+            int cumplimientoDia = 0;
+            long minutosDiferencia = 0;
+
+            // AGRUPACIÓN DIARIA: Cuenta 1 solo desvío si los incidentes comparten el mismo acontecimiento físico
+            int incsDia = (int) incsPeriodo.stream()
+                    .filter(i -> i.getFecha().equals(d))
+                    .map(i -> i.getIdEventoAgrupador() != null ? i.getIdEventoAgrupador() : ("ID_" + i.getId()))
+                    .distinct()
+                    .count();
+
             String estadoDia;
-            if (horasTeoricasDia == 0 && !huboPresencia) {
-                estadoDia = "FRANCO";
-            } else if (!huboPresencia) {
-                estadoDia = "SIN_REGISTRO";
-            } else if (incsDia > 0) {
-                estadoDia = "INFRACCION";
+
+            // DÍA FUTURO -> No acumula deuda ni horas teóricas
+            if (esFuturo) {
+                cumplimientoDia = 0;
+                minutosDiferencia = 0;
+                estadoDia = (minutosTeoricosDia == 0) ? "FRANCO" : "FUTURO";
+
+            // DÍA PRESENTE O PASADO -> Se evalúa normalmente
             } else {
-                estadoDia = "NORMAL";
+                diasEvaluadosHastaHoy++;
+                totalHorasTeoricasPeriodo += horasTeoricasDia;
+
+                if (minutosTeoricosDia > 0) {
+                    if (minNetosDia >= minutosTeoricosDia) {
+                        cumplimientoDia = 100;
+                        totalHorasUtilesPeriodo += horasTeoricasDia;
+                        long sobrante = minNetosDia - minutosTeoricosDia;
+                        if (sobrante > 0) {
+                            minutosDiferencia = sobrante;
+                            totalMinutosAFavor += sobrante;
+                            diasConHorasExtra++;
+                        }
+                    } else {
+                        // Déficit en la jornada (Llegada tarde, salida anticipada o inasistencia)
+                        cumplimientoDia = (int) Math.round(((double) minNetosDia / minutosTeoricosDia) * 100.0);
+                        totalHorasUtilesPeriodo += (minNetosDia / 60.0);
+                        long faltante = minutosTeoricosDia - minNetosDia;
+                        minutosDiferencia = -faltante;
+                        totalMinutosEnContra += faltante;
+                        diasConDeficit++;
+                    }
+                } else {
+                    // Día Franco / No laborable con asistencia
+                    if (minNetosDia > 0) {
+                        cumplimientoDia = 100;
+                        minutosDiferencia = minNetosDia;
+                        totalMinutosAFavor += minNetosDia;
+                        diasConHorasExtra++;
+                    }
+                }
+
+                if (minutosTeoricosDia == 0 && !huboPresencia) {
+                    estadoDia = "FRANCO";
+                } else if (minutosTeoricosDia == 0 && huboPresencia) {
+                    estadoDia = "EXTRA";
+                } else if (!huboPresencia) {
+                    estadoDia = "SIN_REGISTRO";
+                } else if (incsDia > 0 || cumplimientoDia < 100) {
+                    estadoDia = incsDia > 0 ? "INFRACCION" : "DESVIO";
+                } else {
+                    estadoDia = "NORMAL";
+                }
             }
 
             String entDia = fDia.isEmpty() ? "--:--" : fDia.get(0).getHoraFichaje().toLocalTime().toString().substring(0, 5);
             String salDia = fDia.size() < 2 ? "--:--" : fDia.get(fDia.size() - 1).getHoraFichaje().toLocalTime().toString().substring(0, 5);
-
-            long minNetosDia = (long) (resDia.horasNetasTrabajadas() * 60);
 
             diasDesglose.add(new FichaComportamientoDTO.DiaDesgloseDTO(
                     d,
@@ -316,13 +362,28 @@ public class FichaComportamientoService {
                     (long) (resDia.horasSalidasIntermedias() * 60),
                     incsDia,
                     cumplimientoDia,
-                    estadoDia
+                    estadoDia,
+                    minutosDiferencia
             ));
 
             cur = cur.plusDays(1);
         }
 
-        int totalDiasPeriodo = (int) Duration.between(fechaInicio.atStartOfDay(), fechaFin.atStartOfDay()).toDays() + 1;
+        // CUMPLIMIENTO GLOBAL REAL (Evaluando hasta el día actual con horas útiles)
+        int porcentajeCumplimiento;
+        if (totalHorasTeoricasPeriodo > 0) {
+            porcentajeCumplimiento = (int) Math.min(100, Math.round((totalHorasUtilesPeriodo / totalHorasTeoricasPeriodo) * 100.0));
+        } else {
+            porcentajeCumplimiento = diasConPresencia > 0 ? 100 : 0;
+        }
+
+        int totalDiasParaMetrica = Math.max(1, diasEvaluadosHastaHoy);
+        LocalDate fechaLimiteResumen = fechaFin.isAfter(hoy) ? hoy : fechaFin;
+
+        ResumenPresenciaFichajesDTO resumenPeriodo = ("DIARIO".equals(mod))
+                ? evaluadorService.calcularHorasRealesDia(emp.getId(), fechaBase)
+                : evaluadorService.calcularHorasRealesRango(emp.getId(), fechaInicio, fechaLimiteResumen);
+
         long totalMinutosPresencia = (long) (resumenPeriodo.horasNetasTrabajadas() * 60);
         long totalMinutosFuera = (long) (resumenPeriodo.horasSalidasIntermedias() * 60);
 
@@ -330,7 +391,7 @@ public class FichaComportamientoService {
         String ultimoEgresoResultado = ultimoEgresoStr;
 
         if (!"DIARIO".equals(mod)) {
-            primeraEntradaResultado = diasConPresencia + " de " + totalDiasPeriodo + " días";
+            primeraEntradaResultado = diasConPresencia + " de " + totalDiasParaMetrica + " días transcurridos";
             if (diasConPresencia > 0) {
                 long promMinutos = totalMinutosPresencia / diasConPresencia;
                 ultimoEgresoResultado = "Prom: " + (promMinutos / 60) + "h " + (promMinutos % 60) + "m/día";
@@ -339,6 +400,12 @@ public class FichaComportamientoService {
             }
         }
 
+        // AGRUPACIÓN GLOBAL DEL PERÍODO: Evita inflar la tarjeta general de incidentes
+        int totalIncidentesAgrupados = (int) incsPeriodo.stream()
+                .map(i -> i.getIdEventoAgrupador() != null ? i.getIdEventoAgrupador() : ("ID_" + i.getId()))
+                .distinct()
+                .count();
+
         FichaComportamientoDTO.MetricasFichaDTO metricasDTO = new FichaComportamientoDTO.MetricasFichaDTO(
                 primeraEntradaResultado,
                 ultimoEgresoResultado,
@@ -346,10 +413,16 @@ public class FichaComportamientoService {
                 totalMinutosPresencia,
                 resumenPeriodo.cantidadSalidasIntermedias(),
                 totalMinutosFuera,
-                incsPeriodo.size(),
+                totalIncidentesAgrupados, // <-- Conteo real no inflado
                 (int) incsPeriodo.stream().filter(i -> "JUSTIFICADA".equalsIgnoreCase(i.getEstado())).count(),
                 diasConPresencia,
-                totalDiasPeriodo
+                totalDiasParaMetrica,
+                formatearMinutosAHoras(totalMinutosAFavor),
+                totalMinutosAFavor,
+                formatearMinutosAHoras(totalMinutosEnContra),
+                totalMinutosEnContra,
+                diasConDeficit,
+                diasConHorasExtra
         );
 
         String rolOArea = (emp.getCargos() != null && !emp.getCargos().isEmpty())

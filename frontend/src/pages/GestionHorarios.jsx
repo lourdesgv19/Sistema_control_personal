@@ -13,6 +13,7 @@ import {
   Briefcase,
   ChevronLeft,
   ChevronRight,
+  Filter,
 } from "lucide-react";
 import {
   getEmpleadosActivos,
@@ -26,39 +27,20 @@ import {
   getHorarios,
   getMaterias,
 } from "../services/configuracionService";
-import { getBadgeColorClasses } from "./TiposConfiguracion";
 import ModalAlerta from "../components/comunes/ModalAlerta";
 import ModalDetalleCronograma from "../components/personal/ModalDetalleCronograma";
 import ModalAsignarClase from "../components/personal/ModalAsignarClase";
 import ModalAsignarTurno from "../components/personal/ModalAsignarTurno";
 import { useAuth } from "../context/AuthContext";
 
-const DIAS_MAP = [
-  { clave: "Lun", nombre: "Lunes", diaNumero: 1 },
-  { clave: "Mar", nombre: "Martes", diaNumero: 2 },
-  { clave: "Mié", nombre: "Miércoles", diaNumero: 3 },
-  { clave: "Jue", nombre: "Jueves", diaNumero: 4 },
-  { clave: "Vie", nombre: "Viernes", diaNumero: 5 },
-  { clave: "Sáb", nombre: "Sábado", diaNumero: 6 },
-  { clave: "Dom", nombre: "Domingo", diaNumero: 7 },
-];
-
-const MAPA_DIAS_NUMERO = {
-  Lunes: 1,
-  Martes: 2,
-  Miércoles: 3,
-  Jueves: 4,
-  Viernes: 5,
-  Sábado: 6,
-  Domingo: 7,
-  Lun: 1,
-  Mar: 2,
-  Mié: 3,
-  Jue: 4,
-  Vie: 5,
-  Sáb: 6,
-  Dom: 7,
-};
+// Clases utilitarias modularizadas
+import {
+  DIAS_MAP,
+  MAPA_DIAS_NUMERO,
+  getPestanaBgClass,
+  getDotColorClass,
+  getBadgeColorClasses,
+} from "../utils/categoriasHorariosUtils";
 
 const ITEMS_POR_PAGINA = 12;
 
@@ -72,43 +54,6 @@ const FORM_CLASE_INICIAL = {
   tipoFrecuencia: "SEMANAL",
   repeticionesPeriodo: 1,
   semanaAlterna: "PAR",
-};
-
-// Mapeo para fondo sólido del botón activo de la pestaña superior
-const getPestanaBgClass = (color) => {
-  switch (color?.toLowerCase()) {
-    case "emerald":
-      return "bg-[#10b981] text-white shadow-xs";
-    case "amber":
-      return "bg-[#f59e0b] text-white shadow-xs";
-    case "purple":
-      return "bg-[#a855f7] text-white shadow-xs";
-    case "cyan":
-      return "bg-[#06b6d4] text-white shadow-xs";
-    case "rose":
-      return "bg-[#f43f5e] text-white shadow-xs";
-    case "indigo":
-    default:
-      return "bg-[#4338ca] text-white shadow-xs";
-  }
-};
-
-const getDotColorClass = (color) => {
-  switch (color?.toLowerCase()) {
-    case "emerald":
-      return "bg-emerald-600";
-    case "amber":
-      return "bg-amber-600";
-    case "purple":
-      return "bg-purple-600";
-    case "cyan":
-      return "bg-cyan-600";
-    case "rose":
-      return "bg-rose-600";
-    case "indigo":
-    default:
-      return "bg-indigo-600";
-  }
 };
 
 export default function GestionHorarios() {
@@ -212,7 +157,6 @@ export default function GestionHorarios() {
         setCategoriaActiva(cats[0].nombre);
       }
 
-      // Carga directa de las franjas de cada empleado
       const mapaFranjas = {};
       await Promise.allSettled(
         emps.map(async (emp) => {
@@ -242,7 +186,6 @@ export default function GestionHorarios() {
     return categoriaActiva.toLowerCase().includes("docente");
   }, [categoriaActiva]);
 
-  // Categoría actual seleccionada
   const categoriaObjetoActiva = useMemo(() => {
     return categorias.find(
       (c) => c.nombre?.toLowerCase() === categoriaActiva.toLowerCase(),
@@ -274,7 +217,6 @@ export default function GestionHorarios() {
     return empleadosFiltrados.slice(inicio, inicio + ITEMS_POR_PAGINA);
   }, [empleadosFiltrados, paginaActual]);
 
-  // Determinar régimen con estilo respetando el color de su categoría
   const obtenerInfoRegimen = (emp) => {
     const franjas = franjasPorEmpleado[emp.id] || [];
 
@@ -295,7 +237,7 @@ export default function GestionHorarios() {
         titulo: "Por Cátedra",
         subtitulo: `${franjas.length} clases semanales`,
         clasesBadge: getBadgeColorClasses(colorDocente),
-        colorPunto: getDotColorClass(colorDocente), // Sincronizado
+        colorPunto: getDotColorClass(colorDocente),
       };
     }
 
@@ -313,7 +255,6 @@ export default function GestionHorarios() {
       };
     }
 
-    // Color asignado a la categoría del colaborador
     const colorCat =
       emp.categorias?.[0]?.colorIdentificacion ||
       emp.categoria?.colorIdentificacion ||
@@ -324,7 +265,7 @@ export default function GestionHorarios() {
       titulo: primeraEtiqueta,
       subtitulo: `${diasUnicos} días laborables`,
       clasesBadge: getBadgeColorClasses(colorCat),
-      colorPunto: getDotColorClass(colorCat), // Toma el mismo tono que el texto y borde
+      colorPunto: getDotColorClass(colorCat),
     };
   };
 
@@ -543,11 +484,11 @@ export default function GestionHorarios() {
   };
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-6 font-sans">
-      {/* 1. HEADER */}
-      <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-5 font-sans">
+      {/* 1. HEADER (TÍTULO Y DESCRIPCIÓN) */}
+      <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-xs flex items-center justify-between">
         <div className="flex items-center gap-3 sm:gap-4">
-          <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-purple-50 border border-purple-100 flex items-center justify-center text-purple-600 shadow-xs shrink-0">
+          <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-purple-50 border border-purple-100 flex items-center justify-center text-purple-600 shadow-xs shrink-0">
             <Calendar className="w-5 h-5 sm:w-6 sm:h-6 stroke-[1.8]" />
           </div>
           <div>
@@ -561,9 +502,16 @@ export default function GestionHorarios() {
             </p>
           </div>
         </div>
+      </div>
 
-        {/* PESTAÑAS DE CATEGORÍA SUPERIOR (FONDO DINÁMICO SEGÚN EL COLOR CONFIGURADO) */}
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0 no-scrollbar bg-slate-100/80 p-1.5 rounded-2xl border border-slate-200">
+      {/* 2. RECUADRO DE SELECCIÓN DE CATEGORÍAS (SIN SCROLL HORIZONTAL) */}
+      <div className="bg-white border border-slate-200 rounded-2xl p-3.5 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex items-center gap-2 text-xs font-bold text-slate-500 uppercase tracking-wider">
+          <Filter className="w-3.5 h-3.5 text-indigo-600" />
+          <span>Categoría de Personal:</span>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
           {categorias.map((cat) => {
             const activa =
               categoriaActiva.toLowerCase() === cat.nombre.toLowerCase();
@@ -578,10 +526,10 @@ export default function GestionHorarios() {
                   setCategoriaActiva(cat.nombre);
                   setPaginaActual(1);
                 }}
-                className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition cursor-pointer ${
+                className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                   activa
                     ? estiloActivo
-                    : "text-slate-600 hover:text-slate-900 hover:bg-white/60"
+                    : "bg-slate-100/90 hover:bg-slate-200/80 text-slate-700 border border-slate-200/60"
                 }`}
               >
                 {esDoc ? (
@@ -589,15 +537,15 @@ export default function GestionHorarios() {
                 ) : (
                   <Briefcase className="w-3.5 h-3.5 shrink-0" />
                 )}
-                {cat.nombre}
+                <span>{cat.nombre}</span>
               </button>
             );
           })}
         </div>
       </div>
 
-      {/* 2. BARRA DE BÚSQUEDA */}
-      <div className="bg-white p-3 border border-slate-200 rounded-2xl shadow-xs flex flex-col sm:flex-row items-center justify-between gap-3">
+      {/* 3. BARRA DE BÚSQUEDA Y TOTAL */}
+      <div className="bg-white p-3.5 border border-slate-200 rounded-2xl shadow-xs flex flex-col sm:flex-row items-center justify-between gap-3">
         <div className="relative w-full sm:w-80">
           <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
           <input
@@ -608,17 +556,20 @@ export default function GestionHorarios() {
               setSearchEmpleado(e.target.value);
               setPaginaActual(1);
             }}
-            className="w-full text-xs pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-indigo-600"
+            className="w-full text-xs pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-indigo-600 transition"
           />
         </div>
 
-        <div className="text-xs text-slate-500 font-medium">
-          Total en <strong className="text-slate-800">{categoriaActiva}</strong>
+        <div className="text-xs text-slate-500 font-medium self-end sm:self-auto">
+          Total en{" "}
+          <strong className="text-slate-800 font-bold">
+            {categoriaActiva}
+          </strong>
           : {empleadosFiltrados.length} empleados
         </div>
       </div>
 
-      {/* 3. TABLA CENTRAL */}
+      {/* 4. TABLA CENTRAL DE HORARIOS */}
       <div className="bg-white border border-slate-200 rounded-2xl shadow-xs overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs min-w-[750px]">
@@ -753,7 +704,7 @@ export default function GestionHorarios() {
           </table>
         </div>
 
-        {/* 4. CONTROLES DE PAGINACIÓN */}
+        {/* 5. CONTROLES DE PAGINACIÓN */}
         <div className="bg-white px-6 py-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
           <div className="text-slate-500">
             Mostrando{" "}

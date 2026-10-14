@@ -12,6 +12,9 @@ public class IncidenteAsistencia {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Column(name = "id_evento_agrupador")
+    private String idEventoAgrupador;
+
     @Column(nullable = false)
     private LocalDate fecha; // Fecha del incidente a auditar
 
@@ -65,4 +68,6 @@ public class IncidenteAsistencia {
     public void setResolucionObservaciones(String resolucionObservaciones) { this.resolucionObservaciones = resolucionObservaciones; }
     public Empleado getEmpleado() { return empleado; }
     public void setEmpleado(Empleado empleado) { this.empleado = empleado; }
+    public String getIdEventoAgrupador() { return idEventoAgrupador; }
+    public void setIdEventoAgrupador(String idEventoAgrupador) { this.idEventoAgrupador = idEventoAgrupador; }
 }

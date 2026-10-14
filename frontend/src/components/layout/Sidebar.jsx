@@ -4,6 +4,7 @@ import {
   UploadCloud,
   Users,
   LayoutDashboard,
+  ClipboardList,
   Clock,
   AlertTriangle,
   FileBarChart2,
@@ -77,7 +78,7 @@ export default function Sidebar() {
     {
       to: "/fichas-comportamiento",
       label: "Fichas de Comportamiento",
-      icon: AlertCircle,
+      icon: ClipboardList,
       permiso: "FICHAS_COMPORTAMIENTO_VER",
     },
     {
