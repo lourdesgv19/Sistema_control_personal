@@ -51,6 +51,15 @@ api.interceptors.response.use(
       `💥 [HTTP ERROR ${error.response?.status || "NO_RESPONSE"}] ${error.config?.url}:`,
       error.response?.data || error.message,
     );
+
+    // Interceptar 401 Unauthorized para forzar logout
+    if (error.response && error.response.status === 401) {
+      console.warn(
+        "⚠️ Token expirado o sesión inválida. Despachando evento de logout.",
+      );
+      window.dispatchEvent(new CustomEvent("auth:logout"));
+    }
+
     return Promise.reject(error);
   },
 );

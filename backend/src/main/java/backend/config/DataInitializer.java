@@ -24,21 +24,6 @@ public class DataInitializer implements CommandLineRunner {
 
     @Override
     public void run(String... args) {
-        // FORZAR RESINCRONIZACIÓN DE CLAVE PARA 'admin'
-        String clavePlana = "admin123";
-        String nuevoHash = passwordEncoder.encode(clavePlana);
-
-        jdbcTemplate.update("""
-            UPDATE usuarios 
-            SET password_hash = ?, activo = 1, debe_cambiar_password = 0 
-            WHERE username = 'admin'
-        """, nuevoHash);
-
-        System.out.println("=================================================");
-        System.out.println(">>> CLAVE SINCRONIZADA PARA admin: " + clavePlana);
-        System.out.println(">>> HASH GENERADO POR SPRING: " + nuevoHash);
-        System.out.println(">>> PRUEBA DE MATCH INMEDIATA: " + passwordEncoder.matches(clavePlana, nuevoHash));
-        System.out.println("=================================================");
         inicializarCatalogo();
         inicializarAdminSiNoExiste();
     }
@@ -97,23 +82,25 @@ public class DataInitializer implements CommandLineRunner {
         System.out.println(">>> Catálogo maestro de " + catalogo.size() + " permisos sincronizado en base de datos.");
     }
 
-    private void inicializarAdminSiNoExiste() {
+private void inicializarAdminSiNoExiste() {
         try {
             Integer existe = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM usuarios WHERE username = 'admin'",
                 Integer.class
             );
 
-            if (existe != null && existe > 0) return;
+            if (existe != null && existe > 0) return; // Si ya existe, sale y no pisa la contraseña
 
-            String hash = passwordEncoder.encode("admin");
+            String hash = passwordEncoder.encode("admin123");
 
             jdbcTemplate.update("""
                 INSERT INTO usuarios (username, password_hash, rol, activo, debe_cambiar_password, id_empleado, fecha_creacion, fecha_modificacion)
-                VALUES ('admin', ?, 'ADMINISTRADOR', 1, 0, NULL, NOW(), NOW())
-            """, hash);
+                VALUES ('admin', ?, 'ADMINISTRADOR', 1, 1, NULL, NOW(), NOW())
+            """, hash); // debe_cambiar_password en 1 obliga a cambiar la clave al entrar por primera vez
 
             System.out.println(">>> Usuario 'admin' inicial creado con éxito.");
+            actualizarPermisosAdmin();
+            
         } catch (Exception e) {
             System.err.println("Error al inicializar usuario administrador: " + e.getMessage());
         }

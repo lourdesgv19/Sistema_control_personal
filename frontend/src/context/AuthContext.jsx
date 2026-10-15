@@ -44,6 +44,16 @@ export function AuthProvider({ children }) {
       setUser(null);
     }
     setLoading(false);
+
+    // Escuchar evento de token expirado lanzado por api.js
+    const handleForceLogout = () => {
+      logout();
+    };
+    window.addEventListener("auth:logout", handleForceLogout);
+
+    return () => {
+      window.removeEventListener("auth:logout", handleForceLogout);
+    };
   }, [token]);
 
   const login = (tokenRecibido) => {
