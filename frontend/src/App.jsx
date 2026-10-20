@@ -11,6 +11,7 @@ import TiposConfiguracion from "./pages/TiposConfiguracion";
 import PanelAuditoria from "./pages/PanelAuditoria";
 import GestionHorarios from "./pages/GestionHorarios";
 import TableroIncidentesDiarios from "./pages/TableroIncidentesDiarios";
+import GestionMaterias from "./pages/GestionMaterias";
 import Perfil from "./pages/Perfil";
 import FichaComportamiento from "./pages/FichaComportamiento";
 
@@ -45,6 +46,15 @@ export default function App() {
             element={
               <ProtectedRoute permisoRequerido="HORARIOS_VER">
                 <GestionHorarios />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/materias"
+            element={
+              <ProtectedRoute permisoRequerido="MATERIAS_VER">
+                <GestionMaterias />
               </ProtectedRoute>
             }
           />

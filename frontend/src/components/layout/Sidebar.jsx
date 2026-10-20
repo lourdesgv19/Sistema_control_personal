@@ -88,6 +88,12 @@ export default function Sidebar() {
       permiso: "CONFIG_VER",
     },
     {
+      to: "/materias",
+      label: "Gestión de Materias",
+      icon: LayoutDashboard,
+      permiso: "MATERIAS_VER",
+    },
+    {
       to: "/fichajes",
       label: "Fichajes y Biometría",
       icon: UploadCloud,

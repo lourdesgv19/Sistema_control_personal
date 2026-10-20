@@ -65,7 +65,14 @@ public class DataInitializer implements CommandLineRunner {
 
             // Incidentes Diarios & Auditoría de Marcación
             new Permiso("INCIDENTES_VER", "INCIDENTES", "Consultar el tablero de incidentes diarios y desvíos de asistencia"),
-            new Permiso("INCIDENTES_JUSTIFICAR", "INCIDENTES", "Auditar, justificar o rechazar incidentes y anomalías de marcación")
+            new Permiso("INCIDENTES_JUSTIFICAR", "INCIDENTES", "Auditar, justificar o rechazar incidentes y anomalías de marcación"),
+        
+            // Gestión de Materias & Liquidación Docente (Nuevo Módulo)
+            new Permiso("MATERIAS_VER", "MATERIAS", "Visualizar catálogo de cátedras y calendario semanal de clases"),
+            new Permiso("MATERIAS_CREAR", "MATERIAS", "Crear materias y registrar comisiones en el sistema"),
+            new Permiso("MATERIAS_EDITAR", "MATERIAS", "Modificar datos de cátedras, tarifas por hora y aulas predeterminadas"),
+            new Permiso("MATERIAS_ELIMINAR", "MATERIAS", "Dar de baja lógica o reactivar cátedras del catálogo institucional"),
+            new Permiso("LIQUIDACION_DOCENTE", "MATERIAS", "Consultar y exportar planillas de liquidación y montos acumulados por docente")
         );
 
         // Inserta o actualiza cada permiso del catálogo en la base de datos

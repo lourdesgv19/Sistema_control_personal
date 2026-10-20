@@ -1,4 +1,10 @@
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, {
+  useState,
+  useEffect,
+  useCallback,
+  useMemo,
+  useRef,
+} from "react";
 import {
   Calendar as CalendarIcon,
   Clock,
@@ -24,6 +30,7 @@ import ModalJustificarIncidente from "../components/incidentes/ModalJustificarIn
 import { getFichaComportamiento } from "../services/fichaComportamientoService";
 import { resolverIncidente } from "../services/incidenteService";
 import { useAuth } from "../context/AuthContext";
+import { useLocation, useSearchParams } from "react-router-dom";
 import { generarPdfFichaComportamiento } from "../utils/generadorPdfFicha";
 import { exportarFichaACsv } from "../utils/exportadorCsvFicha";
 import {
@@ -37,8 +44,11 @@ import {
 } from "../utils/fechasFichaUtils";
 
 export default function FichaComportamiento() {
+  const tablaDetalleRef = useRef(null);
   const { tienePermiso } = useAuth();
   const puedeJustificar = tienePermiso("INCIDENTES_JUSTIFICAR");
+  const location = useLocation();
+  const [searchParams] = useSearchParams();
 
   const hoyIso = useMemo(() => {
     const d = new Date();
@@ -48,14 +58,17 @@ export default function FichaComportamiento() {
     return `${y}-${m}-${day}`;
   }, []);
 
+  const fechaInicial = location.state?.fecha || hoyIso;
+  const modalidadInicial = location.state?.modalidad || "DIARIO";
+
   const [empleadoSeleccionado, setEmpleadoSeleccionado] = useState(null);
   const [sidebarAbierto, setSidebarAbierto] = useState(true);
   const [menuImpresionAbierto, setMenuImpresionAbierto] = useState(false);
 
   // Modalidades: DIARIO | SEMANAL | MENSUAL | TRIMESTRE | CUATRIMESTRE | RANGO_FECHAS
-  const [modalidad, setModalidad] = useState("DIARIO");
-  const [fechaConsulta, setFechaConsulta] = useState(hoyIso);
-  const [fechaHastaRango, setFechaHastaRango] = useState(hoyIso);
+  const [modalidad, setModalidad] = useState(modalidadInicial);
+  const [fechaConsulta, setFechaConsulta] = useState(fechaInicial);
+  const [fechaHastaRango, setFechaHastaRango] = useState(fechaInicial);
 
   // Estado para expandir/colapsar los meses en vistas Trimestral y Cuatrimestral
   const [mesesExpandidos, setMesesExpandidos] = useState({});
@@ -104,6 +117,18 @@ export default function FichaComportamiento() {
   const colapsarTodos = () => {
     setMesesExpandidos({});
   };
+
+  useEffect(() => {
+    const empId = location.state?.empleadoId || searchParams.get("empleadoId");
+    if (empId) {
+      setEmpleadoSeleccionado({ id: Number(empId) });
+    }
+    if (location.state?.fecha) {
+      setFechaConsulta(location.state.fecha);
+      setModalidad("DIARIO");
+      setDiaInspeccionado(null);
+    }
+  }, [location.state, searchParams]);
 
   const cargarFicha = useCallback(async () => {
     if (!empleadoSeleccionado?.id) return;
@@ -1015,6 +1040,12 @@ export default function FichaComportamiento() {
               onClick={() => {
                 if (modalidad === "DIARIO") {
                   setTabInferior("INCIDENTES");
+                  setTimeout(() => {
+                    tablaDetalleRef.current?.scrollIntoView({
+                      behavior: "smooth",
+                      block: "start",
+                    });
+                  }, 50);
                 } else {
                   setModalListaIncidentesAbierto(true);
                 }
@@ -1126,12 +1157,19 @@ export default function FichaComportamiento() {
                 </div>
               </div>
 
-              <div className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-xs">
+              <div
+                ref={tablaDetalleRef}
+                className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-xs scroll-mt-6"
+              >
                 <div className="flex border-b border-slate-100 bg-[#f8fafc] px-4 pt-3 gap-2 text-xs font-bold no-print">
                   <button
                     type="button"
                     onClick={() => setTabInferior("INTERVALOS")}
-                    className={`pb-2.5 px-3 border-b-2 transition cursor-pointer ${tabInferior === "INTERVALOS" ? "border-indigo-600 text-indigo-700" : "border-transparent text-slate-500 hover:text-slate-800"}`}
+                    className={`pb-2.5 px-3 border-b-2 transition cursor-pointer ${
+                      tabInferior === "INTERVALOS"
+                        ? "border-indigo-600 text-indigo-700"
+                        : "border-transparent text-slate-500 hover:text-slate-800"
+                    }`}
                   >
                     Intervalos de Jornada (
                     {fichaData?.intervalosDetalle?.length || 0})
@@ -1139,7 +1177,11 @@ export default function FichaComportamiento() {
                   <button
                     type="button"
                     onClick={() => setTabInferior("INCIDENTES")}
-                    className={`pb-2.5 px-3 border-b-2 transition cursor-pointer flex items-center gap-1.5 ${tabInferior === "INCIDENTES" ? "border-rose-600 text-rose-700" : "border-transparent text-slate-500 hover:text-slate-800"}`}
+                    className={`pb-2.5 px-3 border-b-2 transition cursor-pointer flex items-center gap-1.5 ${
+                      tabInferior === "INCIDENTES"
+                        ? "border-rose-600 text-rose-700"
+                        : "border-transparent text-slate-500 hover:text-slate-800"
+                    }`}
                   >
                     <span>
                       Incidentes ({fichaData?.incidentes?.length || 0})
@@ -1151,7 +1193,11 @@ export default function FichaComportamiento() {
                   <button
                     type="button"
                     onClick={() => setTabInferior("BRUTOS")}
-                    className={`pb-2.5 px-3 border-b-2 transition cursor-pointer ${tabInferior === "BRUTOS" ? "border-indigo-600 text-indigo-700" : "border-transparent text-slate-500 hover:text-slate-800"}`}
+                    className={`pb-2.5 px-3 border-b-2 transition cursor-pointer ${
+                      tabInferior === "BRUTOS"
+                        ? "border-indigo-600 text-indigo-700"
+                        : "border-transparent text-slate-500 hover:text-slate-800"
+                    }`}
                   >
                     Fichajes en Bruto ({fichaData?.fichajesBrutos?.length || 0})
                   </button>

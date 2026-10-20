@@ -115,3 +115,43 @@ export function calcularOffsetPrimerDia(fechaIso) {
   );
   return (d.getDay() + 6) % 7;
 }
+
+// Formato duración en horas y minutos exactos (ej: 2.7 -> "2h 42m", 3 -> "3h 00m", 0.083 -> "0h 05m")
+export function formatearHorasYMinutos(horasODecimal) {
+  if (horasODecimal == null || isNaN(horasODecimal)) return "0h 00m";
+  const totalMinutos = Math.round(Number(horasODecimal) * 60);
+  const h = Math.floor(Math.abs(totalMinutos) / 60);
+  const m = Math.abs(totalMinutos) % 60;
+  const signo = totalMinutos < 0 ? "-" : "";
+  return `${signo}${h}h ${String(m).padStart(2, "0")}m`;
+}
+
+// Convierte minutos enteros directos a "Xh YYm" (ej: 162 -> "2h 42m")
+export function formatearMinutosVisuales(minutosTotales) {
+  if (minutosTotales == null || isNaN(minutosTotales)) return "0h 00m";
+  const mins = Math.round(Number(minutosTotales));
+  const h = Math.floor(Math.abs(mins) / 60);
+  const m = Math.abs(mins) % 60;
+  const signo = mins < 0 ? "-" : "";
+  return `${signo}${h}h ${String(m).padStart(2, "0")}m`;
+}
+
+// Formato reloj militar / 24 horas estricto (ej: "19:16:00" -> "19:16 hs" o Date -> "19:16 hs")
+export function formatearHora24(horaStrODate) {
+  if (!horaStrODate) return "--:--";
+  if (typeof horaStrODate === "string") {
+    const parteHora = horaStrODate.includes("T")
+      ? horaStrODate.split("T")[1].substring(0, 5)
+      : horaStrODate.trim().substring(0, 5);
+    return `${parteHora} hs`;
+  }
+  const d = new Date(horaStrODate);
+  if (isNaN(d.getTime())) return "--:--";
+  return (
+    d.toLocaleTimeString("es-AR", {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    }) + " hs"
+  );
+}

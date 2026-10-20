@@ -115,6 +115,31 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.GET, "/api/incidentes/**").hasAnyAuthority("INCIDENTES_VER", "PERM_ADMIN_TOTAL")
                 .requestMatchers(HttpMethod.PUT, "/api/incidentes/*/resolver").hasAnyAuthority("INCIDENTES_JUSTIFICAR", "PERM_ADMIN_TOTAL")
 
+                // =========================================================================
+                // MÓDULO GESTIÓN DE MATERIAS & LIQUIDACIÓN DOCENTE
+                // =========================================================================
+                // 1. Calendario semanal y catálogo de materias (Lectura)
+                .requestMatchers(HttpMethod.GET, "/api/gestion-materias/calendario-semanal", "/api/configuracion/materias/**")
+                    .hasAnyAuthority("MATERIAS_VER", "PERM_ADMIN_TOTAL")
+
+                // 2. Resumen y liquidación de sueldos docentes
+                .requestMatchers(HttpMethod.GET, "/api/gestion-materias/resumen")
+                    .hasAnyAuthority("LIQUIDACION_DOCENTE", "MATERIAS_VER", "PERM_ADMIN_TOTAL")
+
+                // 3. Alta de materias
+                .requestMatchers(HttpMethod.POST, "/api/gestion-materias", "/api/configuracion/materias/**")
+                    .hasAnyAuthority("MATERIAS_CREAR", "CONFIG_EDITAR_MATERIAS_TURNOS", "PERM_ADMIN_TOTAL")
+
+                // 4. Edición de materias
+                .requestMatchers(HttpMethod.PUT, "/api/configuracion/materias/**")
+                    .hasAnyAuthority("MATERIAS_EDITAR", "CONFIG_EDITAR_MATERIAS_TURNOS", "PERM_ADMIN_TOTAL")
+
+                // 5. Baja y reactivación de materias
+                .requestMatchers(HttpMethod.DELETE, "/api/configuracion/materias/**")
+                    .hasAnyAuthority("MATERIAS_ELIMINAR", "CONFIG_EDITAR_MATERIAS_TURNOS", "PERM_ADMIN_TOTAL")
+                .requestMatchers(HttpMethod.PATCH, "/api/configuracion/materias/*/reactivar")
+                    .hasAnyAuthority("MATERIAS_ELIMINAR", "CONFIG_EDITAR_MATERIAS_TURNOS", "PERM_ADMIN_TOTAL")
+
                 // Cualquier otra solicitud requiere autenticación válida
                 .anyRequest().authenticated()
              //   .anyRequest().permitAll() // Temporal: Permitir todas las solicitudes mientras se desarrolla el frontend

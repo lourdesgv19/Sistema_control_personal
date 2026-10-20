@@ -73,6 +73,42 @@ export const MODULOS_PERMISOS = [
       },
     ],
   },
+  // MÓDULO INDEPENDIENTE DE MATERIAS & LIQUIDACIÓN
+  {
+    id: "MATERIAS",
+    nombre: "Gestión de Materias & Liquidación",
+    descripcion:
+      "Administración de cátedras, calendario de clases y liquidación docente",
+    permisos: [
+      {
+        codigo: "MATERIAS_VER",
+        label: "Ver calendario semanal y catálogo de materias",
+        critico: false,
+      },
+      {
+        codigo: "MATERIAS_CREAR",
+        label: "Dar de alta nuevas cátedras y asignaturas",
+        critico: false,
+      },
+      {
+        codigo: "MATERIAS_EDITAR",
+        label: "Modificar datos de materias y tarifas",
+        critico: false,
+      },
+      {
+        codigo: "MATERIAS_ELIMINAR",
+        label: "Baja lógica y reactivación de materias",
+        critico: true,
+      },
+      {
+        codigo: "LIQUIDACION_DOCENTE",
+        label: "Visualizar y exportar liquidaciones a docentes",
+        critico: true,
+      },
+    ],
+  },
+
+  ,
   {
     id: "FICHAJES",
     nombre: "Fichajes & Biometría",
