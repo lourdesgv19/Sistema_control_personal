@@ -17,6 +17,7 @@ import {
   ChevronDown,
   Palette,
   Lock,
+  GraduationCap,
 } from "lucide-react";
 import ListaEmpleadosSidebar from "../components/comunes/ListaEmpleadosSidebar";
 import ModalJustificarIncidente from "../components/incidentes/ModalJustificarIncidente";
@@ -51,10 +52,13 @@ export default function FichaComportamiento() {
   const [sidebarAbierto, setSidebarAbierto] = useState(true);
   const [menuImpresionAbierto, setMenuImpresionAbierto] = useState(false);
 
-  // Modalidades: DIARIO | SEMANAL | MENSUAL | RANGO_FECHAS
+  // Modalidades: DIARIO | SEMANAL | MENSUAL | TRIMESTRE | CUATRIMESTRE | RANGO_FECHAS
   const [modalidad, setModalidad] = useState("DIARIO");
   const [fechaConsulta, setFechaConsulta] = useState(hoyIso);
   const [fechaHastaRango, setFechaHastaRango] = useState(hoyIso);
+
+  // Estado para expandir/colapsar los meses en vistas Trimestral y Cuatrimestral
+  const [mesesExpandidos, setMesesExpandidos] = useState({});
 
   // Estados para inspección diaria y modales
   const [diaInspeccionado, setDiaInspeccionado] = useState(null);
@@ -80,13 +84,27 @@ export default function FichaComportamiento() {
     [fechaConsulta],
   );
 
-  // Desfase para alinear el día 1 en el calendario mensual
   const diasOffsetInicioMes = useMemo(() => {
     if (!fichaData?.diasPeriodo || fichaData.diasPeriodo.length === 0) return 0;
     return calcularOffsetPrimerDia(fichaData.diasPeriodo[0].fecha);
   }, [fichaData]);
 
-  // Carga de datos desde la API
+  // Manejo de la expansión de meses
+  const toggleMes = (mesKey) => {
+    setMesesExpandidos((prev) => ({ ...prev, [mesKey]: !prev[mesKey] }));
+  };
+
+  const expandirTodos = () => {
+    if (!fichaData?.mesesPeriodo) return;
+    const allExpanded = {};
+    fichaData.mesesPeriodo.forEach((m) => (allExpanded[m.mesKey] = true));
+    setMesesExpandidos(allExpanded);
+  };
+
+  const colapsarTodos = () => {
+    setMesesExpandidos({});
+  };
+
   const cargarFicha = useCallback(async () => {
     if (!empleadoSeleccionado?.id) return;
     setLoadingFicha(true);
@@ -95,19 +113,15 @@ export default function FichaComportamiento() {
         modalidad: modalidad === "RANGO_FECHAS" ? "RANGO_FECHAS" : modalidad,
         fecha: fechaConsulta,
       };
-
       if (modalidad === "RANGO_FECHAS") {
         params.fechaDesde = fechaConsulta;
         params.fechaHasta = fechaHastaRango;
       }
-
       const data = await getFichaComportamiento(
         empleadoSeleccionado.id,
         params,
       );
       setFichaData(data);
-
-      // Si el usuario estaba inspeccionando un día puntual, actualizar sus métricas en vivo
       setDiaInspeccionado((prev) => {
         if (!prev || !data?.diasPeriodo) return prev;
         return data.diasPeriodo.find((d) => d.fecha === prev.fecha) || prev;
@@ -123,12 +137,10 @@ export default function FichaComportamiento() {
     cargarFicha();
   }, [cargarFicha]);
 
-  // Sincronización automática en TIEMPO REAL (SSE) o al restaurarse la conexión
   useEffect(() => {
     const handleActualizacionTiempoReal = () => {
       cargarFicha();
     };
-
     window.addEventListener(
       "datos:actualizados",
       handleActualizacionTiempoReal,
@@ -149,10 +161,11 @@ export default function FichaComportamiento() {
     };
   }, [cargarFicha]);
 
-  // Abrir directamente el modal de justificación
   const abrirModalJustificarDirecto = (inc, soloLectura = false) => {
-    const incidenteConEmpleado = {
+    const incidenteCompleto = {
       ...inc,
+      motivo: inc.resolucionMotivo || inc.motivo || "",
+      observaciones: inc.resolucionObservaciones || inc.observaciones || "",
       empleado: inc.empleado || {
         id: fichaData?.empleadoId || empleadoSeleccionado?.id,
         nombre: empleadoSeleccionado?.nombre || "",
@@ -163,12 +176,11 @@ export default function FichaComportamiento() {
         rolSistema: fichaData?.rolOArea || "Empleado",
       },
     };
-    setIncidenteSeleccionado(incidenteConEmpleado);
+    setIncidenteSeleccionado(incidenteCompleto);
     setModoSoloLecturaModal(soloLectura);
     setModalJustificarAbierto(true);
   };
 
-  // Guardar resolución y refrescar ficha
   const handleGuardarJustificacion = async (id, payload) => {
     try {
       await resolverIncidente(id, payload);
@@ -190,12 +202,7 @@ export default function FichaComportamiento() {
   };
 
   const handleExportarExcel = () => {
-    exportarFichaACsv({
-      fichaData,
-      modalidad,
-      fechaConsulta,
-      fechaHastaRango,
-    });
+    exportarFichaACsv({ fichaData, modalidad, fechaConsulta, fechaHastaRango });
   };
 
   const moverFecha = (direccion) => {
@@ -210,10 +217,13 @@ export default function FichaComportamiento() {
       actual.setDate(actual.getDate() + direccion);
     } else if (modalidad === "SEMANAL") {
       actual.setDate(actual.getDate() + direccion * 7);
-    } else if (modalidad === "MENSUAL") {
+    } else if (
+      modalidad === "MENSUAL" ||
+      modalidad === "TRIMESTRE" ||
+      modalidad === "CUATRIMESTRE"
+    ) {
       actual.setMonth(actual.getMonth() + direccion);
     }
-
     const y = actual.getFullYear();
     const m = String(actual.getMonth() + 1).padStart(2, "0");
     const d = String(actual.getDate()).padStart(2, "0");
@@ -233,21 +243,27 @@ export default function FichaComportamiento() {
     horasEnContraTexto: "0h 0m",
     diasConDeficit: 0,
     diasConHorasExtra: 0,
+    clasesDictadasTexto: "0h 0m / 0h 0m (0%)",
   };
 
-  // Renderizador de un ítem de incidente con botones interactivos
+  const esDocente = useMemo(() => {
+    const turno = fichaData?.etiquetaTurno?.toLowerCase() || "";
+    const rol = fichaData?.rolOArea?.toLowerCase() || "";
+    return (
+      turno.includes("cátedra") ||
+      turno.includes("catedra") ||
+      rol.includes("profesor") ||
+      rol.includes("docente")
+    );
+  }, [fichaData]);
+
   const renderItemIncidenteInteractivo = (inc, mostrarFecha = false) => {
     const esCritica =
       inc.severidad === "CRÍTICA" || inc.severidad === "CRITICA";
-
     return (
       <div
         key={inc.id}
-        className={`p-3.5 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs transition ${
-          esCritica
-            ? "bg-rose-50/80 border-rose-200"
-            : "bg-amber-50/80 border-amber-200"
-        }`}
+        className={`p-3.5 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs transition ${esCritica ? "bg-rose-50/80 border-rose-200" : "bg-amber-50/80 border-amber-200"}`}
       >
         <div>
           <div className="flex items-center gap-2 flex-wrap">
@@ -265,11 +281,7 @@ export default function FichaComportamiento() {
               {inc.tipo}
             </span>
             <span
-              className={`text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${
-                esCritica
-                  ? "bg-rose-600 text-white shadow-2xs"
-                  : "bg-amber-500 text-white shadow-2xs"
-              }`}
+              className={`text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${esCritica ? "bg-rose-600 text-white shadow-2xs" : "bg-amber-500 text-white shadow-2xs"}`}
             >
               {inc.severidad}
             </span>
@@ -277,7 +289,6 @@ export default function FichaComportamiento() {
           <div className="text-[11px] text-slate-600 mt-1">{inc.detalle}</div>
         </div>
 
-        {/* Estado + Botones de Justificación Directa */}
         <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
           {inc.estado === "JUSTIFICADA" ? (
             <span className="inline-flex items-center px-2.5 py-1 rounded-md text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
@@ -301,11 +312,7 @@ export default function FichaComportamiento() {
             <button
               type="button"
               onClick={() => abrirModalJustificarDirecto(inc, false)}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer shadow-2xs ${
-                inc.estado === "PENDIENTE"
-                  ? "bg-indigo-600 hover:bg-indigo-700 text-white"
-                  : "bg-white hover:bg-slate-50 text-slate-700 border border-slate-200"
-              }`}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer shadow-2xs ${inc.estado === "PENDIENTE" ? "bg-indigo-600 hover:bg-indigo-700 text-white" : "bg-white hover:bg-slate-50 text-slate-700 border border-slate-200"}`}
             >
               {inc.estado === "PENDIENTE" ? "Justificar" : "Editar"}
             </button>
@@ -318,7 +325,6 @@ export default function FichaComportamiento() {
               {inc.estado === "PENDIENTE" ? "Justificar" : "Editar"}
             </span>
           )}
-
           <button
             type="button"
             onClick={() => abrirModalJustificarDirecto(inc, true)}
@@ -332,14 +338,12 @@ export default function FichaComportamiento() {
     );
   };
 
-  // Render tarjeta de inspección de día (para Semanal/Mensual/Rango)
   const renderCardInspeccionDiaria = () => {
     if (!diaInspeccionado) return null;
     const fechaDiaStr = String(diaInspeccionado.fecha || "").split("T")[0];
-    const incidentesDelDia = (fichaData?.incidentes || []).filter((inc) => {
-      if (!inc.fecha) return true;
-      return String(inc.fecha).split("T")[0] === fechaDiaStr;
-    });
+    const incidentesDelDia = (fichaData?.incidentes || []).filter((inc) =>
+      !inc.fecha ? true : String(inc.fecha).split("T")[0] === fechaDiaStr,
+    );
 
     return (
       <div className="bg-white border-2 border-indigo-500/80 rounded-3xl p-5 shadow-sm space-y-4 transition-all animate-fadeIn">
@@ -357,7 +361,6 @@ export default function FichaComportamiento() {
               </h4>
             </div>
           </div>
-
           <div className="flex items-center gap-2">
             <button
               type="button"
@@ -382,19 +385,19 @@ export default function FichaComportamiento() {
           </div>
         </div>
 
-        {/* 4 Mini Cards de Métricas */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+        <div
+          className={`grid grid-cols-2 ${esDocente ? "md:grid-cols-5" : "md:grid-cols-4"} gap-3 text-xs`}
+        >
           <div className="bg-slate-50 border border-slate-200/80 p-3 rounded-2xl flex flex-col justify-between">
             <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
               1RA ENTRADA - ÚLTIMO EGRESO
             </span>
             <div className="font-mono font-bold text-slate-800 text-xs sm:text-sm mt-1">
               {diaInspeccionado.primeraEntrada !== "--:--"
-                ? `${diaInspeccionado.primeraEntrada} a. m. → ${diaInspeccionado.ultimoEgreso} p. m.`
+                ? `${diaInspeccionado.primeraEntrada} hs → ${diaInspeccionado.ultimoEgreso} hs`
                 : "--:--"}
             </div>
           </div>
-
           <div className="bg-emerald-50/50 border border-emerald-200/80 p-3 rounded-2xl flex flex-col justify-between">
             <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700">
               PRESENCIA NETA
@@ -403,7 +406,6 @@ export default function FichaComportamiento() {
               {diaInspeccionado.presenciaNetaTexto}
             </div>
           </div>
-
           <div className="bg-amber-50/50 border border-amber-200/80 p-3 rounded-2xl flex flex-col justify-between">
             <span className="text-[10px] font-bold uppercase tracking-wider text-amber-800">
               SALIDAS INTERMEDIAS
@@ -413,7 +415,6 @@ export default function FichaComportamiento() {
               {diaInspeccionado.minutosFuera} min)
             </div>
           </div>
-
           <div className="bg-slate-50 border border-slate-200/80 p-3 rounded-2xl flex flex-col justify-between">
             <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
               CUMPLIMIENTO
@@ -422,9 +423,18 @@ export default function FichaComportamiento() {
               {diaInspeccionado.porcentajeCumplimiento}%
             </div>
           </div>
+          {esDocente && (
+            <div className="bg-purple-50/60 border border-purple-200/80 p-3 rounded-2xl flex flex-col justify-between">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-purple-700">
+                CLASES DICTADAS
+              </span>
+              <div className="font-black text-purple-900 text-sm sm:text-base mt-1 font-mono">
+                {diaInspeccionado.clasesDictadasTexto || "0h 0m / 0h 0m"}
+              </div>
+            </div>
+          )}
         </div>
 
-        {/* Incidencias del día */}
         <div className="space-y-2">
           <div className="flex items-center gap-1.5 text-xs font-bold text-slate-800 uppercase tracking-wider">
             <AlertTriangle className="w-3.5 h-3.5 text-rose-500" />
@@ -432,7 +442,6 @@ export default function FichaComportamiento() {
               INCIDENCIAS Y DESVÍOS DE LA JORNADA ({incidentesDelDia.length})
             </span>
           </div>
-
           {incidentesDelDia.length === 0 ? (
             <div className="p-3 bg-emerald-50/60 border border-emerald-200 rounded-2xl flex items-center gap-2 text-xs text-emerald-800 font-medium">
               <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
@@ -450,7 +459,6 @@ export default function FichaComportamiento() {
           )}
         </div>
 
-        {/* Intervalos reconstruidos */}
         <div className="space-y-1.5">
           <div className="flex items-center gap-1.5 text-xs font-bold text-slate-800 uppercase tracking-wider">
             <Clock className="w-3.5 h-3.5 text-indigo-600" />
@@ -459,7 +467,6 @@ export default function FichaComportamiento() {
               {diaInspeccionado.presenciaNetaMinutos > 0 ? "1" : "0"})
             </span>
           </div>
-
           {diaInspeccionado.presenciaNetaMinutos > 0 ? (
             <div className="p-3 bg-emerald-50/60 border border-emerald-200 rounded-2xl flex items-center justify-between text-xs max-w-sm">
               <div>
@@ -467,8 +474,8 @@ export default function FichaComportamiento() {
                   <span>✓ PRESENCIA</span>
                 </div>
                 <div className="font-mono text-slate-600 text-[11px] mt-0.5">
-                  {diaInspeccionado.primeraEntrada} →{" "}
-                  {diaInspeccionado.ultimoEgreso}
+                  {diaInspeccionado.primeraEntrada} hs →{" "}
+                  {diaInspeccionado.ultimoEgreso} hs
                 </div>
               </div>
               <span className="font-bold text-emerald-950">
@@ -487,15 +494,8 @@ export default function FichaComportamiento() {
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-[1600px] mx-auto space-y-5 font-sans relative">
-      <style>{`
-        @media print {
-          body { background: white !important; }
-          .no-print { display: none !important; }
-          .print-full { width: 100% !important; margin: 0 !important; }
-        }
-      `}</style>
+      <style>{`@media print { body { background: white !important; } .no-print { display: none !important; } .print-full { width: 100% !important; margin: 0 !important; } }`}</style>
 
-      {/* TOGGLE SIDEBAR */}
       <div className="flex items-center justify-between no-print">
         <button
           type="button"
@@ -515,7 +515,6 @@ export default function FichaComportamiento() {
             </>
           )}
         </button>
-
         {!sidebarAbierto && empleadoSeleccionado && (
           <div className="flex items-center gap-2 text-xs text-slate-500 font-medium">
             <span>Inspeccionando a:</span>
@@ -527,11 +526,8 @@ export default function FichaComportamiento() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
-        {/* SIDEBAR */}
         <div
-          className={`no-print transition-all duration-300 ${
-            sidebarAbierto ? "lg:col-span-3 block" : "lg:hidden"
-          }`}
+          className={`no-print transition-all duration-300 ${sidebarAbierto ? "lg:col-span-3 block" : "lg:hidden"}`}
         >
           <ListaEmpleadosSidebar
             isOpen={sidebarAbierto}
@@ -541,13 +537,9 @@ export default function FichaComportamiento() {
           />
         </div>
 
-        {/* CONTENIDO PRINCIPAL */}
         <div
-          className={`print-full space-y-5 transition-all duration-300 ${
-            sidebarAbierto ? "lg:col-span-9" : "lg:col-span-12"
-          }`}
+          className={`print-full space-y-5 transition-all duration-300 ${sidebarAbierto ? "lg:col-span-9" : "lg:col-span-12"}`}
         >
-          {/* SELECTOR DE MODALIDAD */}
           <div className="bg-white border border-slate-200 rounded-3xl p-4 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4 no-print">
             <div className="flex items-center gap-2">
               <CalendarIcon className="w-4 h-4 text-indigo-600" />
@@ -561,6 +553,8 @@ export default function FichaComportamiento() {
                 { label: "Diario", key: "DIARIO" },
                 { label: "Semanal", key: "SEMANAL" },
                 { label: "Mensual", key: "MENSUAL" },
+                { label: "Trimestre", key: "TRIMESTRE" },
+                { label: "Cuatrimestre", key: "CUATRIMESTRE" },
                 { label: "Rango de fechas", key: "RANGO_FECHAS" },
               ].map(({ label, key }) => {
                 const activo = modalidad === key;
@@ -572,12 +566,9 @@ export default function FichaComportamiento() {
                       setModalidad(key);
                       setDiaInspeccionado(null);
                       setModalListaIncidentesAbierto(false);
+                      setMesesExpandidos({});
                     }}
-                    className={`px-3.5 py-1.5 rounded-xl transition cursor-pointer whitespace-nowrap ${
-                      activo
-                        ? "bg-white text-indigo-700 shadow-xs border border-slate-200 font-bold"
-                        : "text-slate-600 hover:text-slate-900"
-                    }`}
+                    className={`px-3.5 py-1.5 rounded-xl transition cursor-pointer whitespace-nowrap ${activo ? "bg-white text-indigo-700 shadow-xs border border-slate-200 font-bold" : "text-slate-600 hover:text-slate-900"}`}
                   >
                     {label}
                   </button>
@@ -586,7 +577,6 @@ export default function FichaComportamiento() {
             </div>
           </div>
 
-          {/* BARRA DE DATEPICKER */}
           <div className="bg-white border border-slate-200 rounded-2xl p-3 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="font-semibold text-slate-600 text-xs">
@@ -596,24 +586,35 @@ export default function FichaComportamiento() {
                     ? "Semana:"
                     : modalidad === "MENSUAL"
                       ? "Mes:"
-                      : "Período:"}
+                      : modalidad === "TRIMESTRE"
+                        ? "Trimestre Fijo (3 meses):"
+                        : modalidad === "CUATRIMESTRE"
+                          ? "Cuatrimestre Fijo (4 meses):"
+                          : "Período:"}
               </span>
 
-              {modalidad !== "RANGO_FECHAS" && (
-                <button
-                  type="button"
-                  onClick={() => moverFecha(-1)}
-                  className="p-1 hover:bg-slate-100 rounded-lg text-slate-500 hover:text-slate-800 transition cursor-pointer"
-                  title="Anterior"
-                >
-                  <ChevronLeft className="w-4 h-4" />
-                </button>
-              )}
+              {modalidad !== "RANGO_FECHAS" &&
+                modalidad !== "TRIMESTRE" &&
+                modalidad !== "CUATRIMESTRE" && (
+                  <button
+                    type="button"
+                    onClick={() => moverFecha(-1)}
+                    className="p-1 hover:bg-slate-100 rounded-lg text-slate-500 hover:text-slate-800 transition cursor-pointer"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+                )}
 
-              {/* DIARIO */}
               {modalidad === "DIARIO" && (
-                <label className="relative inline-flex items-center border border-slate-200 rounded-xl px-3 py-1.5 bg-white shadow-2xs hover:border-indigo-400 cursor-pointer">
-                  <span className="font-mono font-semibold text-slate-800 text-xs select-none">
+                <div
+                  onClick={(e) => {
+                    const input = e.currentTarget.querySelector("input");
+                    if (input && typeof input.showPicker === "function")
+                      input.showPicker();
+                  }}
+                  className="relative inline-flex items-center border border-slate-200 rounded-xl px-3 py-1.5 bg-white shadow-2xs hover:border-indigo-400 cursor-pointer"
+                >
+                  <span className="font-mono font-semibold text-slate-800 text-xs select-none pointer-events-none">
                     {formatearFechaVisual(fechaConsulta)}
                   </span>
                   <CalendarIcon className="w-4 h-4 text-slate-400 ml-2 pointer-events-none" />
@@ -624,15 +625,20 @@ export default function FichaComportamiento() {
                       if (e.target.value) setFechaConsulta(e.target.value);
                     }}
                     className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
-                    title="Seleccionar fecha"
                   />
-                </label>
+                </div>
               )}
 
-              {/* SEMANAL */}
               {modalidad === "SEMANAL" && (
-                <label className="relative inline-flex items-center border border-slate-200 rounded-xl px-3 py-1.5 bg-white shadow-2xs hover:border-indigo-400 cursor-pointer">
-                  <span className="font-mono font-semibold text-slate-800 text-xs select-none">
+                <div
+                  onClick={(e) => {
+                    const input = e.currentTarget.querySelector("input");
+                    if (input && typeof input.showPicker === "function")
+                      input.showPicker();
+                  }}
+                  className="relative inline-flex items-center border border-slate-200 rounded-xl px-3 py-1.5 bg-white shadow-2xs hover:border-indigo-400 cursor-pointer"
+                >
+                  <span className="font-mono font-semibold text-slate-800 text-xs select-none pointer-events-none">
                     {formatearFechaVisual(inicioSemanaStr)} →{" "}
                     {formatearFechaVisual(finSemanaStr)}
                   </span>
@@ -644,15 +650,20 @@ export default function FichaComportamiento() {
                       if (e.target.value) setFechaConsulta(e.target.value);
                     }}
                     className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
-                    title="Seleccionar fecha de la semana"
                   />
-                </label>
+                </div>
               )}
 
-              {/* MENSUAL */}
               {modalidad === "MENSUAL" && (
-                <label className="relative inline-flex items-center border border-slate-200 rounded-xl px-3 py-1.5 bg-white shadow-2xs hover:border-indigo-400 cursor-pointer">
-                  <span className="font-semibold text-slate-800 text-xs select-none">
+                <div
+                  onClick={(e) => {
+                    const input = e.currentTarget.querySelector("input");
+                    if (input && typeof input.showPicker === "function")
+                      input.showPicker();
+                  }}
+                  className="relative inline-flex items-center border border-slate-200 rounded-xl px-3 py-1.5 bg-white shadow-2xs hover:border-indigo-400 cursor-pointer"
+                >
+                  <span className="font-semibold text-slate-800 text-xs select-none pointer-events-none">
                     {obtenerNombreMes(fechaConsulta)} (
                     {formatearFechaVisual(inicioMesStr)} Al{" "}
                     {formatearFechaVisual(finMesStr)})
@@ -666,19 +677,76 @@ export default function FichaComportamiento() {
                         setFechaConsulta(`${e.target.value}-01`);
                     }}
                     className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
-                    title="Seleccionar mes"
                   />
-                </label>
+                </div>
               )}
 
-              {/* RANGO DE FECHAS */}
+              {(modalidad === "TRIMESTRE" || modalidad === "CUATRIMESTRE") && (
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] text-slate-400 font-bold uppercase">
+                    Desde Mes a Elección
+                  </span>
+                  <select
+                    value={fechaConsulta.substring(0, 7)}
+                    onChange={(e) => {
+                      if (e.target.value)
+                        setFechaConsulta(`${e.target.value}-01`);
+                    }}
+                    className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 font-semibold text-slate-800 outline-none cursor-pointer"
+                  >
+                    <option value={`${hoyIso.substring(0, 4)}-01`}>
+                      Enero (contar {modalidad === "TRIMESTRE" ? "3" : "4"}{" "}
+                      meses)
+                    </option>
+                    <option value={`${hoyIso.substring(0, 4)}-02`}>
+                      Febrero
+                    </option>
+                    <option value={`${hoyIso.substring(0, 4)}-03`}>
+                      Marzo
+                    </option>
+                    <option value={`${hoyIso.substring(0, 4)}-04`}>
+                      Abril
+                    </option>
+                    <option value={`${hoyIso.substring(0, 4)}-05`}>Mayo</option>
+                    <option value={`${hoyIso.substring(0, 4)}-06`}>
+                      Junio
+                    </option>
+                    <option value={`${hoyIso.substring(0, 4)}-07`}>
+                      Julio
+                    </option>
+                    <option value={`${hoyIso.substring(0, 4)}-08`}>
+                      Agosto
+                    </option>
+                    <option value={`${hoyIso.substring(0, 4)}-09`}>
+                      Septiembre
+                    </option>
+                    <option value={`${hoyIso.substring(0, 4)}-10`}>
+                      Octubre
+                    </option>
+                    <option value={`${hoyIso.substring(0, 4)}-11`}>
+                      Noviembre
+                    </option>
+                    <option value={`${hoyIso.substring(0, 4)}-12`}>
+                      Diciembre
+                    </option>
+                  </select>
+                </div>
+              )}
+
               {modalidad === "RANGO_FECHAS" && (
                 <div className="flex items-center gap-2">
-                  <label className="relative inline-flex items-center border border-slate-200 rounded-xl px-3 py-1.5 bg-white shadow-2xs hover:border-indigo-400 cursor-pointer">
-                    <span className="text-[10px] text-slate-400 uppercase mr-1.5 select-none font-bold">
+                  <div
+                    onClick={(e) => {
+                      const input = e.currentTarget.querySelector("input");
+                      if (input && typeof input.showPicker === "function")
+                        input.showPicker();
+                    }}
+                    className="relative inline-flex items-center border border-slate-200 rounded-xl px-3 py-1.5 bg-white shadow-2xs hover:border-indigo-400 cursor-pointer"
+                  >
+                    <span className="text-[10px] text-slate-400 uppercase mr-1.5 select-none font-bold pointer-events-none">
                       Desde:
                     </span>
-                    <span className="font-mono font-semibold text-slate-800 text-xs select-none">
+                    <span className="font-mono font-semibold text-slate-800 text-xs select-none pointer-events-none">
                       {formatearFechaVisual(fechaConsulta)}
                     </span>
                     <CalendarIcon className="w-3.5 h-3.5 text-slate-400 ml-2 pointer-events-none" />
@@ -689,23 +757,25 @@ export default function FichaComportamiento() {
                         const val = e.target.value;
                         if (val) {
                           setFechaConsulta(val);
-                          if (val > fechaHastaRango) {
-                            setFechaHastaRango(val);
-                          }
+                          if (val > fechaHastaRango) setFechaHastaRango(val);
                         }
                       }}
                       className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
-                      title="Seleccionar fecha Desde"
                     />
-                  </label>
-
+                  </div>
                   <ArrowRight className="w-3.5 h-3.5 text-slate-400" />
-
-                  <label className="relative inline-flex items-center border border-slate-200 rounded-xl px-3 py-1.5 bg-white shadow-2xs hover:border-indigo-400 cursor-pointer">
-                    <span className="text-[10px] text-slate-400 uppercase mr-1.5 select-none font-bold">
+                  <div
+                    onClick={(e) => {
+                      const input = e.currentTarget.querySelector("input");
+                      if (input && typeof input.showPicker === "function")
+                        input.showPicker();
+                    }}
+                    className="relative inline-flex items-center border border-slate-200 rounded-xl px-3 py-1.5 bg-white shadow-2xs hover:border-indigo-400 cursor-pointer"
+                  >
+                    <span className="text-[10px] text-slate-400 uppercase mr-1.5 select-none font-bold pointer-events-none">
                       Hasta:
                     </span>
-                    <span className="font-mono font-semibold text-slate-800 text-xs select-none">
+                    <span className="font-mono font-semibold text-slate-800 text-xs select-none pointer-events-none">
                       {formatearFechaVisual(fechaHastaRango)}
                     </span>
                     <CalendarIcon className="w-3.5 h-3.5 text-slate-400 ml-2 pointer-events-none" />
@@ -715,28 +785,25 @@ export default function FichaComportamiento() {
                       min={fechaConsulta}
                       onChange={(e) => {
                         const val = e.target.value;
-                        if (val) {
-                          setFechaHastaRango(val);
-                        }
+                        if (val) setFechaHastaRango(val);
                       }}
                       className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
-                      title="Seleccionar fecha Hasta"
                     />
-                  </label>
+                  </div>
                 </div>
               )}
 
-              {modalidad !== "RANGO_FECHAS" && (
-                <button
-                  type="button"
-                  onClick={() => moverFecha(1)}
-                  className="p-1 hover:bg-slate-100 rounded-lg text-slate-500 hover:text-slate-800 transition cursor-pointer"
-                  title="Siguiente"
-                >
-                  <ChevronRight className="w-4 h-4" />
-                </button>
-              )}
-
+              {modalidad !== "RANGO_FECHAS" &&
+                modalidad !== "TRIMESTRE" &&
+                modalidad !== "CUATRIMESTRE" && (
+                  <button
+                    type="button"
+                    onClick={() => moverFecha(1)}
+                    className="p-1 hover:bg-slate-100 rounded-lg text-slate-500 hover:text-slate-800 transition cursor-pointer"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                )}
               {modalidad === "DIARIO" && (
                 <span className="text-slate-400 font-normal">
                   ({obtenerNombreDia(fechaConsulta)})
@@ -749,13 +816,10 @@ export default function FichaComportamiento() {
                 type="button"
                 onClick={handleExportarExcel}
                 className="flex items-center gap-1.5 px-3 py-1.5 border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 rounded-xl font-bold transition shadow-2xs cursor-pointer text-xs"
-                title="Exportar archivo CSV / Excel"
               >
                 <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-700" />
                 Exportar CSV
               </button>
-
-              {/* DROPDOWN DE IMPRESIÓN / PDF */}
               <div className="relative">
                 <button
                   type="button"
@@ -766,7 +830,6 @@ export default function FichaComportamiento() {
                   <span>Imprimir / PDF</span>
                   <ChevronDown className="w-3 h-3 text-slate-400 ml-0.5" />
                 </button>
-
                 {menuImpresionAbierto && (
                   <>
                     <div
@@ -791,9 +854,7 @@ export default function FichaComportamiento() {
                           </div>
                         </div>
                       </button>
-
                       <div className="border-t border-slate-100 my-1" />
-
                       <button
                         type="button"
                         onClick={() => emitirReportePdf(true)}
@@ -818,7 +879,6 @@ export default function FichaComportamiento() {
             </div>
           </div>
 
-          {/* FICHA EMPLEADO & CUMPLIMIENTO */}
           <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div className="flex items-center gap-4">
               <div className="w-14 h-14 rounded-2xl bg-[#1e293b] flex items-center justify-center text-white font-bold text-base shadow-md overflow-hidden shrink-0">
@@ -828,9 +888,7 @@ export default function FichaComportamiento() {
                 <div className="flex items-center gap-2">
                   <h2 className="text-base font-bold text-slate-900">
                     {fichaData?.nombreCompleto ||
-                      `${empleadoSeleccionado?.apellido || ""}, ${
-                        empleadoSeleccionado?.nombre || ""
-                      }`}
+                      `${empleadoSeleccionado?.apellido || ""}, ${empleadoSeleccionado?.nombre || ""}`}
                   </h2>
                   <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
                     Activo
@@ -849,7 +907,6 @@ export default function FichaComportamiento() {
                 </div>
               </div>
             </div>
-
             <div className="border border-slate-100 bg-slate-50/60 p-4 rounded-2xl text-right shrink-0 min-w-[170px]">
               <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
                 {modalidad === "DIARIO"
@@ -881,35 +938,49 @@ export default function FichaComportamiento() {
               </div>
             </div>
 
-            <div className="bg-slate-50 border border-slate-200 p-4 rounded-2xl shadow-xs flex flex-col justify-between">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">
-                TOTAL PRESENCIA NETA
+            <div className="bg-emerald-50/60 border border-emerald-200 p-4 rounded-2xl shadow-xs flex flex-col justify-between">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-800 block">
+                TOTAL HORAS NETAS
               </span>
               <div>
-                <div className="text-xl font-black text-slate-900 mt-1">
+                <div className="text-xl font-black text-emerald-950 mt-1">
                   {metricas.presenciaNetaTexto}
                 </div>
                 {modalidad !== "DIARIO" && (
-                  <div className="text-[10px] font-semibold text-slate-400 mt-0.5">
+                  <div className="text-[10px] font-semibold text-emerald-700 mt-0.5">
                     {metricas.ultimoEgreso}
                   </div>
                 )}
               </div>
             </div>
 
-            <div className="bg-emerald-50/60 border border-emerald-200 p-4 rounded-2xl shadow-xs flex flex-col justify-between">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-800 block">
-                HORAS A FAVOR (EXTRA)
-              </span>
-              <div>
-                <div className="text-xl font-black text-emerald-950 mt-1">
-                  +{metricas.horasAFavorTexto || "0h 0m"}
-                </div>
-                <div className="text-[10px] font-semibold text-emerald-700 mt-0.5">
-                  {metricas.diasConHorasExtra || 0} día(s) con excedente
+            {/* MOSTRAR KPI DE CLASES DICTADAS SOLO A DOCENTES Y CON PARSEO SEGURO */}
+            {esDocente && (
+              <div className="bg-purple-50/60 border border-purple-200 p-4 rounded-2xl shadow-xs flex flex-col justify-between">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-purple-800 block">
+                  CLASES DICTADAS
+                </span>
+                <div>
+                  <div className="text-xl font-black text-purple-950 mt-1 font-mono">
+                    {String(
+                      metricas.clasesDictadasTexto || "0h 0m / 0h 0m (0%)",
+                    )
+                      .split("/")[0]
+                      .trim()}
+                  </div>
+                  <div className="text-[10px] font-semibold text-purple-700 mt-0.5 font-mono">
+                    de{" "}
+                    {String(
+                      metricas.clasesDictadasTexto || "0h 0m / 0h 0m (0%)",
+                    ).split("/")[1]
+                      ? String(metricas.clasesDictadasTexto)
+                          .split("/")[1]
+                          .trim()
+                      : "0h 0m"}
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
 
             <div className="bg-rose-50/60 border border-rose-200 p-4 rounded-2xl shadow-xs flex flex-col justify-between">
               <span className="text-[10px] font-bold uppercase tracking-wider text-rose-800 block">
@@ -940,7 +1011,6 @@ export default function FichaComportamiento() {
               </div>
             </div>
 
-            {/* KPI INTERACTIVO DE INCIDENTES REGISTRADOS */}
             <div
               onClick={() => {
                 if (modalidad === "DIARIO") {
@@ -1056,17 +1126,12 @@ export default function FichaComportamiento() {
                 </div>
               </div>
 
-              {/* DETALLE INFERIOR */}
               <div className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-xs">
                 <div className="flex border-b border-slate-100 bg-[#f8fafc] px-4 pt-3 gap-2 text-xs font-bold no-print">
                   <button
                     type="button"
                     onClick={() => setTabInferior("INTERVALOS")}
-                    className={`pb-2.5 px-3 border-b-2 transition cursor-pointer ${
-                      tabInferior === "INTERVALOS"
-                        ? "border-indigo-600 text-indigo-700"
-                        : "border-transparent text-slate-500 hover:text-slate-800"
-                    }`}
+                    className={`pb-2.5 px-3 border-b-2 transition cursor-pointer ${tabInferior === "INTERVALOS" ? "border-indigo-600 text-indigo-700" : "border-transparent text-slate-500 hover:text-slate-800"}`}
                   >
                     Intervalos de Jornada (
                     {fichaData?.intervalosDetalle?.length || 0})
@@ -1074,11 +1139,7 @@ export default function FichaComportamiento() {
                   <button
                     type="button"
                     onClick={() => setTabInferior("INCIDENTES")}
-                    className={`pb-2.5 px-3 border-b-2 transition cursor-pointer flex items-center gap-1.5 ${
-                      tabInferior === "INCIDENTES"
-                        ? "border-rose-600 text-rose-700"
-                        : "border-transparent text-slate-500 hover:text-slate-800"
-                    }`}
+                    className={`pb-2.5 px-3 border-b-2 transition cursor-pointer flex items-center gap-1.5 ${tabInferior === "INCIDENTES" ? "border-rose-600 text-rose-700" : "border-transparent text-slate-500 hover:text-slate-800"}`}
                   >
                     <span>
                       Incidentes ({fichaData?.incidentes?.length || 0})
@@ -1090,11 +1151,7 @@ export default function FichaComportamiento() {
                   <button
                     type="button"
                     onClick={() => setTabInferior("BRUTOS")}
-                    className={`pb-2.5 px-3 border-b-2 transition cursor-pointer ${
-                      tabInferior === "BRUTOS"
-                        ? "border-indigo-600 text-indigo-700"
-                        : "border-transparent text-slate-500 hover:text-slate-800"
-                    }`}
+                    className={`pb-2.5 px-3 border-b-2 transition cursor-pointer ${tabInferior === "BRUTOS" ? "border-indigo-600 text-indigo-700" : "border-transparent text-slate-500 hover:text-slate-800"}`}
                   >
                     Fichajes en Bruto ({fichaData?.fichajesBrutos?.length || 0})
                   </button>
@@ -1132,11 +1189,7 @@ export default function FichaComportamiento() {
                               {it.duracionTexto}
                             </td>
                             <td
-                              className={`py-3 ${
-                                it.esInfraccion
-                                  ? "text-rose-600 font-bold"
-                                  : "text-slate-500"
-                              }`}
+                              className={`py-3 ${it.esInfraccion ? "text-rose-600 font-bold" : "text-slate-500"}`}
                             >
                               {it.detalle}
                             </td>
@@ -1149,19 +1202,19 @@ export default function FichaComportamiento() {
                   {tabInferior === "INCIDENTES" && (
                     <div className="space-y-2">
                       {(fichaData?.incidentes || [])
-                        .filter((inc) => {
-                          const fechaInc = String(inc.fecha || "").split(
-                            "T",
-                          )[0];
-                          return !fechaInc || fechaInc === fechaConsulta;
-                        })
+                        .filter((inc) =>
+                          !inc.fecha
+                            ? true
+                            : String(inc.fecha).split("T")[0] === fechaConsulta,
+                        )
                         .map((inc) =>
                           renderItemIncidenteInteractivo(inc, false),
                         )}
-                      {(fichaData?.incidentes || []).filter((inc) => {
-                        const fechaInc = String(inc.fecha || "").split("T")[0];
-                        return !fechaInc || fechaInc === fechaConsulta;
-                      }).length === 0 && (
+                      {(fichaData?.incidentes || []).filter((inc) =>
+                        !inc.fecha
+                          ? true
+                          : String(inc.fecha).split("T")[0] === fechaConsulta,
+                      ).length === 0 && (
                         <div className="p-3 bg-emerald-50/60 border border-emerald-200 rounded-2xl flex items-center gap-2 text-xs text-emerald-800 font-medium">
                           <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
                           <span>
@@ -1206,7 +1259,288 @@ export default function FichaComportamiento() {
             </>
           )}
 
-          {/* VISTA 2: SEMANAL O RANGO DE FECHAS */}
+          {/* VISTA MULTIMES: TRIMESTRE O CUATRIMESTRE */}
+          {(modalidad === "TRIMESTRE" || modalidad === "CUATRIMESTRE") && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between bg-white border border-slate-200 rounded-2xl p-4 shadow-xs">
+                <div>
+                  <span className="text-xs font-bold uppercase tracking-wider text-slate-700 block">
+                    LISTA DE MESES DEL{" "}
+                    {modalidad === "TRIMESTRE" ? "TRIMESTRE" : "CUATRIMESTRE"}
+                  </span>
+                  <span className="text-[10px] text-slate-400">
+                    Toque para expandir el calendario con cada día
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={expandirTodos}
+                    className="px-3 py-1.5 bg-indigo-50 text-indigo-700 font-bold rounded-xl text-xs hover:bg-indigo-100 transition cursor-pointer"
+                  >
+                    Expandir Todos los Meses
+                  </button>
+                  <button
+                    type="button"
+                    onClick={colapsarTodos}
+                    className="px-3 py-1.5 bg-slate-100 text-slate-700 font-bold rounded-xl text-xs hover:bg-slate-200 transition cursor-pointer"
+                  >
+                    Colapsar Todos
+                  </button>
+                </div>
+              </div>
+
+              {(fichaData?.mesesPeriodo || []).map((mes) => {
+                const isExpanded = mesesExpandidos[mes.mesKey];
+                return (
+                  <div
+                    key={mes.mesKey}
+                    className="bg-white border border-slate-200 rounded-3xl shadow-xs overflow-hidden transition-all"
+                  >
+                    <div className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50/50">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 font-bold">
+                          <CalendarIcon className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-indigo-100 text-indigo-800 uppercase block w-fit mb-0.5">
+                            Mes {mes.orden} de{" "}
+                            {modalidad === "TRIMESTRE" ? "3" : "4"}
+                          </span>
+                          <h4 className="text-base font-black text-slate-900">
+                            {mes.nombreMes}
+                          </h4>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-2 text-xs font-bold">
+                        <span className="px-3 py-1 bg-slate-100 text-slate-700 rounded-xl flex items-center gap-1">
+                          <Clock className="w-3 h-3" /> {mes.presenciaNetaTexto}
+                        </span>
+                        <span className="px-3 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-xl flex items-center gap-1">
+                          <CheckCircle2 className="w-3 h-3" /> {mes.diasEnSede}{" "}
+                          días en sede
+                        </span>
+                        <span
+                          className={`px-3 py-1 border rounded-xl flex items-center gap-1 ${mes.totalIncidentes > 0 ? "bg-amber-50 text-amber-700 border-amber-200" : "bg-slate-50 text-slate-400 border-slate-200"}`}
+                        >
+                          <AlertTriangle className="w-3 h-3" />{" "}
+                          {mes.totalIncidentes} desvío(s)
+                        </span>
+                        {esDocente && (
+                          <span className="px-3 py-1 bg-purple-50 text-purple-700 border border-purple-200 rounded-xl flex items-center gap-1">
+                            <GraduationCap className="w-3 h-3" />{" "}
+                            {
+                              String(
+                                mes.clasesDictadasTexto || "0h 0m / 0h 0m",
+                              ).split(" (")[0]
+                            }
+                          </span>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => toggleMes(mes.mesKey)}
+                          className="px-3 py-1.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition cursor-pointer flex items-center gap-1 ml-2"
+                        >
+                          {isExpanded ? "Ocultar" : "Ver Calendario"}{" "}
+                          <ChevronDown
+                            className={`w-3.5 h-3.5 transition-transform ${isExpanded ? "rotate-180" : ""}`}
+                          />
+                        </button>
+                      </div>
+                    </div>
+
+                    {isExpanded && (
+                      <div className="p-5 border-t border-slate-100">
+                        {renderCardInspeccionDiaria()}
+                        <div className="grid grid-cols-7 gap-2.5 mt-4">
+                          {[
+                            "LUN",
+                            "MAR",
+                            "MIÉ",
+                            "JUE",
+                            "VIE",
+                            "SÁB",
+                            "DOM",
+                          ].map((d) => (
+                            <div
+                              key={d}
+                              className="text-center font-bold text-[11px] text-slate-500 py-1 uppercase tracking-wider"
+                            >
+                              {d}
+                            </div>
+                          ))}
+                          {Array.from({ length: mes.diasOffset }).map(
+                            (_, idx) => (
+                              <div
+                                key={`vacio-${mes.mesKey}-${idx}`}
+                                className="border border-transparent rounded-2xl min-h-[110px] hidden sm:block pointer-events-none opacity-0"
+                              />
+                            ),
+                          )}
+                          {(mes.diasPeriodo || []).map((dia) => {
+                            const numDia = parseInt(
+                              dia.fecha.split("-")[2],
+                              10,
+                            );
+                            const esHoy = dia.fecha === hoyIso;
+                            const estaSeleccionado =
+                              diaInspeccionado?.fecha === dia.fecha;
+                            const esFuturo =
+                              dia.estadoGeneral === "FUTURO" ||
+                              dia.fecha > hoyIso;
+                            const esSinRegistro =
+                              !esFuturo && dia.estadoGeneral === "SIN_REGISTRO";
+
+                            const esCritica =
+                              !esFuturo &&
+                              (dia.estadoGeneral === "INFRACCION" ||
+                                esSinRegistro ||
+                                (fichaData?.incidentes || []).some(
+                                  (inc) =>
+                                    String(inc.fecha).split("T")[0] ===
+                                      dia.fecha &&
+                                    (inc.severidad === "CRÍTICA" ||
+                                      inc.severidad === "CRITICA" ||
+                                      inc.tipo
+                                        ?.toLowerCase()
+                                        .includes("clase")),
+                                ));
+                            const esDesvio =
+                              !esCritica &&
+                              !esFuturo &&
+                              (dia.totalIncidentes > 0 ||
+                                dia.estadoGeneral === "DESVIO");
+                            const esSalidaIntermedia =
+                              !esCritica &&
+                              !esDesvio &&
+                              dia.salidasIntermedias > 0;
+                            const esNormal =
+                              !esCritica &&
+                              !esDesvio &&
+                              dia.presenciaNetaMinutos > 0;
+
+                            let cardBgClasses =
+                              "bg-white border-slate-200 hover:border-slate-300";
+                            if (estaSeleccionado)
+                              cardBgClasses =
+                                "bg-indigo-50/50 border-indigo-500 ring-2 ring-indigo-300 shadow-sm";
+                            else if (esFuturo)
+                              cardBgClasses =
+                                "bg-slate-50/40 border-slate-200/60 opacity-60";
+                            else if (esCritica)
+                              cardBgClasses =
+                                "bg-rose-50/70 border-rose-300 hover:border-rose-400 hover:shadow-sm";
+                            else if (esDesvio)
+                              cardBgClasses =
+                                "bg-amber-50/50 border-amber-300 hover:border-amber-400 hover:shadow-sm";
+                            else if (esSalidaIntermedia)
+                              cardBgClasses =
+                                "bg-sky-50/50 border-sky-300 hover:border-sky-400 hover:shadow-sm";
+                            else if (esNormal)
+                              cardBgClasses =
+                                "bg-emerald-50/40 border-emerald-300 hover:border-emerald-400 hover:shadow-sm";
+                            else if (esSinRegistro)
+                              cardBgClasses = "bg-slate-50/70 border-slate-200";
+
+                            return (
+                              <div
+                                key={dia.fecha}
+                                onClick={() => {
+                                  if (diaInspeccionado?.fecha === dia.fecha)
+                                    setDiaInspeccionado(null);
+                                  else setDiaInspeccionado(dia);
+                                }}
+                                className={`border rounded-2xl p-2.5 min-h-[110px] flex flex-col justify-between transition-all cursor-pointer select-none ${cardBgClasses}`}
+                              >
+                                <div>
+                                  <div className="flex items-center justify-between text-xs font-bold text-slate-800">
+                                    <span
+                                      className={`text-sm font-black ${esCritica ? "text-rose-900" : ""}`}
+                                    >
+                                      {numDia}
+                                    </span>
+                                    {esHoy && (
+                                      <span className="px-1.5 py-0.2 bg-indigo-600 text-white text-[9px] font-bold rounded-md uppercase tracking-wider">
+                                        HOY
+                                      </span>
+                                    )}
+                                  </div>
+
+                                  {esDocente &&
+                                    dia.clasesDictadasTexto &&
+                                    dia.clasesDictadasTexto !==
+                                      "0h 0m / 0h 0m" && (
+                                      <div
+                                        className={`mt-1.5 text-[9px] font-bold px-1.5 py-0.5 rounded-md w-fit ${esCritica ? "bg-rose-100 text-rose-800 border border-rose-200" : "bg-purple-100 text-purple-800 border border-purple-200"} flex items-center gap-1`}
+                                      >
+                                        <GraduationCap className="w-2.5 h-2.5" />
+                                        <span>
+                                          Clase:{" "}
+                                          {
+                                            String(
+                                              dia.clasesDictadasTexto,
+                                            ).split(" (")[0]
+                                          }
+                                        </span>
+                                      </div>
+                                    )}
+
+                                  {esSinRegistro && (
+                                    <div className="text-[10px] font-bold text-rose-700 mt-1">
+                                      Ausencia
+                                    </div>
+                                  )}
+                                </div>
+
+                                <div className="mt-2">
+                                  {esFuturo ? (
+                                    <span className="text-[10px] text-slate-400 font-medium">
+                                      Programado
+                                    </span>
+                                  ) : esCritica ? (
+                                    <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-rose-600 text-white text-[10px] font-bold shadow-2xs">
+                                      <span>
+                                        ⚠ Crítica (
+                                        {Math.max(1, dia.totalIncidentes)})
+                                      </span>
+                                    </div>
+                                  ) : esDesvio ? (
+                                    <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-500 text-white text-[10px] font-bold shadow-2xs">
+                                      <Clock className="w-3 h-3 stroke-[2.5]" />
+                                      <span>
+                                        Desvío ({dia.totalIncidentes})
+                                      </span>
+                                    </div>
+                                  ) : esSalidaIntermedia ? (
+                                    <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-sky-500 text-white text-[10px] font-bold shadow-2xs">
+                                      <span>
+                                        Salida ({dia.salidasIntermedias})
+                                      </span>
+                                    </div>
+                                  ) : esNormal ? (
+                                    <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-600 text-white text-[10px] font-bold shadow-2xs">
+                                      <span>✓ {dia.presenciaNetaTexto}</span>
+                                    </div>
+                                  ) : (
+                                    <span className="text-[10px] text-slate-400 italic">
+                                      Sin registros
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* VISTA 2: SEMANAL O RANGO DE FECHAS (QUE NO SEAN TRIMESTRE NI CUATRIMESTRE) */}
           {(modalidad === "SEMANAL" || modalidad === "RANGO_FECHAS") && (
             <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-xs space-y-4">
               <div className="flex items-center justify-between">
@@ -1218,8 +1552,8 @@ export default function FichaComportamiento() {
                       : `Rango (${formatearFechaVisual(fechaConsulta)} al ${formatearFechaVisual(fechaHastaRango)})`}
                   </h3>
                   <p className="text-[11px] text-slate-500">
-                    Haga clic en "Ver Día" para abrir los detalles y justificar
-                    incidencias de cualquier jornada.
+                    Haga clic en "Ver Día" para abrir los detalles y la línea de
+                    tiempo de cualquier jornada.
                   </p>
                 </div>
                 <span className="px-3 py-1 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-xl font-bold text-xs">
@@ -1233,12 +1567,11 @@ export default function FichaComportamiento() {
                 <table className="w-full text-left text-xs">
                   <thead className="bg-[#f8fafc] text-slate-500 uppercase text-[10px] font-bold border-b border-slate-100">
                     <tr>
-                      <th className="px-4 py-3">Fecha</th>
+                      <th className="px-4 py-3">Fecha (dd/mm/aaaa)</th>
                       <th className="px-4 py-3">Día</th>
                       <th className="px-4 py-3">1ra Entrada</th>
                       <th className="px-4 py-3">Último Egreso</th>
                       <th className="px-4 py-3">Presencia Neta</th>
-                      <th className="px-4 py-3">Saldo / Dif.</th>
                       <th className="px-4 py-3">Salidas Interm.</th>
                       <th className="px-4 py-3">Incidentes</th>
                       <th className="px-4 py-3">Cumplimiento</th>
@@ -1249,15 +1582,10 @@ export default function FichaComportamiento() {
                     {(fichaData?.diasPeriodo || []).map((dia) => {
                       const estaInspeccionado =
                         diaInspeccionado?.fecha === dia.fecha;
-                      const difMin = dia.minutosDiferencia || 0;
                       return (
                         <tr
                           key={dia.fecha}
-                          className={`transition ${
-                            estaInspeccionado
-                              ? "bg-indigo-50/70 font-semibold"
-                              : "hover:bg-slate-50/70"
-                          }`}
+                          className={`transition ${estaInspeccionado ? "bg-indigo-50/70 font-semibold" : "hover:bg-slate-50/70"}`}
                         >
                           <td className="px-4 py-3 font-mono font-bold text-slate-900">
                             {formatearFechaVisual(dia.fecha)}
@@ -1271,24 +1599,8 @@ export default function FichaComportamiento() {
                           <td className="px-4 py-3 font-mono">
                             {dia.ultimoEgreso}
                           </td>
-                          <td className="px-4 py-3 font-bold text-slate-800">
+                          <td className="px-4 py-3 font-bold text-emerald-700">
                             {dia.presenciaNetaTexto}
-                          </td>
-                          <td className="px-4 py-3 font-mono text-xs">
-                            {difMin > 0 ? (
-                              <span className="text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
-                                +{Math.floor(difMin / 60)}h {difMin % 60}m
-                              </span>
-                            ) : difMin < 0 ? (
-                              <span className="text-rose-700 font-bold bg-rose-50 px-2 py-0.5 rounded-md border border-rose-200">
-                                -{Math.floor(Math.abs(difMin) / 60)}h{" "}
-                                {Math.abs(difMin) % 60}m
-                              </span>
-                            ) : (
-                              <span className="text-slate-400 font-medium">
-                                0m
-                              </span>
-                            )}
                           </td>
                           <td className="px-4 py-3">
                             {dia.salidasIntermedias} ({dia.minutosFuera} min)
@@ -1323,11 +1635,7 @@ export default function FichaComportamiento() {
                                   setDiaInspeccionado(dia);
                                 }
                               }}
-                              className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold cursor-pointer transition ${
-                                estaInspeccionado
-                                  ? "bg-indigo-600 text-white shadow-xs"
-                                  : "bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200"
-                              }`}
+                              className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold cursor-pointer transition ${estaInspeccionado ? "bg-indigo-600 text-white shadow-xs" : "bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200"}`}
                             >
                               <Eye className="w-3.5 h-3.5" />
                               {estaInspeccionado ? "Cerrar" : "Ver Día"}
@@ -1350,35 +1658,29 @@ export default function FichaComportamiento() {
                   <div className="flex items-center gap-2">
                     <CalendarIcon className="w-4 h-4 text-indigo-600" />
                     <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800">
-                      Calendario Mensual •{" "}
-                      {obtenerNombreMes(fechaConsulta).toUpperCase()}
+                      Calendario Mensual • {fichaData?.periodoTexto}
                     </h3>
                   </div>
                   <p className="text-[11px] text-slate-500 mt-0.5">
-                    Toque cualquier día para ver sus marcas, desvíos y
-                    justificar incidencias en específico.
+                    Toque cualquier día para ver sus marcas, desvíos y detalles
+                    en específico.
                   </p>
                 </div>
-
-                <div className="flex flex-wrap items-center gap-2 text-[11px] font-semibold">
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                <div className="flex items-center gap-3 text-[11px] font-bold">
+                  <span className="flex items-center gap-1 text-emerald-700">
                     <span className="w-2 h-2 rounded-full bg-emerald-500" />{" "}
                     Normal
                   </span>
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-rose-50 text-rose-700 border border-rose-200">
+                  <span className="flex items-center gap-1 text-rose-700">
                     <span className="w-2 h-2 rounded-full bg-rose-500" />{" "}
-                    Infracción Crítica / Ausencia
+                    Infracción
                   </span>
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
-                    <span className="w-2 h-2 rounded-full bg-amber-500" />{" "}
-                    Desvío de Horario
+                  <span className="flex items-center gap-1 text-amber-700">
+                    <span className="w-2 h-2 rounded-full bg-amber-400" />{" "}
+                    Desvío
                   </span>
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-sky-50 text-sky-700 border border-sky-200">
-                    <span className="w-2 h-2 rounded-full bg-sky-500" /> Salida
-                    Intermedia
-                  </span>
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-50 text-slate-600 border border-slate-200">
-                    <span className="w-2 h-2 rounded-full bg-slate-400" /> Sin
+                  <span className="flex items-center gap-1 text-slate-400">
+                    <span className="w-2 h-2 rounded-full bg-slate-300" /> Sin
                     Registro
                   </span>
                 </div>
@@ -1386,11 +1688,11 @@ export default function FichaComportamiento() {
 
               {renderCardInspeccionDiaria()}
 
-              <div className="grid grid-cols-7 gap-2.5">
+              <div className="grid grid-cols-7 gap-2">
                 {["LUN", "MAR", "MIÉ", "JUE", "VIE", "SÁB", "DOM"].map((d) => (
                   <div
                     key={d}
-                    className="text-center font-bold text-[11px] text-slate-500 py-1 uppercase tracking-wider"
+                    className="text-center font-bold text-[10px] text-slate-400 py-1 uppercase"
                   >
                     {d}
                   </div>
@@ -1399,19 +1701,18 @@ export default function FichaComportamiento() {
                 {Array.from({ length: diasOffsetInicioMes }).map((_, idx) => (
                   <div
                     key={`vacio-${idx}`}
-                    className="border border-transparent rounded-2xl min-h-[110px] hidden sm:block pointer-events-none opacity-0"
+                    className="border border-transparent rounded-2xl min-h-[90px] hidden sm:block pointer-events-none opacity-0"
                   />
                 ))}
 
                 {(fichaData?.diasPeriodo || []).map((dia) => {
-                  const numDia = parseInt(dia.fecha.split("-")[2], 10);
+                  const numDia = dia.fecha.split("-")[2];
                   const esHoy = dia.fecha === hoyIso;
                   const estaSeleccionado =
                     diaInspeccionado?.fecha === dia.fecha;
 
                   const esFuturo =
                     dia.estadoGeneral === "FUTURO" || dia.fecha > hoyIso;
-
                   const esSinRegistro =
                     !esFuturo && dia.estadoGeneral === "SIN_REGISTRO";
 
@@ -1426,111 +1727,94 @@ export default function FichaComportamiento() {
                             inc.severidad === "CRITICA" ||
                             inc.tipo?.toLowerCase().includes("clase")),
                       ));
-
                   const esDesvio =
                     !esCritica &&
                     !esFuturo &&
                     (dia.totalIncidentes > 0 || dia.estadoGeneral === "DESVIO");
-
                   const esSalidaIntermedia =
                     !esCritica && !esDesvio && dia.salidasIntermedias > 0;
-
                   const esNormal =
                     !esCritica && !esDesvio && dia.presenciaNetaMinutos > 0;
 
                   let cardBgClasses =
                     "bg-white border-slate-200 hover:border-slate-300";
-                  if (estaSeleccionado) {
+                  if (estaSeleccionado)
                     cardBgClasses =
                       "bg-indigo-50/50 border-indigo-500 ring-2 ring-indigo-300 shadow-sm";
-                  } else if (esFuturo) {
+                  else if (esFuturo)
                     cardBgClasses =
                       "bg-slate-50/40 border-slate-200/60 opacity-60";
-                  } else if (esCritica) {
+                  else if (esCritica)
                     cardBgClasses =
                       "bg-rose-50/70 border-rose-300 hover:border-rose-400 hover:shadow-sm";
-                  } else if (esDesvio) {
+                  else if (esDesvio)
                     cardBgClasses =
                       "bg-amber-50/50 border-amber-300 hover:border-amber-400 hover:shadow-sm";
-                  } else if (esSalidaIntermedia) {
+                  else if (esSalidaIntermedia)
                     cardBgClasses =
                       "bg-sky-50/50 border-sky-300 hover:border-sky-400 hover:shadow-sm";
-                  } else if (esNormal) {
+                  else if (esNormal)
                     cardBgClasses =
                       "bg-emerald-50/40 border-emerald-300 hover:border-emerald-400 hover:shadow-sm";
-                  }
+                  else if (esSinRegistro)
+                    cardBgClasses = "bg-slate-50/70 border-slate-200";
 
                   return (
                     <div
                       key={dia.fecha}
                       onClick={() => {
-                        if (diaInspeccionado?.fecha === dia.fecha) {
+                        if (diaInspeccionado?.fecha === dia.fecha)
                           setDiaInspeccionado(null);
-                        } else {
-                          setDiaInspeccionado(dia);
-                        }
+                        else setDiaInspeccionado(dia);
                       }}
-                      className={`border rounded-2xl p-2.5 min-h-[110px] flex flex-col justify-between transition-all cursor-pointer select-none ${cardBgClasses}`}
+                      className={`border rounded-2xl p-2.5 min-h-[90px] flex flex-col justify-between hover:shadow-xs transition cursor-pointer ${cardBgClasses}`}
                     >
-                      <div>
-                        <div className="flex items-center justify-between text-xs font-bold text-slate-800">
-                          <span
-                            className={`text-sm font-black ${esCritica ? "text-rose-900" : ""}`}
+                      <div className="flex items-center justify-between text-xs font-bold text-slate-800">
+                        <span
+                          className={`text-sm font-black ${esCritica ? "text-rose-900" : ""}`}
+                        >
+                          {numDia}
+                        </span>
+                        {esHoy && (
+                          <span className="px-1.5 py-0.2 bg-indigo-600 text-white text-[9px] font-bold rounded-md uppercase tracking-wider">
+                            HOY
+                          </span>
+                        )}
+                        {!esHoy && dia.totalIncidentes > 0 ? (
+                          <span className="w-2 h-2 rounded-full bg-rose-500" />
+                        ) : !esHoy && dia.presenciaNetaMinutos > 0 ? (
+                          <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                        ) : null}
+                      </div>
+
+                      {esDocente &&
+                        dia.clasesDictadasTexto &&
+                        dia.clasesDictadasTexto !== "0h 0m / 0h 0m" && (
+                          <div
+                            className={`mt-1 text-[9px] font-bold px-1.5 py-0.5 rounded-md w-fit ${esCritica ? "bg-rose-100 text-rose-800 border border-rose-200" : "bg-purple-100 text-purple-800 border border-purple-200"} flex items-center gap-1`}
                           >
-                            {numDia}
-                          </span>
-                          {esHoy && (
-                            <span className="px-1.5 py-0.2 bg-indigo-600 text-white text-[9px] font-bold rounded-md uppercase tracking-wider">
-                              HOY
-                            </span>
-                          )}
-                        </div>
-
-                        {dia.presenciaNetaMinutos > 0 &&
-                          dia.primeraEntrada !== "--:--" && (
-                            <div className="text-[10px] font-mono font-semibold text-slate-600 mt-1 leading-tight">
-                              {dia.primeraEntrada} a. m. → {dia.ultimoEgreso} p.
-                              m.
-                            </div>
-                          )}
-
-                        {esSinRegistro && (
-                          <div className="text-[10px] font-bold text-rose-700 mt-1">
-                            Ausencia
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="mt-2">
-                        {esFuturo ? (
-                          <span className="text-[10px] text-slate-400 font-medium">
-                            Programado
-                          </span>
-                        ) : esCritica ? (
-                          <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-rose-600 text-white text-[10px] font-bold shadow-2xs">
+                            <GraduationCap className="w-2.5 h-2.5" />
                             <span>
-                              ⚠ Crítica ({Math.max(1, dia.totalIncidentes)})
+                              Clase:{" "}
+                              {String(dia.clasesDictadasTexto).split(" (")[0]}
                             </span>
                           </div>
-                        ) : esDesvio ? (
-                          <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-500 text-white text-[10px] font-bold shadow-2xs">
-                            <Clock className="w-3 h-3 stroke-[2.5]" />
-                            <span>Desvío ({dia.totalIncidentes})</span>
-                          </div>
-                        ) : esSalidaIntermedia ? (
-                          <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-sky-500 text-white text-[10px] font-bold shadow-2xs">
-                            <span>Salida ({dia.salidasIntermedias})</span>
-                          </div>
-                        ) : esNormal ? (
-                          <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-600 text-white text-[10px] font-bold shadow-2xs">
-                            <span>✓ {dia.presenciaNetaTexto}</span>
-                          </div>
-                        ) : (
-                          <span className="text-[10px] text-slate-400 italic">
-                            Sin registros
-                          </span>
                         )}
-                      </div>
+
+                      {dia.presenciaNetaMinutos > 0 ? (
+                        <div className="space-y-1 mt-1">
+                          <div className="text-[10px] text-slate-500 font-mono">
+                            {dia.primeraEntrada} → {dia.ultimoEgreso}
+                          </div>
+                          <span className="inline-block px-2 py-0.5 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-md text-[10px] font-bold">
+                            {dia.presenciaNetaTexto}
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="text-[10px] text-slate-400 italic mt-1">
+                          {esSinRegistro ? "Ausencia" : "Franco"}
+                        </span>
+                      )}
                     </div>
                   );
                 })}
@@ -1540,7 +1824,6 @@ export default function FichaComportamiento() {
         </div>
       </div>
 
-      {/* MODAL CON LA LISTA DE INCIDENTES AL CLICKEAR EL KPI DE INCIDENTES REGISTRADOS */}
       {modalListaIncidentesAbierto && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl w-full max-w-3xl shadow-2xl overflow-hidden border border-slate-200 animate-in zoom-in-95 max-h-[90vh] flex flex-col">
@@ -1559,7 +1842,6 @@ export default function FichaComportamiento() {
                 <X className="w-5 h-5" />
               </button>
             </div>
-
             <div className="p-6 space-y-3 overflow-y-auto flex-1">
               {!fichaData?.incidentes || fichaData.incidentes.length === 0 ? (
                 <div className="p-8 text-center text-slate-400 italic text-xs">
@@ -1571,7 +1853,6 @@ export default function FichaComportamiento() {
                 )
               )}
             </div>
-
             <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex justify-end shrink-0">
               <button
                 type="button"
@@ -1585,7 +1866,6 @@ export default function FichaComportamiento() {
         </div>
       )}
 
-      {/* MODAL DE RESOLUCIÓN / JUSTIFICACIÓN DIRECTO EN LA FICHA */}
       <ModalJustificarIncidente
         incidente={incidenteSeleccionado}
         isOpen={modalJustificarAbierto}

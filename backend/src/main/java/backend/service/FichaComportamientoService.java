@@ -8,10 +8,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.format.TextStyle;
 import java.util.*;
 
 @Service
@@ -49,12 +51,8 @@ public class FichaComportamientoService {
             LocalDate fechaDesdeParam,
             LocalDate fechaHastaParam) {
 
-        log.debug("[FichaService] Buscando empleado con ID: {}", empleadoId);
         Empleado emp = empleadoRepo.findById(empleadoId)
                 .orElseThrow(() -> new RuntimeException("Empleado no encontrado con ID: " + empleadoId));
-
-        log.debug("[FichaService] Empleado encontrado: {} {} (Legajo: {})",
-                emp.getNombre(), emp.getApellido(), emp.getNroLegajo());
 
         final LocalDate fechaBase = (fechaConsulta != null) ? fechaConsulta : LocalDate.now();
 
@@ -81,9 +79,20 @@ public class FichaComportamientoService {
             case "MENSUAL" -> {
                 fechaInicio = fechaBase.withDayOfMonth(1);
                 fechaFin = fechaBase.withDayOfMonth(fechaBase.lengthOfMonth());
-                String nombreMesEsp = fechaBase.getMonth()
-                    .getDisplayName(java.time.format.TextStyle.FULL, java.util.Locale.of("es", "ES"));
+                String nombreMesEsp = fechaBase.getMonth().getDisplayName(TextStyle.FULL, Locale.of("es", "ES"));
                 periodoTexto = nombreMesEsp.substring(0, 1).toUpperCase() + nombreMesEsp.substring(1) + " " + fechaBase.getYear();
+            }
+            case "TRIMESTRE" -> {
+                fechaInicio = fechaBase.withDayOfMonth(1);
+                fechaFin = fechaInicio.plusMonths(3).minusDays(1);
+                String nombreMesEsp = fechaBase.getMonth().getDisplayName(TextStyle.FULL, Locale.of("es", "ES"));
+                periodoTexto = "Trimestre desde " + nombreMesEsp.substring(0, 1).toUpperCase() + nombreMesEsp.substring(1) + " " + fechaBase.getYear();
+            }
+            case "CUATRIMESTRE" -> {
+                fechaInicio = fechaBase.withDayOfMonth(1);
+                fechaFin = fechaInicio.plusMonths(4).minusDays(1);
+                String nombreMesEsp = fechaBase.getMonth().getDisplayName(TextStyle.FULL, Locale.of("es", "ES"));
+                periodoTexto = "Cuatrimestre desde " + nombreMesEsp.substring(0, 1).toUpperCase() + nombreMesEsp.substring(1) + " " + fechaBase.getYear();
             }
             default -> {
                 mod = "DIARIO";
@@ -93,20 +102,18 @@ public class FichaComportamientoService {
             }
         }
 
-        log.info("[FichaService] Procesando modalidad='{}', periodo='{}' (desde {} hasta {})",
-                mod, periodoTexto, fechaInicio, fechaFin);
-
-        // 1. Horarios activos
+        // 1. Horarios activos del empleado
         List<EmpleadoHorario> horarios = horarioRepo.findByEmpleadoId(emp.getId()).stream()
                 .filter(h -> Boolean.TRUE.equals(h.getActivo()))
                 .toList();
-        log.debug("[FichaService] Horarios activos encontrados: {}", horarios.size());
+
+        boolean esDocente = horarios.stream().anyMatch(h -> h.getMateria() != null);
 
         String etiquetaTurno = "Sin turno asignado";
         if (!horarios.isEmpty()) {
-            boolean tieneMaterias = horarios.stream().anyMatch(h -> h.getMateria() != null);
-            if (tieneMaterias) {
-                etiquetaTurno = "Por Cátedra (" + horarios.size() + " clases)";
+            if (esDocente) {
+                long totalClases = horarios.stream().filter(h -> h.getMateria() != null).count();
+                etiquetaTurno = "Por Cátedra (" + totalClases + " clases)";
             } else if (horarios.get(0).getEtiqueta() != null && !horarios.get(0).getEtiqueta().isBlank()) {
                 etiquetaTurno = horarios.get(0).getEtiqueta();
             } else {
@@ -127,24 +134,22 @@ public class FichaComportamientoService {
                         !f.getHoraFichaje().isAfter(finT))
                 .sorted(Comparator.comparing(EmpleadoFichaje::getHoraFichaje))
                 .toList();
-        log.debug("[FichaService] Fichajes válidos en el período: {}", fichajesPeriodo.size());
 
-        // 3. Verificación optimizada en memoria para asegurar ausencias del empleado en el rango sin bucles pesados
+        // 3. Verificación de ausencias en memoria
         try {
             evaluadorService.asegurarAusenciasEmpleadoRango(emp, horarios, fichajesPeriodo, fechaInicio, fechaFin);
         } catch (Exception e) {
             log.warn("Error al asegurar ausencias en rango para empleado {}: {}", emp.getId(), e.getMessage());
         }
 
-        // 4. Incidentes del período (incluyendo las ausencias recién aseguradas)
+        // 4. Incidentes del período
         List<IncidenteAsistencia> incsPeriodo = incidenteRepo.buscarFiltradoPaginadoRango(
                 fechaInicio, fechaFin, null, null, null, emp.getNroLegajo(), org.springframework.data.domain.Pageable.unpaged()
         ).getContent().stream()
                 .filter(i -> i.getEmpleado() != null && i.getEmpleado().getId().equals(emp.getId()))
                 .toList();
-        log.debug("[FichaService] Incidentes recuperados en el período: {}", incsPeriodo.size());
 
-        // 5. Detalle y línea de tiempo para la fecha base (Jornada diaria específica)
+        // 5. Línea de tiempo diaria específica
         List<FichaComportamientoDTO.IntervaloLineaTiempoDTO> planificados = new ArrayList<>();
         List<FichaComportamientoDTO.IntervaloLineaTiempoDTO> presencias = new ArrayList<>();
         List<FichaComportamientoDTO.DesgloseIntervaloDTO> desglose = new ArrayList<>();
@@ -190,12 +195,8 @@ public class FichaComportamientoService {
 
         for (int i = 0; i < fichajesDia.size(); i++) {
             EmpleadoFichaje act = fichajesDia.get(i);
-            if (i == 0) {
-                primeraEntradaStr = act.getHoraFichaje().toLocalTime().toString().substring(0, 5);
-            }
-            if (i == fichajesDia.size() - 1) {
-                ultimoEgresoStr = act.getHoraFichaje().toLocalTime().toString().substring(0, 5);
-            }
+            if (i == 0) primeraEntradaStr = act.getHoraFichaje().toLocalTime().toString().substring(0, 5);
+            if (i == fichajesDia.size() - 1) ultimoEgresoStr = act.getHoraFichaje().toLocalTime().toString().substring(0, 5);
 
             if (i < fichajesDia.size() - 1) {
                 EmpleadoFichaje sig = fichajesDia.get(i + 1);
@@ -208,56 +209,40 @@ public class FichaComportamientoService {
 
                 if (!esSalida) {
                     presencias.add(new FichaComportamientoDTO.IntervaloLineaTiempoDTO(
-                            dur + "m",
-                            act.getHoraFichaje().toLocalTime().toString().substring(0, 5),
+                            dur + "m", act.getHoraFichaje().toLocalTime().toString().substring(0, 5),
                             sig.getHoraFichaje().toLocalTime().toString().substring(0, 5),
-                            iniMinutos,
-                            (double) dur,
-                            "PRESENCIA"
+                            iniMinutos, (double) dur, "PRESENCIA"
                     ));
                     desglose.add(new FichaComportamientoDTO.DesgloseIntervaloDTO(
-                            "Presencia",
-                            act.getHoraFichaje().toLocalTime().toString().substring(0, 5) + " hs",
+                            "Presencia", act.getHoraFichaje().toLocalTime().toString().substring(0, 5) + " hs",
                             sig.getHoraFichaje().toLocalTime().toString().substring(0, 5) + " hs",
-                            formatearMinutosAHoras(dur),
-                            "Normal",
-                            false
+                            formatearMinutosAHoras(dur), "Normal", false
                     ));
                 } else if (esIngreso) {
                     boolean excede = dur > maxTiempoFuera;
                     presencias.add(new FichaComportamientoDTO.IntervaloLineaTiempoDTO(
-                            dur + "m",
-                            act.getHoraFichaje().toLocalTime().toString().substring(0, 5),
+                            dur + "m", act.getHoraFichaje().toLocalTime().toString().substring(0, 5),
                             sig.getHoraFichaje().toLocalTime().toString().substring(0, 5),
-                            iniMinutos,
-                            (double) dur,
-                            excede ? "INFRACCION" : "SALIDA_INTERMEDIA"
+                            iniMinutos, (double) dur, excede ? "INFRACCION" : "SALIDA_INTERMEDIA"
                     ));
                     desglose.add(new FichaComportamientoDTO.DesgloseIntervaloDTO(
-                            "Salida Intermedia",
-                            act.getHoraFichaje().toLocalTime().toString().substring(0, 5) + " hs",
+                            "Salida Intermedia", act.getHoraFichaje().toLocalTime().toString().substring(0, 5) + " hs",
                             sig.getHoraFichaje().toLocalTime().toString().substring(0, 5) + " hs",
-                            dur + " min",
-                            excede ? "Excede tiempo permitido" : "Autorizado",
-                            excede
+                            dur + " min", excede ? "Excede tiempo permitido" : "Autorizado", excede
                     ));
                 }
             }
         }
 
-        // Listado completo de incidentes para auditoría
         List<FichaComportamientoDTO.IncidenteFichaDTO> incidentesList = incsPeriodo.stream()
                 .map(i -> new FichaComportamientoDTO.IncidenteFichaDTO(
-                        i.getId(),
-                        i.getFecha(),
+                        i.getId(), i.getFecha(),
                         i.getHora() != null ? i.getHora().toString().substring(0, 5) : "--:--",
-                        i.getSeveridad(),
-                        i.getTipo(),
-                        i.getDetalle(),
-                        i.getEstado()
+                        i.getSeveridad(), i.getTipo(), i.getDetalle(), i.getEstado(),
+                        i.getResolucionMotivo(), i.getResolucionObservaciones()
                 )).toList();
 
-        // 6. Desglose día por día con control estricto de días futuros y sin inflar eventos concurrentes
+        // 6. Desglose día por día
         List<FichaComportamientoDTO.DiaDesgloseDTO> diasDesglose = new ArrayList<>();
         LocalDate cur = fechaInicio;
         LocalDate hoy = LocalDate.now();
@@ -271,6 +256,10 @@ public class FichaComportamientoService {
         long totalMinutosEnContra = 0;
         int diasConDeficit = 0;
         int diasConHorasExtra = 0;
+
+        // Acumuladores de docencia exclusivamente para días con materias
+        long totalMinClasesTeoricasPeriodo = 0;
+        long totalMinClasesEfectivasPeriodo = 0;
 
         while (!cur.isAfter(fechaFin)) {
             LocalDate d = cur;
@@ -294,7 +283,6 @@ public class FichaComportamientoService {
             int cumplimientoDia = 0;
             long minutosDiferencia = 0;
 
-            // AGRUPACIÓN DIARIA: Cuenta 1 solo desvío si los incidentes comparten el mismo acontecimiento físico
             int incsDia = (int) incsPeriodo.stream()
                     .filter(i -> i.getFecha().equals(d))
                     .map(i -> i.getIdEventoAgrupador() != null ? i.getIdEventoAgrupador() : ("ID_" + i.getId()))
@@ -303,13 +291,10 @@ public class FichaComportamientoService {
 
             String estadoDia;
 
-            // DÍA FUTURO -> No acumula deuda ni horas teóricas
             if (esFuturo) {
                 cumplimientoDia = 0;
                 minutosDiferencia = 0;
                 estadoDia = (minutosTeoricosDia == 0) ? "FRANCO" : "FUTURO";
-
-            // DÍA PRESENTE O PASADO -> Se evalúa normalmente
             } else {
                 diasEvaluadosHastaHoy++;
                 totalHorasTeoricasPeriodo += horasTeoricasDia;
@@ -348,7 +333,7 @@ public class FichaComportamientoService {
                 } else if (!huboPresencia) {
                     estadoDia = "SIN_REGISTRO";
                 } else if (incsDia > 0 || cumplimientoDia < 100) {
-                    estadoDia = incsDia > 0 ? "INFRACCION" : "DESVIO";
+                    estadoDia = "DESVIO";
                 } else {
                     estadoDia = "NORMAL";
                 }
@@ -357,31 +342,45 @@ public class FichaComportamientoService {
             String entDia = fDia.isEmpty() ? "--:--" : fDia.get(0).getHoraFichaje().toLocalTime().toString().substring(0, 5);
             String salDia = fDia.size() < 2 ? "--:--" : fDia.get(fDia.size() - 1).getHoraFichaje().toLocalTime().toString().substring(0, 5);
 
+            // =========================================================================
+            // REGLA CLAVE: COMPARAR ÚNICAMENTE DÍAS CON CLASES ASIGNADAS
+            // =========================================================================
+            List<EmpleadoHorario> clasesDelDia = horarios.stream()
+                    .filter(h -> h.getMateria() != null && h.getDiaSemana() != null && h.getDiaSemana() == d.getDayOfWeek().getValue())
+                    .toList();
+
+            long minClaseTeoricos = 0;
+            long minClaseEfectivos = 0;
+            String clasesDictadasTexto = null;
+
+            if (esDocente && !clasesDelDia.isEmpty()) {
+                minClaseTeoricos = evaluadorService.calcularMinutosClaseTeoricos(clasesDelDia);
+                if (!esFuturo) {
+                    minClaseEfectivos = evaluadorService.calcularMinutosClaseEfectivos(clasesDelDia, fDia, d);
+                    totalMinClasesTeoricasPeriodo += minClaseTeoricos;
+                    totalMinClasesEfectivasPeriodo += minClaseEfectivos;
+                }
+
+                if (minClaseTeoricos > 0) {
+                    int porc = (int) Math.min(100, Math.round(((double) minClaseEfectivos / minClaseTeoricos) * 100.0));
+                    clasesDictadasTexto = formatearMinutosAHoras(minClaseEfectivos) + " / " + formatearMinutosAHoras(minClaseTeoricos) + " (" + porc + "%)";
+                }
+            }
+
             diasDesglose.add(new FichaComportamientoDTO.DiaDesgloseDTO(
-                    d,
-                    diaSemanaTresLetras(d.getDayOfWeek().getValue()),
-                    entDia,
-                    salDia,
-                    formatearMinutosAHoras(minNetosDia),
-                    minNetosDia,
-                    resDia.cantidadSalidasIntermedias(),
-                    (long) (resDia.horasSalidasIntermedias() * 60),
-                    incsDia,
-                    cumplimientoDia,
-                    estadoDia,
-                    minutosDiferencia
+                    d, diaSemanaTresLetras(d.getDayOfWeek().getValue()),
+                    entDia, salDia, formatearMinutosAHoras(minNetosDia), minNetosDia,
+                    resDia.cantidadSalidasIntermedias(), (long) (resDia.horasSalidasIntermedias() * 60),
+                    incsDia, cumplimientoDia, estadoDia, minutosDiferencia,
+                    clasesDictadasTexto, minClaseTeoricos, minClaseEfectivos
             ));
 
             cur = cur.plusDays(1);
         }
 
-        // CUMPLIMIENTO GLOBAL REAL (Evaluando hasta el día actual con horas útiles)
-        int porcentajeCumplimiento;
-        if (totalHorasTeoricasPeriodo > 0) {
-            porcentajeCumplimiento = (int) Math.min(100, Math.round((totalHorasUtilesPeriodo / totalHorasTeoricasPeriodo) * 100.0));
-        } else {
-            porcentajeCumplimiento = diasConPresencia > 0 ? 100 : 0;
-        }
+        int porcentajeCumplimiento = totalHorasTeoricasPeriodo > 0 ?
+                (int) Math.min(100, Math.round((totalHorasUtilesPeriodo / totalHorasTeoricasPeriodo) * 100.0)) :
+                (diasConPresencia > 0 ? 100 : 0);
 
         int totalDiasParaMetrica = Math.max(1, diasEvaluadosHastaHoy);
         LocalDate fechaLimiteResumen = fechaFin.isAfter(hoy) ? hoy : fechaFin;
@@ -406,64 +405,80 @@ public class FichaComportamientoService {
             }
         }
 
-        // AGRUPACIÓN GLOBAL DEL PERÍODO: Evita inflar la tarjeta general de incidentes
         int totalIncidentesAgrupados = (int) incsPeriodo.stream()
                 .map(i -> i.getIdEventoAgrupador() != null ? i.getIdEventoAgrupador() : ("ID_" + i.getId()))
-                .distinct()
-                .count();
+                .distinct().count();
 
-        // Conteo de incidentes ya procesados / leídos (Justificados, Observados o Rechazados)
-        int incidentesProcesados = (int) incsPeriodo.stream()
-                .filter(i -> {
-                    String estado = i.getEstado();
-                    return "JUSTIFICADA".equalsIgnoreCase(estado) ||
-                           "OBSERVADA".equalsIgnoreCase(estado) ||
-                           "RECHAZADA".equalsIgnoreCase(estado);
-                })
-                .count();
+        int incidentesProcesados = (int) incsPeriodo.stream().filter(i -> {
+            String estado = i.getEstado();
+            return "JUSTIFICADA".equalsIgnoreCase(estado) || "OBSERVADA".equalsIgnoreCase(estado) || "RECHAZADA".equalsIgnoreCase(estado);
+        }).count();
+
+        // Total de Clases Dictadas para la tarjeta superior
+        String clasesDictadasGral;
+        if (esDocente && totalMinClasesTeoricasPeriodo > 0) {
+            int porcGlobal = (int) Math.min(100, Math.round(((double) totalMinClasesEfectivasPeriodo / totalMinClasesTeoricasPeriodo) * 100.0));
+            clasesDictadasGral = formatearMinutosAHoras(totalMinClasesEfectivasPeriodo) + " / " + formatearMinutosAHoras(totalMinClasesTeoricasPeriodo) + " (" + porcGlobal + "%)";
+        } else {
+            clasesDictadasGral = "0h 0m / 0h 0m (0%)";
+        }
 
         FichaComportamientoDTO.MetricasFichaDTO metricasDTO = new FichaComportamientoDTO.MetricasFichaDTO(
-                primeraEntradaResultado,
-                ultimoEgresoResultado,
-                formatearMinutosAHoras(totalMinutosPresencia),
-                totalMinutosPresencia,
-                resumenPeriodo.cantidadSalidasIntermedias(),
-                totalMinutosFuera,
-                totalIncidentesAgrupados,
-                incidentesProcesados, 
-                diasConPresencia,
-                totalDiasParaMetrica,
-                formatearMinutosAHoras(totalMinutosAFavor),
-                totalMinutosAFavor,
-                formatearMinutosAHoras(totalMinutosEnContra),
-                totalMinutosEnContra,
-                diasConDeficit,
-                diasConHorasExtra
+                primeraEntradaResultado, ultimoEgresoResultado,
+                formatearMinutosAHoras(totalMinutosPresencia), totalMinutosPresencia,
+                resumenPeriodo.cantidadSalidasIntermedias(), totalMinutosFuera,
+                totalIncidentesAgrupados, incidentesProcesados, diasConPresencia, totalDiasParaMetrica,
+                formatearMinutosAHoras(totalMinutosAFavor), totalMinutosAFavor,
+                formatearMinutosAHoras(totalMinutosEnContra), totalMinutosEnContra,
+                diasConDeficit, diasConHorasExtra, clasesDictadasGral
         );
 
+        // Agrupación de meses para Trimestre y Cuatrimestre
+        List<FichaComportamientoDTO.MesResumenDTO> mesesPeriodo = new ArrayList<>();
+        if (mod.equals("TRIMESTRE") || mod.equals("CUATRIMESTRE")) {
+            Map<String, List<FichaComportamientoDTO.DiaDesgloseDTO>> diasPorMes = new LinkedHashMap<>();
+            for (var d : diasDesglose) {
+                String mesKey = d.fecha().toString().substring(0, 7);
+                diasPorMes.computeIfAbsent(mesKey, k -> new ArrayList<>()).add(d);
+            }
+
+            int orden = 1;
+            for (var entry : diasPorMes.entrySet()) {
+                String mesKey = entry.getKey();
+                List<FichaComportamientoDTO.DiaDesgloseDTO> diasDelMes = entry.getValue();
+
+                long minsNetosMes = diasDelMes.stream().mapToLong(FichaComportamientoDTO.DiaDesgloseDTO::presenciaNetaMinutos).sum();
+                int diasSedeMes = (int) diasDelMes.stream().filter(d -> d.presenciaNetaMinutos() > 0).count();
+                int incidentesMes = diasDelMes.stream().mapToInt(FichaComportamientoDTO.DiaDesgloseDTO::totalIncidentes).sum();
+
+                long teoMes = diasDelMes.stream().mapToLong(d -> (long) d.horasClaseTeoricas()).sum();
+                long efecMes = diasDelMes.stream().mapToLong(d -> (long) d.horasClaseEfectivas()).sum();
+                String clasesTxt = "0h 0m / 0h 0m (0%)";
+                if (esDocente && teoMes > 0) {
+                    int porcMes = (int) Math.min(100, Math.round(((double) efecMes / teoMes) * 100.0));
+                    clasesTxt = formatearMinutosAHoras(efecMes) + " / " + formatearMinutosAHoras(teoMes) + " (" + porcMes + "%)";
+                }
+
+                LocalDate primerDiaMes = diasDelMes.get(0).fecha();
+                int offset = primerDiaMes.getDayOfWeek().getValue() - 1;
+                String nombreMes = primerDiaMes.getMonth().getDisplayName(TextStyle.FULL, Locale.of("es", "ES"));
+                nombreMes = nombreMes.substring(0, 1).toUpperCase() + nombreMes.substring(1) + " de " + primerDiaMes.getYear();
+
+                mesesPeriodo.add(new FichaComportamientoDTO.MesResumenDTO(
+                        mesKey, orden++, nombreMes, offset, formatearMinutosAHoras(minsNetosMes), diasSedeMes, incidentesMes, clasesTxt, diasDelMes
+                ));
+            }
+        }
+
         String rolOArea = (emp.getCargos() != null && !emp.getCargos().isEmpty())
-                ? emp.getCargos().get(0).getNombre()
-                : "Personal Institucional";
+                ? emp.getCargos().get(0).getNombre() : "Personal Institucional";
 
         return new FichaComportamientoDTO(
-                emp.getId(),
-                emp.getApellido() + ", " + emp.getNombre(),
-                emp.getNroLegajo(),
-                emp.getDni(),
-                rolOArea,
-                "Departamento de Ciencias Básicas",
-                Boolean.TRUE.equals(emp.getActivo()),
-                etiquetaTurno,
-                mod,
-                periodoTexto,
-                porcentajeCumplimiento,
-                metricasDTO,
-                planificados,
-                presencias,
-                desglose,
-                incidentesList,
-                brutos,
-                diasDesglose
+                emp.getId(), emp.getApellido() + ", " + emp.getNombre(),
+                emp.getNroLegajo(), emp.getDni(), rolOArea, "Departamento de Ciencias Básicas",
+                Boolean.TRUE.equals(emp.getActivo()), etiquetaTurno, mod, periodoTexto,
+                porcentajeCumplimiento, metricasDTO, planificados, presencias,
+                desglose, incidentesList, brutos, diasDesglose, mesesPeriodo
         );
     }
 

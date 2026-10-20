@@ -31,7 +31,6 @@ public class EvaluadorIncidentesService {
     private final EmpleadoFichajeRepository fichajeRepo;
     private final IncidenteAsistenciaRepository incidenteRepo;
     private final HorarioService horarioService;
-    
 
     public EvaluadorIncidentesService(
             EmpleadoRepository empleadoRepo,
@@ -51,6 +50,83 @@ public class EvaluadorIncidentesService {
     public void cierreDiarioAutomatico() {
         evaluarFecha(LocalDate.now());
     }
+
+    // =========================================================================
+    // CÁLCULO EXCLUSIVO DE HORAS DE CLASE (DOCENTES) EN MINUTOS EXACTOS
+    // =========================================================================
+
+    public long calcularMinutosClaseTeoricos(List<EmpleadoHorario> franjasDia) {
+        if (franjasDia == null || franjasDia.isEmpty()) return 0;
+        long minutosTotales = 0;
+        for (EmpleadoHorario h : franjasDia) {
+            if (h.getMateria() != null && h.getHoraEntrada() != null && h.getHoraSalida() != null) {
+                long m = Duration.between(h.getHoraEntrada(), h.getHoraSalida()).toMinutes();
+                if (m > 0) minutosTotales += m;
+            }
+        }
+        return minutosTotales;
+    }
+
+    public long calcularMinutosClaseEfectivos(List<EmpleadoHorario> franjasDia, List<EmpleadoFichaje> fichajesDelDia, LocalDate fecha) {
+        if (franjasDia == null || franjasDia.isEmpty() || fichajesDelDia == null || fichajesDelDia.isEmpty()) return 0;
+
+        List<EmpleadoHorario> clasesDelDia = franjasDia.stream()
+                .filter(h -> h.getMateria() != null && h.getHoraEntrada() != null && h.getHoraSalida() != null)
+                .toList();
+
+        if (clasesDelDia.isEmpty()) return 0;
+
+        List<EmpleadoFichaje> marcasDelDia = fichajesDelDia.stream()
+                .filter(f -> f.getHoraFichaje() != null && f.getHoraFichaje().toLocalDate().equals(fecha))
+                .sorted(Comparator.comparing(EmpleadoFichaje::getHoraFichaje))
+                .toList();
+
+        if (marcasDelDia.isEmpty()) return 0;
+
+        List<IntervaloReal> intervalosPresencia = new ArrayList<>();
+        LocalTime ultimaEntrada = null;
+
+        for (EmpleadoFichaje f : marcasDelDia) {
+            boolean esIngreso = esTipoIngreso(f.getTipoEvento());
+            boolean esSalida = esTipoSalida(f.getTipoEvento());
+
+            if (esIngreso) {
+                ultimaEntrada = f.getHoraFichaje().toLocalTime();
+            } else if (esSalida && ultimaEntrada != null) {
+                intervalosPresencia.add(new IntervaloReal(ultimaEntrada, f.getHoraFichaje().toLocalTime()));
+                ultimaEntrada = null;
+            }
+        }
+        if (ultimaEntrada != null) {
+            intervalosPresencia.add(new IntervaloReal(ultimaEntrada, LocalTime.MAX));
+        }
+
+        long minutosEfectivos = 0;
+        for (EmpleadoHorario clase : clasesDelDia) {
+            LocalTime inicioClase = clase.getHoraEntrada();
+            LocalTime finClase = clase.getHoraSalida();
+
+            for (IntervaloReal pres : intervalosPresencia) {
+                if (pres.inicio().isBefore(finClase) && pres.fin().isAfter(inicioClase)) {
+                    LocalTime solapeInicio = pres.inicio().isAfter(inicioClase) ? pres.inicio() : inicioClase;
+                    LocalTime solapeFin = pres.fin().isBefore(finClase) ? pres.fin() : finClase;
+
+                    long lapso = Duration.between(solapeInicio, solapeFin).toMinutes();
+                    if (lapso > 0) {
+                        minutosEfectivos += lapso;
+                    }
+                }
+            }
+        }
+
+        return minutosEfectivos;
+    }
+
+    private record IntervaloReal(LocalTime inicio, LocalTime fin) {}
+
+    // =========================================================================
+    // AUDITORÍA GENERAL DE JORNADA E INCIDENTES
+    // =========================================================================
 
     @Transactional
     public void evaluarFecha(LocalDate fecha) {
@@ -86,7 +162,7 @@ public class EvaluadorIncidentesService {
                     .sorted(Comparator.comparing(EmpleadoFichaje::getHoraFichaje))
                     .toList();
 
-            // REGLA 1: Ausencia en Jornada Programada -> CRÍTICA
+            // REGLA 1: Ausencia en Jornada Programada -> CRÍTICA[cite: 35]
             if (fichajes.isEmpty()) {
                 if (!existeIncidente(fecha, empleado.getId(), "AUSENCIAS")) {
                     IncidenteAsistencia inc = new IncidenteAsistencia();
@@ -114,7 +190,6 @@ public class EvaluadorIncidentesService {
                     .reduce((first, second) -> second)
                     .orElse(null);
 
-            // Mapeo de salidas intermedias para verificar duraciones y asociar eventos comunes
             Map<LocalTime, Long> duracionPorHoraSalida = new HashMap<>();
             for (int i = 0; i < fichajes.size() - 1; i++) {
                 EmpleadoFichaje act = fichajes.get(i);
@@ -131,7 +206,7 @@ public class EvaluadorIncidentesService {
                 int tolIngreso = franja.getToleranciaIngresoMin() != null ? franja.getToleranciaIngresoMin() : 15;
                 int tolEgreso = franja.getToleranciaEgresoMin() != null ? franja.getToleranciaEgresoMin() : 10;
 
-                // REGLA 2: Llegada Tarde
+                // REGLA 2: Llegada Tarde[cite: 35]
                 if (primerIngreso != null && entradaEsperada != null) {
                     LocalTime horaIngresoReal = primerIngreso.getHoraFichaje().toLocalTime();
                     LocalTime limiteTolerancia = entradaEsperada.plusMinutes(tolIngreso);
@@ -155,7 +230,7 @@ public class EvaluadorIncidentesService {
                     }
                 }
 
-                // REGLA 3: Retiro Anticipado
+                // REGLA 3: Retiro Anticipado[cite: 35]
                 if (ultimoEgreso != null && salidaEsperada != null) {
                     LocalTime horaEgresoReal = ultimoEgreso.getHoraFichaje().toLocalTime();
                     LocalTime limiteSalida = salidaEsperada.minusMinutes(tolEgreso);
@@ -179,7 +254,7 @@ public class EvaluadorIncidentesService {
                     }
                 }
 
-                // REGLA 4: Salida durante clase (Docentes)
+                // REGLA 4: Salida durante clase (Docentes)[cite: 35]
                 if (franja.getMateria() != null) {
                     for (Map.Entry<LocalTime, Long> salidaInterm : duracionPorHoraSalida.entrySet()) {
                         LocalTime horaSalida = salidaInterm.getKey();
@@ -204,8 +279,6 @@ public class EvaluadorIncidentesService {
                                 incidentesAGuardar.add(inc);
                             }
 
-                            // Si también excedió el tiempo máximo reglamentario, se registra el incidente complementario
-                            // pero COMPARTIENDO EL MISMO ID DE GRUPO para que cuente como 1 solo desvío en métricas.
                             int maxTiempoFuera = empleado.getTiempoMaxFueraMin() != null ? empleado.getTiempoMaxFueraMin() : 45;
                             if (duracionMinutos > maxTiempoFuera && !existeIncidente(fecha, empleado.getId(), "SALIDAS_EXCESIVAS")) {
                                 IncidenteAsistencia incExceso = new IncidenteAsistencia();
@@ -218,7 +291,7 @@ public class EvaluadorIncidentesService {
                                 incExceso.setDetalle(String.format("La salida intermedia de las %s hs alcanzó %d min (tolerancia máxima reglamentaria: %d min).",
                                         horaSalida.toString().substring(0, 5), duracionMinutos, maxTiempoFuera));
                                 incExceso.setEstado("PENDIENTE");
-                                incExceso.setIdEventoAgrupador(grupoUnico); // Mismo grupo: 1 solo acontecimiento físico
+                                incExceso.setIdEventoAgrupador(grupoUnico);
                                 incidentesAGuardar.add(incExceso);
                             }
                         }
@@ -226,7 +299,7 @@ public class EvaluadorIncidentesService {
                 }
             }
 
-            // REGLA 5: Marcas Abiertas
+            // REGLA 5: Marcas Abiertas[cite: 35]
             if (primerIngreso != null && ultimoEgreso == null) {
                 if (!existeIncidente(fecha, empleado.getId(), "MARCAS_ABIERTAS")) {
                     LocalTime horaIngreso = primerIngreso.getHoraFichaje().toLocalTime();
@@ -272,7 +345,6 @@ public class EvaluadorIncidentesService {
 
         LocalDate cur = desde;
         while (!cur.isAfter(limite)) {
-            // Si el empleado tenía obligación de asistir ese día de la semana y no tiene ni 1 fichaje
             if (diasConHorario.contains(cur.getDayOfWeek().getValue()) && !diasConFichaje.contains(cur)) {
                 if (!existeIncidente(cur, emp.getId(), "AUSENCIAS")) {
                     IncidenteAsistencia inc = new IncidenteAsistencia();

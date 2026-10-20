@@ -21,7 +21,8 @@ public record FichaComportamientoDTO(
     List<DesgloseIntervaloDTO> intervalosDetalle,
     List<IncidenteFichaDTO> incidentes,
     List<FichajeBrutoDTO> fichajesBrutos,
-    List<DiaDesgloseDTO> diasPeriodo
+    List<DiaDesgloseDTO> diasPeriodo,
+    List<MesResumenDTO> mesesPeriodo // Agrupador Trimestral / Cuatrimestral[cite: 37]
 ) {
     public record MetricasFichaDTO(
         String primeraEntrada,
@@ -34,13 +35,25 @@ public record FichaComportamientoDTO(
         int incidentesJustificados,
         int diasEnSede,
         int diasTotalesPeriodo,
-        // --- NUEVAS MÉTRICAS AUDITORÍA PROFESIONAL ---
         String horasAFavorTexto,
         long minutosAFavor,
         String horasEnContraTexto,
         long minutosEnContra,
         int diasConDeficit,
-        int diasConHorasExtra
+        int diasConHorasExtra,
+        String clasesDictadasTexto
+    ) {}
+
+    public record MesResumenDTO(
+        String mesKey,
+        int orden,
+        String nombreMes,
+        int diasOffset,
+        String presenciaNetaTexto,
+        int diasEnSede,
+        int totalIncidentes,
+        String clasesDictadasTexto,
+        List<DiaDesgloseDTO> diasPeriodo
     ) {}
 
     public record IntervaloLineaTiempoDTO(
@@ -68,7 +81,9 @@ public record FichaComportamientoDTO(
         String severidad,
         String tipo,
         String detalle,
-        String estado
+        String estado,
+        String resolucionMotivo,    
+        String resolucionObservaciones
     ) {}
 
     public record FichajeBrutoDTO(
@@ -90,7 +105,10 @@ public record FichaComportamientoDTO(
         long minutosFuera,
         int totalIncidentes,
         int porcentajeCumplimiento,
-        String estadoGeneral, // NORMAL, INFRACCION, DESVIO, SIN_REGISTRO, FRANCO, EXTRA
-        long minutosDiferencia // Positivo: horas a favor en el día, Negativo: deuda/déficit en el día
+        String estadoGeneral,
+        long minutosDiferencia,
+        String clasesDictadasTexto,
+        double horasClaseTeoricas,
+        double horasClaseEfectivas
     ) {}
 }
