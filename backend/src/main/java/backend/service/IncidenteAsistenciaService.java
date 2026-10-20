@@ -24,16 +24,19 @@ public class IncidenteAsistenciaService {
     private final EmpleadoHorarioRepository horarioRepo;
     private final EmpleadoFichajeRepository fichajeRepo;
     private final AuditorHelperService auditor;
+    private final NotificacionTiempoRealService notificacionService;
 
     public IncidenteAsistenciaService(
             IncidenteAsistenciaRepository incidenteRepo,
             EmpleadoHorarioRepository horarioRepo,
             EmpleadoFichajeRepository fichajeRepo,
-            AuditorHelperService auditor) {
+            AuditorHelperService auditor,
+            NotificacionTiempoRealService notificacionService) {
         this.incidenteRepo = incidenteRepo;
         this.horarioRepo = horarioRepo;
         this.fichajeRepo = fichajeRepo;
         this.auditor = auditor;
+        this.notificacionService = notificacionService;
     }
 
     @Transactional(readOnly = true)
@@ -113,6 +116,7 @@ public class IncidenteAsistenciaService {
             "AUDITORIA_ASISTENCIA",
             "Resolución [" + req.estado() + "] incidente #" + id + " (" + inc.getTipo() + ") colaborador: " + nombreColab
         );
+        notificacionService.notificarCambio("INCIDENTE_RESUELTO");
 
         return guardado;
     }

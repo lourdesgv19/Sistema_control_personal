@@ -16,6 +16,7 @@ import java.io.ByteArrayInputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.text.Normalizer;
+import java.time.LocalDate;
 import java.util.*;
 
 @Service
@@ -24,11 +25,20 @@ public class VinculacionBiometricaService {
     private final EmpleadoRepository empleadoRepo;
     private final EmpleadoFichajeRepository fichajeRepo;
     private final AuditorHelperService auditor;
+    private final EvaluadorIncidentesService evaluadorIncidentes;
+    private final NotificacionTiempoRealService notificacionService;
 
-    public VinculacionBiometricaService(EmpleadoRepository empleadoRepo, EmpleadoFichajeRepository fichajeRepo, AuditorHelperService auditor) {
+    public VinculacionBiometricaService(
+            EmpleadoRepository empleadoRepo,
+            EmpleadoFichajeRepository fichajeRepo,
+            AuditorHelperService auditor,
+            EvaluadorIncidentesService evaluadorIncidentes,
+            NotificacionTiempoRealService notificacionService) {
         this.empleadoRepo = empleadoRepo;
         this.fichajeRepo = fichajeRepo;
         this.auditor = auditor;
+        this.evaluadorIncidentes = evaluadorIncidentes;
+        this.notificacionService = notificacionService;
     }
 
     public record DispositivoUsuarioDTO(
@@ -62,7 +72,6 @@ public class VinculacionBiometricaService {
         byte[] fileBytes = file.getBytes();
         char separador = '\t';
 
-        // Detectar si separa por comas o tabuladores
         try (BufferedReader br = new BufferedReader(new InputStreamReader(new ByteArrayInputStream(fileBytes), StandardCharsets.UTF_8))) {
             String firstLine = br.readLine();
             if (firstLine != null && !firstLine.contains("\t") && firstLine.contains(",")) {
@@ -107,7 +116,6 @@ public class VinculacionBiometricaService {
             String jobNo = entry.getKey();
             String name = entry.getValue();
 
-            // 1. Verificar si ya está asignado en la BD
             Optional<Empleado> yaAsignado = todosLosEmpleados.stream()
                 .filter(e -> jobNo.equals(e.getIdBiometrico()))
                 .findFirst();
@@ -118,7 +126,6 @@ public class VinculacionBiometricaService {
                 continue;
             }
 
-            // 2. Coincidencia inteligente (Nombre completo, nombre o apellido sin acentos)
             String nameNorm = normalizarTexto(name);
             Empleado coincidente = todosLosEmpleados.stream()
                 .filter(e -> {
@@ -126,8 +133,8 @@ public class VinculacionBiometricaService {
                     String apeNorm = normalizarTexto(e.getApellido());
                     String fullNorm = nomNorm + " " + apeNorm;
 
-                    return fullNorm.contains(nameNorm) 
-                        || nameNorm.contains(nomNorm) 
+                    return fullNorm.contains(nameNorm)
+                        || nameNorm.contains(nomNorm)
                         || (!apeNorm.isBlank() && nameNorm.contains(apeNorm));
                 })
                 .findFirst()
@@ -147,12 +154,12 @@ public class VinculacionBiometricaService {
 
     @Transactional
     public void guardarVinculaciones(List<AsignacionBiometricaRequest> asignaciones) {
+        Set<LocalDate> fechasAEvaluar = new HashSet<>();
+
         for (AsignacionBiometricaRequest asig : asignaciones) {
             if (asig.empleadoId() != null && asig.idBiometrico() != null && !asig.idBiometrico().isBlank()) {
                 String idBio = asig.idBiometrico().trim();
-                
 
-                // Liberar el ID de cualquier otro empleado si ya lo tenía asignado (evita colisión UNIQUE)
                 empleadoRepo.findByIdBiometrico(idBio).ifPresent(otro -> {
                     if (!otro.getId().equals(asig.empleadoId())) {
                         otro.setIdBiometrico(null);
@@ -160,65 +167,74 @@ public class VinculacionBiometricaService {
                     }
                 });
 
-                // Asignar al empleado confirmado
                 empleadoRepo.findById(asig.empleadoId()).ifPresent(emp -> {
                     emp.setIdBiometrico(idBio);
                     empleadoRepo.save(emp);
 
-                    // Actualizar retroactivamente las marcas históricas que estaban huérfanas
                     List<EmpleadoFichaje> marcasPrevias = fichajeRepo.findAllByIdBiometrico(idBio);
                     for (EmpleadoFichaje f : marcasPrevias) {
                         f.setEmpleado(emp);
+                        if (f.getHoraFichaje() != null) {
+                            fechasAEvaluar.add(f.getHoraFichaje().toLocalDate());
+                        }
                     }
 
-                    auditor.registrar(
-                "VINCULACION_BIOMETRICA",
-                "FICHAJES",
-                String.format("Vinculación del ID Biométrico '%s' al colaborador %s, %s (Legajo: %s). Se asociaron %d marcaciones históricas.",
-                    idBio,
-                    emp.getApellido(),
-                    emp.getNombre(),
-                    emp.getNroLegajo(),
-                    marcasPrevias.size()
-                )
-            );
                     fichajeRepo.saveAll(marcasPrevias);
+
+                    auditor.registrar(
+                        "VINCULACION_BIOMETRICA",
+                        "FICHAJES",
+                        String.format("Vinculación del ID Biométrico '%s' al colaborador %s, %s (Legajo: %s). Se asociaron %d marcaciones históricas.",
+                            idBio,
+                            emp.getApellido(),
+                            emp.getNombre(),
+                            emp.getNroLegajo(),
+                            marcasPrevias.size()
+                        )
+                    );
                 });
             }
         }
+
+        // Evaluar incidentes inmediatamente para las fechas recién vinculadas
+        for (LocalDate fecha : fechasAEvaluar) {
+            try {
+                evaluadorIncidentes.evaluarFecha(fecha);
+            } catch (Exception ignored) {}
+        }
+
+        // Avisar al Frontend en tiempo real
+        notificacionService.notificarCambio("VINCULACION_BIOMETRICA");
     }
 
     @Transactional(readOnly = true)
-public List<DispositivoUsuarioDTO> obtenerPendientesDesdeBD() {
-    // 1. Obtener pares únicos (idBiometrico, nombreReloj) de los fichajes sin empleado
-    List<Object[]> huerfanos = fichajeRepo.findDistinctHuerfanos(); 
-    // SELECT DISTINCT f.idBiometrico, f.nombreReloj FROM EmpleadoFichaje f WHERE f.activo = true AND f.empleado IS NULL
+    public List<DispositivoUsuarioDTO> obtenerPendientesDesdeBD() {
+        List<Object[]> huerfanos = fichajeRepo.findDistinctHuerfanos();
+        List<Empleado> todos = empleadoRepo.findAll();
+        List<DispositivoUsuarioDTO> resultado = new ArrayList<>();
 
-    List<Empleado> todos = empleadoRepo.findAll();
-    List<DispositivoUsuarioDTO> resultado = new ArrayList<>();
+        for (Object[] fila : huerfanos) {
+            String jobNo = (String) fila[0];
+            String name = (String) fila[1];
+            if (jobNo == null || jobNo.isBlank()) continue;
 
-    for (Object[] fila : huerfanos) {
-        String jobNo = (String) fila[0];
-        String name = (String) fila[1];
-        if (jobNo == null || jobNo.isBlank()) continue;
+            String nameNorm = normalizarTexto(name);
+            Empleado coincidente = todos.stream()
+                .filter(e -> {
+                    String fullNorm = normalizarTexto(e.getNombre() + " " + e.getApellido());
+                    return fullNorm.contains(nameNorm) || nameNorm.contains(normalizarTexto(e.getNombre()));
+                })
+                .findFirst()
+                .orElse(null);
 
-        String nameNorm = normalizarTexto(name);
-        Empleado coincidente = todos.stream()
-            .filter(e -> {
-                String fullNorm = normalizarTexto(e.getNombre() + " " + e.getApellido());
-                return fullNorm.contains(nameNorm) || nameNorm.contains(normalizarTexto(e.getNombre()));
-            })
-            .findFirst()
-            .orElse(null);
-
-        resultado.add(new DispositivoUsuarioDTO(
-            jobNo,
-            name != null ? name : "Desconocido",
-            coincidente != null ? coincidente.getId() : null,
-            coincidente != null ? coincidente.getNombre() + " " + coincidente.getApellido() : null,
-            false // Si está aquí, es porque aún no está vinculado en los fichajes
-        ));
+            resultado.add(new DispositivoUsuarioDTO(
+                jobNo,
+                name != null ? name : "Desconocido",
+                coincidente != null ? coincidente.getId() : null,
+                coincidente != null ? coincidente.getNombre() + " " + coincidente.getApellido() : null,
+                false
+            ));
+        }
+        return resultado;
     }
-    return resultado;
-}
 }

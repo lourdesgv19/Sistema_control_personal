@@ -8,7 +8,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -42,7 +41,7 @@ public class FichaComportamientoService {
         this.horarioService = horarioService;
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public FichaComportamientoDTO obtenerFicha(
             Long empleadoId,
             String modalidad,
@@ -130,13 +129,22 @@ public class FichaComportamientoService {
                 .toList();
         log.debug("[FichaService] Fichajes válidos en el período: {}", fichajesPeriodo.size());
 
-        // 3. Incidentes del período
+        // 3. Verificación optimizada en memoria para asegurar ausencias del empleado en el rango sin bucles pesados
+        try {
+            evaluadorService.asegurarAusenciasEmpleadoRango(emp, horarios, fichajesPeriodo, fechaInicio, fechaFin);
+        } catch (Exception e) {
+            log.warn("Error al asegurar ausencias en rango para empleado {}: {}", emp.getId(), e.getMessage());
+        }
+
+        // 4. Incidentes del período (incluyendo las ausencias recién aseguradas)
         List<IncidenteAsistencia> incsPeriodo = incidenteRepo.buscarFiltradoPaginadoRango(
                 fechaInicio, fechaFin, null, null, null, emp.getNroLegajo(), org.springframework.data.domain.Pageable.unpaged()
-        ).getContent();
+        ).getContent().stream()
+                .filter(i -> i.getEmpleado() != null && i.getEmpleado().getId().equals(emp.getId()))
+                .toList();
         log.debug("[FichaService] Incidentes recuperados en el período: {}", incsPeriodo.size());
 
-        // 4. Detalle y línea de tiempo para la fecha base (Jornada diaria específica)
+        // 5. Detalle y línea de tiempo para la fecha base (Jornada diaria específica)
         List<FichaComportamientoDTO.IntervaloLineaTiempoDTO> planificados = new ArrayList<>();
         List<FichaComportamientoDTO.IntervaloLineaTiempoDTO> presencias = new ArrayList<>();
         List<FichaComportamientoDTO.DesgloseIntervaloDTO> desglose = new ArrayList<>();
@@ -237,7 +245,7 @@ public class FichaComportamientoService {
             }
         }
 
-        // Listado completo de incidentes para auditoría (se listan todos para trazabilidad)
+        // Listado completo de incidentes para auditoría
         List<FichaComportamientoDTO.IncidenteFichaDTO> incidentesList = incsPeriodo.stream()
                 .map(i -> new FichaComportamientoDTO.IncidenteFichaDTO(
                         i.getId(),
@@ -249,7 +257,7 @@ public class FichaComportamientoService {
                         i.getEstado()
                 )).toList();
 
-        // 5. Desglose día por día con control estricto y sin inflar eventos concurrentes
+        // 6. Desglose día por día con control estricto de días futuros y sin inflar eventos concurrentes
         List<FichaComportamientoDTO.DiaDesgloseDTO> diasDesglose = new ArrayList<>();
         LocalDate cur = fechaInicio;
         LocalDate hoy = LocalDate.now();
@@ -317,7 +325,6 @@ public class FichaComportamientoService {
                             diasConHorasExtra++;
                         }
                     } else {
-                        // Déficit en la jornada (Llegada tarde, salida anticipada o inasistencia)
                         cumplimientoDia = (int) Math.round(((double) minNetosDia / minutosTeoricosDia) * 100.0);
                         totalHorasUtilesPeriodo += (minNetosDia / 60.0);
                         long faltante = minutosTeoricosDia - minNetosDia;
@@ -326,7 +333,6 @@ public class FichaComportamientoService {
                         diasConDeficit++;
                     }
                 } else {
-                    // Día Franco / No laborable con asistencia
                     if (minNetosDia > 0) {
                         cumplimientoDia = 100;
                         minutosDiferencia = minNetosDia;
@@ -406,6 +412,16 @@ public class FichaComportamientoService {
                 .distinct()
                 .count();
 
+        // Conteo de incidentes ya procesados / leídos (Justificados, Observados o Rechazados)
+        int incidentesProcesados = (int) incsPeriodo.stream()
+                .filter(i -> {
+                    String estado = i.getEstado();
+                    return "JUSTIFICADA".equalsIgnoreCase(estado) ||
+                           "OBSERVADA".equalsIgnoreCase(estado) ||
+                           "RECHAZADA".equalsIgnoreCase(estado);
+                })
+                .count();
+
         FichaComportamientoDTO.MetricasFichaDTO metricasDTO = new FichaComportamientoDTO.MetricasFichaDTO(
                 primeraEntradaResultado,
                 ultimoEgresoResultado,
@@ -413,8 +429,8 @@ public class FichaComportamientoService {
                 totalMinutosPresencia,
                 resumenPeriodo.cantidadSalidasIntermedias(),
                 totalMinutosFuera,
-                totalIncidentesAgrupados, // <-- Conteo real no inflado
-                (int) incsPeriodo.stream().filter(i -> "JUSTIFICADA".equalsIgnoreCase(i.getEstado())).count(),
+                totalIncidentesAgrupados,
+                incidentesProcesados, 
                 diasConPresencia,
                 totalDiasParaMetrica,
                 formatearMinutosAHoras(totalMinutosAFavor),

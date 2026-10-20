@@ -41,6 +41,7 @@ public class SecurityConfig {
                 // 1. CORS Preflight y Endpoints Públicos
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                 .requestMatchers("/api/auth/**", "/auth/**", "/api/public/**", "/public/**", "/error").permitAll()
+                .requestMatchers("/api/stream/**").permitAll()
 
                 // 2. Cambio de contraseña propio (Cualquier usuario autenticado)
                 .requestMatchers(HttpMethod.GET, "/api/usuarios/mi-perfil").authenticated()

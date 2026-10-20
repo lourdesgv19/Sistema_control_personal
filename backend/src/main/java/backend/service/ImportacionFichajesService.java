@@ -15,7 +15,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
-import backend.service.EvaluadorIncidentesService;
 import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
 import java.io.InputStreamReader;
@@ -34,15 +33,19 @@ public class ImportacionFichajesService {
     private final EmpleadoFichajeRepository fichajeRepo;
     private final ImportacionHistorialRepository historialRepo;
     private final EvaluadorIncidentesService evaluadorIncidentes;
+    private final NotificacionTiempoRealService notificacionService;
+
     public ImportacionFichajesService(
             EmpleadoRepository empleadoRepo,
             EmpleadoFichajeRepository fichajeRepo,
             ImportacionHistorialRepository historialRepo,
-            EvaluadorIncidentesService evaluadorIncidentesService) {
+            EvaluadorIncidentesService evaluadorIncidentesService,
+            NotificacionTiempoRealService notificacionService) {
         this.empleadoRepo = empleadoRepo;
         this.fichajeRepo = fichajeRepo;
         this.historialRepo = historialRepo;
         this.evaluadorIncidentes = evaluadorIncidentesService;
+        this.notificacionService = notificacionService;
     }
 
     private String limpiar(String val) {
@@ -82,22 +85,41 @@ public class ImportacionFichajesService {
         historial.setErrores(resumen.errores());
         historialRepo.save(historial);
 
-        try {
-        Set<LocalDate> fechasDelArchivo = new HashSet<>();
-        for (FilaFichajeRaw f : filas) {
-            if (!esVacioONulo(f.fecha())) {
-                try {
-                    fechasDelArchivo.add(parsearFechaSegura(f.fecha()));
-                } catch (Exception ignored) {}
-            }
-        }
+try {
+    LocalDate minFecha = null;
+    LocalDate maxFecha = null;
 
-        for (LocalDate fecha : fechasDelArchivo) {
-            evaluadorIncidentes.evaluarFecha(fecha);
+    for (FilaFichajeRaw f : filas) {
+        if (!esVacioONulo(f.fecha())) {
+            try {
+                LocalDate d = parsearFechaSegura(f.fecha());
+                if (minFecha == null || d.isBefore(minFecha)) minFecha = d;
+                if (maxFecha == null || d.isAfter(maxFecha)) maxFecha = d;
+            } catch (Exception ignored) {}
         }
-    } catch (Exception e) {
-        log.error("Error al auditar incidentes tras importación: {}", e.getMessage());
     }
+
+    if (minFecha != null && maxFecha != null) {
+        LocalDate hoy = LocalDate.now();
+        // Si el archivo es del mes en curso, extendemos hasta hoy para detectar ausencias recientes
+        if (maxFecha.getYear() == hoy.getYear() && maxFecha.getMonth() == hoy.getMonth() && maxFecha.isBefore(hoy)) {
+            maxFecha = hoy;
+        }
+        // Evaluar todos los días del rango (incluyendo los días en que hubo ausencia total)
+        LocalDate cursor = minFecha;
+        while (!cursor.isAfter(maxFecha)) {
+            if (!cursor.isAfter(hoy)) {
+                evaluadorIncidentes.evaluarFecha(cursor);
+            }
+            cursor = cursor.plusDays(1);
+        }
+    }
+} catch (Exception e) {
+    log.error("Error al auditar incidentes tras importación: {}", e.getMessage());
+}
+
+        // Notificar al Frontend que hay nuevos fichajes e incidentes
+        notificacionService.notificarCambio("IMPORTACION_FICHAJES");
 
         return resumen;
     }
@@ -249,7 +271,7 @@ public class ImportacionFichajesService {
 
     @Transactional(readOnly = true)
     public org.springframework.data.domain.Page<EmpleadoFichaje> listarMarcacionesPaginadas(String q, int pagina, int tamano) {
-        org.springframework.data.domain.Pageable pageable = 
+        org.springframework.data.domain.Pageable pageable =
             org.springframework.data.domain.PageRequest.of(pagina, tamano);
         return fichajeRepo.buscarMarcacionesPaginadas(q, pageable);
     }
@@ -283,6 +305,9 @@ public class ImportacionFichajesService {
         LocalDateTime ahora = LocalDateTime.now();
         fichajeRepo.desactivarFichajesPorImportacion(id, ahora);
         historialRepo.deleteById(id);
+
+        // Notificar al Frontend que se dio de baja un lote
+        notificacionService.notificarCambio("BAJA_IMPORTACION");
     }
 
     public record FilaFichajeRaw(String sName, String sJobNo, String fecha, String hora, String status, Long serialNo) {}

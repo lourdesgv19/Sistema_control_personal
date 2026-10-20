@@ -398,30 +398,78 @@ export default function ImportacionFichajes() {
     }
   }, []);
 
+  // Consulta al backend para el modal de un lote específico
+  const consultarFichajesDelLote = useCallback(async (id, nombre, fecha) => {
+    setCargandoModalFichajes(true);
+    try {
+      const data = await getFichajesPorImportacion(id, nombre, fecha);
+      setFichajesLote(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error("Error al obtener fichajes del lote:", err);
+      setFichajesLote([]);
+    } finally {
+      setCargandoModalFichajes(false);
+    }
+  }, []);
+
   // Carga inicial al montar el componente
   useEffect(() => {
     cargarDatos();
   }, [cargarDatos]);
 
-  // Sincronización automática ante restablecimiento de conexión
+  // Sincronización automática en TIEMPO REAL (SSE) o al restaurarse la conexión
   useEffect(() => {
-    const handleRecuperacion = () => {
+    const handleActualizacionTiempoReal = async () => {
       cargarDatos();
       if (vistaActual === "marcaciones") {
         cargarMarcacionesServidor(busquedaFichaje, paginaFichajes);
+      } else if (vistaActual === "asistente" && !archivo) {
+        try {
+          const datos = await getPendientesVinculacion();
+          setVinculaciones(Array.isArray(datos) ? datos : []);
+        } catch (err) {
+          console.error("Error refrescando vinculaciones:", err);
+        }
+      }
+      if (modalArchivo.isOpen && modalArchivo.item) {
+        consultarFichajesDelLote(
+          modalArchivo.item.id,
+          filtroModalNombre,
+          filtroModalFecha,
+        );
       }
     };
 
-    window.addEventListener("conexion:restaurada", handleRecuperacion);
+    window.addEventListener(
+      "datos:actualizados",
+      handleActualizacionTiempoReal,
+    );
+    window.addEventListener(
+      "conexion:restaurada",
+      handleActualizacionTiempoReal,
+    );
     return () => {
-      window.removeEventListener("conexion:restaurada", handleRecuperacion);
+      window.removeEventListener(
+        "datos:actualizados",
+        handleActualizacionTiempoReal,
+      );
+      window.removeEventListener(
+        "conexion:restaurada",
+        handleActualizacionTiempoReal,
+      );
     };
   }, [
     cargarDatos,
     cargarMarcacionesServidor,
+    consultarFichajesDelLote,
     vistaActual,
     busquedaFichaje,
     paginaFichajes,
+    archivo,
+    modalArchivo.isOpen,
+    modalArchivo.item,
+    filtroModalNombre,
+    filtroModalFecha,
   ]);
 
   // Cargar marcaciones al ingresar a la vista o cambiar de página
@@ -441,20 +489,6 @@ export default function ImportacionFichajes() {
       return () => clearTimeout(timer);
     }
   }, [busquedaFichaje, vistaActual, cargarMarcacionesServidor]);
-
-  // Consulta al backend para el modal de un lote específico
-  const consultarFichajesDelLote = async (id, nombre, fecha) => {
-    setCargandoModalFichajes(true);
-    try {
-      const data = await getFichajesPorImportacion(id, nombre, fecha);
-      setFichajesLote(Array.isArray(data) ? data : []);
-    } catch (err) {
-      console.error("Error al obtener fichajes del lote:", err);
-      setFichajesLote([]);
-    } finally {
-      setCargandoModalFichajes(false);
-    }
-  };
 
   const handleAbrirModalLote = (item) => {
     setFiltroModalNombre("");
@@ -479,6 +513,7 @@ export default function ImportacionFichajes() {
     filtroModalFecha,
     modalArchivo.isOpen,
     modalArchivo.item,
+    consultarFichajesDelLote,
   ]);
 
   const handleSeleccionarArchivo = (e) => {
@@ -1245,7 +1280,6 @@ export default function ImportacionFichajes() {
                       </td>
                       <td className="py-3.5 px-4 text-right">
                         <div className="flex items-center justify-end gap-1 text-slate-400">
-                          {/* Ver Detalle del Lote (Accesible con FICHAJES_VER) */}
                           <button
                             onClick={() => handleAbrirModalLote(h)}
                             className="p-1.5 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition cursor-pointer"
@@ -1254,7 +1288,6 @@ export default function ImportacionFichajes() {
                             <Eye className="w-4 h-4" />
                           </button>
 
-                          {/* Eliminar Lote (Requiere FICHAJES_ELIMINAR_LOTE) */}
                           {puedeEliminarLote ? (
                             <button
                               onClick={() =>

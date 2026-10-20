@@ -33,7 +33,6 @@ const STORAGE_KEY = "tablero_incidentes_filtros_v1";
 function formatearFechaVisual(fechaIso) {
   if (!fechaIso) return "--/--/----";
 
-  // Limpiar si viene con timestamp (T o espacio)
   const soloFecha = String(fechaIso).split("T")[0].split(" ")[0].trim();
   const partes = soloFecha.split("-");
 
@@ -51,9 +50,8 @@ export default function TableroIncidentesDiarios() {
   const { tienePermiso } = useAuth();
   const puedeJustificar = tienePermiso("INCIDENTES_JUSTIFICAR");
   const location = useLocation();
-  const filtroNavegado = location.state; // Datos enviados desde Ficha de Comportamiento
+  const filtroNavegado = location.state;
 
-  // Recuperar filtros guardados en sessionStorage o usar defaults
   const filtrosGuardados = useMemo(() => {
     try {
       const data = sessionStorage.getItem(STORAGE_KEY);
@@ -65,7 +63,6 @@ export default function TableroIncidentesDiarios() {
 
   const hoyIso = useMemo(() => new Date().toISOString().split("T")[0], []);
 
-  // Estados inicializados con prioridad al filtro que viene de la navegación
   const [modoFiltroFecha, setModoFiltroFecha] = useState(
     () =>
       filtroNavegado?.modoFiltroFecha ||
@@ -152,8 +149,8 @@ export default function TableroIncidentesDiarios() {
   }, [location.state]);
 
   const cargarDatos = useCallback(
-    async (pageIndex) => {
-      setLoading(true);
+    async (pageIndex, silencioso = false) => {
+      if (!silencioso) setLoading(true);
       try {
         const params = {
           fechaDesde: fechaDesde,
@@ -181,9 +178,9 @@ export default function TableroIncidentesDiarios() {
         }
       } catch (err) {
         console.error("Error al cargar incidentes:", err);
-        setIncidentes([]);
+        if (!silencioso) setIncidentes([]);
       } finally {
-        setLoading(false);
+        if (!silencioso) setLoading(false);
       }
     },
     [
@@ -197,10 +194,10 @@ export default function TableroIncidentesDiarios() {
     ],
   );
 
-  // Debounce para llamadas a la API
+  // Debounce para llamadas a la API al cambiar filtros
   useEffect(() => {
     const timer = setTimeout(() => {
-      cargarDatos(paginaActual - 1);
+      cargarDatos(paginaActual - 1, false);
     }, 250);
     return () => clearTimeout(timer);
   }, [
@@ -215,6 +212,32 @@ export default function TableroIncidentesDiarios() {
     cargarDatos,
   ]);
 
+  // Actualización automática en TIEMPO REAL (SSE) o al restaurarse la conexión sin tocar F5
+  useEffect(() => {
+    const handleActualizacionTiempoReal = () => {
+      cargarDatos(paginaActual - 1, true);
+    };
+
+    window.addEventListener(
+      "datos:actualizados",
+      handleActualizacionTiempoReal,
+    );
+    window.addEventListener(
+      "conexion:restaurada",
+      handleActualizacionTiempoReal,
+    );
+    return () => {
+      window.removeEventListener(
+        "datos:actualizados",
+        handleActualizacionTiempoReal,
+      );
+      window.removeEventListener(
+        "conexion:restaurada",
+        handleActualizacionTiempoReal,
+      );
+    };
+  }, [cargarDatos, paginaActual]);
+
   const handleCambiarPagina = (nuevaPagina) => {
     setPaginaActual(nuevaPagina);
   };
@@ -222,7 +245,7 @@ export default function TableroIncidentesDiarios() {
   const handleResolver = async (id, payload) => {
     try {
       await resolverIncidente(id, payload);
-      cargarDatos(paginaActual - 1);
+      cargarDatos(paginaActual - 1, true);
     } catch (err) {
       console.error("Error al registrar justificación:", err);
     }
@@ -287,7 +310,6 @@ export default function TableroIncidentesDiarios() {
 
         {/* CONTROLES DE FECHA */}
         <div className="flex items-center gap-3 flex-wrap">
-          {/* Alternador Día / Rango */}
           <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs font-semibold">
             <button
               type="button"
@@ -320,7 +342,6 @@ export default function TableroIncidentesDiarios() {
             </button>
           </div>
 
-          {/* Selectores de Fecha */}
           {modoFiltroFecha === "DIA" ? (
             <label className="relative flex items-center gap-2 border border-slate-200 rounded-xl px-3 py-1.5 bg-slate-50 hover:bg-white focus-within:bg-white focus-within:border-indigo-500 transition shadow-2xs cursor-pointer">
               <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider shrink-0 select-none">
@@ -394,7 +415,7 @@ export default function TableroIncidentesDiarios() {
               </label>
             </div>
           )}
-          {/* Presentes (visible cuando se evalúa un día puntual) */}
+
           {modoFiltroFecha === "DIA" && (
             <div
               className="flex items-center gap-2 px-3.5 py-1.5 bg-indigo-50/80 border border-indigo-100 rounded-xl text-xs font-semibold text-indigo-950 select-none shadow-2xs"
@@ -412,7 +433,7 @@ export default function TableroIncidentesDiarios() {
           )}
 
           <button
-            onClick={() => cargarDatos(paginaActual - 1)}
+            onClick={() => cargarDatos(paginaActual - 1, false)}
             disabled={loading}
             className="p-2 border border-slate-200 rounded-xl hover:bg-slate-50 text-slate-600 transition cursor-pointer"
             title="Refrescar datos"

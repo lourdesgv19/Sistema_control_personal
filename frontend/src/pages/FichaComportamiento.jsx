@@ -16,10 +16,13 @@ import {
   AlertTriangle,
   ChevronDown,
   Palette,
+  Lock,
 } from "lucide-react";
 import ListaEmpleadosSidebar from "../components/comunes/ListaEmpleadosSidebar";
+import ModalJustificarIncidente from "../components/incidentes/ModalJustificarIncidente";
 import { getFichaComportamiento } from "../services/fichaComportamientoService";
-import { useNavigate } from "react-router-dom";
+import { resolverIncidente } from "../services/incidenteService";
+import { useAuth } from "../context/AuthContext";
 import { generarPdfFichaComportamiento } from "../utils/generadorPdfFicha";
 import { exportarFichaACsv } from "../utils/exportadorCsvFicha";
 import {
@@ -33,6 +36,9 @@ import {
 } from "../utils/fechasFichaUtils";
 
 export default function FichaComportamiento() {
+  const { tienePermiso } = useAuth();
+  const puedeJustificar = tienePermiso("INCIDENTES_JUSTIFICAR");
+
   const hoyIso = useMemo(() => {
     const d = new Date();
     const y = d.getFullYear();
@@ -40,7 +46,6 @@ export default function FichaComportamiento() {
     const day = String(d.getDate()).padStart(2, "0");
     return `${y}-${m}-${day}`;
   }, []);
-  const navigate = useNavigate();
 
   const [empleadoSeleccionado, setEmpleadoSeleccionado] = useState(null);
   const [sidebarAbierto, setSidebarAbierto] = useState(true);
@@ -51,12 +56,19 @@ export default function FichaComportamiento() {
   const [fechaConsulta, setFechaConsulta] = useState(hoyIso);
   const [fechaHastaRango, setFechaHastaRango] = useState(hoyIso);
 
-  // Estado para el modal de inspección diaria (Semanal, Mensual y Rango)
+  // Estados para inspección diaria y modales
   const [diaInspeccionado, setDiaInspeccionado] = useState(null);
+  const [modalListaIncidentesAbierto, setModalListaIncidentesAbierto] =
+    useState(false);
   const [tabInferior, setTabInferior] = useState("INTERVALOS");
 
   const [loadingFicha, setLoadingFicha] = useState(false);
   const [fichaData, setFichaData] = useState(null);
+
+  // Estados para abrir el ModalJustificarIncidente directamente aquí
+  const [incidenteSeleccionado, setIncidenteSeleccionado] = useState(null);
+  const [modalJustificarAbierto, setModalJustificarAbierto] = useState(false);
+  const [modoSoloLecturaModal, setModoSoloLecturaModal] = useState(false);
 
   // Rangos calculados modularmente
   const { inicioSemanaStr, finSemanaStr } = useMemo(
@@ -94,6 +106,12 @@ export default function FichaComportamiento() {
         params,
       );
       setFichaData(data);
+
+      // Si el usuario estaba inspeccionando un día puntual, actualizar sus métricas en vivo
+      setDiaInspeccionado((prev) => {
+        if (!prev || !data?.diasPeriodo) return prev;
+        return data.diasPeriodo.find((d) => d.fecha === prev.fecha) || prev;
+      });
     } catch (err) {
       console.error("Error al cargar ficha de comportamiento:", err);
     } finally {
@@ -105,18 +123,59 @@ export default function FichaComportamiento() {
     cargarFicha();
   }, [cargarFicha]);
 
-  const irAIncidentesParaJustificar = (inc) => {
-    navigate("/incidentes", {
-      state: {
-        modoFiltroFecha: "DIA",
-        fecha: inc.fecha || diaInspeccionado?.fecha || fechaConsulta,
-        busqueda:
-          empleadoSeleccionado?.nroLegajo ||
-          empleadoSeleccionado?.apellido ||
-          "",
-        estado: "PENDIENTE",
+  // Sincronización automática en TIEMPO REAL (SSE) o al restaurarse la conexión
+  useEffect(() => {
+    const handleActualizacionTiempoReal = () => {
+      cargarFicha();
+    };
+
+    window.addEventListener(
+      "datos:actualizados",
+      handleActualizacionTiempoReal,
+    );
+    window.addEventListener(
+      "conexion:restaurada",
+      handleActualizacionTiempoReal,
+    );
+    return () => {
+      window.removeEventListener(
+        "datos:actualizados",
+        handleActualizacionTiempoReal,
+      );
+      window.removeEventListener(
+        "conexion:restaurada",
+        handleActualizacionTiempoReal,
+      );
+    };
+  }, [cargarFicha]);
+
+  // Abrir directamente el modal de justificación
+  const abrirModalJustificarDirecto = (inc, soloLectura = false) => {
+    const incidenteConEmpleado = {
+      ...inc,
+      empleado: inc.empleado || {
+        id: fichaData?.empleadoId || empleadoSeleccionado?.id,
+        nombre: empleadoSeleccionado?.nombre || "",
+        apellido:
+          empleadoSeleccionado?.apellido || fichaData?.nombreCompleto || "",
+        nroLegajo:
+          fichaData?.nroLegajo || empleadoSeleccionado?.nroLegajo || "",
+        rolSistema: fichaData?.rolOArea || "Empleado",
       },
-    });
+    };
+    setIncidenteSeleccionado(incidenteConEmpleado);
+    setModoSoloLecturaModal(soloLectura);
+    setModalJustificarAbierto(true);
+  };
+
+  // Guardar resolución y refrescar ficha
+  const handleGuardarJustificacion = async (id, payload) => {
+    try {
+      await resolverIncidente(id, payload);
+      await cargarFicha();
+    } catch (err) {
+      console.error("Error al registrar justificación desde la ficha:", err);
+    }
   };
 
   const emitirReportePdf = (modoColor) => {
@@ -176,10 +235,111 @@ export default function FichaComportamiento() {
     diasConHorasExtra: 0,
   };
 
-  // Render modal / tarjeta de inspección de día
+  // Renderizador de un ítem de incidente con botones interactivos
+  const renderItemIncidenteInteractivo = (inc, mostrarFecha = false) => {
+    const esCritica =
+      inc.severidad === "CRÍTICA" || inc.severidad === "CRITICA";
+
+    return (
+      <div
+        key={inc.id}
+        className={`p-3.5 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs transition ${
+          esCritica
+            ? "bg-rose-50/80 border-rose-200"
+            : "bg-amber-50/80 border-amber-200"
+        }`}
+      >
+        <div>
+          <div className="flex items-center gap-2 flex-wrap">
+            {mostrarFecha && inc.fecha && (
+              <span className="font-mono font-bold text-indigo-900 bg-white/90 border border-slate-200 px-2.5 py-0.5 rounded-md text-[11px]">
+                {formatearFechaVisual(inc.fecha)}
+              </span>
+            )}
+            <span className="font-mono font-bold text-slate-700">
+              {inc.hora} hs
+            </span>
+            <span
+              className={`font-bold ${esCritica ? "text-rose-950" : "text-amber-950"}`}
+            >
+              {inc.tipo}
+            </span>
+            <span
+              className={`text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${
+                esCritica
+                  ? "bg-rose-600 text-white shadow-2xs"
+                  : "bg-amber-500 text-white shadow-2xs"
+              }`}
+            >
+              {inc.severidad}
+            </span>
+          </div>
+          <div className="text-[11px] text-slate-600 mt-1">{inc.detalle}</div>
+        </div>
+
+        {/* Estado + Botones de Justificación Directa */}
+        <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
+          {inc.estado === "JUSTIFICADA" ? (
+            <span className="inline-flex items-center px-2.5 py-1 rounded-md text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+              ✓ JUSTIFICADA
+            </span>
+          ) : inc.estado === "OBSERVADA" ? (
+            <span className="inline-flex items-center px-2.5 py-1 rounded-md text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+              ✓ OBSERVADA
+            </span>
+          ) : inc.estado === "RECHAZADA" ? (
+            <span className="inline-flex items-center px-2.5 py-1 rounded-md text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+              ✓ RECHAZADA
+            </span>
+          ) : (
+            <span className="inline-flex items-center px-2.5 py-1 rounded-md text-[10px] font-bold bg-amber-100/80 text-amber-800 border border-amber-300">
+              Pendiente
+            </span>
+          )}
+
+          {puedeJustificar ? (
+            <button
+              type="button"
+              onClick={() => abrirModalJustificarDirecto(inc, false)}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer shadow-2xs ${
+                inc.estado === "PENDIENTE"
+                  ? "bg-indigo-600 hover:bg-indigo-700 text-white"
+                  : "bg-white hover:bg-slate-50 text-slate-700 border border-slate-200"
+              }`}
+            >
+              {inc.estado === "PENDIENTE" ? "Justificar" : "Editar"}
+            </button>
+          ) : (
+            <span
+              className="flex items-center gap-1 px-3 py-1.5 bg-slate-100 text-slate-400 border border-slate-200 rounded-xl text-[11px] font-semibold cursor-not-allowed select-none"
+              title="Requiere permiso INCIDENTES_JUSTIFICAR"
+            >
+              <Lock className="w-3.5 h-3.5" />
+              {inc.estado === "PENDIENTE" ? "Justificar" : "Editar"}
+            </span>
+          )}
+
+          <button
+            type="button"
+            onClick={() => abrirModalJustificarDirecto(inc, true)}
+            className="p-2 bg-white/80 hover:bg-white text-slate-500 hover:text-indigo-600 border border-slate-200/80 rounded-xl transition cursor-pointer"
+            title="Ver detalle del incidente"
+          >
+            <Eye className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  // Render tarjeta de inspección de día (para Semanal/Mensual/Rango)
   const renderCardInspeccionDiaria = () => {
     if (!diaInspeccionado) return null;
     const fechaDiaStr = String(diaInspeccionado.fecha || "").split("T")[0];
+    const incidentesDelDia = (fichaData?.incidentes || []).filter((inc) => {
+      if (!inc.fecha) return true;
+      return String(inc.fecha).split("T")[0] === fechaDiaStr;
+    });
 
     return (
       <div className="bg-white border-2 border-indigo-500/80 rounded-3xl p-5 shadow-sm space-y-4 transition-all animate-fadeIn">
@@ -269,12 +429,11 @@ export default function FichaComportamiento() {
           <div className="flex items-center gap-1.5 text-xs font-bold text-slate-800 uppercase tracking-wider">
             <AlertTriangle className="w-3.5 h-3.5 text-rose-500" />
             <span>
-              INCIDENCIAS Y DESVÍOS DE LA JORNADA (
-              {diaInspeccionado.totalIncidentes})
+              INCIDENCIAS Y DESVÍOS DE LA JORNADA ({incidentesDelDia.length})
             </span>
           </div>
 
-          {diaInspeccionado.totalIncidentes === 0 ? (
+          {incidentesDelDia.length === 0 ? (
             <div className="p-3 bg-emerald-50/60 border border-emerald-200 rounded-2xl flex items-center gap-2 text-xs text-emerald-800 font-medium">
               <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
               <span>
@@ -284,69 +443,9 @@ export default function FichaComportamiento() {
             </div>
           ) : (
             <div className="space-y-2">
-              {(fichaData?.incidentes || [])
-                .filter((inc) => {
-                  if (!inc.fecha) return true;
-                  const fechaInc = String(inc.fecha).split("T")[0];
-                  return fechaInc === fechaDiaStr;
-                })
-                .map((inc) => {
-                  const esCritica =
-                    inc.severidad === "CRÍTICA" || inc.severidad === "CRITICA";
-                  return (
-                    <div
-                      key={inc.id}
-                      className={`p-3 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs ${
-                        esCritica
-                          ? "bg-rose-50/80 border-rose-200"
-                          : "bg-amber-50/80 border-amber-200"
-                      }`}
-                    >
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="font-mono font-bold text-slate-700">
-                            {inc.hora} hs
-                          </span>
-                          <span
-                            className={`font-bold ${esCritica ? "text-rose-950" : "text-amber-950"}`}
-                          >
-                            {inc.tipo}
-                          </span>
-                          <span
-                            className={`text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${
-                              esCritica
-                                ? "bg-rose-600 text-white shadow-2xs"
-                                : "bg-amber-500 text-white shadow-2xs"
-                            }`}
-                          >
-                            {inc.severidad}
-                          </span>
-                        </div>
-                        <div className="text-[11px] text-slate-600 mt-0.5">
-                          {inc.detalle}
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-2 self-end sm:self-center">
-                        {inc.estado === "PENDIENTE" ? (
-                          <button
-                            type="button"
-                            onClick={() => irAIncidentesParaJustificar(inc)}
-                            className="inline-flex items-center gap-1 text-[10px] font-bold px-2.5 py-1 rounded-lg bg-amber-500 hover:bg-amber-600 text-white shadow-xs transition-all cursor-pointer group"
-                            title="Ir al Tablero de Incidentes para auditar o justificar este caso"
-                          >
-                            <span>Pendiente</span>
-                            <ArrowRight className="w-3 h-3 transition-transform group-hover:translate-x-0.5" />
-                          </button>
-                        ) : (
-                          <span className="text-[10px] font-bold px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-slate-700 shadow-2xs">
-                            {inc.estado}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
+              {incidentesDelDia.map((inc) =>
+                renderItemIncidenteInteractivo(inc, false),
+              )}
             </div>
           )}
         </div>
@@ -472,6 +571,7 @@ export default function FichaComportamiento() {
                     onClick={() => {
                       setModalidad(key);
                       setDiaInspeccionado(null);
+                      setModalListaIncidentesAbierto(false);
                     }}
                     className={`px-3.5 py-1.5 rounded-xl transition cursor-pointer whitespace-nowrap ${
                       activo
@@ -840,16 +940,31 @@ export default function FichaComportamiento() {
               </div>
             </div>
 
-            <div className="bg-white border border-slate-200 p-4 rounded-2xl shadow-xs flex flex-col justify-between">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
-                INCIDENTES REGISTRADOS
-              </span>
+            {/* KPI INTERACTIVO DE INCIDENTES REGISTRADOS */}
+            <div
+              onClick={() => {
+                if (modalidad === "DIARIO") {
+                  setTabInferior("INCIDENTES");
+                } else {
+                  setModalListaIncidentesAbierto(true);
+                }
+              }}
+              title="Haga clic para ver y justificar los incidentes registrados"
+              className="p-4 rounded-2xl shadow-xs flex flex-col justify-between transition cursor-pointer select-none border bg-white hover:bg-rose-50/40 border-rose-200 hover:border-rose-400"
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-bold uppercase tracking-wider block text-rose-600">
+                  INCIDENTES REGISTRADOS
+                </span>
+                <Eye className="w-3.5 h-3.5 text-rose-500" />
+              </div>
               <div>
-                <div className="text-xl font-black text-slate-900 mt-1">
+                <div className="text-xl font-black mt-1 text-slate-900">
                   {metricas.totalIncidentes}
                 </div>
-                <div className="text-[10px] font-semibold text-slate-400 mt-0.5">
-                  {metricas.incidentesJustificados} justificados
+                <div className="text-[10px] font-semibold mt-0.5 text-slate-400">
+                  {metricas.incidentesJustificados} revisados •{" "}
+                  <span className="underline">Ver lista</span>
                 </div>
               </div>
             </div>
@@ -1040,24 +1155,21 @@ export default function FichaComportamiento() {
                           )[0];
                           return !fechaInc || fechaInc === fechaConsulta;
                         })
-                        .map((inc) => (
-                          <div
-                            key={inc.id}
-                            className="p-3 bg-rose-50/60 border border-rose-200 rounded-xl flex items-center justify-between text-xs"
-                          >
-                            <div>
-                              <div className="font-bold text-rose-900">
-                                {inc.tipo}
-                              </div>
-                              <div className="text-[11px] text-slate-600">
-                                {inc.detalle}
-                              </div>
-                            </div>
-                            <span className="font-bold text-[10px] px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 uppercase">
-                              {inc.severidad}
-                            </span>
-                          </div>
-                        ))}
+                        .map((inc) =>
+                          renderItemIncidenteInteractivo(inc, false),
+                        )}
+                      {(fichaData?.incidentes || []).filter((inc) => {
+                        const fechaInc = String(inc.fecha || "").split("T")[0];
+                        return !fechaInc || fechaInc === fechaConsulta;
+                      }).length === 0 && (
+                        <div className="p-3 bg-emerald-50/60 border border-emerald-200 rounded-2xl flex items-center gap-2 text-xs text-emerald-800 font-medium">
+                          <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                          <span>
+                            Sin incidentes ni ausencias registradas en esta
+                            fecha.
+                          </span>
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -1106,8 +1218,8 @@ export default function FichaComportamiento() {
                       : `Rango (${formatearFechaVisual(fechaConsulta)} al ${formatearFechaVisual(fechaHastaRango)})`}
                   </h3>
                   <p className="text-[11px] text-slate-500">
-                    Haga clic en "Ver Día" para abrir los detalles y la
-                    inspección de cualquier jornada.
+                    Haga clic en "Ver Día" para abrir los detalles y justificar
+                    incidencias de cualquier jornada.
                   </p>
                 </div>
                 <span className="px-3 py-1 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-xl font-bold text-xs">
@@ -1255,7 +1367,7 @@ export default function FichaComportamiento() {
                   </span>
                   <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-rose-50 text-rose-700 border border-rose-200">
                     <span className="w-2 h-2 rounded-full bg-rose-500" />{" "}
-                    Infracción Crítica
+                    Infracción Crítica / Ausencia
                   </span>
                   <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
                     <span className="w-2 h-2 rounded-full bg-amber-500" />{" "}
@@ -1284,7 +1396,6 @@ export default function FichaComportamiento() {
                   </div>
                 ))}
 
-                {/* Casilleros vacíos de desfase para iniciar en la columna correcta */}
                 {Array.from({ length: diasOffsetInicioMes }).map((_, idx) => (
                   <div
                     key={`vacio-${idx}`}
@@ -1298,17 +1409,27 @@ export default function FichaComportamiento() {
                   const estaSeleccionado =
                     diaInspeccionado?.fecha === dia.fecha;
 
+                  const esFuturo =
+                    dia.estadoGeneral === "FUTURO" || dia.fecha > hoyIso;
+
+                  const esSinRegistro =
+                    !esFuturo && dia.estadoGeneral === "SIN_REGISTRO";
+
                   const esCritica =
-                    dia.estadoGeneral === "INFRACCION" ||
-                    (fichaData?.incidentes || []).some(
-                      (inc) =>
-                        inc.fecha === dia.fecha &&
-                        (inc.severidad === "CRÍTICA" ||
-                          inc.tipo?.toLowerCase().includes("clase")),
-                    );
+                    !esFuturo &&
+                    (dia.estadoGeneral === "INFRACCION" ||
+                      esSinRegistro ||
+                      (fichaData?.incidentes || []).some(
+                        (inc) =>
+                          String(inc.fecha).split("T")[0] === dia.fecha &&
+                          (inc.severidad === "CRÍTICA" ||
+                            inc.severidad === "CRITICA" ||
+                            inc.tipo?.toLowerCase().includes("clase")),
+                      ));
 
                   const esDesvio =
                     !esCritica &&
+                    !esFuturo &&
                     (dia.totalIncidentes > 0 || dia.estadoGeneral === "DESVIO");
 
                   const esSalidaIntermedia =
@@ -1316,12 +1437,6 @@ export default function FichaComportamiento() {
 
                   const esNormal =
                     !esCritica && !esDesvio && dia.presenciaNetaMinutos > 0;
-
-                  const esFuturo =
-                    dia.estadoGeneral === "FUTURO" || dia.fecha > hoyIso;
-
-                  const esSinRegistro =
-                    !esFuturo && dia.estadoGeneral === "SIN_REGISTRO";
 
                   let cardBgClasses =
                     "bg-white border-slate-200 hover:border-slate-300";
@@ -1343,8 +1458,6 @@ export default function FichaComportamiento() {
                   } else if (esNormal) {
                     cardBgClasses =
                       "bg-emerald-50/40 border-emerald-300 hover:border-emerald-400 hover:shadow-sm";
-                  } else if (esSinRegistro) {
-                    cardBgClasses = "bg-slate-50/70 border-slate-200";
                   }
 
                   return (
@@ -1380,6 +1493,12 @@ export default function FichaComportamiento() {
                               m.
                             </div>
                           )}
+
+                        {esSinRegistro && (
+                          <div className="text-[10px] font-bold text-rose-700 mt-1">
+                            Ausencia
+                          </div>
+                        )}
                       </div>
 
                       <div className="mt-2">
@@ -1389,7 +1508,9 @@ export default function FichaComportamiento() {
                           </span>
                         ) : esCritica ? (
                           <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-rose-600 text-white text-[10px] font-bold shadow-2xs">
-                            <span>⚠ Crítica ({dia.totalIncidentes})</span>
+                            <span>
+                              ⚠ Crítica ({Math.max(1, dia.totalIncidentes)})
+                            </span>
                           </div>
                         ) : esDesvio ? (
                           <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-500 text-white text-[10px] font-bold shadow-2xs">
@@ -1404,10 +1525,6 @@ export default function FichaComportamiento() {
                           <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-600 text-white text-[10px] font-bold shadow-2xs">
                             <span>✓ {dia.presenciaNetaTexto}</span>
                           </div>
-                        ) : esSinRegistro ? (
-                          <span className="text-[10px] text-rose-500 font-semibold">
-                            Ausencia
-                          </span>
                         ) : (
                           <span className="text-[10px] text-slate-400 italic">
                             Sin registros
@@ -1422,6 +1539,63 @@ export default function FichaComportamiento() {
           )}
         </div>
       </div>
+
+      {/* MODAL CON LA LISTA DE INCIDENTES AL CLICKEAR EL KPI DE INCIDENTES REGISTRADOS */}
+      {modalListaIncidentesAbierto && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl w-full max-w-3xl shadow-2xl overflow-hidden border border-slate-200 animate-in zoom-in-95 max-h-[90vh] flex flex-col">
+            <div className="bg-[#111827] px-6 py-4 text-white flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-2.5 font-bold text-sm">
+                <AlertTriangle className="w-5 h-5 text-rose-400" />
+                <span>
+                  Listado de Incidentes Registrados (
+                  {fichaData?.incidentes?.length || 0})
+                </span>
+              </div>
+              <button
+                onClick={() => setModalListaIncidentesAbierto(false)}
+                className="text-slate-400 hover:text-white cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-3 overflow-y-auto flex-1">
+              {!fichaData?.incidentes || fichaData.incidentes.length === 0 ? (
+                <div className="p-8 text-center text-slate-400 italic text-xs">
+                  No se registran incidentes ni ausencias en este período.
+                </div>
+              ) : (
+                fichaData.incidentes.map((inc) =>
+                  renderItemIncidenteInteractivo(inc, true),
+                )
+              )}
+            </div>
+
+            <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex justify-end shrink-0">
+              <button
+                type="button"
+                onClick={() => setModalListaIncidentesAbierto(false)}
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-xl font-medium text-xs cursor-pointer transition"
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DE RESOLUCIÓN / JUSTIFICACIÓN DIRECTO EN LA FICHA */}
+      <ModalJustificarIncidente
+        incidente={incidenteSeleccionado}
+        isOpen={modalJustificarAbierto}
+        readOnly={modoSoloLecturaModal || !puedeJustificar}
+        onClose={() => {
+          setModalJustificarAbierto(false);
+          setIncidenteSeleccionado(null);
+        }}
+        onGuardar={handleGuardarJustificacion}
+      />
     </div>
   );
 }

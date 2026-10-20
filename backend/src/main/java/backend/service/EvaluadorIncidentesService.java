@@ -31,6 +31,7 @@ public class EvaluadorIncidentesService {
     private final EmpleadoFichajeRepository fichajeRepo;
     private final IncidenteAsistenciaRepository incidenteRepo;
     private final HorarioService horarioService;
+    
 
     public EvaluadorIncidentesService(
             EmpleadoRepository empleadoRepo,
@@ -43,6 +44,12 @@ public class EvaluadorIncidentesService {
         this.fichajeRepo = fichajeRepo;
         this.incidenteRepo = incidenteRepo;
         this.horarioService = horarioService;
+    }
+
+    @org.springframework.scheduling.annotation.Scheduled(cron = "0 55 23 * * *")
+    @Transactional
+    public void cierreDiarioAutomatico() {
+        evaluarFecha(LocalDate.now());
     }
 
     @Transactional
@@ -241,6 +248,51 @@ public class EvaluadorIncidentesService {
         if (!incidentesAGuardar.isEmpty()) {
             incidenteRepo.saveAll(incidentesAGuardar);
             log.info(">>> Auditoría finalizada para {}: {} registros generados.", fecha, incidentesAGuardar.size());
+        }
+    }
+
+    @Transactional
+    public void asegurarAusenciasEmpleadoRango(Empleado emp, List<EmpleadoHorario> horariosActivos,
+                                               List<EmpleadoFichaje> fichajesPeriodo,
+                                               LocalDate desde, LocalDate hasta) {
+        if (horariosActivos == null || horariosActivos.isEmpty()) return;
+
+        Set<Integer> diasConHorario = horariosActivos.stream()
+                .map(EmpleadoHorario::getDiaSemana)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+
+        Set<LocalDate> diasConFichaje = fichajesPeriodo.stream()
+                .map(f -> f.getHoraFichaje().toLocalDate())
+                .collect(Collectors.toSet());
+
+        List<IncidenteAsistencia> nuevasAusencias = new ArrayList<>();
+        LocalDate hoy = LocalDate.now();
+        LocalDate limite = hasta.isAfter(hoy) ? hoy : hasta;
+
+        LocalDate cur = desde;
+        while (!cur.isAfter(limite)) {
+            // Si el empleado tenía obligación de asistir ese día de la semana y no tiene ni 1 fichaje
+            if (diasConHorario.contains(cur.getDayOfWeek().getValue()) && !diasConFichaje.contains(cur)) {
+                if (!existeIncidente(cur, emp.getId(), "AUSENCIAS")) {
+                    IncidenteAsistencia inc = new IncidenteAsistencia();
+                    inc.setFecha(cur);
+                    inc.setHora(LocalTime.MIDNIGHT);
+                    inc.setEmpleado(emp);
+                    inc.setSeveridad("CRÍTICA");
+                    inc.setCategoriaRegla("AUSENCIAS");
+                    inc.setTipo("Inasistencia injustificada en jornada obligatoria");
+                    inc.setDetalle("El empleado no registró ninguna marcación durante su día asignado.");
+                    inc.setEstado("PENDIENTE");
+                    inc.setIdEventoAgrupador("AUSENCIA_" + cur + "_" + emp.getId());
+                    nuevasAusencias.add(inc);
+                }
+            }
+            cur = cur.plusDays(1);
+        }
+
+        if (!nuevasAusencias.isEmpty()) {
+            incidenteRepo.saveAll(nuevasAusencias);
         }
     }
 
