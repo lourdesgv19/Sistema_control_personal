@@ -29,3 +29,7 @@ export const getCalendarioSemanal = (
 // 3. Alta de nueva materia con asignación semanal
 export const postNuevaMateria = (payload) =>
   api.post("/gestion-materias", payload);
+
+// 4. Obtener catálogo de materias agrupadas
+export const getCatalogoMateriasAgrupadas = () =>
+  api.get("/gestion-materias/catalogo-agrupado");

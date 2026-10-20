@@ -83,7 +83,7 @@ export default function Sidebar() {
     },
     {
       to: "/horarios-catedras",
-      label: "Horarios y Cátedras",
+      label: "Horarios por empleado",
       icon: Clock,
       permiso: "CONFIG_VER",
     },

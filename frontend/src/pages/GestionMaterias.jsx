@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   BookOpen,
   Plus,
@@ -7,29 +7,16 @@ import {
   DollarSign,
   ChevronDown,
   ChevronUp,
-  Search,
-  Pencil,
-  Trash2,
-  RotateCcw,
-  Clock,
-  AlertTriangle,
-  CheckCircle2,
-  XCircle,
   Lock,
-  Loader2,
 } from "lucide-react";
 import { formatearHorasYMinutos } from "../utils/fechasFichaUtils";
 import CalendarioSemanalMaterias from "../components/materias/CalendarioSemanalMaterias";
+import CatalogoMateriasABM from "../components/materias/CatalogoMateriasABM";
 import TablaLiquidacionDocente from "../components/materias/TablaLiquidacionDocente";
 import ModalNuevaMateria from "../components/materias/ModalNuevaMateria";
 import ModalAlerta from "../components/comunes/ModalAlerta";
 import { useAuth } from "../context/AuthContext";
-import {
-  getMaterias,
-  updateMateria,
-  deleteMateria,
-  reactivarMateria,
-} from "../services/configuracionService";
+import { deleteMateria } from "../services/configuracionService";
 import { getResumenMaterias } from "../services/gestionMateriasService";
 
 export default function GestionMaterias() {
@@ -48,9 +35,9 @@ export default function GestionMaterias() {
 
   const [tab, setTab] = useState("calendario");
   const [mostrarResumen, setMostrarResumen] = useState(false);
-  const [modalAlta, setModalAlta] = useState(false);
+  const [modalMateria, setModalMateria] = useState(false);
+  const [materiaAEditar, setMateriaAEditar] = useState(null);
 
-  // Fecha de referencia semanal (Lunes actual)
   const [fechaLunes] = useState(() => {
     const d = new Date();
     const day = d.getDay();
@@ -59,7 +46,6 @@ export default function GestionMaterias() {
     return monday.toISOString().split("T")[0];
   });
 
-  // Métricas superiores obtenidas 100% desde la BD
   const [metricas, setMetricas] = useState({
     horasDictadas: 0.0,
     horasFijadas: 0.0,
@@ -71,16 +57,6 @@ export default function GestionMaterias() {
     totalDeduccion: 0,
   });
 
-  // Catálogo ABM
-  const [materias, setMaterias] = useState([]);
-  const [busquedaCatalogo, setBusquedaCatalogo] = useState("");
-  const [filtroEstado, setFiltroEstado] = useState("TODOS");
-  const [loading, setLoading] = useState(false);
-
-  // Modal para Edición Rápida en ABM
-  const [materiaAEditar, setMateriaAEditar] = useState(null);
-
-  // Modal Alerta Centralizado
   const [modalAlerta, setModalAlerta] = useState({
     isOpen: false,
     tipo: "info",
@@ -105,27 +81,17 @@ export default function GestionMaterias() {
   };
 
   const cargarDatos = useCallback(async () => {
-    setLoading(true);
     try {
       const finSemana = new Date(fechaLunes + "T00:00:00");
       finSemana.setDate(finSemana.getDate() + 5);
       const fechaFinStr = finSemana.toISOString().split("T")[0];
 
-      const [matsRes, resuRes] = await Promise.allSettled([
-        getMaterias(),
-        getResumenMaterias(fechaLunes, fechaFinStr),
-      ]);
-
-      if (matsRes.status === "fulfilled" && Array.isArray(matsRes.value)) {
-        setMaterias(matsRes.value);
-      }
-      if (resuRes.status === "fulfilled" && resuRes.value?.data) {
-        setMetricas(resuRes.value.data);
+      const resuRes = await getResumenMaterias(fechaLunes, fechaFinStr);
+      if (resuRes?.data) {
+        setMetricas(resuRes.data);
       }
     } catch (err) {
-      console.error("Error al sincronizar datos:", err);
-    } finally {
-      setLoading(false);
+      console.error("Error al sincronizar métricas de materias:", err);
     }
   }, [fechaLunes]);
 
@@ -162,68 +128,30 @@ export default function GestionMaterias() {
     });
   };
 
-  const handleReactivarMateria = (id, nombre) => {
-    if (!puedeEliminar) return;
-    setModalAlerta({
-      isOpen: true,
-      tipo: "info",
-      titulo: "¿Reactivar materia?",
-      mensaje: `¿Desea reactivar la materia "${nombre}" en el catálogo?`,
-      textoConfirmar: "Sí, reactivar",
-      textoCancelar: "Cancelar",
-      mostrarCancelar: true,
-      onConfirmar: async () => {
-        setModalAlerta((p) => ({ ...p, isOpen: false }));
-        try {
-          await reactivarMateria(id);
-          await cargarDatos();
-          mostrarAviso(
-            "success",
-            "Éxito",
-            `La materia "${nombre}" fue reactivada.`,
-          );
-        } catch (err) {
-          mostrarAviso("danger", "Error", "No se pudo reactivar la materia.");
-        }
-      },
-    });
+  // Abrir modal para crear materia
+  const handleAbrirCrear = () => {
+    setMateriaAEditar(null);
+    setModalMateria(true);
   };
 
-  const handleGuardarEdicion = async (e) => {
-    e.preventDefault();
-    if (!materiaAEditar) return;
-    try {
-      await updateMateria(materiaAEditar.id, materiaAEditar);
-      setMateriaAEditar(null);
-      await cargarDatos();
-      mostrarAviso(
-        "success",
-        "Modificación Exitosa",
-        "Los datos de la cátedra fueron actualizados.",
-      );
-    } catch (err) {
-      mostrarAviso("danger", "Error", "No se pudo guardar la modificación.");
-    }
-  };
-
-  const materiasFiltradas = useMemo(() => {
-    return materias.filter((m) => {
-      const cumpleEstado =
-        filtroEstado === "TODOS" ||
-        (filtroEstado === "ACTIVOS" && m.activo !== false) ||
-        (filtroEstado === "INACTIVOS" && m.activo === false);
-
-      const q = busquedaCatalogo.toLowerCase().trim();
-      const cumpleBusqueda =
-        !q ||
-        m.nombre?.toLowerCase().includes(q) ||
-        m.codigo?.toLowerCase().includes(q) ||
-        m.departamento?.toLowerCase().includes(q) ||
-        m.aulaPredeterminada?.toLowerCase().includes(q);
-
-      return cumpleEstado && cumpleBusqueda;
+  // Abrir modal para editar horario/materia existente
+  const handleAbrirEditarHorario = (horario, materia) => {
+    setMateriaAEditar({
+      idMateria: materia.idMateria,
+      nombre: materia.nombre,
+      codigo: materia.codigo,
+      aula: horario.aula,
+      diaSemana: horario.diaSemana,
+      diasSemana: [horario.diaSemana],
+      horaInicio: horario.horaInicio,
+      horaFin: horario.horaFin,
+      idDocente: horario.idDocente,
+      idDocenteTitular: horario.idDocente,
+      tarifaHora: horario.tarifaHora,
+      idHorario: horario.idHorario,
     });
-  }, [materias, filtroEstado, busquedaCatalogo]);
+    setModalMateria(true);
+  };
 
   if (!puedeVerMaterias) {
     return (
@@ -281,7 +209,7 @@ export default function GestionMaterias() {
           {puedeCrear && (
             <button
               type="button"
-              onClick={() => setModalAlta(true)}
+              onClick={handleAbrirCrear}
               className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#4b35e6] hover:bg-[#3f2bc9] text-white text-xs font-semibold shadow-xs transition cursor-pointer"
             >
               <Plus className="w-4 h-4 stroke-[2.5]" />
@@ -301,6 +229,7 @@ export default function GestionMaterias() {
           )}
         </div>
       </div>
+
       {/* 2. TARJETAS KPI DE RESUMEN */}
       {mostrarResumen && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 animate-in fade-in duration-200">
@@ -380,6 +309,7 @@ export default function GestionMaterias() {
           </div>
         </div>
       )}
+
       {/* 3. TABS */}
       <div className="bg-white border border-slate-200 rounded-2xl p-1.5 shadow-xs flex items-center justify-between">
         <div className="flex bg-slate-100 p-1 rounded-xl text-xs font-semibold text-slate-600">
@@ -404,7 +334,7 @@ export default function GestionMaterias() {
                 : "hover:text-slate-900"
             }`}
           >
-            <BookOpen className="w-4 h-4" /> Catálogo & ABM ({materias.length})
+            <BookOpen className="w-4 h-4" /> Catálogo & ABM
           </button>
 
           {puedeLiquidar && (
@@ -422,233 +352,74 @@ export default function GestionMaterias() {
           )}
         </div>
       </div>
+
       {/* 4. CONTENIDO */}
-      {tab === "calendario" && <CalendarioSemanalMaterias />}
-      {tab === "catalogo" && (
-        <div className="space-y-4">
-          <div className="bg-white p-3.5 border border-slate-200 rounded-2xl shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3">
-            <div className="relative flex-1">
-              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input
-                type="text"
-                value={busquedaCatalogo}
-                onChange={(e) => setBusquedaCatalogo(e.target.value)}
-                placeholder="Buscar por materia, código o aula..."
-                className="w-full pl-9 pr-3 py-2 text-xs border border-slate-200 rounded-xl outline-none focus:border-indigo-600"
-              />
-            </div>
-
-            <div className="flex items-center gap-2 text-xs text-slate-600">
-              <span className="font-semibold text-slate-500">Estado:</span>
-              <select
-                value={filtroEstado}
-                onChange={(e) => setFiltroEstado(e.target.value)}
-                className="border border-slate-200 text-slate-700 font-semibold rounded-xl px-3 py-2 text-xs outline-none focus:border-indigo-600 bg-white"
-              >
-                <option value="TODOS">Todos</option>
-                <option value="ACTIVOS">Solo Activos</option>
-                <option value="INACTIVOS">Solo Bajas</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-xs">
-            <table className="w-full text-left text-xs border-collapse">
-              <thead className="bg-[#f8fafc] text-slate-500 font-bold uppercase text-[10px] tracking-wider border-b border-slate-200/80">
-                <tr>
-                  <th className="px-6 py-3.5">Materia / Asignatura</th>
-                  <th className="px-6 py-3.5">Aula Base</th>
-                  <th className="px-6 py-3.5">Tarifa Cátedra</th>
-                  <th className="px-6 py-3.5">Estado</th>
-                  <th className="px-6 py-3.5 text-right">Acciones</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 text-slate-800">
-                {materiasFiltradas.length > 0 ? (
-                  materiasFiltradas.map((m) => (
-                    <tr
-                      key={m.id}
-                      className="hover:bg-slate-50/70 transition-colors"
-                    >
-                      <td className="px-6 py-4 font-bold text-slate-900">
-                        {m.nombre}
-                        {m.codigo && (
-                          <span className="text-slate-400 font-mono text-[11px] block">
-                            {m.codigo}
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-6 py-4 text-slate-600">
-                        {m.aulaPredeterminada || "Sin asignar"}
-                      </td>
-                      <td className="px-6 py-4 font-semibold text-slate-900 font-mono">
-                        $
-                        {Number(m.tarifaHoraCatedra || 5200).toLocaleString(
-                          "es-AR",
-                        )}
-                        /h
-                      </td>
-                      <td className="px-6 py-4">
-                        <span
-                          className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
-                            m.activo !== false
-                              ? "bg-emerald-100 text-emerald-800"
-                              : "bg-rose-100 text-rose-800"
-                          }`}
-                        >
-                          {m.activo !== false ? "Activo" : "Inactivo"}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 text-right">
-                        <div className="flex items-center justify-end gap-2 text-slate-400">
-                          {puedeEditar && (
-                            <button
-                              type="button"
-                              onClick={() => setMateriaAEditar({ ...m })}
-                              className="p-1 hover:text-indigo-600 transition cursor-pointer"
-                              title="Editar materia"
-                            >
-                              <Pencil className="w-4 h-4" />
-                            </button>
-                          )}
-
-                          {puedeEliminar &&
-                            (m.activo !== false ? (
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  handleEliminarMateria(m.id, m.nombre)
-                                }
-                                className="p-1 hover:text-rose-600 transition cursor-pointer"
-                                title="Dar de baja"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            ) : (
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  handleReactivarMateria(m.id, m.nombre)
-                                }
-                                className="p-1 hover:text-emerald-600 transition cursor-pointer"
-                                title="Reactivar materia"
-                              >
-                                <RotateCcw className="w-4 h-4 text-emerald-600" />
-                              </button>
-                            ))}
-                        </div>
-                      </td>
-                    </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td
-                      colSpan={5}
-                      className="text-center py-12 text-slate-400 text-xs"
-                    >
-                      {loading
-                        ? "Cargando materias..."
-                        : "No se encontraron materias registradas con los filtros actuales."}
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
+      {tab === "calendario" && (
+        <CalendarioSemanalMaterias
+          onEditarMateriaParam={(clase) => {
+            setMateriaAEditar({
+              idMateria: clase.idMateria,
+              nombre: clase.nombreMateria,
+              aula: clase.aula,
+              diaSemana: clase.diaSemana,
+              diasSemana: [clase.diaSemana],
+              horaInicio: clase.horaInicio,
+              horaFin: clase.horaFin,
+              idDocente: clase.idDocente,
+              tarifaHora: clase.tarifaHora,
+              idHorario: clase.idHorario,
+            });
+            setModalMateria(true);
+          }}
+        />
       )}
+
+      {tab === "catalogo" && (
+        <CatalogoMateriasABM
+          onNuevaMateria={handleAbrirCrear}
+          onEditarMateria={(materia) => {
+            setMateriaAEditar({
+              idMateria: materia.idMateria,
+              nombre: materia.nombre,
+              codigo: materia.codigo,
+              aula: materia.aulaPredeterminada,
+              tarifaHora: materia.tarifaHora,
+              idDocenteTitular: materia.idDocenteTitular,
+            });
+            setModalMateria(true);
+          }}
+          onEditarHorario={handleAbrirEditarHorario}
+          onEliminarMateria={handleEliminarMateria}
+          puedeCrear={puedeCrear}
+          puedeEditar={puedeEditar}
+          puedeEliminar={puedeEliminar}
+        />
+      )}
+
       {tab === "liquidacion" && puedeLiquidar && <TablaLiquidacionDocente />}
-      {/* MODAL ALTA DE MATERIA */}
-      {modalAlta && puedeCrear && (
+
+      {/* MODAL UNIFICADO: ALTA O EDICIÓN DE MATERIA */}
+      {modalMateria && (
         <ModalNuevaMateria
-          onClose={() => setModalAlta(false)}
+          materiaAEditar={materiaAEditar}
+          onClose={() => {
+            setModalMateria(false);
+            setMateriaAEditar(null);
+          }}
           onCreado={async () => {
             await cargarDatos();
             mostrarAviso(
               "success",
-              "Cátedra Asignada",
-              "La materia y sus horarios fueron registrados en el cronograma institucional.",
+              "Operación Exitosa",
+              materiaAEditar
+                ? "La cátedra y sus horarios fueron actualizados correctamente."
+                : "La nueva materia fue registrada en el cronograma institucional.",
             );
           }}
         />
       )}
-      {/* MODAL DE EDICIÓN EN ABM */}
-      {materiaAEditar && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 animate-in fade-in duration-150">
-          <div className="bg-white rounded-3xl w-full max-w-md shadow-xl overflow-hidden border border-slate-100 p-6">
-            <h3 className="text-sm font-bold text-slate-900 mb-4">
-              Editar Cátedra
-            </h3>
-            <form onSubmit={handleGuardarEdicion} className="space-y-3 text-xs">
-              <div>
-                <label className="font-semibold text-slate-700 block mb-1">
-                  Nombre
-                </label>
-                <input
-                  required
-                  value={materiaAEditar.nombre}
-                  onChange={(e) =>
-                    setMateriaAEditar({
-                      ...materiaAEditar,
-                      nombre: e.target.value,
-                    })
-                  }
-                  className="w-full px-3 py-2 border border-slate-200 rounded-xl outline-none focus:border-indigo-600"
-                />
-              </div>
-              <div>
-                <label className="font-semibold text-slate-700 block mb-1">
-                  Aula Predeterminada
-                </label>
-                <input
-                  value={materiaAEditar.aulaPredeterminada || ""}
-                  onChange={(e) =>
-                    setMateriaAEditar({
-                      ...materiaAEditar,
-                      aulaPredeterminada: e.target.value,
-                    })
-                  }
-                  className="w-full px-3 py-2 border border-slate-200 rounded-xl outline-none focus:border-indigo-600"
-                />
-              </div>
-              <div>
-                <label className="font-semibold text-slate-700 block mb-1">
-                  Tarifa Cátedra ($/hora)
-                </label>
-                <input
-                  type="number"
-                  min="0"
-                  step="100"
-                  value={materiaAEditar.tarifaHoraCatedra || 0}
-                  onChange={(e) =>
-                    setMateriaAEditar({
-                      ...materiaAEditar,
-                      tarifaHoraCatedra: Number(e.target.value),
-                    })
-                  }
-                  className="w-full px-3 py-2 border border-slate-200 rounded-xl outline-none focus:border-indigo-600 font-bold"
-                />
-              </div>
-              <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setMateriaAEditar(null)}
-                  className="px-4 py-2 rounded-xl text-slate-600 font-semibold hover:bg-slate-50 cursor-pointer"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold cursor-pointer shadow-xs"
-                >
-                  Guardar Cambios
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-      {/* MODAL DE ALERTA UNIFICADO */}
+
+      {/* MODAL ALERTA CENTRALIZADO */}
       <ModalAlerta
         isOpen={modalAlerta.isOpen}
         tipo={modalAlerta.tipo}

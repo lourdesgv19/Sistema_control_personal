@@ -1,6 +1,7 @@
 package backend.controller;
 
 import backend.dto.CalendarioSemanalDTO;
+import backend.dto.GestionMateriasDTO;
 import backend.dto.GestionMateriasDTO.*;
 import backend.service.GestionMateriasService;
 import backend.service.CalendarioSemanalService;
@@ -49,5 +50,10 @@ public class GestionMateriasController {
         } catch (IllegalArgumentException | IllegalStateException e) {
             return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
         }
+    }
+
+    @GetMapping("/catalogo-agrupado")
+    public ResponseEntity<List<GestionMateriasDTO.MateriaCatalogoDTO>> getCatalogoAgrupado() {
+     return ResponseEntity.ok(service.obtenerCatalogoMateriasAgrupadas());
     }
 }
