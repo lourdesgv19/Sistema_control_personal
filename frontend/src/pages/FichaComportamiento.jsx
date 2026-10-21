@@ -24,6 +24,9 @@ import {
   Palette,
   Lock,
   GraduationCap,
+  CalendarOff,
+  UserX,
+  CalendarCheck,
 } from "lucide-react";
 import ListaEmpleadosSidebar from "../components/comunes/ListaEmpleadosSidebar";
 import ModalJustificarIncidente from "../components/incidentes/ModalJustificarIncidente";
@@ -70,10 +73,7 @@ export default function FichaComportamiento() {
   const [fechaConsulta, setFechaConsulta] = useState(fechaInicial);
   const [fechaHastaRango, setFechaHastaRango] = useState(fechaInicial);
 
-  // Estado para expandir/colapsar los meses en vistas Trimestral y Cuatrimestral
   const [mesesExpandidos, setMesesExpandidos] = useState({});
-
-  // Estados para inspección diaria y modales
   const [diaInspeccionado, setDiaInspeccionado] = useState(null);
   const [modalListaIncidentesAbierto, setModalListaIncidentesAbierto] =
     useState(false);
@@ -82,12 +82,10 @@ export default function FichaComportamiento() {
   const [loadingFicha, setLoadingFicha] = useState(false);
   const [fichaData, setFichaData] = useState(null);
 
-  // Estados para abrir el ModalJustificarIncidente directamente aquí
   const [incidenteSeleccionado, setIncidenteSeleccionado] = useState(null);
   const [modalJustificarAbierto, setModalJustificarAbierto] = useState(false);
   const [modoSoloLecturaModal, setModoSoloLecturaModal] = useState(false);
 
-  // Rangos calculados modularmente
   const { inicioSemanaStr, finSemanaStr } = useMemo(
     () => calcularRangoSemana(fechaConsulta),
     [fechaConsulta],
@@ -102,7 +100,6 @@ export default function FichaComportamiento() {
     return calcularOffsetPrimerDia(fichaData.diasPeriodo[0].fecha);
   }, [fichaData]);
 
-  // Manejo de la expansión de meses
   const toggleMes = (mesKey) => {
     setMesesExpandidos((prev) => ({ ...prev, [mesKey]: !prev[mesKey] }));
   };
@@ -282,13 +279,123 @@ export default function FichaComportamiento() {
     );
   }, [fichaData]);
 
+  // EVALUACIÓN DE LA JORNADA DIARIA (CONTROL DE DÍAS FUTUROS vs PASADOS/HOY)
+  const estadoJornadaDiaria = useMemo(() => {
+    if (modalidad !== "DIARIO") {
+      return {
+        esSinHorario: false,
+        esInasistencia: false,
+        esFuturoConHorario: false,
+        tieneDatos: true,
+      };
+    }
+
+    const esFechaFutura = fechaConsulta > hoyIso;
+    const franjasTeoricas =
+      fichaData?.planificados || fichaData?.planificado || [];
+    const tieneHorariosPlanificados =
+      Array.isArray(franjasTeoricas) && franjasTeoricas.length > 0;
+
+    const tienePresencia =
+      (fichaData?.presenciaReal && fichaData.presenciaReal.length > 0) ||
+      (fichaData?.fichajesBrutos && fichaData.fichajesBrutos.length > 0) ||
+      (metricas?.presenciaNetaTexto &&
+        metricas.presenciaNetaTexto !== "0h 0m" &&
+        metricas.presenciaNetaTexto !== "0h 00m");
+
+    const tieneIncidentes =
+      Array.isArray(fichaData?.incidentes) &&
+      fichaData.incidentes.some((inc) =>
+        !inc.fecha ? true : String(inc.fecha).split("T")[0] === fechaConsulta,
+      );
+
+    // 1. DÍA FUTURO
+    if (esFechaFutura) {
+      if (tieneHorariosPlanificados) {
+        // Tiene horario fijado para un día que aún no ocurrió: NO ES ERROR, ES PROGRAMADO
+        return {
+          esSinHorario: false,
+          esInasistencia: false,
+          esFuturoConHorario: true,
+          tieneDatos: false,
+          planificados: franjasTeoricas,
+        };
+      }
+      // Futuro sin horario laboral asignado
+      return {
+        esSinHorario: true,
+        esInasistencia: false,
+        esFuturoConHorario: false,
+        tieneDatos: false,
+      };
+    }
+
+    // 2. DÍA PASADO O DÍA DE HOY
+    // Tenía horario obligatorio pero no asistió (Ausencia)
+    if (tieneHorariosPlanificados && !tienePresencia) {
+      return {
+        esSinHorario: false,
+        esInasistencia: true,
+        esFuturoConHorario: false,
+        tieneDatos: false,
+        planificados: franjasTeoricas,
+      };
+    }
+
+    // No tenía horario asignado ni fichajes ni incidentes (Franco / Día sin horario)
+    if (!tieneHorariosPlanificados && !tienePresencia && !tieneIncidentes) {
+      return {
+        esSinHorario: true,
+        esInasistencia: false,
+        esFuturoConHorario: false,
+        tieneDatos: false,
+      };
+    }
+
+    return {
+      esSinHorario: false,
+      esInasistencia: false,
+      esFuturoConHorario: false,
+      tieneDatos: true,
+    };
+  }, [modalidad, fichaData, metricas, fechaConsulta, hoyIso]);
+
+  // AUTO-SCROLL A INCIDENTES: ÚNICAMENTE SI ES DÍA PASADO/HOY Y HUBO FALTA REAL
+  useEffect(() => {
+    if (
+      modalidad === "DIARIO" &&
+      estadoJornadaDiaria.esInasistencia &&
+      !loadingFicha
+    ) {
+      setTabInferior("INCIDENTES");
+      const timer = setTimeout(() => {
+        if (tablaDetalleRef.current) {
+          tablaDetalleRef.current.scrollIntoView({
+            behavior: "smooth",
+            block: "start",
+          });
+        }
+      }, 250);
+      return () => clearTimeout(timer);
+    }
+  }, [
+    modalidad,
+    estadoJornadaDiaria.esInasistencia,
+    loadingFicha,
+    fechaConsulta,
+  ]);
+
   const renderItemIncidenteInteractivo = (inc, mostrarFecha = false) => {
     const esCritica =
       inc.severidad === "CRÍTICA" || inc.severidad === "CRITICA";
     return (
       <div
         key={inc.id}
-        className={`p-3.5 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs transition ${esCritica ? "bg-rose-50/80 border-rose-200" : "bg-amber-50/80 border-amber-200"}`}
+        className={`p-3.5 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs transition ${
+          esCritica
+            ? "bg-rose-50/80 border-rose-200"
+            : "bg-amber-50/80 border-amber-200"
+        }`}
       >
         <div>
           <div className="flex items-center gap-2 flex-wrap">
@@ -306,7 +413,11 @@ export default function FichaComportamiento() {
               {inc.tipo}
             </span>
             <span
-              className={`text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${esCritica ? "bg-rose-600 text-white shadow-2xs" : "bg-amber-500 text-white shadow-2xs"}`}
+              className={`text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${
+                esCritica
+                  ? "bg-rose-600 text-white shadow-2xs"
+                  : "bg-amber-500 text-white shadow-2xs"
+              }`}
             >
               {inc.severidad}
             </span>
@@ -337,7 +448,11 @@ export default function FichaComportamiento() {
             <button
               type="button"
               onClick={() => abrirModalJustificarDirecto(inc, false)}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer shadow-2xs ${inc.estado === "PENDIENTE" ? "bg-indigo-600 hover:bg-indigo-700 text-white" : "bg-white hover:bg-slate-50 text-slate-700 border border-slate-200"}`}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer shadow-2xs ${
+                inc.estado === "PENDIENTE"
+                  ? "bg-indigo-600 hover:bg-indigo-700 text-white"
+                  : "bg-white hover:bg-slate-50 text-slate-700 border border-slate-200"
+              }`}
             >
               {inc.estado === "PENDIENTE" ? "Justificar" : "Editar"}
             </button>
@@ -453,7 +568,7 @@ export default function FichaComportamiento() {
               <span className="text-[10px] font-bold uppercase tracking-wider text-purple-700">
                 CLASES DICTADAS
               </span>
-              <div className="font-black text-purple-900 text-sm sm:text-base mt-1 font-mono">
+              <div className="font-black text-purple-950 text-sm sm:text-base mt-1 font-mono">
                 {diaInspeccionado.clasesDictadasTexto || "0h 0m / 0h 0m"}
               </div>
             </div>
@@ -565,6 +680,7 @@ export default function FichaComportamiento() {
         <div
           className={`print-full space-y-5 transition-all duration-300 ${sidebarAbierto ? "lg:col-span-9" : "lg:col-span-12"}`}
         >
+          {/* BARRA DE MODALIDAD */}
           <div className="bg-white border border-slate-200 rounded-3xl p-4 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4 no-print">
             <div className="flex items-center gap-2">
               <CalendarIcon className="w-4 h-4 text-indigo-600" />
@@ -593,7 +709,11 @@ export default function FichaComportamiento() {
                       setModalListaIncidentesAbierto(false);
                       setMesesExpandidos({});
                     }}
-                    className={`px-3.5 py-1.5 rounded-xl transition cursor-pointer whitespace-nowrap ${activo ? "bg-white text-indigo-700 shadow-xs border border-slate-200 font-bold" : "text-slate-600 hover:text-slate-900"}`}
+                    className={`px-3.5 py-1.5 rounded-xl transition cursor-pointer whitespace-nowrap ${
+                      activo
+                        ? "bg-white text-indigo-700 shadow-xs border border-slate-200 font-bold"
+                        : "text-slate-600 hover:text-slate-900"
+                    }`}
                   >
                     {label}
                   </button>
@@ -602,6 +722,7 @@ export default function FichaComportamiento() {
             </div>
           </div>
 
+          {/* BARRA DE FECHA Y NAVEGACIÓN */}
           <div className="bg-white border border-slate-200 rounded-2xl p-3 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="font-semibold text-slate-600 text-xs">
@@ -904,6 +1025,7 @@ export default function FichaComportamiento() {
             </div>
           </div>
 
+          {/* CABECERA DE DATOS DEL EMPLEADO */}
           <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div className="flex items-center gap-4">
               <div className="w-14 h-14 rounded-2xl bg-[#1e293b] flex items-center justify-center text-white font-bold text-base shadow-md overflow-hidden shrink-0">
@@ -938,372 +1060,624 @@ export default function FichaComportamiento() {
                   ? "CUMPLIMIENTO JORNADA"
                   : "CUMPLIMIENTO PERÍODO"}
               </div>
-              <div className="text-3xl font-black text-slate-900 mt-1">
-                {fichaData?.porcentajeCumplimiento || 0}%
+              <div
+                className={`text-3xl font-black mt-1 ${
+                  estadoJornadaDiaria.esInasistencia
+                    ? "text-rose-600"
+                    : estadoJornadaDiaria.esSinHorario ||
+                        estadoJornadaDiaria.esFuturoConHorario
+                      ? "text-slate-400"
+                      : "text-slate-900"
+                }`}
+              >
+                {estadoJornadaDiaria.esSinHorario ||
+                estadoJornadaDiaria.esFuturoConHorario
+                  ? "—"
+                  : `${fichaData?.porcentajeCumplimiento || 0}%`}
               </div>
             </div>
           </div>
 
-          {/* TARJETAS KPI ADAPTADAS */}
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-            <div className="bg-white border border-slate-200 p-4 rounded-2xl shadow-xs flex flex-col justify-between">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
-                {modalidad === "DIARIO"
-                  ? "1RA ENTRADA → EGRESO"
-                  : "DÍAS EN SEDE"}
-              </span>
-              <div className="text-sm font-black text-slate-900 mt-2 font-mono">
-                {modalidad === "DIARIO" ? (
-                  `${metricas.primeraEntrada} hs → ${metricas.ultimoEgreso} hs`
-                ) : (
-                  <span className="text-base font-bold font-sans text-slate-800">
-                    {metricas.primeraEntrada}
-                  </span>
-                )}
+          {/* ESCENARIO 1: DÍA FUTURO CON HORARIO PROGRAMADO (SIN ERROR NI INASISTENCIA) */}
+          {modalidad === "DIARIO" && estadoJornadaDiaria.esFuturoConHorario && (
+            <div className="bg-indigo-50/60 border-2 border-indigo-200 rounded-3xl p-6 sm:p-8 text-center space-y-4 shadow-sm animate-fadeIn">
+              <div className="w-14 h-14 mx-auto rounded-2xl bg-indigo-100 border border-indigo-200 flex items-center justify-center text-indigo-600 shadow-2xs">
+                <CalendarCheck className="w-7 h-7" />
               </div>
-            </div>
+              <div className="max-w-xl mx-auto space-y-1.5">
+                <span className="inline-block px-3 py-0.5 rounded-full bg-indigo-600 text-white font-bold text-[10px] uppercase tracking-wider shadow-2xs">
+                  Jornada Futura Programada
+                </span>
+                <h3 className="text-base sm:text-lg font-black text-slate-900">
+                  Horarios pautados para el{" "}
+                  {formatearFechaVisual(fechaConsulta)} (
+                  {obtenerNombreDia(fechaConsulta)})
+                </h3>
+                <p className="text-xs text-slate-600">
+                  Esta fecha es posterior al día de hoy. El colaborador tiene
+                  los siguientes horarios laborales registrados que deberá
+                  cumplir al iniciar la jornada.
+                </p>
+              </div>
 
-            <div className="bg-emerald-50/60 border border-emerald-200 p-4 rounded-2xl shadow-xs flex flex-col justify-between">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-800 block">
-                TOTAL HORAS NETAS
-              </span>
-              <div>
-                <div className="text-xl font-black text-emerald-950 mt-1">
-                  {metricas.presenciaNetaTexto}
-                </div>
-                {modalidad !== "DIARIO" && (
-                  <div className="text-[10px] font-semibold text-emerald-700 mt-0.5">
-                    {metricas.ultimoEgreso}
+              {/* Lista limpia de los horarios a cumplir */}
+              {Array.isArray(estadoJornadaDiaria.planificados) &&
+                estadoJornadaDiaria.planificados.length > 0 && (
+                  <div className="max-w-lg mx-auto bg-white/95 border border-indigo-100 rounded-2xl p-3.5 text-left text-xs shadow-2xs">
+                    <div className="text-[10px] font-bold text-indigo-900 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                      <Clock className="w-3.5 h-3.5 text-indigo-600" />
+                      Horarios a cumplir:
+                    </div>
+                    <div className="space-y-1.5">
+                      {estadoJornadaDiaria.planificados.map((p, idx) => (
+                        <div
+                          key={idx}
+                          className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-200/80 font-medium text-slate-700"
+                        >
+                          <span className="font-semibold text-slate-800">
+                            {p.etiqueta || "Turno Laboral"}
+                          </span>
+                          <span className="font-mono font-bold text-indigo-700">
+                            {p.horaInicio} hs → {p.horaFin} hs
+                          </span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
+
+              <div className="flex flex-wrap items-center justify-center gap-2.5 pt-2">
+                <button
+                  type="button"
+                  onClick={() => moverFecha(-1)}
+                  className="px-3.5 py-2 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer shadow-2xs"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                  Día anterior
+                </button>
+                <button
+                  type="button"
+                  onClick={() => moverFecha(1)}
+                  className="px-3.5 py-2 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer shadow-2xs"
+                >
+                  Día siguiente
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+                {fechaConsulta !== hoyIso && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFechaConsulta(hoyIso);
+                      setDiaInspeccionado(null);
+                    }}
+                    className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition cursor-pointer shadow-2xs"
+                  >
+                    Volver a Hoy
+                  </button>
+                )}
               </div>
             </div>
+          )}
 
-            {/* MOSTRAR KPI DE CLASES DICTADAS SOLO A DOCENTES Y CON PARSEO SEGURO */}
-            {esDocente && (
-              <div className="bg-purple-50/60 border border-purple-200 p-4 rounded-2xl shadow-xs flex flex-col justify-between">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-purple-800 block">
-                  CLASES DICTADAS
+          {/* ESCENARIO 2: PASADO / HOY CON HORARIO ASIGNADO PERO NO ASISTIÓ (INASISTENCIA REAL) */}
+          {modalidad === "DIARIO" && estadoJornadaDiaria.esInasistencia && (
+            <div className="bg-rose-50/80 border-2 border-rose-300 rounded-3xl p-6 sm:p-8 text-center space-y-4 shadow-sm animate-fadeIn">
+              <div className="w-14 h-14 mx-auto rounded-2xl bg-rose-100 border border-rose-200 flex items-center justify-center text-rose-600 shadow-2xs">
+                <UserX className="w-7 h-7" />
+              </div>
+              <div className="max-w-xl mx-auto space-y-1.5">
+                <span className="inline-block px-3 py-0.5 rounded-full bg-rose-600 text-white font-black text-[10px] uppercase tracking-wider shadow-2xs">
+                  Inasistencia detectada
+                </span>
+                <h3 className="text-base sm:text-lg font-black text-rose-950">
+                  El empleado tenía jornada laboral asignada pero no registró
+                  asistencia
+                </h3>
+                <p className="text-xs text-rose-800">
+                  Para el día{" "}
+                  <strong>{formatearFechaVisual(fechaConsulta)}</strong> (
+                  {obtenerNombreDia(fechaConsulta)}) constan franjas horarias
+                  obligatorias programadas, pero no se registraron marcaciones
+                  biométricas válidas de ingreso ni egreso.
+                </p>
+              </div>
+
+              {/* Detalle de los horarios obligatorios incumplidos */}
+              {Array.isArray(estadoJornadaDiaria.planificados) &&
+                estadoJornadaDiaria.planificados.length > 0 && (
+                  <div className="max-w-lg mx-auto bg-white/90 border border-rose-200 rounded-2xl p-3.5 text-left text-xs shadow-2xs">
+                    <div className="text-[10px] font-bold text-rose-900 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                      <Clock className="w-3.5 h-3.5 text-rose-600" />
+                      Horarios obligatorios que debía cumplir:
+                    </div>
+                    <div className="space-y-1.5">
+                      {estadoJornadaDiaria.planificados.map((p, idx) => (
+                        <div
+                          key={idx}
+                          className="flex items-center justify-between p-2 rounded-xl bg-rose-50/50 border border-rose-100 font-medium text-slate-700"
+                        >
+                          <span className="font-semibold text-rose-950">
+                            {p.etiqueta || "Turno Programado"}
+                          </span>
+                          <span className="font-mono font-bold text-rose-800">
+                            {p.horaInicio} hs → {p.horaFin} hs
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+              <div className="flex flex-wrap items-center justify-center gap-2.5 pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTabInferior("INCIDENTES");
+                    if (tablaDetalleRef.current) {
+                      tablaDetalleRef.current.scrollIntoView({
+                        behavior: "smooth",
+                        block: "start",
+                      });
+                    }
+                  }}
+                  className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                >
+                  <AlertTriangle className="w-3.5 h-3.5" />
+                  Ver Incidencia y Justificar Abajo
+                </button>
+                <button
+                  type="button"
+                  onClick={() => moverFecha(-1)}
+                  className="px-3.5 py-2 bg-white hover:bg-slate-50 border border-rose-200 text-slate-700 rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer shadow-2xs"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                  Día anterior
+                </button>
+                <button
+                  type="button"
+                  onClick={() => moverFecha(1)}
+                  className="px-3.5 py-2 bg-white hover:bg-slate-50 border border-rose-200 text-slate-700 rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer shadow-2xs"
+                >
+                  Día siguiente
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* ESCENARIO 3: NO TIENE HORARIO ASIGNADO NI ACTIVIDAD (FRANCO / NO LABORABLE) */}
+          {modalidad === "DIARIO" && estadoJornadaDiaria.esSinHorario && (
+            <div className="bg-white border border-slate-200 rounded-3xl p-8 sm:p-12 text-center space-y-4 shadow-xs animate-fadeIn">
+              <div className="w-16 h-16 mx-auto rounded-3xl bg-slate-50 border border-slate-200/80 flex items-center justify-center text-slate-400 shadow-2xs">
+                <CalendarOff className="w-8 h-8 text-slate-400" />
+              </div>
+              <div className="max-w-md mx-auto space-y-1.5">
+                <span className="inline-block px-3 py-0.5 rounded-full bg-slate-100 text-slate-600 font-bold text-[10px] uppercase tracking-wider">
+                  Sin registros ni horario
+                </span>
+                <h3 className="text-base sm:text-lg font-black text-slate-900">
+                  No hay datos para esta jornada
+                </h3>
+                <p className="text-xs text-slate-500 leading-relaxed">
+                  No existe registro de un horario laboral asignado ni
+                  marcaciones biométricas para el día{" "}
+                  <strong>{formatearFechaVisual(fechaConsulta)}</strong> (
+                  {obtenerNombreDia(fechaConsulta)}).
+                </p>
+                <p className="text-[11px] text-slate-400">
+                  Por favor, seleccione otro día utilizando el selector de
+                  fechas o los botones de navegación.
+                </p>
+              </div>
+
+              <div className="flex flex-wrap items-center justify-center gap-2.5 pt-3">
+                <button
+                  type="button"
+                  onClick={() => moverFecha(-1)}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                  Día anterior
+                </button>
+                <button
+                  type="button"
+                  onClick={() => moverFecha(1)}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer"
+                >
+                  Día siguiente
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+                {fechaConsulta !== hoyIso && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFechaConsulta(hoyIso);
+                      setDiaInspeccionado(null);
+                    }}
+                    className="px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-xs font-bold transition cursor-pointer"
+                  >
+                    Volver a Hoy
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* RENDERIZADO DE MÉTRICAS KPI (CUANDO HAY ACTIVIDAD REAL O ES VISTA MULTI-DÍA) */}
+          {(modalidad !== "DIARIO" ||
+            (!estadoJornadaDiaria.esSinHorario &&
+              !estadoJornadaDiaria.esInasistencia &&
+              !estadoJornadaDiaria.esFuturoConHorario)) && (
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+              <div className="bg-white border border-slate-200 p-4 rounded-2xl shadow-xs flex flex-col justify-between">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
+                  {modalidad === "DIARIO"
+                    ? "1RA ENTRADA → EGRESO"
+                    : "DÍAS EN SEDE"}
+                </span>
+                <div className="text-sm font-black text-slate-900 mt-2 font-mono">
+                  {modalidad === "DIARIO" ? (
+                    `${metricas.primeraEntrada} hs → ${metricas.ultimoEgreso} hs`
+                  ) : (
+                    <span className="text-base font-bold font-sans text-slate-800">
+                      {metricas.primeraEntrada}
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              <div className="bg-emerald-50/60 border border-emerald-200 p-4 rounded-2xl shadow-xs flex flex-col justify-between">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-800 block">
+                  TOTAL HORAS NETAS
                 </span>
                 <div>
-                  <div className="text-xl font-black text-purple-950 mt-1 font-mono">
-                    {String(
-                      metricas.clasesDictadasTexto || "0h 0m / 0h 0m (0%)",
-                    )
-                      .split("/")[0]
-                      .trim()}
+                  <div className="text-xl font-black text-emerald-950 mt-1">
+                    {metricas.presenciaNetaTexto}
                   </div>
-                  <div className="text-[10px] font-semibold text-purple-700 mt-0.5 font-mono">
-                    de{" "}
-                    {String(
-                      metricas.clasesDictadasTexto || "0h 0m / 0h 0m (0%)",
-                    ).split("/")[1]
-                      ? String(metricas.clasesDictadasTexto)
-                          .split("/")[1]
-                          .trim()
-                      : "0h 0m"}
+                  {modalidad !== "DIARIO" && (
+                    <div className="text-[10px] font-semibold text-emerald-700 mt-0.5">
+                      {metricas.ultimoEgreso}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {esDocente && (
+                <div className="bg-purple-50/60 border border-purple-200 p-4 rounded-2xl shadow-xs flex flex-col justify-between">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-purple-800 block">
+                    CLASES DICTADAS
+                  </span>
+                  <div>
+                    <div className="text-xl font-black text-purple-950 mt-1 font-mono">
+                      {String(
+                        metricas.clasesDictadasTexto || "0h 0m / 0h 0m (0%)",
+                      )
+                        .split("/")[0]
+                        .trim()}
+                    </div>
+                    <div className="text-[10px] font-semibold text-purple-700 mt-0.5 font-mono">
+                      de{" "}
+                      {String(
+                        metricas.clasesDictadasTexto || "0h 0m / 0h 0m (0%)",
+                      ).split("/")[1]
+                        ? String(metricas.clasesDictadasTexto)
+                            .split("/")[1]
+                            .trim()
+                        : "0h 0m"}
+                    </div>
                   </div>
                 </div>
-              </div>
-            )}
+              )}
 
-            <div className="bg-rose-50/60 border border-rose-200 p-4 rounded-2xl shadow-xs flex flex-col justify-between">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-rose-800 block">
-                HORAS EN CONTRA (DEUDA)
-              </span>
-              <div>
-                <div className="text-xl font-black text-rose-950 mt-1">
-                  -{metricas.horasEnContraTexto || "0h 0m"}
-                </div>
-                <div className="text-[10px] font-semibold text-rose-700 mt-0.5">
-                  {metricas.diasConDeficit || 0} día(s) con faltante
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-amber-50/50 border border-amber-200/70 p-4 rounded-2xl shadow-xs flex flex-col justify-between">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-amber-800 block">
-                SALIDAS INTERMEDIAS
-              </span>
-              <div className="text-base font-black text-amber-950 mt-1">
-                {metricas.salidasIntermediasCantidad}{" "}
-                {metricas.salidasIntermediasCantidad === 1
-                  ? "salida"
-                  : "salidas"}
-                <div className="text-[11px] font-bold text-amber-800">
-                  ({metricas.salidasIntermediasMinutos} min)
-                </div>
-              </div>
-            </div>
-
-            <div
-              onClick={() => {
-                if (modalidad === "DIARIO") {
-                  setTabInferior("INCIDENTES");
-                  setTimeout(() => {
-                    tablaDetalleRef.current?.scrollIntoView({
-                      behavior: "smooth",
-                      block: "start",
-                    });
-                  }, 50);
-                } else {
-                  setModalListaIncidentesAbierto(true);
-                }
-              }}
-              title="Haga clic para ver y justificar los incidentes registrados"
-              className="p-4 rounded-2xl shadow-xs flex flex-col justify-between transition cursor-pointer select-none border bg-white hover:bg-rose-50/40 border-rose-200 hover:border-rose-400"
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] font-bold uppercase tracking-wider block text-rose-600">
-                  INCIDENTES REGISTRADOS
+              <div className="bg-rose-50/60 border border-rose-200 p-4 rounded-2xl shadow-xs flex flex-col justify-between">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-rose-800 block">
+                  HORAS EN CONTRA (DEUDA)
                 </span>
-                <Eye className="w-3.5 h-3.5 text-rose-500" />
-              </div>
-              <div>
-                <div className="text-xl font-black mt-1 text-slate-900">
-                  {metricas.totalIncidentes}
-                </div>
-                <div className="text-[10px] font-semibold mt-0.5 text-slate-400">
-                  {metricas.incidentesJustificados} revisados •{" "}
-                  <span className="underline">Ver lista</span>
+                <div>
+                  <div className="text-xl font-black text-rose-950 mt-1">
+                    -{metricas.horasEnContraTexto || "0h 0m"}
+                  </div>
+                  <div className="text-[10px] font-semibold text-rose-700 mt-0.5">
+                    {metricas.diasConDeficit || 0} día(s) con faltante
+                  </div>
                 </div>
               </div>
-            </div>
-          </div>
 
-          {/* VISTA 1: DIARIO */}
-          {modalidad === "DIARIO" && (
-            <>
-              <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-xs space-y-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 font-bold text-xs uppercase tracking-wider text-slate-800">
-                    <Clock className="w-4 h-4 text-indigo-600" />
-                    <span>Línea de Tiempo (06:00 a 22:00 hs)</span>
-                  </div>
-                  <div className="flex items-center gap-3 text-[11px] font-bold">
-                    <span className="flex items-center gap-1.5 text-indigo-700">
-                      <span className="w-2.5 h-2.5 rounded-sm bg-indigo-600" />{" "}
-                      Planificado
-                    </span>
-                    <span className="flex items-center gap-1.5 text-emerald-700">
-                      <span className="w-2.5 h-2.5 rounded-sm bg-emerald-500" />{" "}
-                      Presencia
-                    </span>
-                    <span className="flex items-center gap-1.5 text-amber-700">
-                      <span className="w-2.5 h-2.5 rounded-sm bg-amber-400" />{" "}
-                      Salida Interm.
-                    </span>
-                    <span className="flex items-center gap-1.5 text-rose-700">
-                      <span className="w-2.5 h-2.5 rounded-sm bg-rose-500" />{" "}
-                      Infracción
-                    </span>
-                  </div>
-                </div>
-
-                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-3 overflow-x-auto">
-                  <div className="flex justify-between text-[10px] font-mono text-slate-400 px-1 border-b border-slate-200 pb-1 min-w-[700px]">
-                    {[
-                      6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
-                      21, 22,
-                    ].map((h) => (
-                      <span key={h}>{h}:00</span>
-                    ))}
-                  </div>
-
-                  <div className="relative h-8 bg-slate-200/60 rounded-xl overflow-hidden min-w-[700px]">
-                    {(fichaData?.planificado || []).map((p, idx) => {
-                      const leftPct = ((p.inicioMinutos - 360) / 960) * 100;
-                      const widthPct = (p.duracionMinutos / 960) * 100;
-                      return (
-                        <div
-                          key={idx}
-                          style={{
-                            left: `${Math.max(0, leftPct)}%`,
-                            width: `${widthPct}%`,
-                          }}
-                          className="absolute top-1 bottom-1 bg-purple-600 text-white rounded-lg px-2 flex items-center text-[10px] font-bold shadow-xs truncate"
-                          title={`${p.etiqueta}: ${p.horaInicio} - ${p.horaFin}`}
-                        >
-                          {p.etiqueta} ({p.horaInicio} a {p.horaFin})
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  <div className="relative h-8 bg-slate-200/60 rounded-xl overflow-hidden min-w-[700px]">
-                    {(fichaData?.presenciaReal || []).map((r, idx) => {
-                      const leftPct = ((r.inicioMinutos - 360) / 960) * 100;
-                      const widthPct = (r.duracionMinutos / 960) * 100;
-                      const bg =
-                        r.tipo === "PRESENCIA"
-                          ? "bg-emerald-500"
-                          : r.tipo === "INFRACCION"
-                            ? "bg-rose-500"
-                            : "bg-amber-400";
-                      return (
-                        <div
-                          key={idx}
-                          style={{
-                            left: `${Math.max(0, leftPct)}%`,
-                            width: `${widthPct}%`,
-                          }}
-                          className={`absolute top-1 bottom-1 ${bg} text-white rounded-lg px-2 flex items-center justify-center text-[10px] font-bold shadow-xs`}
-                        >
-                          {r.etiqueta}
-                        </div>
-                      );
-                    })}
+              <div className="bg-amber-50/50 border border-amber-200/70 p-4 rounded-2xl shadow-xs flex flex-col justify-between">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-amber-800 block">
+                  SALIDAS INTERMEDIAS
+                </span>
+                <div className="text-base font-black text-amber-950 mt-1">
+                  {metricas.salidasIntermediasCantidad}{" "}
+                  {metricas.salidasIntermediasCantidad === 1
+                    ? "salida"
+                    : "salidas"}
+                  <div className="text-[11px] font-bold text-amber-800">
+                    ({metricas.salidasIntermediasMinutos} min)
                   </div>
                 </div>
               </div>
 
               <div
-                ref={tablaDetalleRef}
-                className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-xs scroll-mt-6"
+                onClick={() => {
+                  if (modalidad === "DIARIO") {
+                    setTabInferior("INCIDENTES");
+                    setTimeout(() => {
+                      tablaDetalleRef.current?.scrollIntoView({
+                        behavior: "smooth",
+                        block: "start",
+                      });
+                    }, 50);
+                  } else {
+                    setModalListaIncidentesAbierto(true);
+                  }
+                }}
+                title="Haga clic para ver y justificar los incidentes registrados"
+                className="p-4 rounded-2xl shadow-xs flex flex-col justify-between transition cursor-pointer select-none border bg-white hover:bg-rose-50/40 border-rose-200 hover:border-rose-400"
               >
-                <div className="flex border-b border-slate-100 bg-[#f8fafc] px-4 pt-3 gap-2 text-xs font-bold no-print">
-                  <button
-                    type="button"
-                    onClick={() => setTabInferior("INTERVALOS")}
-                    className={`pb-2.5 px-3 border-b-2 transition cursor-pointer ${
-                      tabInferior === "INTERVALOS"
-                        ? "border-indigo-600 text-indigo-700"
-                        : "border-transparent text-slate-500 hover:text-slate-800"
-                    }`}
-                  >
-                    Intervalos de Jornada (
-                    {fichaData?.intervalosDetalle?.length || 0})
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setTabInferior("INCIDENTES")}
-                    className={`pb-2.5 px-3 border-b-2 transition cursor-pointer flex items-center gap-1.5 ${
-                      tabInferior === "INCIDENTES"
-                        ? "border-rose-600 text-rose-700"
-                        : "border-transparent text-slate-500 hover:text-slate-800"
-                    }`}
-                  >
-                    <span>
-                      Incidentes ({fichaData?.incidentes?.length || 0})
-                    </span>
-                    {fichaData?.incidentes?.length > 0 && (
-                      <span className="w-2 h-2 rounded-full bg-rose-500" />
-                    )}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setTabInferior("BRUTOS")}
-                    className={`pb-2.5 px-3 border-b-2 transition cursor-pointer ${
-                      tabInferior === "BRUTOS"
-                        ? "border-indigo-600 text-indigo-700"
-                        : "border-transparent text-slate-500 hover:text-slate-800"
-                    }`}
-                  >
-                    Fichajes en Bruto ({fichaData?.fichajesBrutos?.length || 0})
-                  </button>
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-bold uppercase tracking-wider block text-rose-600">
+                    INCIDENTES REGISTRADOS
+                  </span>
+                  <Eye className="w-3.5 h-3.5 text-rose-500" />
                 </div>
+                <div>
+                  <div className="text-xl font-black mt-1 text-slate-900">
+                    {metricas.totalIncidentes}
+                  </div>
+                  <div className="text-[10px] font-semibold mt-0.5 text-slate-400">
+                    {metricas.incidentesJustificados} revisados •{" "}
+                    <span className="underline">Ver lista</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
-                <div className="p-4">
-                  {tabInferior === "INTERVALOS" && (
-                    <table className="w-full text-left text-xs">
-                      <thead className="text-[10px] uppercase font-bold text-slate-400 border-b border-slate-100">
-                        <tr>
-                          <th className="py-2">Tipo</th>
-                          <th className="py-2">Inicio</th>
-                          <th className="py-2">Fin</th>
-                          <th className="py-2">Duración</th>
-                          <th className="py-2">Detalle</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100">
-                        {(fichaData?.intervalosDetalle || []).map((it, idx) => (
-                          <tr key={idx} className="hover:bg-slate-50">
-                            <td className="py-3 font-bold">
-                              {it.tipo === "Presencia" ? (
-                                <span className="text-emerald-600">
-                                  →] Presencia
-                                </span>
-                              ) : (
-                                <span className="text-amber-600">
-                                  [→ Salida Intermedia
-                                </span>
-                              )}
-                            </td>
-                            <td className="py-3 font-mono">{it.horaInicio}</td>
-                            <td className="py-3 font-mono">{it.horaFin}</td>
-                            <td className="py-3 font-bold">
-                              {it.duracionTexto}
-                            </td>
-                            <td
-                              className={`py-3 ${it.esInfraccion ? "text-rose-600 font-bold" : "text-slate-500"}`}
-                            >
-                              {it.detalle}
-                            </td>
-                          </tr>
+          {/* VISTA 1: DIARIO (LÍNEA DE TIEMPO Y TABLA INFERIOR) */}
+          {modalidad === "DIARIO" &&
+            !estadoJornadaDiaria.esSinHorario &&
+            !estadoJornadaDiaria.esFuturoConHorario && (
+              <>
+                {!estadoJornadaDiaria.esInasistencia && (
+                  <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-xs space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2 font-bold text-xs uppercase tracking-wider text-slate-800">
+                        <Clock className="w-4 h-4 text-indigo-600" />
+                        <span>Línea de Tiempo (06:00 a 22:00 hs)</span>
+                      </div>
+                      <div className="flex items-center gap-3 text-[11px] font-bold">
+                        <span className="flex items-center gap-1.5 text-indigo-700">
+                          <span className="w-2.5 h-2.5 rounded-sm bg-indigo-600" />{" "}
+                          Planificado
+                        </span>
+                        <span className="flex items-center gap-1.5 text-emerald-700">
+                          <span className="w-2.5 h-2.5 rounded-sm bg-emerald-500" />{" "}
+                          Presencia
+                        </span>
+                        <span className="flex items-center gap-1.5 text-amber-700">
+                          <span className="w-2.5 h-2.5 rounded-sm bg-amber-400" />{" "}
+                          Salida Interm.
+                        </span>
+                        <span className="flex items-center gap-1.5 text-rose-700">
+                          <span className="w-2.5 h-2.5 rounded-sm bg-rose-500" />{" "}
+                          Infracción
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-3 overflow-x-auto">
+                      <div className="flex justify-between text-[10px] font-mono text-slate-400 px-1 border-b border-slate-200 pb-1 min-w-[700px]">
+                        {[
+                          6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
+                          20, 21, 22,
+                        ].map((h) => (
+                          <span key={h}>{h}:00</span>
                         ))}
-                      </tbody>
-                    </table>
-                  )}
+                      </div>
 
-                  {tabInferior === "INCIDENTES" && (
-                    <div className="space-y-2">
-                      {(fichaData?.incidentes || [])
-                        .filter((inc) =>
+                      <div className="relative h-8 bg-slate-200/60 rounded-xl overflow-hidden min-w-[700px]">
+                        {(fichaData?.planificado || []).map((p, idx) => {
+                          const leftPct = ((p.inicioMinutos - 360) / 960) * 100;
+                          const widthPct = (p.duracionMinutos / 960) * 100;
+                          return (
+                            <div
+                              key={idx}
+                              style={{
+                                left: `${Math.max(0, leftPct)}%`,
+                                width: `${widthPct}%`,
+                              }}
+                              className="absolute top-1 bottom-1 bg-purple-600 text-white rounded-lg px-2 flex items-center text-[10px] font-bold shadow-xs truncate"
+                              title={`${p.etiqueta}: ${p.horaInicio} - ${p.horaFin}`}
+                            >
+                              {p.etiqueta} ({p.horaInicio} a {p.horaFin})
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      <div className="relative h-8 bg-slate-200/60 rounded-xl overflow-hidden min-w-[700px]">
+                        {(fichaData?.presenciaReal || []).map((r, idx) => {
+                          const leftPct = ((r.inicioMinutos - 360) / 960) * 100;
+                          const widthPct = (r.duracionMinutos / 960) * 100;
+                          const bg =
+                            r.tipo === "PRESENCIA"
+                              ? "bg-emerald-500"
+                              : r.tipo === "INFRACCION"
+                                ? "bg-rose-500"
+                                : "bg-amber-400";
+                          return (
+                            <div
+                              key={idx}
+                              style={{
+                                left: `${Math.max(0, leftPct)}%`,
+                                width: `${widthPct}%`,
+                              }}
+                              className={`absolute top-1 bottom-1 ${bg} text-white rounded-lg px-2 flex items-center justify-center text-[10px] font-bold shadow-xs`}
+                            >
+                              {r.etiqueta}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* TABLA DE DETALLES INFERIOR */}
+                <div
+                  ref={tablaDetalleRef}
+                  className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-xs scroll-mt-6"
+                >
+                  <div className="flex border-b border-slate-100 bg-[#f8fafc] px-4 pt-3 gap-2 text-xs font-bold no-print">
+                    <button
+                      type="button"
+                      onClick={() => setTabInferior("INTERVALOS")}
+                      className={`pb-2.5 px-3 border-b-2 transition cursor-pointer ${
+                        tabInferior === "INTERVALOS"
+                          ? "border-indigo-600 text-indigo-700"
+                          : "border-transparent text-slate-500 hover:text-slate-800"
+                      }`}
+                    >
+                      Intervalos de Jornada (
+                      {fichaData?.intervalosDetalle?.length || 0})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setTabInferior("INCIDENTES")}
+                      className={`pb-2.5 px-3 border-b-2 transition cursor-pointer flex items-center gap-1.5 ${
+                        tabInferior === "INCIDENTES"
+                          ? "border-rose-600 text-rose-700"
+                          : "border-transparent text-slate-500 hover:text-slate-800"
+                      }`}
+                    >
+                      <span>
+                        Incidentes ({fichaData?.incidentes?.length || 0})
+                      </span>
+                      {fichaData?.incidentes?.length > 0 && (
+                        <span className="w-2 h-2 rounded-full bg-rose-500" />
+                      )}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setTabInferior("BRUTOS")}
+                      className={`pb-2.5 px-3 border-b-2 transition cursor-pointer ${
+                        tabInferior === "BRUTOS"
+                          ? "border-indigo-600 text-indigo-700"
+                          : "border-transparent text-slate-500 hover:text-slate-800"
+                      }`}
+                    >
+                      Fichajes en Bruto (
+                      {fichaData?.fichajesBrutos?.length || 0})
+                    </button>
+                  </div>
+
+                  <div className="p-4">
+                    {tabInferior === "INTERVALOS" && (
+                      <table className="w-full text-left text-xs">
+                        <thead className="text-[10px] uppercase font-bold text-slate-400 border-b border-slate-100">
+                          <tr>
+                            <th className="py-2">Tipo</th>
+                            <th className="py-2">Inicio</th>
+                            <th className="py-2">Fin</th>
+                            <th className="py-2">Duración</th>
+                            <th className="py-2">Detalle</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {(fichaData?.intervalosDetalle || []).map(
+                            (it, idx) => (
+                              <tr key={idx} className="hover:bg-slate-50">
+                                <td className="py-3 font-bold">
+                                  {it.tipo === "Presencia" ? (
+                                    <span className="text-emerald-600">
+                                      →] Presencia
+                                    </span>
+                                  ) : (
+                                    <span className="text-amber-600">
+                                      [→ Salida Intermedia
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="py-3 font-mono">
+                                  {it.horaInicio}
+                                </td>
+                                <td className="py-3 font-mono">{it.horaFin}</td>
+                                <td className="py-3 font-bold">
+                                  {it.duracionTexto}
+                                </td>
+                                <td
+                                  className={`py-3 ${it.esInfraccion ? "text-rose-600 font-bold" : "text-slate-500"}`}
+                                >
+                                  {it.detalle}
+                                </td>
+                              </tr>
+                            ),
+                          )}
+                        </tbody>
+                      </table>
+                    )}
+
+                    {tabInferior === "INCIDENTES" && (
+                      <div className="space-y-2">
+                        {(fichaData?.incidentes || [])
+                          .filter((inc) =>
+                            !inc.fecha
+                              ? true
+                              : String(inc.fecha).split("T")[0] ===
+                                fechaConsulta,
+                          )
+                          .map((inc) =>
+                            renderItemIncidenteInteractivo(inc, false),
+                          )}
+                        {(fichaData?.incidentes || []).filter((inc) =>
                           !inc.fecha
                             ? true
                             : String(inc.fecha).split("T")[0] === fechaConsulta,
-                        )
-                        .map((inc) =>
-                          renderItemIncidenteInteractivo(inc, false),
+                        ).length === 0 && (
+                          <div className="p-3 bg-emerald-50/60 border border-emerald-200 rounded-2xl flex items-center gap-2 text-xs text-emerald-800 font-medium">
+                            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                            <span>
+                              Sin incidentes ni ausencias registradas en esta
+                              fecha.
+                            </span>
+                          </div>
                         )}
-                      {(fichaData?.incidentes || []).filter((inc) =>
-                        !inc.fecha
-                          ? true
-                          : String(inc.fecha).split("T")[0] === fechaConsulta,
-                      ).length === 0 && (
-                        <div className="p-3 bg-emerald-50/60 border border-emerald-200 rounded-2xl flex items-center gap-2 text-xs text-emerald-800 font-medium">
-                          <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                          <span>
-                            Sin incidentes ni ausencias registradas en esta
-                            fecha.
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  )}
+                      </div>
+                    )}
 
-                  {tabInferior === "BRUTOS" && (
-                    <table className="w-full text-left text-xs">
-                      <thead className="text-[10px] uppercase font-bold text-slate-400 border-b border-slate-100">
-                        <tr>
-                          <th className="py-2">Hora</th>
-                          <th className="py-2">Evento</th>
-                          <th className="py-2">Dispositivo / Reloj</th>
-                          <th className="py-2">Estado</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100 font-mono">
-                        {(fichaData?.fichajesBrutos || []).map((b) => (
-                          <tr key={b.id} className="hover:bg-slate-50">
-                            <td className="py-2.5 font-bold">{b.hora} hs</td>
-                            <td className="py-2.5 uppercase font-semibold text-indigo-700">
-                              {b.tipoEvento}
-                            </td>
-                            <td className="py-2.5 text-slate-600">
-                              {b.nombreReloj}
-                            </td>
-                            <td className="py-2.5 text-emerald-600 font-bold">
-                              ✓ {b.estado}
-                            </td>
+                    {tabInferior === "BRUTOS" && (
+                      <table className="w-full text-left text-xs">
+                        <thead className="text-[10px] uppercase font-bold text-slate-400 border-b border-slate-100">
+                          <tr>
+                            <th className="py-2">Hora</th>
+                            <th className="py-2">Evento</th>
+                            <th className="py-2">Dispositivo / Reloj</th>
+                            <th className="py-2">Estado</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  )}
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 font-mono">
+                          {(fichaData?.fichajesBrutos || []).map((b) => (
+                            <tr key={b.id} className="hover:bg-slate-50">
+                              <td className="py-2.5 font-bold">{b.hora} hs</td>
+                              <td className="py-2.5 uppercase font-semibold text-indigo-700">
+                                {b.tipoEvento}
+                              </td>
+                              <td className="py-2.5 text-slate-600">
+                                {b.nombreReloj}
+                              </td>
+                              <td className="py-2.5 text-emerald-600 font-bold">
+                                ✓ {b.estado}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
                 </div>
-              </div>
-            </>
-          )}
+              </>
+            )}
 
           {/* VISTA MULTIMES: TRIMESTRE O CUATRIMESTRE */}
           {(modalidad === "TRIMESTRE" || modalidad === "CUATRIMESTRE") && (
@@ -1368,7 +1742,11 @@ export default function FichaComportamiento() {
                           días en sede
                         </span>
                         <span
-                          className={`px-3 py-1 border rounded-xl flex items-center gap-1 ${mes.totalIncidentes > 0 ? "bg-amber-50 text-amber-700 border-amber-200" : "bg-slate-50 text-slate-400 border-slate-200"}`}
+                          className={`px-3 py-1 border rounded-xl flex items-center gap-1 ${
+                            mes.totalIncidentes > 0
+                              ? "bg-amber-50 text-amber-700 border-amber-200"
+                              : "bg-slate-50 text-slate-400 border-slate-200"
+                          }`}
                         >
                           <AlertTriangle className="w-3 h-3" />{" "}
                           {mes.totalIncidentes} desvío(s)
@@ -1518,7 +1896,11 @@ export default function FichaComportamiento() {
                                     dia.clasesDictadasTexto !==
                                       "0h 0m / 0h 0m" && (
                                       <div
-                                        className={`mt-1.5 text-[9px] font-bold px-1.5 py-0.5 rounded-md w-fit ${esCritica ? "bg-rose-100 text-rose-800 border border-rose-200" : "bg-purple-100 text-purple-800 border border-purple-200"} flex items-center gap-1`}
+                                        className={`mt-1.5 text-[9px] font-bold px-1.5 py-0.5 rounded-md w-fit ${
+                                          esCritica
+                                            ? "bg-rose-100 text-rose-800 border border-rose-200"
+                                            : "bg-purple-100 text-purple-800 border border-purple-200"
+                                        } flex items-center gap-1`}
                                       >
                                         <GraduationCap className="w-2.5 h-2.5" />
                                         <span>
@@ -1586,7 +1968,7 @@ export default function FichaComportamiento() {
             </div>
           )}
 
-          {/* VISTA 2: SEMANAL O RANGO DE FECHAS (QUE NO SEAN TRIMESTRE NI CUATRIMESTRE) */}
+          {/* VISTA 2: SEMANAL O RANGO DE FECHAS */}
           {(modalidad === "SEMANAL" || modalidad === "RANGO_FECHAS") && (
             <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-xs space-y-4">
               <div className="flex items-center justify-between">
@@ -1631,7 +2013,11 @@ export default function FichaComportamiento() {
                       return (
                         <tr
                           key={dia.fecha}
-                          className={`transition ${estaInspeccionado ? "bg-indigo-50/70 font-semibold" : "hover:bg-slate-50/70"}`}
+                          className={`transition ${
+                            estaInspeccionado
+                              ? "bg-indigo-50/70 font-semibold"
+                              : "hover:bg-slate-50/70"
+                          }`}
                         >
                           <td className="px-4 py-3 font-mono font-bold text-slate-900">
                             {formatearFechaVisual(dia.fecha)}
@@ -1681,7 +2067,11 @@ export default function FichaComportamiento() {
                                   setDiaInspeccionado(dia);
                                 }
                               }}
-                              className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold cursor-pointer transition ${estaInspeccionado ? "bg-indigo-600 text-white shadow-xs" : "bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200"}`}
+                              className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold cursor-pointer transition ${
+                                estaInspeccionado
+                                  ? "bg-indigo-600 text-white shadow-xs"
+                                  : "bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200"
+                              }`}
                             >
                               <Eye className="w-3.5 h-3.5" />
                               {estaInspeccionado ? "Cerrar" : "Ver Día"}
@@ -1837,7 +2227,11 @@ export default function FichaComportamiento() {
                         dia.clasesDictadasTexto &&
                         dia.clasesDictadasTexto !== "0h 0m / 0h 0m" && (
                           <div
-                            className={`mt-1 text-[9px] font-bold px-1.5 py-0.5 rounded-md w-fit ${esCritica ? "bg-rose-100 text-rose-800 border border-rose-200" : "bg-purple-100 text-purple-800 border border-purple-200"} flex items-center gap-1`}
+                            className={`mt-1 text-[9px] font-bold px-1.5 py-0.5 rounded-md w-fit ${
+                              esCritica
+                                ? "bg-rose-100 text-rose-800 border border-rose-200"
+                                : "bg-purple-100 text-purple-800 border border-purple-200"
+                            } flex items-center gap-1`}
                           >
                             <GraduationCap className="w-2.5 h-2.5" />
                             <span>
