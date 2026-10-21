@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Users,
   BookOpen,
@@ -16,6 +17,7 @@ import {
   ChevronRight,
   Lock,
   AlertCircle,
+  ArrowRight,
 } from "lucide-react";
 import {
   getEmpleadosPaginados,
@@ -34,14 +36,11 @@ import {
   getCategorias,
   getCargos,
   getHorarios,
-  getMaterias,
 } from "../services/configuracionService";
 import { getBadgeColorClasses } from "./TiposConfiguracion";
 import ModalAlerta from "../components/comunes/ModalAlerta";
-
 import ModalRegistroEmpleado from "../components/personal/ModalRegistroEmpleado";
 import ModalDetalleCronograma from "../components/personal/ModalDetalleCronograma";
-import ModalAsignarClase from "../components/personal/ModalAsignarClase";
 import ModalAsignarTurno from "../components/personal/ModalAsignarTurno";
 import { useAuth } from "../context/AuthContext";
 
@@ -59,18 +58,6 @@ const FORM_EMP_INICIAL = {
   toleranciaEgresoMin: 10,
   tiempoMaxFueraMin: 45,
   maxSalidasIntermedias: 2,
-};
-
-const FORM_CLASE_INICIAL = {
-  materiaId: "",
-  materia: "",
-  diasSemana: ["Lunes"],
-  horaInicio: "18:00",
-  horaFin: "21:00",
-  aula: "",
-  tipoFrecuencia: "SEMANAL",
-  repeticionesPeriodo: 1,
-  semanaAlterna: "PAR",
 };
 
 const DIAS_MAP = [
@@ -102,7 +89,6 @@ const MAPA_DIAS_NUMERO = {
 
 const ITEMS_POR_PAGINA = 15;
 
-// Helper: determina si a un empleado le faltan datos esenciales
 export const esEmpleadoIncompleto = (emp) => {
   if (!emp) return false;
   const sinDni = !emp.dni || String(emp.dni).trim() === "";
@@ -113,6 +99,7 @@ export const esEmpleadoIncompleto = (emp) => {
 };
 
 export default function GestionPersonal() {
+  const navigate = useNavigate();
   const { tienePermiso } = useAuth();
 
   // Permisos granulares de Personal
@@ -132,7 +119,6 @@ export default function GestionPersonal() {
   const [categorias, setCategorias] = useState([]);
   const [cargos, setCargos] = useState([]);
   const [horarios, setHorarios] = useState([]);
-  const [materias, setMaterias] = useState([]);
 
   // Periodicidad de franjas
   const [tipoFrecuencia, setTipoFrecuencia] = useState("SEMANAL");
@@ -159,9 +145,6 @@ export default function GestionPersonal() {
   const [empleadoSeleccionado, setEmpleadoSeleccionado] = useState(null);
   const [metricasEmpleado, setMetricasEmpleado] = useState(null);
   const [horariosEmpleado, setHorariosEmpleado] = useState([]);
-
-  const [modalAsignarClase, setModalAsignarClase] = useState(false);
-  const [formClase, setFormClase] = useState(FORM_CLASE_INICIAL);
 
   const [modalAsignarTurno, setModalAsignarTurno] = useState(false);
   const [tipoAsignacionTurno, setTipoAsignacionTurno] =
@@ -224,11 +207,10 @@ export default function GestionPersonal() {
 
   const cargarCatalogos = useCallback(async () => {
     try {
-      const [catRes, carRes, horRes, matRes] = await Promise.allSettled([
+      const [catRes, carRes, horRes] = await Promise.allSettled([
         getCategorias(),
         getCargos(),
         getHorarios(),
-        getMaterias(),
       ]);
       setCategorias(
         catRes.status === "fulfilled" && Array.isArray(catRes.value)
@@ -243,11 +225,6 @@ export default function GestionPersonal() {
       setHorarios(
         horRes.status === "fulfilled" && Array.isArray(horRes.value)
           ? horRes.value
-          : [],
-      );
-      setMaterias(
-        matRes.status === "fulfilled" && Array.isArray(matRes.value)
-          ? matRes.value
           : [],
       );
     } catch (err) {
@@ -297,6 +274,27 @@ export default function GestionPersonal() {
     cargarResumenGlobal();
   }, [cargarCatalogos, cargarResumenGlobal]);
 
+  // Escuchar sincronización en tiempo real
+  useEffect(() => {
+    const handleSincronizacionGlobal = () => {
+      cargarCatalogos();
+      cargarEmpleadosServidor(paginaActual - 1);
+      cargarResumenGlobal();
+    };
+    window.addEventListener("datos:actualizados", handleSincronizacionGlobal);
+    return () => {
+      window.removeEventListener(
+        "datos:actualizados",
+        handleSincronizacionGlobal,
+      );
+    };
+  }, [
+    cargarCatalogos,
+    cargarEmpleadosServidor,
+    cargarResumenGlobal,
+    paginaActual,
+  ]);
+
   useEffect(() => {
     const timer = setTimeout(() => {
       cargarEmpleadosServidor(paginaActual - 1);
@@ -315,10 +313,6 @@ export default function GestionPersonal() {
   const horariosActivos = useMemo(
     () => horarios.filter((h) => h.activo !== false),
     [horarios],
-  );
-  const materiasActivas = useMemo(
-    () => materias.filter((m) => m.activo !== false),
-    [materias],
   );
 
   const cargosFiltradosForm = useMemo(() => {
@@ -429,6 +423,7 @@ export default function GestionPersonal() {
         );
       }
 
+      window.dispatchEvent(new CustomEvent("datos:actualizados"));
       await cargarEmpleadosServidor(paginaActual - 1);
       cargarResumenGlobal();
       setModalRegistro(false);
@@ -456,6 +451,7 @@ export default function GestionPersonal() {
         setModalAlerta((prev) => ({ ...prev, isOpen: false }));
         try {
           await deleteEmpleado(id);
+          window.dispatchEvent(new CustomEvent("datos:actualizados"));
           await cargarEmpleadosServidor(paginaActual - 1);
           cargarResumenGlobal();
           mostrarAviso(
@@ -489,6 +485,7 @@ export default function GestionPersonal() {
         setModalAlerta((prev) => ({ ...prev, isOpen: false }));
         try {
           await reactivarEmpleado(id);
+          window.dispatchEvent(new CustomEvent("datos:actualizados"));
           await cargarEmpleadosServidor(paginaActual - 1);
           cargarResumenGlobal();
           mostrarAviso(
@@ -525,107 +522,6 @@ export default function GestionPersonal() {
     setModalDetalle(true);
   };
 
-  const handleAbrirAsignarClase = (diaPreseleccionado = null) => {
-    if (!puedeHorariosGestionar) return;
-    setFormClase({
-      ...FORM_CLASE_INICIAL,
-      diasSemana: diaPreseleccionado ? [diaPreseleccionado] : ["Lunes"],
-    });
-    setModalAsignarClase(true);
-  };
-
-  const handleGuardarClase = async (e, forzar = false) => {
-    if (e && e.preventDefault) e.preventDefault();
-    if (!empleadoSeleccionado || !puedeHorariosGestionar) return;
-
-    const dias = formClase.diasSemana || [];
-    if (dias.length === 0) {
-      mostrarAviso(
-        "warning",
-        "Atención",
-        "Debe seleccionar al menos un día de cursada.",
-      );
-      return;
-    }
-
-    try {
-      const diasNumericos = dias.map((d) =>
-        typeof d === "number" ? d : MAPA_DIAS_NUMERO[d] || 1,
-      );
-      const tipoFrec = formClase.tipoFrecuencia || "SEMANAL";
-      const reps =
-        tipoFrec === "MENSUAL" || tipoFrec === "ANUAL"
-          ? parseInt(formClase.repeticionesPeriodo, 10) || 1
-          : 1;
-      const semanaAlt =
-        tipoFrec === "SEMANA_POR_MEDIO"
-          ? formClase.semanaAlterna || "PAR"
-          : null;
-
-      const payload = {
-        diasSemana: diasNumericos,
-        horaEntrada:
-          formClase.horaInicio.length === 5
-            ? `${formClase.horaInicio}:00`
-            : formClase.horaInicio,
-        horaSalida:
-          formClase.horaFin.length === 5
-            ? `${formClase.horaFin}:00`
-            : formClase.horaFin,
-        materiaId: formClase.materiaId
-          ? parseInt(formClase.materiaId, 10)
-          : null,
-        etiqueta: formClase.materia || "Cátedra",
-        aula: formClase.aula || null,
-        forzarGuardado: forzar,
-        tipoFrecuencia: tipoFrec,
-        repeticionesPeriodo: reps,
-        semanaAlterna: semanaAlt,
-      };
-
-      await addEmpleadoHorario(empleadoSeleccionado.id, payload);
-
-      const [horariosActualizados, metricasActualizadas] = await Promise.all([
-        getEmpleadoHorarios(empleadoSeleccionado.id),
-        getMetricasEmpleado(empleadoSeleccionado.id),
-      ]);
-
-      setHorariosEmpleado(horariosActualizados);
-      setMetricasEmpleado(metricasActualizadas);
-      setModalAsignarClase(false);
-      setFormClase(FORM_CLASE_INICIAL);
-      await cargarEmpleadosServidor(paginaActual - 1);
-      mostrarAviso(
-        "success",
-        "Clases Asignadas",
-        "Las cátedras fueron asignadas con éxito.",
-      );
-    } catch (err) {
-      const mensaje = err.response?.data?.message || "";
-      if (mensaje.includes("SOLAPAMIENTO")) {
-        setModalAlerta({
-          isOpen: true,
-          tipo: "warning",
-          titulo: "¿Superponer Horario?",
-          mensaje: `${mensaje.replace("SOLAPAMIENTO: ", "")} ¿Desea guardarlo de todas formas?`,
-          textoConfirmar: "Sí, asignar igual",
-          textoCancelar: "Corregir horario",
-          mostrarCancelar: true,
-          onConfirmar: async () => {
-            setModalAlerta((prev) => ({ ...prev, isOpen: false }));
-            await handleGuardarClase(null, true);
-          },
-        });
-      } else {
-        mostrarAviso(
-          "danger",
-          "Error",
-          mensaje || "No se pudo asignar el bloque horario.",
-        );
-      }
-    }
-  };
-
   const handleEliminarHorario = async (horarioId) => {
     if (!puedeHorariosEliminar) {
       mostrarAviso(
@@ -637,6 +533,7 @@ export default function GestionPersonal() {
     }
     try {
       await removeEmpleadoHorario(horarioId);
+      window.dispatchEvent(new CustomEvent("datos:actualizados"));
       const [horariosActualizados, metricasActualizadas] = await Promise.all([
         getEmpleadoHorarios(empleadoSeleccionado.id),
         getMetricasEmpleado(empleadoSeleccionado.id),
@@ -712,7 +609,6 @@ export default function GestionPersonal() {
             tipoFrecuencia === "SEMANA_POR_MEDIO" ? semanaAlterna : null,
         });
 
-        // Herencia de tolerancias de salidas intermedias de la plantilla
         if (plantilla.tiempoMaxFueraMin || plantilla.maxSalidasIntermedias) {
           await updateEmpleado(empleadoSeleccionado.id, {
             ...empleadoSeleccionado,
@@ -746,6 +642,7 @@ export default function GestionPersonal() {
         }
       }
 
+      window.dispatchEvent(new CustomEvent("datos:actualizados"));
       const [horariosActualizados, metricasActualizadas] = await Promise.all([
         getEmpleadoHorarios(empleadoSeleccionado.id),
         getMetricasEmpleado(empleadoSeleccionado.id),
@@ -805,7 +702,6 @@ export default function GestionPersonal() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2.5">
-          {/* BOTÓN ALERTA: COMPLETAR CAMPOS FALTANTES */}
           {totalIncompletos > 0 && (
             <button
               onClick={() => {
@@ -827,7 +723,6 @@ export default function GestionPersonal() {
             </button>
           )}
 
-          {/* ALTA DE PERSONAL: PERSONAL_CREAR */}
           {puedePersonalCrear ? (
             <button
               onClick={abrirModalCrear}
@@ -1230,7 +1125,8 @@ export default function GestionPersonal() {
                           </button>
                         )}
 
-                        {puedeHorariosGestionar && (
+                        {/* Si no es docente, permite asignar horario/turno regular */}
+                        {!esDocente && puedeHorariosGestionar && (
                           <button
                             onClick={() =>
                               verificarEmpleadoActivo(emp, () =>
@@ -1252,26 +1148,19 @@ export default function GestionPersonal() {
                           </button>
                         )}
 
+                        {/* Si es docente, redirige a Gestión de Materias pasando docenteId para desglosar sus materias */}
                         {esDocente && puedeHorariosGestionar && (
                           <button
                             onClick={() =>
-                              verificarEmpleadoActivo(emp, () => {
-                                setEmpleadoSeleccionado(emp);
-                                handleAbrirAsignarClase();
+                              navigate("/materias", {
+                                state: { tab: "catalogo", docenteId: emp.id },
                               })
                             }
-                            className={`p-1 transition ${
-                              emp.activo === false
-                                ? "opacity-30 cursor-not-allowed hover:text-slate-400"
-                                : "hover:text-purple-600 cursor-pointer"
-                            }`}
-                            title={
-                              emp.activo === false
-                                ? "Empleado inactivo"
-                                : "Asignar Cátedra a Docente"
-                            }
+                            className="inline-flex items-center gap-1 px-2.5 py-1 bg-purple-50 hover:bg-purple-100 text-purple-700 font-bold rounded-lg text-[11px] transition cursor-pointer border border-purple-200"
+                            title="Gestionar asignaciones en el catálogo institucional"
                           >
-                            <Plus className="w-4 h-4 text-purple-600 stroke-[2.5]" />
+                            <span>Materias</span>
+                            <ArrowRight className="w-3 h-3" />
                           </button>
                         )}
 
@@ -1411,17 +1300,17 @@ export default function GestionPersonal() {
         clases={horariosEmpleado}
         metricas={metricasEmpleado}
         diasMap={DIAS_MAP}
-        onOpenAsignarClase={(dia) =>
-          verificarEmpleadoActivo(empleadoSeleccionado, () => {
-            setModalDetalle(false);
-            handleAbrirAsignarClase(dia);
+        onOpenAsignarClase={() =>
+          navigate("/materias", {
+            state: { tab: "catalogo", docenteId: empleadoSeleccionado?.id },
           })
         }
-        onEliminarClase={(horarioId) =>
+        onEliminarClase={(franja) => {
+          const id = franja.id || franja.idEmpleadoHorario;
           verificarEmpleadoActivo(empleadoSeleccionado, () =>
-            handleEliminarHorario(horarioId),
-          )
-        }
+            handleEliminarHorario(id),
+          );
+        }}
         onOpenAsignarTurno={(emp) =>
           verificarEmpleadoActivo(emp, () => {
             setModalDetalle(false);
@@ -1430,20 +1319,6 @@ export default function GestionPersonal() {
         }
         puedeEditar={puedeHorariosGestionar}
         puedeEliminar={puedeHorariosEliminar}
-      />
-
-      <ModalAsignarClase
-        isOpen={modalAsignarClase}
-        onClose={() => setModalAsignarClase(false)}
-        onSubmit={handleGuardarClase}
-        formClase={formClase}
-        setFormClase={setFormClase}
-        empleado={empleadoSeleccionado}
-        docenteSeleccionadoId={empleadoSeleccionado?.id}
-        setDocenteSeleccionadoId={() => {}}
-        docentesDisponibles={empleados}
-        materiasActivas={materiasActivas}
-        onMateriaCreada={(nueva) => setMaterias((prev) => [...prev, nueva])}
       />
 
       <ModalAsignarTurno

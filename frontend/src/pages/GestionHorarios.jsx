@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Calendar,
   Users,
   Search,
-  Plus,
   Clock,
   Eye,
   Sliders,
@@ -14,6 +14,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Filter,
+  ArrowRight,
 } from "lucide-react";
 import {
   getEmpleadosActivos,
@@ -22,14 +23,9 @@ import {
   removeEmpleadoHorario,
   getMetricasEmpleado,
 } from "../services/empleadoService";
-import {
-  getCategorias,
-  getHorarios,
-  getMaterias,
-} from "../services/configuracionService";
+import { getCategorias, getHorarios } from "../services/configuracionService";
 import ModalAlerta from "../components/comunes/ModalAlerta";
 import ModalDetalleCronograma from "../components/personal/ModalDetalleCronograma";
-import ModalAsignarClase from "../components/personal/ModalAsignarClase";
 import ModalAsignarTurno from "../components/personal/ModalAsignarTurno";
 import { useAuth } from "../context/AuthContext";
 
@@ -44,30 +40,21 @@ import {
 
 const ITEMS_POR_PAGINA = 12;
 
-const FORM_CLASE_INICIAL = {
-  materiaId: "",
-  materia: "",
-  diasSemana: ["Lunes"],
-  horaInicio: "18:00",
-  horaFin: "21:00",
-  aula: "",
-  tipoFrecuencia: "SEMANAL",
-  repeticionesPeriodo: 1,
-  semanaAlterna: "PAR",
-};
-
 export default function GestionHorarios() {
+  const navigate = useNavigate();
   const { tienePermiso } = useAuth();
 
-  const puedeCrear = tienePermiso("HORARIOS_GESTIONAR");
-  const puedeEditar = tienePermiso("HORARIOS_EDITAR");
-  const puedeEliminar = tienePermiso("HORARIOS_ELIMINAR");
+  const puedeCrear =
+    tienePermiso("HORARIOS_GESTIONAR") || tienePermiso("PERM_ADMIN_TOTAL");
+  const puedeEditar =
+    tienePermiso("HORARIOS_GESTIONAR") || tienePermiso("PERM_ADMIN_TOTAL");
+  const puedeEliminar =
+    tienePermiso("HORARIOS_ELIMINAR") || tienePermiso("PERM_ADMIN_TOTAL");
 
   const [loading, setLoading] = useState(true);
   const [empleados, setEmpleados] = useState([]);
   const [categorias, setCategorias] = useState([]);
   const [horariosPreestablecidos, setHorariosPreestablecidos] = useState([]);
-  const [materias, setMaterias] = useState([]);
 
   // Mapa con las franjas horarias de cada empleado
   const [franjasPorEmpleado, setFranjasPorEmpleado] = useState({});
@@ -83,9 +70,7 @@ export default function GestionHorarios() {
   const [horariosEmpleadoModal, setHorariosEmpleadoModal] = useState([]);
   const [metricasEmpleadoModal, setMetricasEmpleadoModal] = useState(null);
 
-  const [modalAsignarClase, setModalAsignarClase] = useState(false);
-  const [formClase, setFormClase] = useState(FORM_CLASE_INICIAL);
-
+  // Modal Turno (Solo para personal no docente / turnos regulares)
   const [modalAsignarTurno, setModalAsignarTurno] = useState(false);
   const [tipoAsignacionTurno, setTipoAsignacionTurno] =
     useState("PREESTABLECIDO");
@@ -107,6 +92,7 @@ export default function GestionHorarios() {
   const [repeticionesPeriodoTurno, setRepeticionesPeriodoTurno] = useState(1);
   const [semanaAlternaTurno, setSemanaAlternaTurno] = useState("PAR");
 
+  // Modal Alerta Centralizado
   const [modalAlerta, setModalAlerta] = useState({
     isOpen: false,
     tipo: "info",
@@ -133,11 +119,10 @@ export default function GestionHorarios() {
   const cargarCatalogos = useCallback(async () => {
     setLoading(true);
     try {
-      const [empRes, catRes, horRes, matRes] = await Promise.all([
+      const [empRes, catRes, horRes] = await Promise.all([
         getEmpleadosActivos(),
         getCategorias(),
         getHorarios(),
-        getMaterias(),
       ]);
 
       const emps = Array.isArray(empRes) ? empRes : [];
@@ -146,7 +131,6 @@ export default function GestionHorarios() {
       const cats = Array.isArray(catRes) ? catRes : [];
       setCategorias(cats);
       setHorariosPreestablecidos(Array.isArray(horRes) ? horRes : []);
-      setMaterias(Array.isArray(matRes) ? matRes : []);
 
       if (
         cats.length > 0 &&
@@ -180,6 +164,20 @@ export default function GestionHorarios() {
 
   useEffect(() => {
     cargarCatalogos();
+  }, [cargarCatalogos]);
+
+  // Escuchar sincronización en tiempo real desde Gestión de Materias u otros módulos
+  useEffect(() => {
+    const handleSincronizacionGlobal = () => {
+      cargarCatalogos();
+    };
+    window.addEventListener("datos:actualizados", handleSincronizacionGlobal);
+    return () => {
+      window.removeEventListener(
+        "datos:actualizados",
+        handleSincronizacionGlobal,
+      );
+    };
   }, [cargarCatalogos]);
 
   const esVistaDocente = useMemo(() => {
@@ -298,11 +296,9 @@ export default function GestionHorarios() {
     setModalAsignarTurno(true);
   };
 
-  const abrirClase = (emp) => {
-    if (!puedeEditar && !puedeCrear) return;
-    setEmpleadoEnModal(emp);
-    setFormClase(FORM_CLASE_INICIAL);
-    setModalAsignarClase(true);
+  // REDIRECCIÓN A GESTIÓN DE MATERIAS PARA ASIGNACIÓN CENTRALIZADA
+  const irAGestionMaterias = () => {
+    navigate("/materias", { state: { tab: "catalogo" } });
   };
 
   const handleGuardarTurno = async (forzar = false) => {
@@ -376,6 +372,8 @@ export default function GestionHorarios() {
         }
       }
 
+      window.dispatchEvent(new CustomEvent("datos:actualizados"));
+
       setModalAsignarTurno(false);
       await cargarCatalogos();
       mostrarAviso("success", "Éxito", "Horario registrado correctamente.");
@@ -405,82 +403,48 @@ export default function GestionHorarios() {
     }
   };
 
-  const handleGuardarClase = async (e, forzar = false) => {
-    if (e && e.preventDefault) e.preventDefault();
-    if (!empleadoEnModal) return;
+  // ELIMINACIÓN DE CLASE / HORARIO DESDE EL CRONOGRAMA CON MODAL DE ALERTA
+  const handleConfirmarEliminarFranja = (franja) => {
+    if (!puedeEliminar) return;
 
-    const dias = formClase.diasSemana || [];
-    if (dias.length === 0) {
-      mostrarAviso(
-        "warning",
-        "Atención",
-        "Seleccione al menos un día de cursada.",
-      );
-      return;
-    }
+    const esMateria = Boolean(franja.materia);
+    const titulo = esMateria
+      ? "¿Desvincular cátedra del docente?"
+      : "¿Dar de baja franja horaria?";
+    const mensaje = esMateria
+      ? `¿Está seguro de desvincular la clase de "${franja.materia.nombre}" (${franja.horaEntrada?.substring(0, 5)} a ${franja.horaSalida?.substring(0, 5)} hs)? La materia conservará sus horarios fijados pero quedará sin docente asignado.`
+      : `¿Está seguro de dar de baja este bloque horario laboral?`;
 
-    try {
-      const diasNumericos = dias.map((d) =>
-        typeof d === "number" ? d : MAPA_DIAS_NUMERO[d] || 1,
-      );
-
-      const payload = {
-        diasSemana: diasNumericos,
-        horaEntrada:
-          formClase.horaInicio.length === 5
-            ? `${formClase.horaInicio}:00`
-            : formClase.horaInicio,
-        horaSalida:
-          formClase.horaFin.length === 5
-            ? `${formClase.horaFin}:00`
-            : formClase.horaFin,
-        materiaId: formClase.materiaId
-          ? parseInt(formClase.materiaId, 10)
-          : null,
-        etiqueta: formClase.materia || "Por Cátedra",
-        aula: formClase.aula || null,
-        forzarGuardado: forzar,
-        tipoFrecuencia: formClase.tipoFrecuencia || "SEMANAL",
-        repeticionesPeriodo:
-          formClase.tipoFrecuencia === "MENSUAL" ||
-          formClase.tipoFrecuencia === "ANUAL"
-            ? formClase.repeticionesPeriodo
-            : 1,
-        semanaAlterna:
-          formClase.tipoFrecuencia === "SEMANA_POR_MEDIO"
-            ? formClase.semanaAlterna
-            : null,
-      };
-
-      await addEmpleadoHorario(empleadoEnModal.id, payload);
-      setModalAsignarClase(false);
-      setFormClase(FORM_CLASE_INICIAL);
-      await cargarCatalogos();
-      mostrarAviso("success", "Éxito", "Clase asignada al cronograma docente.");
-    } catch (err) {
-      const msg = err.response?.data?.message || "";
-      if (msg.includes("SOLAPAMIENTO")) {
-        setModalAlerta({
-          isOpen: true,
-          tipo: "warning",
-          titulo: "¿Superponer Clase?",
-          mensaje: `${msg.replace("SOLAPAMIENTO: ", "")} ¿Desea guardarla de todas formas?`,
-          textoConfirmar: "Sí, asignar",
-          textoCancelar: "Cancelar",
-          mostrarCancelar: true,
-          onConfirmar: async () => {
-            setModalAlerta((p) => ({ ...p, isOpen: false }));
-            await handleGuardarClase(null, true);
-          },
-        });
-      } else {
-        mostrarAviso(
-          "danger",
-          "Conflicto",
-          msg || "No se pudo asignar la clase.",
-        );
-      }
-    }
+    setModalAlerta({
+      isOpen: true,
+      tipo: "danger",
+      titulo,
+      mensaje,
+      textoConfirmar: "Sí, quitar",
+      textoCancelar: "Cancelar",
+      mostrarCancelar: true,
+      onConfirmar: async () => {
+        setModalAlerta((p) => ({ ...p, isOpen: false }));
+        try {
+          await removeEmpleadoHorario(franja.id || franja.idEmpleadoHorario);
+          window.dispatchEvent(new CustomEvent("datos:actualizados"));
+          const [hRes, mRes] = await Promise.all([
+            getEmpleadoHorarios(empleadoEnModal.id),
+            getMetricasEmpleado(empleadoEnModal.id),
+          ]);
+          setHorariosEmpleadoModal(hRes || []);
+          setMetricasEmpleadoModal(mRes);
+          await cargarCatalogos();
+          mostrarAviso(
+            "success",
+            "Éxito",
+            "La franja fue desvinculada del cronograma.",
+          );
+        } catch {
+          mostrarAviso("danger", "Error", "No se pudo eliminar el bloque.");
+        }
+      },
+    });
   };
 
   return (
@@ -496,15 +460,14 @@ export default function GestionHorarios() {
               Gestión de Horarios y Cronogramas
             </h1>
             <p className="text-[11px] sm:text-xs text-slate-500 mt-0.5">
-              Administración de turnos y cátedras por empleado. Haga clic en{" "}
-              <strong>Ver cronograma</strong> para consultar el detalle de cada
-              día.
+              Administración de turnos para el personal y consulta de
+              cronogramas docentes.
             </p>
           </div>
         </div>
       </div>
 
-      {/* 2. RECUADRO DE SELECCIÓN DE CATEGORÍAS (SIN SCROLL HORIZONTAL) */}
+      {/* 2. RECUADRO DE SELECCIÓN DE CATEGORÍAS */}
       <div className="bg-white border border-slate-200 rounded-2xl p-3.5 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="flex items-center gap-2 text-xs font-bold text-slate-500 uppercase tracking-wider">
           <Filter className="w-3.5 h-3.5 text-indigo-600" />
@@ -616,7 +579,6 @@ export default function GestionHorarios() {
                       key={emp.id}
                       className="hover:bg-slate-50/70 transition-colors"
                     >
-                      {/* Empleado */}
                       <td className="px-6 py-4">
                         <div className="font-bold text-slate-900 text-sm">
                           {emp.apellido}, {emp.nombre}
@@ -627,14 +589,12 @@ export default function GestionHorarios() {
                         </div>
                       </td>
 
-                      {/* Cargos */}
                       <td className="px-6 py-4">
                         <span className="inline-block px-2.5 py-1 rounded-lg bg-slate-100 border border-slate-200 text-slate-700 text-xs font-medium">
                           {cargosStr}
                         </span>
                       </td>
 
-                      {/* Régimen & Estado: Respeta el color configurado de la categoría */}
                       <td className="px-6 py-4">
                         <span
                           className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold border uppercase tracking-wider ${regimenInfo.clasesBadge}`}
@@ -649,7 +609,6 @@ export default function GestionHorarios() {
                         </div>
                       </td>
 
-                      {/* Botón Ver Cronograma */}
                       <td className="px-6 py-4">
                         <button
                           type="button"
@@ -661,19 +620,26 @@ export default function GestionHorarios() {
                         </button>
                       </td>
 
-                      {/* Acciones */}
+                      {/* ACCIONES: Redirige a Gestión de Materias para docentes, o abre ModalTurno para no docentes */}
                       <td className="px-6 py-4 text-right whitespace-nowrap">
                         <div className="flex items-center justify-end gap-2 text-slate-400">
                           {puedeCrear || puedeEditar ? (
                             esVistaDocente ? (
                               <button
                                 type="button"
-                                onClick={() => abrirClase(emp)}
-                                className="flex items-center gap-1 px-2.5 py-1 bg-purple-50 hover:bg-purple-100 text-purple-700 font-bold rounded-lg text-xs transition cursor-pointer"
-                                title="Asignar cátedra a docente"
+                                onClick={() =>
+                                  navigate("/materias", {
+                                    state: {
+                                      tab: "catalogo",
+                                      docenteId: emp.id,
+                                    },
+                                  })
+                                }
+                                className="flex items-center gap-1.5 px-3 py-1 bg-purple-50 hover:bg-purple-100 text-purple-700 font-bold rounded-lg text-xs transition cursor-pointer border border-purple-200"
+                                title="Gestionar comisiones y cátedras desde el módulo central"
                               >
-                                <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
-                                <span>Asignar Clase</span>
+                                <span>Gestionar Materias</span>
+                                <ArrowRight className="w-3.5 h-3.5" />
                               </button>
                             ) : (
                               <button
@@ -733,7 +699,6 @@ export default function GestionHorarios() {
               onClick={() => setPaginaActual((p) => Math.max(p - 1, 1))}
               disabled={paginaActual === 1 || loading}
               className="p-2 border border-slate-200 rounded-xl hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer"
-              title="Página Anterior"
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
@@ -763,7 +728,6 @@ export default function GestionHorarios() {
               }
               disabled={paginaActual === totalPaginas || loading}
               className="p-2 border border-slate-200 rounded-xl hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer"
-              title="Página Siguiente"
             >
               <ChevronRight className="w-4 h-4" />
             </button>
@@ -771,7 +735,7 @@ export default function GestionHorarios() {
         </div>
       </div>
 
-      {/* MODALES REUTILIZADOS */}
+      {/* MODAL DETALLE CRONOGRAMA */}
       <ModalDetalleCronograma
         isOpen={modalDetalle}
         onClose={() => setModalDetalle(false)}
@@ -779,24 +743,12 @@ export default function GestionHorarios() {
         clases={horariosEmpleadoModal}
         metricas={metricasEmpleadoModal}
         diasMap={DIAS_MAP}
-        onOpenAsignarClase={() => {
-          setModalDetalle(false);
-          abrirClase(empleadoEnModal);
-        }}
-        onEliminarClase={async (hId) => {
-          try {
-            await removeEmpleadoHorario(hId);
-            const [hRes, mRes] = await Promise.all([
-              getEmpleadoHorarios(empleadoEnModal.id),
-              getMetricasEmpleado(empleadoEnModal.id),
-            ]);
-            setHorariosEmpleadoModal(hRes || []);
-            setMetricasEmpleadoModal(mRes);
-            await cargarCatalogos();
-          } catch {
-            mostrarAviso("danger", "Error", "No se pudo eliminar el bloque.");
-          }
-        }}
+        onOpenAsignarClase={() =>
+          navigate("/materias", {
+            state: { tab: "catalogo", docenteId: empleadoEnModal?.id },
+          })
+        }
+        onEliminarClase={(franja) => handleConfirmarEliminarFranja(franja)}
         onOpenAsignarTurno={(emp) => {
           setModalDetalle(false);
           abrirTurno(emp);
@@ -805,20 +757,7 @@ export default function GestionHorarios() {
         puedeEliminar={puedeEliminar}
       />
 
-      <ModalAsignarClase
-        isOpen={modalAsignarClase}
-        onClose={() => setModalAsignarClase(false)}
-        onSubmit={handleGuardarClase}
-        formClase={formClase}
-        setFormClase={setFormClase}
-        empleado={empleadoEnModal}
-        docenteSeleccionadoId={empleadoEnModal?.id}
-        setDocenteSeleccionadoId={() => {}}
-        docentesDisponibles={empleadosFiltrados}
-        materiasActivas={materias}
-        onMateriaCreada={(nueva) => setMaterias((prev) => [...prev, nueva])}
-      />
-
+      {/* MODAL ASIGNAR TURNO (Para personal no docente) */}
       <ModalAsignarTurno
         isOpen={modalAsignarTurno}
         onClose={() => setModalAsignarTurno(false)}
@@ -868,6 +807,7 @@ export default function GestionHorarios() {
         setSemanaAlterna={setSemanaAlternaTurno}
       />
 
+      {/* MODAL ALERTA CENTRALIZADO */}
       <ModalAlerta
         isOpen={modalAlerta.isOpen}
         tipo={modalAlerta.tipo}

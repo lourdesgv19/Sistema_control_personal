@@ -43,11 +43,11 @@ public class DataInitializer implements CommandLineRunner {
             new Permiso("FICHAJES_ELIMINAR_LOTE", "FICHAJES", "Dar de baja lotes cargados erróneamente"),
 
             // Configuración
-            new Permiso("CONFIG_VER", "CONFIGURACION", "Lectura de categorías, cargos, materias y turnos molde"),
+            new Permiso("CONFIG_VER", "CONFIGURACION", "Lectura de categorías, cargos y turnos molde"),
             new Permiso("CONFIG_EDITAR_CATEGORIAS", "CONFIGURACION", "Crear, editar o dar de baja categorías"),
             new Permiso("CONFIG_EDITAR_CARGOS", "CONFIGURACION", "Gestionar puestos y áreas funcionales"),
-            new Permiso("CONFIG_EDITAR_MATERIAS_TURNOS", "CONFIGURACION", "Administrar cátedras y moldes de horario"),
-
+            new Permiso("CONFIG_EDITAR_TURNOS", "CONFIGURACION", "Administrar plantillas y moldes de horario preestablecido"),
+            
             // Usuarios & Seguridad
             new Permiso("USUARIOS_VER", "USUARIOS", "Listar usuarios del sistema y estados de cuenta"),
             new Permiso("USUARIOS_GESTIONAR_ACCESOS", "USUARIOS", "Otorgar o modificar permisos granulares"),

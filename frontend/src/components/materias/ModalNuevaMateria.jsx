@@ -1,12 +1,17 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { X, Clock, Users, Loader2, DollarSign, Calculator } from "lucide-react";
-import { postNuevaMateria } from "../../services/gestionMateriasService";
-import { updateMateria } from "../../services/configuracionService";
 import {
-  getEmpleadosActivos,
-  addEmpleadoHorario,
-  removeEmpleadoHorario,
-} from "../../services/empleadoService";
+  X,
+  Clock,
+  Users,
+  Loader2,
+  DollarSign,
+  Calculator,
+  UserCheck,
+  CalendarCheck,
+  Repeat,
+} from "lucide-react";
+import { postNuevaMateria } from "../../services/gestionMateriasService";
+import { getEmpleadosActivos } from "../../services/empleadoService";
 import ModalAlerta from "../comunes/ModalAlerta";
 
 const DIAS_OPCIONES = [
@@ -25,11 +30,12 @@ export default function ModalNuevaMateria({
 }) {
   const esEdicion = Boolean(materiaAEditar);
 
-  const [docentes, setDocentes] = useState([]);
-  const [loadingDocentes, setLoadingDocentes] = useState(true);
+  const [todosLosEmpleados, setTodosLosEmpleados] = useState([]);
+  const [loadingEmpleados, setLoadingEmpleados] = useState(true);
+  const [mostrarTodosLosEmpleados, setMostrarTodosLosEmpleados] =
+    useState(false);
   const [guardando, setGuardando] = useState(false);
 
-  // Modo de ingreso de tarifa: "HORA" | "CLASE"
   const [tipoIngresoTarifa, setTipoIngresoTarifa] = useState("HORA");
   const [tarifaClaseInput, setTarifaClaseInput] = useState("");
 
@@ -42,9 +48,14 @@ export default function ModalNuevaMateria({
     horaInicio: "08:30",
     horaFin: "12:30",
     idDocenteTitular: "",
+    idDocenteAuxiliar: "",
     tarifaHora: 5200,
     observaciones: "",
     forzarGuardado: false,
+    // CAMPOS DE FRECUENCIA / PERIODICIDAD:
+    tipoFrecuencia: "SEMANAL",
+    repeticionesPeriodo: 1,
+    semanaAlterna: "PAR",
   });
 
   const [modalAlerta, setModalAlerta] = useState({
@@ -70,7 +81,6 @@ export default function ModalNuevaMateria({
     });
   };
 
-  // Cálculo de duración en horas de la clase
   const duracionHoras = useMemo(() => {
     if (!form.horaInicio || !form.horaFin) return 1;
     const [hIni, mIni] = form.horaInicio.split(":").map(Number);
@@ -79,7 +89,38 @@ export default function ModalNuevaMateria({
     return minTotales > 0 ? minTotales / 60 : 1;
   }, [form.horaInicio, form.horaFin]);
 
-  // Carga de datos de edición cuando se pasa una materia/horario existente
+  useEffect(() => {
+    const cargarEmpleados = async () => {
+      try {
+        const data = await getEmpleadosActivos();
+        setTodosLosEmpleados(Array.isArray(data) ? data : []);
+      } catch (e) {
+        mostrarAviso(
+          "danger",
+          "Error",
+          "No se pudo cargar la lista de personal.",
+        );
+      } finally {
+        setLoadingEmpleados(false);
+      }
+    };
+    cargarEmpleados();
+  }, []);
+
+  const listaEmpleadosFiltrada = useMemo(() => {
+    if (mostrarTodosLosEmpleados) return todosLosEmpleados;
+    return todosLosEmpleados.filter((emp) => {
+      const enCategorias = (emp.categorias || []).some((c) =>
+        (c.nombre || c.codigoTag || "").toLowerCase().includes("docente"),
+      );
+      const enCategoriaSimple = (emp.categoria?.nombre || "")
+        .toLowerCase()
+        .includes("docente");
+      return enCategorias || enCategoriaSimple;
+    });
+  }, [todosLosEmpleados, mostrarTodosLosEmpleados]);
+
+  // Cargar datos en caso de edición
   useEffect(() => {
     if (materiaAEditar) {
       const diasArray = materiaAEditar.diaSemana
@@ -103,45 +144,25 @@ export default function ModalNuevaMateria({
           ? materiaAEditar.horaFin.slice(0, 5)
           : "12:30",
         idDocenteTitular:
-          materiaAEditar.idDocente || materiaAEditar.idDocenteTitular || "",
+          materiaAEditar.idDocenteTitular || materiaAEditar.idDocente || "",
+        idDocenteAuxiliar: materiaAEditar.idDocenteAuxiliar || "",
         tarifaHora: tarifaBase,
         observaciones: materiaAEditar.observaciones || "",
         forzarGuardado: false,
+        tipoFrecuencia: materiaAEditar.tipoFrecuencia || "SEMANAL",
+        repeticionesPeriodo: materiaAEditar.repeticionesPeriodo || 1,
+        semanaAlterna: materiaAEditar.semanaAlterna || "PAR",
       });
 
       setTarifaClaseInput(Math.round(tarifaBase * duracionHoras));
     }
   }, [materiaAEditar]);
 
-  // Recalcular la tarifa total por clase cuando cambia la hora o la tarifa hora
   useEffect(() => {
     if (tipoIngresoTarifa === "HORA") {
       setTarifaClaseInput(Math.round(form.tarifaHora * duracionHoras));
     }
   }, [form.tarifaHora, duracionHoras, tipoIngresoTarifa]);
-
-  // Carga del listado real de docentes
-  useEffect(() => {
-    const cargarDocentes = async () => {
-      try {
-        const data = await getEmpleadosActivos();
-        const lista = Array.isArray(data) ? data : [];
-        setDocentes(lista);
-        if (lista.length > 0 && !materiaAEditar) {
-          setForm((f) => ({ ...f, idDocenteTitular: lista[0].id }));
-        }
-      } catch (e) {
-        mostrarAviso(
-          "danger",
-          "Error",
-          "No se pudo cargar la lista de docentes.",
-        );
-      } finally {
-        setLoadingDocentes(false);
-      }
-    };
-    cargarDocentes();
-  }, [materiaAEditar]);
 
   const toggleDia = (id) => {
     setForm((prev) => ({
@@ -152,20 +173,20 @@ export default function ModalNuevaMateria({
     }));
   };
 
-  // Manejo de ingreso por hora
   const handleCambioTarifaHora = (valorHora) => {
     const num = Number(valorHora);
     setForm((prev) => ({ ...prev, tarifaHora: num }));
     setTarifaClaseInput(Math.round(num * duracionHoras));
   };
 
-  // Manejo de ingreso por clase (calcula automáticamente $/hora)
   const handleCambioTarifaClase = (valorClase) => {
     setTarifaClaseInput(valorClase);
     const numClase = Number(valorClase);
     if (numClase >= 0 && duracionHoras > 0) {
-      const calculadaHora = Math.round(numClase / duracionHoras);
-      setForm((prev) => ({ ...prev, tarifaHora: calculadaHora }));
+      setForm((prev) => ({
+        ...prev,
+        tarifaHora: Math.round(numClase / duracionHoras),
+      }));
     }
   };
 
@@ -178,66 +199,46 @@ export default function ModalNuevaMateria({
       );
       return;
     }
-    if (form.diasSemana.length === 0) {
-      mostrarAviso(
-        "warning",
-        "Días Requeridos",
-        "Debe seleccionar al menos un día de dictado.",
-      );
-      return;
-    }
-    if (!form.idDocenteTitular) {
-      mostrarAviso(
-        "warning",
-        "Docente Requerido",
-        "Seleccione el docente titular a cargo.",
-      );
-      return;
-    }
 
     setGuardando(true);
     try {
-      if (esEdicion) {
-        const materiaId = materiaAEditar.idMateria || materiaAEditar.id;
+      const payload = {
+        idMateria: materiaAEditar
+          ? materiaAEditar.idMateria || materiaAEditar.id
+          : null,
+        idHorario: materiaAEditar ? materiaAEditar.idHorario : null,
+        nombre: form.nombre.trim(),
+        codigo: form.codigo ? form.codigo.trim() : null,
+        departamento: form.departamento,
+        aula: form.aula ? form.aula.trim() : "",
+        diasSemana: form.diasSemana || [],
+        horaInicio: form.horaInicio,
+        horaFin: form.horaFin,
+        idDocenteTitular: form.idDocenteTitular
+          ? Number(form.idDocenteTitular)
+          : null,
+        idDocenteAuxiliar: form.idDocenteAuxiliar
+          ? Number(form.idDocenteAuxiliar)
+          : null,
+        tarifaHora: Number(form.tarifaHora || 5200),
+        observaciones: form.observaciones,
+        forzarGuardado: forzar,
+        // ENVIAR CAMPOS DE FRECUENCIA
+        tipoFrecuencia: form.tipoFrecuencia || "SEMANAL",
+        repeticionesPeriodo:
+          form.tipoFrecuencia === "MENSUAL" || form.tipoFrecuencia === "ANUAL"
+            ? parseInt(form.repeticionesPeriodo, 10) || 1
+            : 1,
+        semanaAlterna:
+          form.tipoFrecuencia === "SEMANA_POR_MEDIO"
+            ? form.semanaAlterna || "PAR"
+            : null,
+      };
 
-        // 1. Actualizar los datos maestros de la cátedra
-        await updateMateria(materiaId, {
-          id: materiaId,
-          nombre: form.nombre.trim(),
-          codigo: form.codigo.trim(),
-          departamento: form.departamento,
-          aulaPredeterminada: form.aula.trim(),
-          tarifaHoraCatedra: form.tarifaHora,
-          activo: true,
-        });
+      await postNuevaMateria(payload);
 
-        // 2. Si se editó una comisión puntual (tenía idHorario)
-        if (materiaAEditar.idHorario) {
-          await removeEmpleadoHorario(materiaAEditar.idHorario);
-          await addEmpleadoHorario(form.idDocenteTitular, {
-            diasSemana: form.diasSemana,
-            horaEntrada:
-              form.horaInicio.length === 5
-                ? `${form.horaInicio}:00`
-                : form.horaInicio,
-            horaSalida:
-              form.horaFin.length === 5 ? `${form.horaFin}:00` : form.horaFin,
-            materiaId: materiaId,
-            etiqueta: form.nombre.trim(),
-            aula: form.aula.trim(),
-            forzarGuardado: forzar,
-            tipoFrecuencia: "SEMANAL",
-            repeticionesPeriodo: 1,
-          });
-        }
-      } else {
-        // Alta nueva estándar
-        const payload = {
-          ...form,
-          forzarGuardado: forzar,
-        };
-        await postNuevaMateria(payload);
-      }
+      // Disparar sincronización global
+      window.dispatchEvent(new CustomEvent("datos:actualizados"));
 
       onCreado();
       onClose();
@@ -249,8 +250,7 @@ export default function ModalNuevaMateria({
         msg.includes("SOLAPAMIENTO_AULA") ||
         msg.includes("SOLAPAMIENTO")
       ) {
-        const esDocente =
-          msg.includes("SOLAPAMIENTO_DOCENTE") || msg.includes("DOCENTE");
+        const esDocente = msg.includes("SOLAPAMIENTO_DOCENTE");
         const detalle = msg
           .replace("SOLAPAMIENTO_DOCENTE: ", "")
           .replace("SOLAPAMIENTO_AULA: ", "")
@@ -283,11 +283,6 @@ export default function ModalNuevaMateria({
     }
   };
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    handleGuardar(false);
-  };
-
   return (
     <>
       <div
@@ -298,7 +293,6 @@ export default function ModalNuevaMateria({
           onClick={(e) => e.stopPropagation()}
           className="bg-white rounded-3xl w-full max-w-lg shadow-xl overflow-hidden border border-slate-100 flex flex-col cursor-default"
         >
-          {/* HEADER DEL MODAL */}
           <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
             <div>
               <h3 className="text-sm font-bold text-slate-900">
@@ -308,8 +302,8 @@ export default function ModalNuevaMateria({
               </h3>
               <p className="text-[11px] text-slate-400">
                 {esEdicion
-                  ? "Modifique los parámetros pedagógicos, días, horarios y valores de liquidación."
-                  : "Se registrará en el catálogo institucional y en los horarios asignados."}
+                  ? "Modifique los parámetros pedagógicos, días, horarios o docentes asignados."
+                  : "Se registrará en el catálogo y se reflejará en el cronograma institucional."}
               </p>
             </div>
             <button
@@ -321,9 +315,11 @@ export default function ModalNuevaMateria({
             </button>
           </div>
 
-          {/* FORMULARIO */}
           <form
-            onSubmit={handleSubmit}
+            onSubmit={(e) => {
+              e.preventDefault();
+              handleGuardar(false);
+            }}
             className="p-6 space-y-4 text-xs overflow-y-auto max-h-[80vh]"
           >
             <div>
@@ -353,10 +349,9 @@ export default function ModalNuevaMateria({
               </div>
               <div>
                 <label className="font-semibold text-slate-700 block mb-1">
-                  Aula / Laboratorio *
+                  Aula / Laboratorio
                 </label>
                 <input
-                  required
                   placeholder="Ej. Aula Magna 3"
                   value={form.aula}
                   onChange={(e) => setForm({ ...form, aula: e.target.value })}
@@ -365,11 +360,10 @@ export default function ModalNuevaMateria({
               </div>
             </div>
 
-            {/* DÍAS DE DICTADO */}
             <div>
               <div className="flex justify-between items-center mb-1.5">
                 <span className="font-semibold text-slate-700">
-                  Días de Cursada *
+                  Días de Cursada
                 </span>
                 <span className="text-[11px] text-indigo-600 font-medium">
                   {form.diasSemana.length} seleccionados
@@ -396,15 +390,13 @@ export default function ModalNuevaMateria({
               </div>
             </div>
 
-            {/* HORARIOS */}
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="font-semibold text-slate-700 block mb-1">
-                  Hora Inicio *
+                  Hora Inicio
                 </label>
                 <input
                   type="time"
-                  required
                   value={form.horaInicio}
                   onChange={(e) =>
                     setForm({ ...form, horaInicio: e.target.value })
@@ -414,11 +406,10 @@ export default function ModalNuevaMateria({
               </div>
               <div>
                 <label className="font-semibold text-slate-700 block mb-1">
-                  Hora Fin *
+                  Hora Fin
                 </label>
                 <input
                   type="time"
-                  required
                   value={form.horaFin}
                   onChange={(e) =>
                     setForm({ ...form, horaFin: e.target.value })
@@ -428,30 +419,140 @@ export default function ModalNuevaMateria({
               </div>
             </div>
 
-            {/* DOCENTE A CARGO */}
-            <div>
-              <label className="font-semibold text-slate-700 block mb-1">
-                Docente Titular a Cargo *
-              </label>
-              {loadingDocentes ? (
+            {/* SECCIÓN NUEVA: FRECUENCIA Y PERIODICIDAD DE CLASES */}
+            <div className="space-y-2 pt-2 border-t border-slate-100">
+              <div className="flex items-center justify-between">
+                <label className="font-bold text-slate-700 flex items-center gap-1.5">
+                  <CalendarCheck className="w-4 h-4 text-indigo-600" />
+                  Frecuencia de Dictado
+                </label>
+                <span className="text-[10px] text-slate-400">Periodicidad</span>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {[
+                  { id: "SEMANAL", label: "Todas las semanas" },
+                  { id: "SEMANA_POR_MEDIO", label: "Semana por medio" },
+                  { id: "MENSUAL", label: "Veces al mes" },
+                  { id: "ANUAL", label: "Veces al año" },
+                ].map((frec) => (
+                  <button
+                    key={frec.id}
+                    type="button"
+                    onClick={() =>
+                      setForm({ ...form, tipoFrecuencia: frec.id })
+                    }
+                    className={`px-2.5 py-2 text-xs font-semibold rounded-xl border text-center transition cursor-pointer ${
+                      form.tipoFrecuencia === frec.id
+                        ? "bg-[#4b35e6] text-white border-[#4b35e6] shadow-xs"
+                        : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+                    }`}
+                  >
+                    {frec.label}
+                  </button>
+                ))}
+              </div>
+
+              {form.tipoFrecuencia === "SEMANA_POR_MEDIO" && (
+                <div className="flex items-center gap-4 p-3 bg-indigo-50/50 border border-indigo-100 rounded-xl mt-2 text-xs">
+                  <span className="text-slate-700 font-medium">Rotación:</span>
+                  <label className="flex items-center gap-1.5 cursor-pointer text-slate-700 font-medium">
+                    <input
+                      type="radio"
+                      name="materiaSemanaAlterna"
+                      value="PAR"
+                      checked={form.semanaAlterna === "PAR"}
+                      onChange={(e) =>
+                        setForm({ ...form, semanaAlterna: e.target.value })
+                      }
+                      className="text-indigo-600 focus:ring-indigo-500"
+                    />
+                    Semanas Pares
+                  </label>
+                  <label className="flex items-center gap-1.5 cursor-pointer text-slate-700 font-medium">
+                    <input
+                      type="radio"
+                      name="materiaSemanaAlterna"
+                      value="IMPAR"
+                      checked={form.semanaAlterna === "IMPAR"}
+                      onChange={(e) =>
+                        setForm({ ...form, semanaAlterna: e.target.value })
+                      }
+                      className="text-indigo-600 focus:ring-indigo-500"
+                    />
+                    Semanas Impares
+                  </label>
+                </div>
+              )}
+
+              {(form.tipoFrecuencia === "MENSUAL" ||
+                form.tipoFrecuencia === "ANUAL") && (
+                <div className="flex items-center gap-3 p-3 bg-indigo-50/40 border border-indigo-100 rounded-xl mt-2">
+                  <span className="text-xs text-slate-700 font-medium shrink-0">
+                    Cantidad requerida:
+                  </span>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <input
+                      type="number"
+                      min="1"
+                      max={form.tipoFrecuencia === "MENSUAL" ? 31 : 365}
+                      value={form.repeticionesPeriodo}
+                      onChange={(e) =>
+                        setForm({
+                          ...form,
+                          repeticionesPeriodo:
+                            parseInt(e.target.value, 10) || 1,
+                        })
+                      }
+                      className="w-16 px-2.5 py-1 text-xs border border-indigo-200 rounded-lg text-center font-bold text-indigo-700 bg-white outline-none focus:border-indigo-600"
+                    />
+                    <span className="text-xs text-slate-600 font-semibold">
+                      {form.tipoFrecuencia === "MENSUAL"
+                        ? "clase(s) al mes"
+                        : "clase(s) al año"}
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* SELECCIÓN DE DOCENTES CON TOGGLE DE TODOS LOS EMPLEADOS */}
+            <div className="space-y-3 bg-slate-50 p-3.5 rounded-2xl border border-slate-200">
+              <div className="flex items-center justify-between">
+                <label className="font-bold text-slate-800 flex items-center gap-1.5">
+                  <UserCheck className="w-4 h-4 text-indigo-600" />
+                  Docente Titular a Cargo
+                </label>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setMostrarTodosLosEmpleados(!mostrarTodosLosEmpleados)
+                  }
+                  className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 underline cursor-pointer"
+                >
+                  {mostrarTodosLosEmpleados
+                    ? "Mostrar solo docentes"
+                    : "+ Ver todo el personal"}
+                </button>
+              </div>
+
+              {loadingEmpleados ? (
                 <div className="text-slate-400 py-2 flex items-center gap-1.5">
                   <Loader2 className="w-3.5 h-3.5 animate-spin" /> Cargando
                   nómina...
                 </div>
               ) : (
                 <select
-                  required
                   value={form.idDocenteTitular}
                   onChange={(e) =>
-                    setForm({
-                      ...form,
-                      idDocenteTitular: Number(e.target.value),
-                    })
+                    setForm({ ...form, idDocenteTitular: e.target.value })
                   }
                   className="w-full px-3 py-2 border border-slate-200 rounded-xl outline-none focus:border-indigo-600 font-medium bg-white"
                 >
-                  <option value="">Seleccione docente...</option>
-                  {docentes.map((doc) => (
+                  <option value="">
+                    -- Sin docente asignado (Materia Vacante) --
+                  </option>
+                  {listaEmpleadosFiltrada.map((doc) => (
                     <option key={doc.id} value={doc.id}>
                       {doc.apellido}, {doc.nombre}{" "}
                       {doc.nroLegajo ? `(Leg: ${doc.nroLegajo})` : ""}
@@ -459,9 +560,17 @@ export default function ModalNuevaMateria({
                   ))}
                 </select>
               )}
+
+              {mostrarTodosLosEmpleados && (
+                <p className="text-[10px] text-amber-700 bg-amber-50 p-2 rounded-lg border border-amber-200">
+                  ℹ Si selecciona un empleado que no tiene categoría docente, el
+                  sistema le asignará automáticamente la categoría docente al
+                  guardar.
+                </p>
+              )}
             </div>
 
-            {/* SECCIÓN FLEXIBLE: TARIFA POR HORA O POR CLASE CON CÁLCULO AUTOMÁTICO */}
+            {/* TARIFA FLEXIBLE */}
             <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-3.5 space-y-3">
               <div className="flex items-center justify-between">
                 <span className="font-bold text-slate-800 flex items-center gap-1.5">
@@ -473,7 +582,6 @@ export default function ModalNuevaMateria({
                 </span>
               </div>
 
-              {/* Selector de modo: Por Hora vs Por Clase */}
               <div className="grid grid-cols-2 gap-2 bg-slate-200/60 p-1 rounded-xl">
                 <button
                   type="button"
@@ -500,7 +608,6 @@ export default function ModalNuevaMateria({
               </div>
 
               <div className="grid grid-cols-2 gap-3 items-center">
-                {/* Input Tarifa por Hora */}
                 <div>
                   <label className="text-[10px] font-semibold text-slate-600 block mb-1">
                     Valor por Hora Cátedra *
@@ -526,7 +633,6 @@ export default function ModalNuevaMateria({
                   </div>
                 </div>
 
-                {/* Input Tarifa por Clase */}
                 <div>
                   <label className="text-[10px] font-semibold text-slate-600 block mb-1">
                     Valor Total por Clase *
@@ -557,13 +663,12 @@ export default function ModalNuevaMateria({
                 <Calculator className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
                 <span>
                   {tipoIngresoTarifa === "CLASE"
-                    ? `Calculado automáticamente: $${tarifaClaseInput || 0} ÷ ${duracionHoras.toFixed(1)}h = $${form.tarifaHora.toLocaleString("es-AR")}/h`
-                    : `Cálculo de liquidación: $${form.tarifaHora.toLocaleString("es-AR")}/h × ${duracionHoras.toFixed(1)}h = $${tarifaClaseInput || 0} por clase`}
+                    ? `Calculado: $${tarifaClaseInput || 0} ÷ ${duracionHoras.toFixed(1)}h = $${form.tarifaHora.toLocaleString("es-AR")}/h`
+                    : `Cálculo por clase: $${form.tarifaHora.toLocaleString("es-AR")}/h × ${duracionHoras.toFixed(1)}h = $${tarifaClaseInput || 0}`}
                 </span>
               </div>
             </div>
 
-            {/* BOTONES DE ACCIÓN */}
             <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2">
               <button
                 type="button"
@@ -578,7 +683,7 @@ export default function ModalNuevaMateria({
                 className="px-5 py-2 rounded-xl bg-[#4b35e6] hover:bg-[#3f2bc9] text-white font-semibold flex items-center gap-1.5 cursor-pointer shadow-xs"
               >
                 {guardando && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                {esEdicion ? "Guardar Cambios" : "Crear Materia y Asignar"}
+                {esEdicion ? "Guardar Cambios" : "Guardar Cátedra"}
               </button>
             </div>
           </form>

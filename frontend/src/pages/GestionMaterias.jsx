@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
+import { useLocation } from "react-router-dom";
 import {
   BookOpen,
   Plus,
@@ -16,11 +17,15 @@ import TablaLiquidacionDocente from "../components/materias/TablaLiquidacionDoce
 import ModalNuevaMateria from "../components/materias/ModalNuevaMateria";
 import ModalAlerta from "../components/comunes/ModalAlerta";
 import { useAuth } from "../context/AuthContext";
-import { deleteMateria } from "../services/configuracionService";
-import { getResumenMaterias } from "../services/gestionMateriasService";
+import {
+  getResumenMaterias,
+  getImpactoBajaMateria,
+  deleteMateriaEnCascada,
+} from "../services/gestionMateriasService";
 
 export default function GestionMaterias() {
   const { tienePermiso } = useAuth();
+  const location = useLocation();
 
   const puedeVerMaterias =
     tienePermiso("MATERIAS_VER") || tienePermiso("PERM_ADMIN_TOTAL");
@@ -33,10 +38,16 @@ export default function GestionMaterias() {
   const puedeLiquidar =
     tienePermiso("LIQUIDACION_DOCENTE") || tienePermiso("PERM_ADMIN_TOTAL");
 
-  const [tab, setTab] = useState("calendario");
+  const [tab, setTab] = useState(() => {
+    return location.state?.tab || "calendario";
+  });
+  const [docenteSeleccionadoId, setDocenteSeleccionadoId] = useState(
+    () => location.state?.docenteId || null,
+  );
   const [mostrarResumen, setMostrarResumen] = useState(false);
   const [modalMateria, setModalMateria] = useState(false);
   const [materiaAEditar, setMateriaAEditar] = useState(null);
+  const [recargarKey, setRecargarKey] = useState(0);
 
   const [fechaLunes] = useState(() => {
     const d = new Date();
@@ -101,40 +112,94 @@ export default function GestionMaterias() {
     }
   }, [puedeVerMaterias, cargarDatos]);
 
-  const handleEliminarMateria = (id, nombre) => {
+  useEffect(() => {
+    if (location.state?.tab) {
+      setTab(location.state.tab);
+    }
+    if (location.state?.docenteId !== undefined) {
+      setDocenteSeleccionadoId(location.state.docenteId);
+    }
+  }, [location.state]);
+
+  // Escuchar sincronización en tiempo real
+  useEffect(() => {
+    const handleSincronizacion = () => {
+      cargarDatos();
+      setRecargarKey((k) => k + 1);
+    };
+    window.addEventListener("datos:actualizados", handleSincronizacion);
+    return () =>
+      window.removeEventListener("datos:actualizados", handleSincronizacion);
+  }, [cargarDatos]);
+
+  const handleEliminarMateria = async (id, nombre) => {
     if (!puedeEliminar) return;
-    setModalAlerta({
-      isOpen: true,
-      tipo: "danger",
-      titulo: "¿Dar de baja materia?",
-      mensaje: `¿Está seguro de dar de baja la materia "${nombre}"?`,
-      textoConfirmar: "Sí, dar de baja",
-      textoCancelar: "Cancelar",
-      mostrarCancelar: true,
-      onConfirmar: async () => {
-        setModalAlerta((p) => ({ ...p, isOpen: false }));
-        try {
-          await deleteMateria(id);
-          await cargarDatos();
-          mostrarAviso(
-            "success",
-            "Éxito",
-            `La materia "${nombre}" fue dada de baja.`,
-          );
-        } catch (err) {
-          mostrarAviso("danger", "Error", "No se pudo dar de baja la materia.");
-        }
-      },
-    });
+
+    try {
+      const res = await getImpactoBajaMateria(id);
+      const data = res.data;
+
+      let mensajeAviso = `¿Está seguro de dar de baja la materia "${nombre}"?`;
+      if (data.totalHorariosAfectados > 0) {
+        const detalleHorarios = data.horariosAfectados
+          .slice(0, 5)
+          .map(
+            (h) =>
+              `• ${h.diaNombre} ${h.horaInicio} - ${h.horaFin} hs (${h.docenteNombre})`,
+          )
+          .join("\n");
+
+        const sufijoMas =
+          data.totalHorariosAfectados > 5
+            ? `\n... y ${data.totalHorariosAfectados - 5} comisiones más.`
+            : "";
+
+        mensajeAviso = `ADVERTENCIA: Esta cátedra tiene ${data.totalHorariosAfectados} comisiones activas que también se darán de baja del cronograma de los docentes:\n\n${detalleHorarios}${sufijoMas}\n\n¿Desea confirmar la baja en cascada?`;
+      }
+
+      setModalAlerta({
+        isOpen: true,
+        tipo: "danger",
+        titulo: "¿Dar de baja cátedra y horarios?",
+        mensaje: mensajeAviso,
+        textoConfirmar: "Sí, dar de baja",
+        textoCancelar: "Cancelar",
+        mostrarCancelar: true,
+        onConfirmar: async () => {
+          setModalAlerta((p) => ({ ...p, isOpen: false }));
+          try {
+            await deleteMateriaEnCascada(id);
+            window.dispatchEvent(new CustomEvent("datos:actualizados"));
+            await cargarDatos();
+            setRecargarKey((k) => k + 1);
+            mostrarAviso(
+              "success",
+              "Baja Exitosa",
+              `La materia "${nombre}" y sus horarios asociados fueron dados de baja correctamente.`,
+            );
+          } catch (err) {
+            mostrarAviso(
+              "danger",
+              "Error",
+              "No se pudo dar de baja la materia.",
+            );
+          }
+        },
+      });
+    } catch (err) {
+      mostrarAviso(
+        "danger",
+        "Error",
+        "No se pudo verificar el impacto de la materia.",
+      );
+    }
   };
 
-  // Abrir modal para crear materia
   const handleAbrirCrear = () => {
     setMateriaAEditar(null);
     setModalMateria(true);
   };
 
-  // Abrir modal para editar horario/materia existente
   const handleAbrirEditarHorario = (horario, materia) => {
     setMateriaAEditar({
       idMateria: materia.idMateria,
@@ -145,10 +210,12 @@ export default function GestionMaterias() {
       diasSemana: [horario.diaSemana],
       horaInicio: horario.horaInicio,
       horaFin: horario.horaFin,
-      idDocente: horario.idDocente,
       idDocenteTitular: horario.idDocente,
       tarifaHora: horario.tarifaHora,
       idHorario: horario.idHorario,
+      tipoFrecuencia: horario.tipoFrecuencia || "SEMANAL",
+      repeticionesPeriodo: horario.repeticionesPeriodo || 1,
+      semanaAlterna: horario.semanaAlterna || "PAR",
     });
     setModalMateria(true);
   };
@@ -230,7 +297,7 @@ export default function GestionMaterias() {
         </div>
       </div>
 
-      {/* 2. TARJETAS KPI DE RESUMEN */}
+      {/* 2. TARJETAS KPI */}
       {mostrarResumen && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 animate-in fade-in duration-200">
           <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs">
@@ -353,9 +420,10 @@ export default function GestionMaterias() {
         </div>
       </div>
 
-      {/* 4. CONTENIDO */}
+      {/* 4. CONTENIDO CON SINCRONIZACIÓN AUTOMÁTICA */}
       {tab === "calendario" && (
         <CalendarioSemanalMaterias
+          key={`cal-${recargarKey}`}
           onEditarMateriaParam={(clase) => {
             setMateriaAEditar({
               idMateria: clase.idMateria,
@@ -365,7 +433,7 @@ export default function GestionMaterias() {
               diasSemana: [clase.diaSemana],
               horaInicio: clase.horaInicio,
               horaFin: clase.horaFin,
-              idDocente: clase.idDocente,
+              idDocenteTitular: clase.idDocente,
               tarifaHora: clase.tarifaHora,
               idHorario: clase.idHorario,
             });
@@ -376,6 +444,8 @@ export default function GestionMaterias() {
 
       {tab === "catalogo" && (
         <CatalogoMateriasABM
+          key={`cat-${recargarKey}`}
+          docenteInicialId={docenteSeleccionadoId}
           onNuevaMateria={handleAbrirCrear}
           onEditarMateria={(materia) => {
             setMateriaAEditar({
@@ -398,7 +468,7 @@ export default function GestionMaterias() {
 
       {tab === "liquidacion" && puedeLiquidar && <TablaLiquidacionDocente />}
 
-      {/* MODAL UNIFICADO: ALTA O EDICIÓN DE MATERIA */}
+      {/* MODAL UNIFICADO: ALTA O EDICIÓN */}
       {modalMateria && (
         <ModalNuevaMateria
           materiaAEditar={materiaAEditar}
@@ -408,6 +478,7 @@ export default function GestionMaterias() {
           }}
           onCreado={async () => {
             await cargarDatos();
+            setRecargarKey((prev) => prev + 1);
             mostrarAviso(
               "success",
               "Operación Exitosa",

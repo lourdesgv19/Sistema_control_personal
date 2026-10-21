@@ -61,10 +61,10 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.PUT, "/api/configuracion/cargos/**").hasAnyAuthority("CONFIG_EDITAR_CARGOS", "PERM_ADMIN_TOTAL")
                 .requestMatchers(HttpMethod.DELETE, "/api/configuracion/cargos/**").hasAnyAuthority("CONFIG_EDITAR_CARGOS", "PERM_ADMIN_TOTAL")
 
-                .requestMatchers(HttpMethod.POST, "/api/configuracion/materias/**", "/api/configuracion/horarios/**").hasAnyAuthority("CONFIG_EDITAR_MATERIAS_TURNOS", "PERM_ADMIN_TOTAL")
-                .requestMatchers(HttpMethod.PUT, "/api/configuracion/materias/**", "/api/configuracion/horarios/**").hasAnyAuthority("CONFIG_EDITAR_MATERIAS_TURNOS", "PERM_ADMIN_TOTAL")
-                .requestMatchers(HttpMethod.DELETE, "/api/configuracion/materias/**", "/api/configuracion/horarios/**").hasAnyAuthority("CONFIG_EDITAR_MATERIAS_TURNOS", "PERM_ADMIN_TOTAL")
-
+                .requestMatchers(HttpMethod.POST, "/api/configuracion/horarios/**").hasAnyAuthority("CONFIG_EDITAR_TURNOS", "PERM_ADMIN_TOTAL")
+                .requestMatchers(HttpMethod.PUT, "/api/configuracion/horarios/**").hasAnyAuthority("CONFIG_EDITAR_TURNOS", "PERM_ADMIN_TOTAL")
+                .requestMatchers(HttpMethod.DELETE, "/api/configuracion/horarios/**").hasAnyAuthority("CONFIG_EDITAR_TURNOS", "PERM_ADMIN_TOTAL")
+                
                 // =========================================================================
                 // 5. MÓDULO HORARIOS (Endpoints dedicados /api/horarios/** y subrutas)
                 // =========================================================================
@@ -116,29 +116,29 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.PUT, "/api/incidentes/*/resolver").hasAnyAuthority("INCIDENTES_JUSTIFICAR", "PERM_ADMIN_TOTAL")
 
                 // =========================================================================
-                // MÓDULO GESTIÓN DE MATERIAS & LIQUIDACIÓN DOCENTE
+                // MÓDULO UNIFICADO: GESTIÓN DE MATERIAS & LIQUIDACIÓN DOCENTE (/api/materias/**)
                 // =========================================================================
-                // 1. Calendario semanal y catálogo de materias (Lectura)
-                .requestMatchers(HttpMethod.GET, "/api/gestion-materias/calendario-semanal", "/api/configuracion/materias/**")
+                // 1. Calendario semanal y catálogo agrupado (Lectura)
+                .requestMatchers(HttpMethod.GET, "/api/materias", "/api/materias/*", "/api/materias/catalogo-agrupado", "/api/materias/calendario-semanal")
                     .hasAnyAuthority("MATERIAS_VER", "PERM_ADMIN_TOTAL")
 
-                // 2. Resumen y liquidación de sueldos docentes
-                .requestMatchers(HttpMethod.GET, "/api/gestion-materias/resumen")
+                // 2. Resumen y métricas de liquidación
+                .requestMatchers(HttpMethod.GET, "/api/materias/resumen")
                     .hasAnyAuthority("LIQUIDACION_DOCENTE", "MATERIAS_VER", "PERM_ADMIN_TOTAL")
 
-                // 3. Alta de materias
-                .requestMatchers(HttpMethod.POST, "/api/gestion-materias", "/api/configuracion/materias/**")
-                    .hasAnyAuthority("MATERIAS_CREAR", "CONFIG_EDITAR_MATERIAS_TURNOS", "PERM_ADMIN_TOTAL")
+                // 3. Impacto de baja de materias
+                .requestMatchers(HttpMethod.GET, "/api/materias/*/impacto-baja")
+                    .hasAnyAuthority("MATERIAS_ELIMINAR", "PERM_ADMIN_TOTAL")
 
-                // 4. Edición de materias
-                .requestMatchers(HttpMethod.PUT, "/api/configuracion/materias/**")
-                    .hasAnyAuthority("MATERIAS_EDITAR", "CONFIG_EDITAR_MATERIAS_TURNOS", "PERM_ADMIN_TOTAL")
+                // 4. Alta y edición de cátedras con comisiones
+                .requestMatchers(HttpMethod.POST, "/api/materias", "/api/materias/**")
+                    .hasAnyAuthority("MATERIAS_CREAR", "MATERIAS_EDITAR", "PERM_ADMIN_TOTAL")
+                .requestMatchers(HttpMethod.PUT, "/api/materias/**")
+                    .hasAnyAuthority("MATERIAS_EDITAR", "PERM_ADMIN_TOTAL")
 
-                // 5. Baja y reactivación de materias
-                .requestMatchers(HttpMethod.DELETE, "/api/configuracion/materias/**")
-                    .hasAnyAuthority("MATERIAS_ELIMINAR", "CONFIG_EDITAR_MATERIAS_TURNOS", "PERM_ADMIN_TOTAL")
-                .requestMatchers(HttpMethod.PATCH, "/api/configuracion/materias/*/reactivar")
-                    .hasAnyAuthority("MATERIAS_ELIMINAR", "CONFIG_EDITAR_MATERIAS_TURNOS", "PERM_ADMIN_TOTAL")
+                // 5. Baja en cascada
+                .requestMatchers(HttpMethod.DELETE, "/api/materias/**")
+                    .hasAnyAuthority("MATERIAS_ELIMINAR", "PERM_ADMIN_TOTAL")
 
                 // Cualquier otra solicitud requiere autenticación válida
                 .anyRequest().authenticated()

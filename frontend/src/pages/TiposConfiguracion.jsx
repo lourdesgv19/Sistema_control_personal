@@ -13,7 +13,6 @@ import {
   Check,
   Loader2,
   RotateCcw,
-  BookOpen,
   Lock,
 } from "lucide-react";
 import {
@@ -32,11 +31,6 @@ import {
   updateHorario,
   deleteHorario,
   reactivarHorario,
-  getMaterias,
-  createMateria,
-  updateMateria,
-  deleteMateria,
-  reactivarMateria,
 } from "../services/configuracionService";
 import ModalAlerta from "../components/comunes/ModalAlerta";
 import { buscarSimilar } from "../utils/textSimilarity";
@@ -77,14 +71,6 @@ const FORM_HORARIO_INICIAL = {
   tolEgreso: 10,
   maxSalidas: 2,
   tiempoMaxFuera: 45,
-};
-
-const FORM_MATERIA_INICIAL = {
-  nombre: "",
-  codigo: "",
-  departamento: "",
-  aulaPredeterminada: "",
-  estado: "Activo",
 };
 
 export const getBadgeColorClasses = (color) => {
@@ -130,27 +116,22 @@ export default function TiposConfiguracion() {
 
   const puedeEditarCategorias = tienePermiso("CONFIG_EDITAR_CATEGORIAS");
   const puedeEditarCargos = tienePermiso("CONFIG_EDITAR_CARGOS");
-  const puedeEditarMateriasTurnos = tienePermiso(
-    "CONFIG_EDITAR_MATERIAS_TURNOS",
-  );
+  const puedeEditarTurnos = tienePermiso("CONFIG_EDITAR_MATERIAS_TURNOS");
 
-  const [activeTab, setActiveTab] = useState("categorias");
+  const [activeTab, setActiveTab] = useState("categorias"); // "categorias" | "cargos" | "horarios"
   const [loading, setLoading] = useState(true);
 
   const [categorias, setCategorias] = useState([]);
   const [cargos, setCargos] = useState([]);
   const [horarios, setHorarios] = useState([]);
-  const [materias, setMaterias] = useState([]);
 
   const [filtroEstadoCat, setFiltroEstadoCat] = useState("TODOS");
   const [filtroEstadoCargo, setFiltroEstadoCargo] = useState("TODOS");
   const [filtroEstadoHorario, setFiltroEstadoHorario] = useState("TODOS");
-  const [filtroEstadoMateria, setFiltroEstadoMateria] = useState("TODOS");
 
   const [cargoSearch, setCargoSearch] = useState("");
   const [cargoCategoryFilter, setCargoCategoryFilter] = useState("TODAS");
   const [horarioCategoryFilter, setHorarioCategoryFilter] = useState("TODOS");
-  const [materiaSearch, setMateriaSearch] = useState("");
 
   const [modalCat, setModalCat] = useState(false);
   const [editandoCatId, setEditandoCatId] = useState(null);
@@ -160,9 +141,6 @@ export default function TiposConfiguracion() {
 
   const [modalHorario, setModalHorario] = useState(false);
   const [editandoHorarioId, setEditandoHorarioId] = useState(null);
-
-  const [modalMateria, setModalMateria] = useState(false);
-  const [editandoMateriaId, setEditandoMateriaId] = useState(null);
 
   const [modalAlerta, setModalAlerta] = useState({
     isOpen: false,
@@ -178,7 +156,6 @@ export default function TiposConfiguracion() {
   const [formCat, setFormCat] = useState(FORM_CAT_INICIAL);
   const [formCargo, setFormCargo] = useState(FORM_CARGO_INICIAL);
   const [formHorario, setFormHorario] = useState(FORM_HORARIO_INICIAL);
-  const [formMateria, setFormMateria] = useState(FORM_MATERIA_INICIAL);
 
   const mostrarAviso = (tipo, titulo, mensaje) => {
     setModalAlerta({
@@ -195,13 +172,11 @@ export default function TiposConfiguracion() {
   const cargarDatos = useCallback(async () => {
     setLoading(true);
     try {
-      const [catsRes, cargosRes, horariosRes, materiasRes] =
-        await Promise.allSettled([
-          getCategorias(),
-          getCargos(),
-          getHorarios(),
-          getMaterias(),
-        ]);
+      const [catsRes, cargosRes, horariosRes] = await Promise.allSettled([
+        getCategorias(),
+        getCargos(),
+        getHorarios(),
+      ]);
 
       const listaCats =
         catsRes.status === "fulfilled" && Array.isArray(catsRes.value)
@@ -215,15 +190,10 @@ export default function TiposConfiguracion() {
         horariosRes.status === "fulfilled" && Array.isArray(horariosRes.value)
           ? horariosRes.value
           : [];
-      const listaMaterias =
-        materiasRes.status === "fulfilled" && Array.isArray(materiasRes.value)
-          ? materiasRes.value
-          : [];
 
       setCategorias(listaCats);
       setCargos(listaCargos);
       setHorarios(listaHorarios);
-      setMaterias(listaMaterias);
 
       const catsActivas = listaCats.filter((c) => c.activo !== false);
       if (catsActivas.length > 0) {
@@ -589,7 +559,7 @@ export default function TiposConfiguracion() {
 
   // --- HANDLERS: HORARIOS PREESTABLECIDOS ---
   const abrirModalCrearHorario = () => {
-    if (!puedeEditarMateriasTurnos) return;
+    if (!puedeEditarTurnos) return;
     setEditandoHorarioId(null);
     setFormHorario({
       ...FORM_HORARIO_INICIAL,
@@ -599,7 +569,7 @@ export default function TiposConfiguracion() {
   };
 
   const abrirModalEditarHorario = (h) => {
-    if (!puedeEditarMateriasTurnos) return;
+    if (!puedeEditarTurnos) return;
     setEditandoHorarioId(h.id);
     setFormHorario({
       nombre: h.nombre || "",
@@ -620,7 +590,7 @@ export default function TiposConfiguracion() {
 
   const handleGuardarHorario = async (e) => {
     e.preventDefault();
-    if (!puedeEditarMateriasTurnos) return;
+    if (!puedeEditarTurnos) return;
 
     if (!formHorario.nombre.trim()) {
       mostrarAviso(
@@ -741,7 +711,7 @@ export default function TiposConfiguracion() {
   };
 
   const handleEliminarHorario = (id, nombre) => {
-    if (!puedeEditarMateriasTurnos) return;
+    if (!puedeEditarTurnos) return;
     setModalAlerta({
       isOpen: true,
       tipo: "danger",
@@ -768,7 +738,7 @@ export default function TiposConfiguracion() {
   };
 
   const handleReactivarHorario = (id, nombre) => {
-    if (!puedeEditarMateriasTurnos) return;
+    if (!puedeEditarTurnos) return;
     setModalAlerta({
       isOpen: true,
       tipo: "info",
@@ -803,167 +773,6 @@ export default function TiposConfiguracion() {
     } else {
       setFormHorario({ ...formHorario, dias: [...formHorario.dias, dia] });
     }
-  };
-
-  // --- HANDLERS: MATERIAS / CÁTEDRAS ---
-  const abrirModalCrearMateria = () => {
-    if (!puedeEditarMateriasTurnos) return;
-    setEditandoMateriaId(null);
-    setFormMateria(FORM_MATERIA_INICIAL);
-    setModalMateria(true);
-  };
-
-  const abrirModalEditarMateria = (m) => {
-    if (!puedeEditarMateriasTurnos) return;
-    setEditandoMateriaId(m.id);
-    setFormMateria({
-      nombre: m.nombre || "",
-      codigo: m.codigo || "",
-      departamento: m.departamento || "",
-      aulaPredeterminada: m.aulaPredeterminada || "",
-      estado: m.activo !== false ? "Activo" : "Inactivo",
-    });
-    setModalMateria(true);
-  };
-
-  const handleGuardarMateria = async (e) => {
-    e.preventDefault();
-    if (!puedeEditarMateriasTurnos) return;
-
-    if (!formMateria.nombre.trim()) {
-      mostrarAviso(
-        "warning",
-        "Atención",
-        "El nombre de la materia es obligatorio.",
-      );
-      return;
-    }
-
-    const coincidencia = buscarSimilar(
-      formMateria.nombre,
-      materias,
-      editandoMateriaId,
-    );
-    const ejecutarPeticion = async () => {
-      try {
-        const payload = {
-          nombre: formMateria.nombre.trim(),
-          codigo: formMateria.codigo?.trim() || null,
-          departamento: formMateria.departamento?.trim() || null,
-          aulaPredeterminada: formMateria.aulaPredeterminada?.trim() || null,
-          activo: formMateria.estado === "Activo",
-        };
-
-        if (editandoMateriaId) {
-          await updateMateria(editandoMateriaId, payload);
-          mostrarAviso(
-            "success",
-            "Cátedra Actualizada",
-            "Los datos se actualizaron correctamente.",
-          );
-        } else {
-          await createMateria(payload);
-          mostrarAviso(
-            "success",
-            "Cátedra Registrada",
-            "La materia se registró con éxito.",
-          );
-        }
-
-        await cargarDatos();
-        setModalMateria(false);
-        setEditandoMateriaId(null);
-        setFormMateria(FORM_MATERIA_INICIAL);
-      } catch (err) {
-        mostrarAviso(
-          "danger",
-          "Error",
-          err.response?.data?.message || "No se pudo guardar la materia.",
-        );
-      }
-    };
-
-    if (coincidencia) {
-      if (coincidencia.tipo === "EXACTO") {
-        mostrarAviso(
-          "danger",
-          "Materia Duplicada",
-          `Ya existe una materia registrada como "${coincidencia.item.nombre}".`,
-        );
-        return;
-      }
-      if (coincidencia.tipo === "SIMILAR") {
-        setModalAlerta({
-          isOpen: true,
-          tipo: "warning",
-          titulo: "¿Desea continuar?",
-          mensaje: `El nombre "${formMateria.nombre}" es similar a "${coincidencia.item.nombre}". ¿Desea guardarla?`,
-          textoConfirmar: "Sí, registrar de todos modos",
-          textoCancelar: "Revisar nombre",
-          mostrarCancelar: true,
-          onConfirmar: async () => {
-            setModalAlerta((prev) => ({ ...prev, isOpen: false }));
-            await ejecutarPeticion();
-          },
-        });
-        return;
-      }
-    }
-    await ejecutarPeticion();
-  };
-
-  const handleEliminarMateria = (id, nombre) => {
-    if (!puedeEditarMateriasTurnos) return;
-    setModalAlerta({
-      isOpen: true,
-      tipo: "danger",
-      titulo: "¿Dar de baja cátedra?",
-      mensaje: `¿Desea dar de baja la cátedra "${nombre}"?`,
-      textoConfirmar: "Sí, dar de baja",
-      textoCancelar: "Cancelar",
-      mostrarCancelar: true,
-      onConfirmar: async () => {
-        setModalAlerta((prev) => ({ ...prev, isOpen: false }));
-        try {
-          await deleteMateria(id);
-          await cargarDatos();
-          mostrarAviso(
-            "success",
-            "Baja Exitosa",
-            `La cátedra "${nombre}" fue dada de baja.`,
-          );
-        } catch (err) {
-          mostrarAviso("danger", "Error", "No se pudo dar de baja la materia.");
-        }
-      },
-    });
-  };
-
-  const handleReactivarMateria = (id, nombre) => {
-    if (!puedeEditarMateriasTurnos) return;
-    setModalAlerta({
-      isOpen: true,
-      tipo: "info",
-      titulo: "¿Reactivar cátedra?",
-      mensaje: `¿Desea reactivar la materia "${nombre}"?`,
-      textoConfirmar: "Sí, reactivar",
-      textoCancelar: "Cancelar",
-      mostrarCancelar: true,
-      onConfirmar: async () => {
-        setModalAlerta((prev) => ({ ...prev, isOpen: false }));
-        try {
-          await reactivarMateria(id);
-          await cargarDatos();
-          mostrarAviso(
-            "success",
-            "Reactivación Exitosa",
-            `La cátedra "${nombre}" fue reactivada.`,
-          );
-        } catch (err) {
-          mostrarAviso("danger", "Error", "No se pudo reactivar la materia.");
-        }
-      },
-    });
   };
 
   // --- FILTROS DE LISTAS ---
@@ -1008,21 +817,6 @@ export default function TiposConfiguracion() {
     return matchEstado && matchCat;
   });
 
-  const filteredMaterias = materias.filter((m) => {
-    const matchEstado =
-      filtroEstadoMateria === "TODOS" ||
-      (filtroEstadoMateria === "ACTIVOS" && m.activo !== false) ||
-      (filtroEstadoMateria === "INACTIVOS" && m.activo === false);
-
-    const query = materiaSearch.toLowerCase();
-    const matchSearch =
-      m.nombre?.toLowerCase().includes(query) ||
-      m.codigo?.toLowerCase().includes(query) ||
-      m.departamento?.toLowerCase().includes(query);
-
-    return matchEstado && matchSearch;
-  });
-
   if (loading) {
     return (
       <div className="flex h-96 items-center justify-center">
@@ -1049,13 +843,13 @@ export default function TiposConfiguracion() {
               Configuración del Sistema
             </h1>
             <p className="text-xs text-slate-500">
-              Gestión centralizada de Categorías, Cargos, Tabla de Horarios y
-              Catálogo de Materias
+              Gestión centralizada de Categorías, Cargos y Tabla de Horarios
+              Preestablecidos
             </p>
           </div>
         </div>
 
-        {/* Subpestañas */}
+        {/* Subpestañas (3 principales) */}
         <div className="flex flex-wrap bg-slate-100 p-1.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-600">
           <button
             onClick={() => setActiveTab("categorias")}
@@ -1099,21 +893,6 @@ export default function TiposConfiguracion() {
             Tabla de Horarios
             <span className="bg-slate-200 text-slate-700 px-1.5 py-0.5 rounded-full text-[10px] font-bold">
               {horarios.length}
-            </span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab("materias")}
-            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg transition-all ${
-              activeTab === "materias"
-                ? "bg-white text-indigo-700 shadow-xs border border-slate-200"
-                : "hover:text-slate-900"
-            }`}
-          >
-            <BookOpen className="w-3.5 h-3.5 text-indigo-600" />
-            Materias
-            <span className="bg-slate-200 text-slate-700 px-1.5 py-0.5 rounded-full text-[10px] font-bold">
-              {materias.length}
             </span>
           </button>
         </div>
@@ -1454,7 +1233,7 @@ export default function TiposConfiguracion() {
                 directa o por régimen
               </p>
             </div>
-            {puedeEditarMateriasTurnos ? (
+            {puedeEditarTurnos ? (
               <button
                 onClick={abrirModalCrearHorario}
                 className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#4b35e6] hover:bg-[#3f2bc9] text-white text-xs font-semibold shadow-md transition cursor-pointer"
@@ -1539,7 +1318,7 @@ export default function TiposConfiguracion() {
                       </div>
 
                       <div className="flex items-center gap-1.5 text-slate-400">
-                        {puedeEditarMateriasTurnos ? (
+                        {puedeEditarTurnos ? (
                           <>
                             <button
                               onClick={() => abrirModalEditarHorario(h)}
@@ -1619,7 +1398,7 @@ export default function TiposConfiguracion() {
                     </div>
                   </div>
 
-                  {/* BLOQUE INFERIOR: TOLERANCIAS Y SALIDAS INTERMEDIAS AUDITABLES */}
+                  {/* BLOQUE INFERIOR: TOLERANCIAS Y SALIDAS INTERMEDIAS */}
                   <div className="grid grid-cols-2 gap-2 pt-3 border-t border-slate-100 text-center">
                     <div className="bg-[#f8fafc] p-2 rounded-xl">
                       <div className="text-[9px] font-bold uppercase text-slate-400">
@@ -1657,172 +1436,6 @@ export default function TiposConfiguracion() {
                 </div>
               );
             })}
-          </div>
-        </div>
-      )}
-
-      {/* ========================================================
-          VISTA 4: CATÁLOGO DE CÁTEDRAS Y MATERIAS
-         ======================================================== */}
-      {activeTab === "materias" && (
-        <div className="space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-2 gap-4">
-            <div>
-              <h2 className="text-base font-bold text-slate-900">
-                Catálogo de Cátedras y Materias
-              </h2>
-              <p className="text-xs text-slate-500">
-                Listado de materias, departamentos y comisiones institucionales
-                para asignación docente
-              </p>
-            </div>
-            {puedeEditarMateriasTurnos ? (
-              <button
-                onClick={abrirModalCrearMateria}
-                className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#4b35e6] hover:bg-[#3f2bc9] text-white text-xs font-semibold shadow-md transition cursor-pointer"
-              >
-                <Plus className="w-4 h-4 stroke-[2.5]" />
-                Nueva Materia
-              </button>
-            ) : (
-              <span
-                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 border border-slate-200 text-slate-400 text-xs font-semibold select-none cursor-not-allowed"
-                title="Requiere permiso CONFIG_EDITAR_MATERIAS_TURNOS"
-              >
-                <Lock className="w-3.5 h-3.5" />
-                Creación Restringida
-              </span>
-            )}
-          </div>
-
-          <div className="bg-white p-3 border border-slate-200 rounded-xl shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3">
-            <div className="relative flex-1">
-              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input
-                type="text"
-                value={materiaSearch}
-                onChange={(e) => setMateriaSearch(e.target.value)}
-                placeholder="Buscar por materia, código, departamento o comisión..."
-                className="w-full pl-9 pr-3 py-2 text-xs text-slate-800 placeholder-slate-400 border border-slate-200 rounded-xl outline-none focus:border-indigo-500"
-              />
-            </div>
-
-            <div className="flex items-center gap-2 text-xs text-slate-600">
-              <span className="font-medium text-slate-500">Estado:</span>
-              <select
-                value={filtroEstadoMateria}
-                onChange={(e) => setFiltroEstadoMateria(e.target.value)}
-                className="bg-white border border-slate-200 text-slate-700 font-semibold rounded-xl px-3 py-2 text-xs outline-none focus:border-indigo-600 transition shadow-xs"
-              >
-                <option value="ACTIVOS">Solo Activos</option>
-                <option value="TODOS">Todos</option>
-                <option value="INACTIVOS">Solo Bajas (Inactivos)</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-xs">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-[#f8fafc] text-slate-500 font-bold uppercase text-[10px] border-b border-slate-100">
-                <tr>
-                  <th className="px-6 py-3.5 tracking-wider">
-                    Materia / Asignatura
-                  </th>
-                  <th className="px-6 py-3.5 tracking-wider">Código / Depto</th>
-                  <th className="px-6 py-3.5 tracking-wider">Aula Base</th>
-                  <th className="px-6 py-3.5 tracking-wider">Estado</th>
-                  <th className="px-6 py-3.5 tracking-wider text-right">
-                    Acciones
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 text-slate-800">
-                {filteredMaterias.length > 0 ? (
-                  filteredMaterias.map((m) => (
-                    <tr
-                      key={m.id}
-                      className={`transition-colors ${
-                        m.activo === false
-                          ? "bg-slate-50/60 opacity-80"
-                          : "hover:bg-slate-50/70"
-                      }`}
-                    >
-                      <td className="px-6 py-4 font-bold text-slate-900 text-sm">
-                        {m.nombre}
-                      </td>
-                      <td className="px-6 py-4 text-slate-500">
-                        {m.codigo ? (
-                          <span className="font-mono font-semibold text-slate-700">
-                            {m.codigo} •{" "}
-                          </span>
-                        ) : (
-                          ""
-                        )}
-                        {m.departamento || "General"}
-                      </td>
-                      <td className="px-6 py-4 text-slate-600">
-                        {m.aulaPredeterminada || "-"}
-                      </td>
-                      <td className="px-6 py-4">
-                        <StatusBadge activo={m.activo} />
-                      </td>
-                      <td className="px-6 py-4 text-right">
-                        <div className="flex items-center justify-end gap-2 text-slate-400">
-                          {puedeEditarMateriasTurnos ? (
-                            <>
-                              <button
-                                onClick={() => abrirModalEditarMateria(m)}
-                                className="p-1 hover:text-indigo-600 transition cursor-pointer"
-                                title="Editar Materia"
-                              >
-                                <Pencil className="w-4 h-4" />
-                              </button>
-                              {m.activo !== false ? (
-                                <button
-                                  onClick={() =>
-                                    handleEliminarMateria(m.id, m.nombre)
-                                  }
-                                  className="p-1 hover:text-rose-600 transition cursor-pointer"
-                                  title="Dar de baja"
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </button>
-                              ) : (
-                                <button
-                                  onClick={() =>
-                                    handleReactivarMateria(m.id, m.nombre)
-                                  }
-                                  className="p-1 hover:text-emerald-600 transition cursor-pointer"
-                                  title="Reactivar Materia"
-                                >
-                                  <RotateCcw className="w-4 h-4 text-emerald-600" />
-                                </button>
-                              )}
-                            </>
-                          ) : (
-                            <span
-                              className="p-1 text-slate-300 cursor-not-allowed select-none"
-                              title="Requiere permiso CONFIG_EDITAR_MATERIAS_TURNOS"
-                            >
-                              <Lock className="w-3.5 h-3.5" />
-                            </span>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td
-                      colSpan={5}
-                      className="text-center py-12 text-slate-400 text-xs"
-                    >
-                      No se encontraron materias con los filtros seleccionados.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
           </div>
         </div>
       )}
@@ -2313,136 +1926,6 @@ export default function TiposConfiguracion() {
                   className="px-5 py-2 font-semibold text-white bg-[#4b35e6] hover:bg-[#3e2bc0] rounded-xl shadow-md cursor-pointer"
                 >
                   {editandoHorarioId ? "Guardar Cambios" : "Guardar Horario"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Modal 4: Materia / Cátedra */}
-      {modalMateria && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl w-full max-w-md overflow-hidden shadow-2xl">
-            <div className="bg-[#111827] px-6 py-4 text-white flex items-center justify-between">
-              <div className="flex items-center gap-2.5 font-bold text-sm">
-                <BookOpen className="w-4 h-4 text-indigo-400" />
-                <span>
-                  {editandoMateriaId ? "Editar Materia" : "Nueva Materia"}
-                </span>
-              </div>
-              <button
-                onClick={() => setModalMateria(false)}
-                className="text-slate-400 hover:text-white cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <form
-              onSubmit={handleGuardarMateria}
-              className="p-6 space-y-4 text-xs"
-            >
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">
-                  Nombre de la Materia *
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="ej. Álgebra Lineal Aplicada, Física I"
-                  value={formMateria.nombre}
-                  onChange={(e) =>
-                    setFormMateria({ ...formMateria, nombre: e.target.value })
-                  }
-                  className="w-full border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-indigo-600"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">
-                    Código de Cátedra
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="ej. MAT-101"
-                    value={formMateria.codigo}
-                    onChange={(e) =>
-                      setFormMateria({ ...formMateria, codigo: e.target.value })
-                    }
-                    className="w-full border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-indigo-600 font-mono"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">
-                  Departamento / Carrera
-                </label>
-                <input
-                  type="text"
-                  placeholder="ej. Departamento de Ciencias Básicas"
-                  value={formMateria.departamento}
-                  onChange={(e) =>
-                    setFormMateria({
-                      ...formMateria,
-                      departamento: e.target.value,
-                    })
-                  }
-                  className="w-full border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-indigo-600"
-                />
-              </div>
-
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">
-                  Aula Predeterminada
-                </label>
-                <input
-                  type="text"
-                  placeholder="ej. Aula Magna 1, Laboratorio 3"
-                  value={formMateria.aulaPredeterminada}
-                  onChange={(e) =>
-                    setFormMateria({
-                      ...formMateria,
-                      aulaPredeterminada: e.target.value,
-                    })
-                  }
-                  className="w-full border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-indigo-600"
-                />
-              </div>
-
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">
-                  Estado *
-                </label>
-                <select
-                  value={formMateria.estado}
-                  onChange={(e) =>
-                    setFormMateria({ ...formMateria, estado: e.target.value })
-                  }
-                  className="w-full border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-indigo-600 bg-white"
-                >
-                  <option value="Activo">
-                    Activo (Habilitada en el sistema)
-                  </option>
-                  <option value="Inactivo">Inactivo (Baja lógica)</option>
-                </select>
-              </div>
-
-              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => setModalMateria(false)}
-                  className="px-4 py-2 font-medium text-slate-600 hover:bg-slate-100 rounded-xl cursor-pointer"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2 font-semibold text-white bg-[#4b35e6] hover:bg-[#3e2bc0] rounded-xl shadow-md cursor-pointer"
-                >
-                  {editandoMateriaId ? "Guardar Cambios" : "Guardar Cátedra"}
                 </button>
               </div>
             </form>

@@ -58,7 +58,7 @@ export const MODULOS_PERMISOS = [
       },
       {
         codigo: "HORARIOS_GESTIONAR",
-        label: "Asignar turnos o clases",
+        label: "Asignar turnos o clases a colaboradores",
         critico: false,
       },
       {
@@ -73,7 +73,6 @@ export const MODULOS_PERMISOS = [
       },
     ],
   },
-  // MÓDULO INDEPENDIENTE DE MATERIAS & LIQUIDACIÓN
   {
     id: "MATERIAS",
     nombre: "Gestión de Materias & Liquidación",
@@ -107,8 +106,6 @@ export const MODULOS_PERMISOS = [
       },
     ],
   },
-
-  ,
   {
     id: "FICHAJES",
     nombre: "Fichajes & Biometría",
@@ -139,7 +136,8 @@ export const MODULOS_PERMISOS = [
   {
     id: "CONFIGURACION",
     nombre: "Configuración del Sistema",
-    descripcion: "Mantenimiento de tablas maestras y catálogos institucionales",
+    descripcion:
+      "Mantenimiento de tablas maestras de categorías, cargos y turnos",
     permisos: [
       {
         codigo: "CONFIG_VER",
@@ -157,8 +155,8 @@ export const MODULOS_PERMISOS = [
         critico: false,
       },
       {
-        codigo: "CONFIG_EDITAR_MATERIAS_TURNOS",
-        label: "Gestionar cátedras y moldes de horario",
+        codigo: "CONFIG_EDITAR_TURNOS",
+        label: "Gestionar moldes y plantillas de horario",
         critico: false,
       },
     ],

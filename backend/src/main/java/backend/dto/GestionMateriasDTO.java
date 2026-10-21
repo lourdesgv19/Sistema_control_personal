@@ -16,27 +16,47 @@ public class GestionMateriasDTO {
         double totalDeduccion
     ) {}
 
-    public record BloqueMateriaSemanal(
+    public record HorarioDesgloseDTO(
         Long idHorario,
-        Long idMateria,
-        String nombreMateria,
-        String aula,
         int diaSemana,
-        LocalTime horaInicio,
-        LocalTime horaFin,
-        double horasProgramadas,
-        double horasEfectivas,
-        String estadoSemaforo,
-        String motivoDesvio,
+        String diaNombre,
+        String horaInicio,
+        String horaFin,
+        double horasClase,
+        String turnoEtiqueta,
+        String aula,
         Long idDocente,
         String nombreDocente,
+        String legajoDocente,
         double tarifaHora,
-        double montoLiquidado
+        double totalPorClase,
+        String tipoFrecuencia,
+        Integer repeticionesPeriodo,
+        String semanaAlterna
+    ) {}
+
+public record MateriaCatalogoDTO(
+        Long idMateria,
+        String nombre,
+        String codigo,
+        String departamento,
+        String aulaPredeterminada,
+        double tarifaHora,
+        int totalHorarios,
+        List<String> diasResumen,
+        double totalHorasSemanales,
+        Long idDocenteTitular,
+        String docenteTitularNombre,
+        Long idDocenteAuxiliar,
+        String docenteAuxiliarNombre,
+        boolean sinDocente,
+        boolean activo, // <-- AGREGADO
+        List<HorarioDesgloseDTO> desgloseHorarios
     ) {}
 
 public record NuevaMateriaRequest(
-    Long idMateria,       
-    Long idHorario,     
+    Long idMateria,
+    Long idHorario,
     String nombre,
     String codigo,
     String departamento,
@@ -48,36 +68,26 @@ public record NuevaMateriaRequest(
     Long idDocenteAuxiliar,
     Double tarifaHora,
     String observaciones,
-    Boolean forzarGuardado
+    Boolean forzarGuardado,
+    String tipoFrecuencia,
+    Integer repeticionesPeriodo,
+    String semanaAlterna
 ) {}
 
-    public record HorarioDesgloseDTO(
-    Long idHorario,
-    int diaSemana,
-    String diaNombre,
-    String horaInicio,
-    String horaFin,
-    double horasClase,
-    String turnoEtiqueta, // ej: "Turno Mañana"
-    String aula,
-    Long idDocente,
-    String nombreDocente,
-    String legajoDocente,
-    double tarifaHora,
-    double totalPorClase
-) {}
-
-public record MateriaCatalogoDTO(
-    Long idMateria,
-    String nombre,
-    String codigo,
-    String aulaPredeterminada,
-    double tarifaHora,
-    int totalHorarios,
-    List<String> diasResumen, // ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"]
-    double totalHorasSemanales,
-    Long idDocenteTitular,
-    String docenteTitularNombre,
-    List<HorarioDesgloseDTO> desgloseHorarios
-) {}
+    public record ImpactoBajaMateriaDTO(
+        Long idMateria,
+        String nombreMateria,
+        int totalHorariosAfectados,
+        List<HorarioAfectadoDTO> horariosAfectados
+    ) {
+        public record HorarioAfectadoDTO(
+            Long idHorario,
+            String diaNombre,
+            String horaInicio,
+            String horaFin,
+            String docenteNombre,
+            String legajoDocente,
+            String aula
+        ) {}
+    }
 }
