@@ -80,7 +80,6 @@ public class UsuarioService {
 
     /**
      * Genera la contraseña inicial: apellido en minúscula + primeros 2 dígitos del DNI.
-     * Ejemplo: Pérez con DNI 45854982 -> perez45
      */
     public String generarPasswordPredeterminada(String apellido, String dni) {
         if (apellido == null || apellido.isBlank()) apellido = "usuario";
@@ -116,33 +115,29 @@ public class UsuarioService {
         usuario.setPasswordHash(passwordEncoder.encode(passNueva.trim()));
         usuario.setDebeCambiarPassword(false);
         usuarioRepo.save(usuario);
-
     }
 
     @Transactional
     public void cambiarPasswordPerfil(String username, String passActual, String passNueva) {
-    Usuario usuario = usuarioRepo.findByUsername(username)
-            .orElseThrow(() -> new IllegalArgumentException("Usuario no encontrado"));
+        Usuario usuario = usuarioRepo.findByUsername(username)
+                .orElseThrow(() -> new IllegalArgumentException("Usuario no encontrado"));
 
-    // 1. Verificación obligatoria de contraseña actual
-    if (!passwordEncoder.matches(passActual, usuario.getPasswordHash())) {
-        throw new IllegalArgumentException("La contraseña actual ingresada es incorrecta.");
+        if (!passwordEncoder.matches(passActual, usuario.getPasswordHash())) {
+            throw new IllegalArgumentException("La contraseña actual ingresada es incorrecta.");
+        }
+
+        if (passNueva == null || passNueva.trim().length() < 6) {
+            throw new IllegalArgumentException("La nueva contraseña debe tener al menos 6 caracteres.");
+        }
+
+        if (passwordEncoder.matches(passNueva, usuario.getPasswordHash())) {
+            throw new IllegalArgumentException("La nueva contraseña no puede ser igual a la anterior.");
+        }
+
+        usuario.setPasswordHash(passwordEncoder.encode(passNueva.trim()));
+        usuario.setDebeCambiarPassword(false);
+        usuarioRepo.save(usuario);
     }
-
-    // 2. Validación de complejidad
-    if (passNueva == null || passNueva.trim().length() < 6) {
-        throw new IllegalArgumentException("La nueva contraseña debe tener al menos 6 caracteres.");
-    }
-
-    if (passwordEncoder.matches(passNueva, usuario.getPasswordHash())) {
-        throw new IllegalArgumentException("La nueva contraseña no puede ser igual a la anterior.");
-    }
-
-    // 3. Persistir y desactivar el requerimiento
-    usuario.setPasswordHash(passwordEncoder.encode(passNueva.trim()));
-    usuario.setDebeCambiarPassword(false);
-    usuarioRepo.save(usuario);
-}
 
     @Transactional
     public UsuarioDTO crearUsuarioParaEmpleado(CrearUsuarioRequest req) {
@@ -179,7 +174,6 @@ public class UsuarioService {
 
         Usuario guardado = usuarioRepo.save(usuario);
 
-        // Registro de Auditoría
         String operador = obtenerOperadorActual();
         auditoriaService.registrarMovimiento(
             null,
@@ -199,6 +193,11 @@ public class UsuarioService {
         Usuario usuario = usuarioRepo.findById(usuarioId)
                 .orElseThrow(() -> new IllegalArgumentException("Usuario no encontrado con ID: " + usuarioId));
 
+        // Blindaje explícito de la cuenta raíz
+        if ("admin".equalsIgnoreCase(usuario.getUsername())) {
+            throw new IllegalStateException("La contraseña del usuario administrador raíz no se puede restablecer por este medio. Debe gestionarse desde 'Mi Perfil'.");
+        }
+
         if (usuario.getEmpleado() == null) {
             throw new IllegalStateException("El usuario no está vinculado a un empleado para autocalcular su clave.");
         }
@@ -209,7 +208,6 @@ public class UsuarioService {
         usuario.setDebeCambiarPassword(true);
         usuarioRepo.save(usuario);
 
-        // Registro de Auditoría
         String operador = obtenerOperadorActual();
         auditoriaService.registrarMovimiento(
             null,
@@ -226,10 +224,14 @@ public class UsuarioService {
     public void cambiarEstado(Long usuarioId, boolean activo) {
         Usuario usuario = usuarioRepo.findById(usuarioId)
                 .orElseThrow(() -> new IllegalArgumentException("Usuario no encontrado con ID: " + usuarioId));
+
+        if ("admin".equalsIgnoreCase(usuario.getUsername())) {
+            throw new IllegalStateException("La cuenta de administrador principal no puede ser suspendida.");
+        }
+
         usuario.setActivo(activo);
         usuarioRepo.save(usuario);
 
-        // Registro de Auditoría
         String operador = obtenerOperadorActual();
         String accionAudit = activo ? "HABILITAR_USUARIO" : "SUSPENDER_USUARIO";
         String detalle = (activo ? "Se habilitó" : "Se suspendió") + " el acceso al usuario " + usuario.getUsername();
@@ -246,57 +248,53 @@ public class UsuarioService {
     }
 
     public UsuarioDTO convertirADTO(Usuario u) {
-    boolean esAdminRaiz = (u.getEmpleado() == null && "admin".equalsIgnoreCase(u.getUsername()));
+        boolean esAdminRaiz = (u.getEmpleado() == null && "admin".equalsIgnoreCase(u.getUsername()));
 
-    String nombreCompleto = u.getEmpleado() != null 
-            ? (u.getEmpleado().getNombre() + " " + u.getEmpleado().getApellido()) 
-            : (esAdminRaiz ? "Administrador General del Sistema" : "Sin Empleado Asociado");
+        String nombreCompleto = u.getEmpleado() != null 
+                ? (u.getEmpleado().getNombre() + " " + u.getEmpleado().getApellido()) 
+                : (esAdminRaiz ? "Administrador General del Sistema" : "Sin Empleado Asociado");
 
-    Long empId = u.getEmpleado() != null ? u.getEmpleado().getId() : null;
-    String email = u.getEmpleado() != null ? u.getEmpleado().getEmail() : null;
-    String telefono = u.getEmpleado() != null ? u.getEmpleado().getTelefono() : null;
-    String idBiometrico = u.getEmpleado() != null ? u.getEmpleado().getIdBiometrico() : null;
+        Long empId = u.getEmpleado() != null ? u.getEmpleado().getId() : null;
+        String email = u.getEmpleado() != null ? u.getEmpleado().getEmail() : null;
+        String telefono = u.getEmpleado() != null ? u.getEmpleado().getTelefono() : null;
+        String idBiometrico = u.getEmpleado() != null ? u.getEmpleado().getIdBiometrico() : null;
 
-    return new UsuarioDTO(
-            u.getId(),
-            u.getUsername(), // Asegurar que pase u.getUsername()
-            u.getRol(),
-            u.getActivo(),
-            empId,
-            nombreCompleto,
-            email,
-            telefono,
-            idBiometrico,
-            Boolean.TRUE.equals(u.getDebeCambiarPassword())
-    );
-}
-
-    @Transactional
-public void actualizarContacto(String usernameActual, String email, String telefono) {
-    Usuario usuario = usuarioRepo.findByUsername(usernameActual)
-            .orElseThrow(() -> new IllegalArgumentException("Usuario no encontrado: " + usernameActual));
-
-    Empleado emp = usuario.getEmpleado();
-
-    // 1. Caso especial: Usuario raíz del sistema (sin empleado vinculado)
-    if (emp == null) {
-        // Si el admin no tiene empleado, podemos actualizar su username si fuera email, 
-        // o simplemente registrar el movimiento en auditoría.
-        auditoriaService.registrarMovimiento(
-            usuario.getId(),
-            usuario.getUsername(),
-            usuario.getRol(),
-            "ACTUALIZAR_CONTACTO_ADMIN",
-            "SEGURIDAD",
-            "Actualización de contacto de cuenta de sistema: " + email + " / Tel: " + telefono,
-            null
+        return new UsuarioDTO(
+                u.getId(),
+                u.getUsername(),
+                u.getRol(),
+                u.getActivo(),
+                empId,
+                nombreCompleto,
+                email,
+                telefono,
+                idBiometrico,
+                Boolean.TRUE.equals(u.getDebeCambiarPassword())
         );
-        return;
     }
 
-    // 2. Flujo estándar para usuarios vinculados a empleados
-    emp.setEmail(email != null ? email.trim().toLowerCase() : null);
-    emp.setTelefono(telefono != null ? telefono.trim() : null);
-    empleadoRepo.save(emp);
-}
+    @Transactional
+    public void actualizarContacto(String usernameActual, String email, String telefono) {
+        Usuario usuario = usuarioRepo.findByUsername(usernameActual)
+                .orElseThrow(() -> new IllegalArgumentException("Usuario no encontrado: " + usernameActual));
+
+        Empleado emp = usuario.getEmpleado();
+
+        if (emp == null) {
+            auditoriaService.registrarMovimiento(
+                usuario.getId(),
+                usuario.getUsername(),
+                usuario.getRol(),
+                "ACTUALIZAR_CONTACTO_ADMIN",
+                "SEGURIDAD",
+                "Actualización de contacto de cuenta de sistema: " + email + " / Tel: " + telefono,
+                null
+            );
+            return;
+        }
+
+        emp.setEmail(email != null ? email.trim().toLowerCase() : null);
+        emp.setTelefono(telefono != null ? telefono.trim() : null);
+        empleadoRepo.save(emp);
+    }
 }

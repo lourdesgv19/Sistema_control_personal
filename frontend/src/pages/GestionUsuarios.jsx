@@ -30,9 +30,8 @@ import { useAuth } from "../context/AuthContext";
 const ITEMS_POR_PAGINA = 10;
 
 export default function GestionUsuarios() {
-  const { user, tienePermiso } = useAuth(); // Sesión actual y verificador de permisos
+  const { user, tienePermiso } = useAuth();
 
-  // Facultades evaluadas por PBAC
   const puedeGestionarAccesos = tienePermiso("USUARIOS_GESTIONAR_ACCESOS");
   const puedeResetPassword = tienePermiso("USUARIOS_RESET_PASSWORD");
   const puedeSuspender = tienePermiso("USUARIOS_SUSPENDER");
@@ -41,12 +40,10 @@ export default function GestionUsuarios() {
   const [usuarios, setUsuarios] = useState([]);
   const [empleados, setEmpleados] = useState([]);
 
-  // Paginación desde Servidor
   const [paginaActual, setPaginaActual] = useState(1);
   const [totalPaginas, setTotalPaginas] = useState(1);
   const [totalElementos, setTotalElementos] = useState(0);
 
-  // Métricas desde Servidor
   const [resumenGlobal, setResumenGlobal] = useState({
     total: 0,
     administradores: 0,
@@ -54,12 +51,10 @@ export default function GestionUsuarios() {
     inactivos: 0,
   });
 
-  // Filtros
   const [searchTerm, setSearchTerm] = useState("");
   const [filtroRol, setFiltroRol] = useState("TODOS");
   const [filtroEstado, setFiltroEstado] = useState("TODOS");
 
-  // Modales
   const [modalCrear, setModalCrear] = useState(false);
   const [modalPermisos, setModalPermisos] = useState({
     isOpen: false,
@@ -88,7 +83,6 @@ export default function GestionUsuarios() {
     });
   };
 
-  // Apertura de gestión de permisos
   const abrirModalPermisos = (u) => {
     if (!puedeGestionarAccesos) return;
     setModalPermisos({
@@ -97,7 +91,6 @@ export default function GestionUsuarios() {
     });
   };
 
-  // 1. Cargar métricas globales del backend
   const cargarResumenGlobal = useCallback(async () => {
     try {
       const data = await getUsuarioResumen();
@@ -107,7 +100,6 @@ export default function GestionUsuarios() {
     }
   }, []);
 
-  // 2. Cargar nómina de empleados para el select del modal de asignación
   const cargarEmpleadosCatalogo = useCallback(async () => {
     try {
       const emps = await getEmpleados();
@@ -117,7 +109,6 @@ export default function GestionUsuarios() {
     }
   }, []);
 
-  // 3. Consulta paginada al backend
   const cargarUsuariosServidor = useCallback(
     async (page = 0) => {
       setLoading(true);
@@ -151,13 +142,11 @@ export default function GestionUsuarios() {
     [searchTerm, filtroRol, filtroEstado],
   );
 
-  // Carga inicial
   useEffect(() => {
     cargarResumenGlobal();
     cargarEmpleadosCatalogo();
   }, [cargarResumenGlobal, cargarEmpleadosCatalogo]);
 
-  // Debounce de búsqueda y cambio de filtros
   useEffect(() => {
     const timer = setTimeout(() => {
       cargarUsuariosServidor(paginaActual - 1);
@@ -165,7 +154,6 @@ export default function GestionUsuarios() {
     return () => clearTimeout(timer);
   }, [cargarUsuariosServidor, paginaActual]);
 
-  // Colaboradores sin usuario creado (para el modal)
   const empleadosSinUsuario = useMemo(() => {
     const idsConUsuario = new Set(
       usuarios.map((u) => u.empleadoId).filter(Boolean),
@@ -175,7 +163,6 @@ export default function GestionUsuarios() {
     );
   }, [empleados, usuarios]);
 
-  // Handlers
   const handleCrearUsuario = async (payload) => {
     if (!puedeGestionarAccesos) return;
     try {
@@ -200,7 +187,7 @@ export default function GestionUsuarios() {
   };
 
   const handleResetPassword = (usuario) => {
-    if (!puedeResetPassword) return;
+    if (!puedeResetPassword || usuario.username === "admin") return;
     setModalAlerta({
       isOpen: true,
       tipo: "warning",
@@ -222,7 +209,8 @@ export default function GestionUsuarios() {
           mostrarAviso(
             "danger",
             "Error",
-            "No se pudo restablecer la contraseña.",
+            err.response?.data?.message ||
+              "No se pudo restablecer la contraseña.",
           );
         }
       },
@@ -230,7 +218,7 @@ export default function GestionUsuarios() {
   };
 
   const handleToggleEstado = (usuario) => {
-    if (!puedeSuspender) return;
+    if (!puedeSuspender || usuario.username === "admin") return;
     const nuevoEstado = !usuario.activo;
     setModalAlerta({
       isOpen: true,
@@ -283,7 +271,6 @@ export default function GestionUsuarios() {
           </div>
         </div>
 
-        {/* Botón Nuevo Usuario: Controlado por USUARIOS_GESTIONAR_ACCESOS */}
         {puedeGestionarAccesos ? (
           <button
             onClick={() => setModalCrear(true)}
@@ -305,7 +292,6 @@ export default function GestionUsuarios() {
 
       {/* 2. TARJETAS DE MÉTRICAS */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        {/* TOTAL CUENTAS */}
         <button
           type="button"
           onClick={() => {
@@ -335,7 +321,6 @@ export default function GestionUsuarios() {
           </div>
         </button>
 
-        {/* ADMINISTRADORES ACTIVOS */}
         <button
           type="button"
           onClick={() => {
@@ -365,7 +350,6 @@ export default function GestionUsuarios() {
           </div>
         </button>
 
-        {/* AUDITORES ACTIVOS */}
         <button
           type="button"
           onClick={() => {
@@ -395,7 +379,6 @@ export default function GestionUsuarios() {
           </div>
         </button>
 
-        {/* CUENTAS SUSPENDIDAS */}
         <button
           type="button"
           onClick={() => {
@@ -567,30 +550,39 @@ export default function GestionUsuarios() {
                       </span>
                     </td>
 
-                    {/* Acciones de Seguridad con PBAC */}
                     <td className="px-6 py-4 text-right">
                       <div className="flex items-center justify-end gap-2 text-slate-400">
-                        {/* 1. Reset Clave (Requiere USUARIOS_RESET_PASSWORD) */}
-                        {puedeResetPassword ? (
-                          <button
-                            onClick={() => handleResetPassword(u)}
-                            className="flex items-center gap-1 px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 rounded-lg text-xs font-semibold transition cursor-pointer"
-                            title="Restablecer a contraseña predeterminada"
-                          >
-                            <KeyRound className="w-3.5 h-3.5 text-amber-600" />
-                            Reset Clave
-                          </button>
+                        {/* 1. Reset Clave protegido: DESHABILITADO PARA ADMIN */}
+                        {!esAdminRaiz ? (
+                          puedeResetPassword ? (
+                            <button
+                              onClick={() => handleResetPassword(u)}
+                              className="flex items-center gap-1 px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 rounded-lg text-xs font-semibold transition cursor-pointer"
+                              title="Restablecer a contraseña predeterminada"
+                            >
+                              <KeyRound className="w-3.5 h-3.5 text-amber-600" />
+                              Reset Clave
+                            </button>
+                          ) : (
+                            <span
+                              className="flex items-center gap-1 px-2.5 py-1 bg-slate-50 text-slate-300 border border-slate-200 rounded-lg text-xs font-semibold cursor-not-allowed select-none"
+                              title="Requiere permiso USUARIOS_RESET_PASSWORD"
+                            >
+                              <KeyRound className="w-3.5 h-3.5" />
+                              Reset Clave
+                            </span>
+                          )
                         ) : (
                           <span
                             className="flex items-center gap-1 px-2.5 py-1 bg-slate-50 text-slate-300 border border-slate-200 rounded-lg text-xs font-semibold cursor-not-allowed select-none"
-                            title="Requiere permiso USUARIOS_RESET_PASSWORD"
+                            title="La clave de Administrador General se gestiona únicamente desde Mi Perfil"
                           >
-                            <KeyRound className="w-3.5 h-3.5" />
+                            <Lock className="w-3.5 h-3.5" />
                             Reset Clave
                           </span>
                         )}
 
-                        {/* 2. Permisos (Requiere USUARIOS_GESTIONAR_ACCESOS y no ser admin raíz) */}
+                        {/* 2. Permisos */}
                         {puedeGestionarAccesos ? (
                           <button
                             onClick={() => abrirModalPermisos(u)}
@@ -613,7 +605,7 @@ export default function GestionUsuarios() {
                           </span>
                         )}
 
-                        {/* 3. Suspender / Reactivar (Requiere USUARIOS_SUSPENDER y no ser admin raíz ni usuario actual) */}
+                        {/* 3. Suspender / Reactivar */}
                         {!esAdminRaiz && !esUsuarioActual ? (
                           puedeSuspender ? (
                             u.activo !== false ? (
@@ -658,7 +650,7 @@ export default function GestionUsuarios() {
           </tbody>
         </table>
 
-        {/* 5. PAGINACIÓN DESDE EL SERVIDOR */}
+        {/* 5. PAGINACIÓN */}
         <div className="bg-white px-6 py-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
           <div className="text-slate-500">
             Mostrando{" "}
@@ -717,7 +709,6 @@ export default function GestionUsuarios() {
         </div>
       </div>
 
-      {/* MODAL CREAR USUARIO */}
       <ModalCrearUsuario
         isOpen={modalCrear}
         onClose={() => setModalCrear(false)}
@@ -725,7 +716,6 @@ export default function GestionUsuarios() {
         empleadosSinUsuario={empleadosSinUsuario}
       />
 
-      {/* MODAL DE GESTIÓN DE PERMISOS */}
       <ModalMatrizPermisos
         isOpen={modalPermisos.isOpen}
         usuario={modalPermisos.usuario}
@@ -734,7 +724,6 @@ export default function GestionUsuarios() {
         mostrarAviso={mostrarAviso}
       />
 
-      {/* MODAL ALERTA CENTRALIZADO */}
       <ModalAlerta
         isOpen={modalAlerta.isOpen}
         tipo={modalAlerta.tipo}

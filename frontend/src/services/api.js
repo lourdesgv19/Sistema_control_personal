@@ -1,62 +1,44 @@
 import axios from "axios";
 
-// 1. Crear la instancia con el nombre 'api'
 const api = axios.create({
-  baseURL: "http://localhost:8080/api",
+  baseURL: import.meta.env.VITE_API_URL || "http://localhost:8080/api",
   headers: {
     "Content-Type": "application/json",
   },
-  timeout: 5000,
 });
 
-// 2. Interceptor de solicitudes (Request)
-api.interceptors.response.use(
-  (response) => {
-    // Notifica que el servidor respondió con éxito
-    window.dispatchEvent(
-      new CustomEvent("servidor:estado", { detail: { ok: true } }),
-    );
-    return response;
-  },
-  (error) => {
-    // Si no hubo respuesta o hay error de red (servidor apagado)
-    if (
-      !error.response ||
-      error.code === "ERR_NETWORK" ||
-      error.message === "Network Error"
-    ) {
-      console.error(
-        `💥 [HTTP ERROR NO_RESPONSE] ${error.config?.url}: ${error.message}`,
-      );
-      // Notifica inmediatamente a la barra de conexión
-      window.dispatchEvent(
-        new CustomEvent("servidor:estado", { detail: { ok: false } }),
-      );
+// Interceptor de Peticiones: inyecta el token Bearer si existe
+api.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem("token");
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
     }
-    return Promise.reject(error);
+    return config;
   },
+  (error) => Promise.reject(error),
 );
 
-// 3. Interceptor de respuestas (Response)
+// Interceptor de Respuestas: gestión de sesión e ignorar rutas de login
 api.interceptors.response.use(
-  (response) => {
-    console.log(
-      `📥 [HTTP IN ${response.status}] ${response.config.url}`,
-      response.data,
-    );
-    return response;
-  },
+  (response) => response,
   (error) => {
-    console.error(
-      `💥 [HTTP ERROR ${error.response?.status || "NO_RESPONSE"}] ${error.config?.url}:`,
-      error.response?.data || error.message,
-    );
+    const originalRequest = error.config;
+    const url = originalRequest?.url || "";
 
-    // Interceptar 401 Unauthorized para forzar logout
-    if (error.response && error.response.status === 401) {
+    // 1. Verificar si la petición que falló corresponde al endpoint de autenticación
+    const esRutaLogin =
+      url.includes("/auth/login") ||
+      url.includes("/api/auth/login") ||
+      url.endsWith("/login");
+
+    // 2. Solo despachar logout si el 401 proviene de una sesión en uso, no del formulario de login
+    if (error.response?.status === 401 && !esRutaLogin) {
       console.warn(
         "⚠️ Token expirado o sesión inválida. Despachando evento de logout.",
       );
+      localStorage.removeItem("token");
+      localStorage.removeItem("user");
       window.dispatchEvent(new CustomEvent("auth:logout"));
     }
 
