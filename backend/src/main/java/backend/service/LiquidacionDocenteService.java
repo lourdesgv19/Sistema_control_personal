@@ -131,13 +131,18 @@ public class LiquidacionDocenteService {
 
         List<DocenteLiquidacionDTO> listaDocentes = new ArrayList<>();
 
-        double sumPagoIdeal = 0.0;
+        double sumPagoEstimadoPeriodo = 0.0;
+        double sumPagoIdealHastaHoy = 0.0;
         double sumPagoReal = 0.0;
         double sumMontoDescontado = 0.0;
-        double sumHorasProg = 0.0;
+        
+        double sumHorasProgPeriodo = 0.0;
+        double sumHorasProgHastaHoy = 0.0;
         double sumHorasDict = 0.0;
         double sumHorasDesc = 0.0;
+        
         int sumClasesPeriodo = 0;
+        int sumClasesHastaHoy = 0;
 
         double causaFaltas = 0.0;
         double causaTardanzas = 0.0;
@@ -162,11 +167,14 @@ public class LiquidacionDocenteService {
             List<ComisionLiquidacionDTO> comisionesDTO = new ArrayList<>();
             List<DesvioDocenteDTO> desviosDocente = new ArrayList<>();
 
-            double docHorasProg = 0.0;
+            double docHorasProgPeriodo = 0.0;
+            double docHorasProgHastaHoy = 0.0;
             double docHorasDict = 0.0;
-            double docPagoIdeal = 0.0;
+            double docPagoEstimado = 0.0;
+            double docPagoIdealHastaHoy = 0.0;
             double docPagoReal = 0.0;
-            int docClasesTotal = 0;
+            int docClasesPeriodoTotal = 0;
+            int docClasesHastaHoyTotal = 0;
 
             for (Map.Entry<Long, List<EmpleadoHorario>> matEntry : porMateria.entrySet()) {
                 List<EmpleadoHorario> subFranjas = matEntry.getValue();
@@ -185,9 +193,11 @@ public class LiquidacionDocenteService {
                         ? rep.getHoraEntrada().toString().substring(0, 5) + " - " + rep.getHoraSalida().toString().substring(0, 5) + " hs"
                         : "--:--";
 
-                double comHorasProg = 0.0;
+                double comHorasProgPeriodo = 0.0;
+                double comHorasProgHastaHoy = 0.0;
                 double comHorasDict = 0.0;
-                int comClasesCount = 0;
+                int comClasesPeriodo = 0;
+                int comClasesHastaHoy = 0;
                 List<DesvioDocenteDTO> desviosComision = new ArrayList<>();
 
                 LocalDate cur = rInicio;
@@ -195,22 +205,25 @@ public class LiquidacionDocenteService {
                     if (cur.getDayOfWeek().getValue() != 7) { // Excluir domingos
                         int diaSem = cur.getDayOfWeek().getValue();
                         final LocalDate fActual = cur;
+                        boolean esFuturo = cur.isAfter(hoy);
 
                         List<EmpleadoHorario> clasesDeHoy = subFranjas.stream()
                                 .filter(h -> h.getDiaSemana() != null && h.getDiaSemana() == diaSem)
                                 .toList();
 
                         for (EmpleadoHorario clase : clasesDeHoy) {
-                            comClasesCount++;
-
+                            comClasesPeriodo++;
                             long minTeoricos = evaluadorService.calcularMinutosClaseTeoricos(List.of(clase));
                             double hTeoricas = redondear1Dec(minTeoricos / 60.0);
-                            comHorasProg += hTeoricas;
+                            comHorasProgPeriodo += hTeoricas;
 
-                            if (cur.isAfter(hoy)) {
-                                comHorasDict += hTeoricas;
+                            // Si la fecha es posterior a hoy, no se computa como debida ni dictada a hoy
+                            if (esFuturo) {
                                 continue;
                             }
+
+                            comClasesHastaHoy++;
+                            comHorasProgHastaHoy += hTeoricas;
 
                             List<EmpleadoFichaje> fDiaDocente = fichajesDocente.stream()
                                     .filter(f -> f.getHoraFichaje().toLocalDate().equals(fActual))
@@ -218,7 +231,7 @@ public class LiquidacionDocenteService {
                                     .toList();
 
                             long minEfectivos = evaluadorService.calcularMinutosClaseEfectivos(List.of(clase), fDiaDocente, fActual);
-                            
+
                             // Tolerancia de 5 minutos
                             if (minTeoricos - minEfectivos <= 5) {
                                 comHorasDict += hTeoricas;
@@ -230,7 +243,6 @@ public class LiquidacionDocenteService {
                                 double hDesc = redondear1Dec(minPerdidos / 60.0);
                                 double pDesc = redondearDinero(hDesc * tarifaHora);
 
-                                // Clasificación Forense Precisa
                                 String tipoD;
                                 String badgeStyle;
                                 String detalleForense;
@@ -238,14 +250,12 @@ public class LiquidacionDocenteService {
                                 LocalTime entradaClase = clase.getHoraEntrada();
                                 LocalTime salidaClase = clase.getHoraSalida();
 
-                                // CASO 1: Sin marcaciones o 0 minutos de permanencia en el horario de cátedra
                                 if (fDiaDocente.isEmpty() || minEfectivos == 0) {
                                     tipoD = "FALTA";
                                     badgeStyle = "bg-rose-50 text-rose-600 border border-rose-200";
                                     detalleForense = "Sin registro biométrico (Falta sin aviso)";
                                     causaFaltas += hDesc;
                                 } else {
-                                    // El docente sí fichó ese día. Analizamos el comportamiento respecto a la clase:
                                     EmpleadoFichaje primerFichaje = fDiaDocente.get(0);
                                     EmpleadoFichaje ultimoFichaje = fDiaDocente.get(fDiaDocente.size() - 1);
                                     LocalTime horaPri = primerFichaje.getHoraFichaje().toLocalTime();
@@ -254,7 +264,6 @@ public class LiquidacionDocenteService {
                                     boolean llegoTarde = horaPri.isAfter(entradaClase.plusMinutes(5));
                                     boolean seFueAntes = horaUlt.isBefore(salidaClase.minusMinutes(5));
 
-                                    // Consultar si el incidente ya fue registrado por EvaluadorIncidentesService
                                     IncidenteAsistencia incSalidaClase = incidentesDocente.stream()
                                             .filter(i -> i.getFecha().equals(fActual) && "SALIDAS_EN_CLASE".equalsIgnoreCase(i.getCategoriaRegla()))
                                             .findFirst().orElse(null);
@@ -283,7 +292,6 @@ public class LiquidacionDocenteService {
                                                 horaPri.toString().substring(0, 5), horaUlt.toString().substring(0, 5));
                                         causaTardanzas += hDesc;
                                     } else {
-                                        // Estuvo en la institución pero salió durante el horario de clase
                                         tipoD = "SALIDA_INTERMEDIA";
                                         badgeStyle = "bg-purple-50 text-purple-700 border border-purple-200";
                                         detalleForense = "Salida intermedia durante dictado de clase";
@@ -310,19 +318,28 @@ public class LiquidacionDocenteService {
                     cur = cur.plusDays(1);
                 }
 
-                comHorasProg = redondear1Dec(comHorasProg);
+                comHorasProgPeriodo = redondear1Dec(comHorasProgPeriodo);
+                comHorasProgHastaHoy = redondear1Dec(comHorasProgHastaHoy);
                 comHorasDict = redondear1Dec(comHorasDict);
-                double comHorasDesc = redondear1Dec(Math.max(0, comHorasProg - comHorasDict));
-                double comPagoIdeal = redondearDinero(comHorasProg * tarifaHora);
+                double comHorasDesc = redondear1Dec(Math.max(0, comHorasProgHastaHoy - comHorasDict));
+                
+                double comPagoEstimado = redondearDinero(comHorasProgPeriodo * tarifaHora);
+                double comPagoIdealHastaHoy = redondearDinero(comHorasProgHastaHoy * tarifaHora);
                 double comPagoReal = redondearDinero(comHorasDict * tarifaHora);
-                double comDescMonto = redondearDinero(Math.max(0, comPagoIdeal - comPagoReal));
-                int comCumpl = (comHorasProg > 0) ? (int) Math.min(100, Math.round((comHorasDict / comHorasProg) * 100.0)) : 100;
+                double comDescMonto = redondearDinero(Math.max(0, comPagoIdealHastaHoy - comPagoReal));
+                
+                int comCumpl = (comHorasProgHastaHoy > 0) 
+                        ? (int) Math.min(100, Math.round((comHorasDict / comHorasProgHastaHoy) * 100.0)) 
+                        : 100;
 
-                docHorasProg += comHorasProg;
+                docHorasProgPeriodo += comHorasProgPeriodo;
+                docHorasProgHastaHoy += comHorasProgHastaHoy;
                 docHorasDict += comHorasDict;
-                docPagoIdeal += comPagoIdeal;
+                docPagoEstimado += comPagoEstimado;
+                docPagoIdealHastaHoy += comPagoIdealHastaHoy;
                 docPagoReal += comPagoReal;
-                docClasesTotal += comClasesCount;
+                docClasesPeriodoTotal += comClasesPeriodo;
+                docClasesHastaHoyTotal += comClasesHastaHoy;
 
                 comisionesDTO.add(new ComisionLiquidacionDTO(
                         rep.getId(),
@@ -332,12 +349,12 @@ public class LiquidacionDocenteService {
                         rep.getDiaSemana(),
                         new ArrayList<>(diasTexto),
                         horarioTexto,
-                        comClasesCount,
+                        comClasesPeriodo,
                         tarifaHora,
-                        comHorasProg,
+                        comHorasProgHastaHoy,
                         comHorasDict,
                         comHorasDesc,
-                        comPagoIdeal,
+                        comPagoIdealHastaHoy,
                         comPagoReal,
                         comDescMonto,
                         comCumpl,
@@ -346,21 +363,32 @@ public class LiquidacionDocenteService {
                 ));
             }
 
-            docHorasProg = redondear1Dec(docHorasProg);
+            docHorasProgPeriodo = redondear1Dec(docHorasProgPeriodo);
+            docHorasProgHastaHoy = redondear1Dec(docHorasProgHastaHoy);
             docHorasDict = redondear1Dec(docHorasDict);
-            double docHorasDesc = redondear1Dec(Math.max(0, docHorasProg - docHorasDict));
-            docPagoIdeal = redondearDinero(docPagoIdeal);
+            double docHorasDesc = redondear1Dec(Math.max(0, docHorasProgHastaHoy - docHorasDict));
+            
+            docPagoEstimado = redondearDinero(docPagoEstimado);
+            docPagoIdealHastaHoy = redondearDinero(docPagoIdealHastaHoy);
             docPagoReal = redondearDinero(docPagoReal);
-            double docMontoDesc = redondearDinero(Math.max(0, docPagoIdeal - docPagoReal));
-            int docCumpl = (docHorasProg > 0) ? (int) Math.min(100, Math.round((docHorasDict / docHorasProg) * 100.0)) : 100;
+            double docMontoDesc = redondearDinero(Math.max(0, docPagoIdealHastaHoy - docPagoReal));
+            
+            int docCumpl = (docHorasProgHastaHoy > 0) 
+                    ? (int) Math.min(100, Math.round((docHorasDict / docHorasProgHastaHoy) * 100.0)) 
+                    : 100;
 
-            sumHorasProg += docHorasProg;
+            sumHorasProgPeriodo += docHorasProgPeriodo;
+            sumHorasProgHastaHoy += docHorasProgHastaHoy;
             sumHorasDict += docHorasDict;
             sumHorasDesc += docHorasDesc;
-            sumPagoIdeal += docPagoIdeal;
+            
+            sumPagoEstimadoPeriodo += docPagoEstimado;
+            sumPagoIdealHastaHoy += docPagoIdealHastaHoy;
             sumPagoReal += docPagoReal;
             sumMontoDescontado += docMontoDesc;
-            sumClasesPeriodo += docClasesTotal;
+            
+            sumClasesPeriodo += docClasesPeriodoTotal;
+            sumClasesHastaHoy += docClasesHastaHoyTotal;
 
             listaDocentes.add(new DocenteLiquidacionDTO(
                     docente.getId(),
@@ -369,11 +397,11 @@ public class LiquidacionDocenteService {
                     docente.getDni() != null ? docente.getDni() : "-",
                     porMateria.size(),
                     franjasDocente.size(),
-                    docClasesTotal,
-                    docHorasProg,
+                    docClasesPeriodoTotal,
+                    docHorasProgHastaHoy,
                     docHorasDict,
                     docHorasDesc,
-                    docPagoIdeal,
+                    docPagoIdealHastaHoy,
                     docPagoReal,
                     docMontoDesc,
                     docCumpl,
@@ -385,15 +413,22 @@ public class LiquidacionDocenteService {
 
         listaDocentes.sort(Comparator.comparing(DocenteLiquidacionDTO::nombreDocente));
 
-        sumHorasProg = redondear1Dec(sumHorasProg);
+        sumHorasProgPeriodo = redondear1Dec(sumHorasProgPeriodo);
+        sumHorasProgHastaHoy = redondear1Dec(sumHorasProgHastaHoy);
         sumHorasDict = redondear1Dec(sumHorasDict);
         sumHorasDesc = redondear1Dec(sumHorasDesc);
-        sumPagoIdeal = redondearDinero(sumPagoIdeal);
+        
+        sumPagoEstimadoPeriodo = redondearDinero(sumPagoEstimadoPeriodo);
+        sumPagoIdealHastaHoy = redondearDinero(sumPagoIdealHastaHoy);
         sumPagoReal = redondearDinero(sumPagoReal);
         sumMontoDescontado = redondearDinero(sumMontoDescontado);
 
-        double porcPerdida = (sumPagoIdeal > 0) ? redondear1Dec((sumMontoDescontado / sumPagoIdeal) * 100.0) : 0.0;
-        double porcCumplGlobal = (sumHorasProg > 0) ? redondear1Dec((sumHorasDict / sumHorasProg) * 100.0) : 100.0;
+        double porcPerdida = (sumPagoIdealHastaHoy > 0) 
+                ? redondear1Dec((sumMontoDescontado / sumPagoIdealHastaHoy) * 100.0) 
+                : 0.0;
+        double porcCumplGlobal = (sumHorasProgHastaHoy > 0) 
+                ? redondear1Dec((sumHorasDict / sumHorasProgHastaHoy) * 100.0) 
+                : 100.0;
 
         DesgloseCausasDTO desgloseCausas = new DesgloseCausasDTO(
                 redondear1Dec(causaFaltas),
@@ -407,15 +442,18 @@ public class LiquidacionDocenteService {
                 periodoTexto,
                 rInicio,
                 rFin,
-                sumPagoIdeal,
+                sumPagoEstimadoPeriodo,
+                sumPagoIdealHastaHoy,
                 sumPagoReal,
                 sumMontoDescontado,
                 porcPerdida,
                 porcCumplGlobal,
-                sumHorasProg,
+                sumHorasProgPeriodo,
+                sumHorasProgHastaHoy,
                 sumHorasDict,
                 sumHorasDesc,
                 sumClasesPeriodo,
+                sumClasesHastaHoy,
                 listaDocentes.size(),
                 desgloseCausas,
                 listaDocentes

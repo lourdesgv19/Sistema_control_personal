@@ -11,6 +11,11 @@ export const MODULOS_PERMISOS = [
         critico: false,
       },
       {
+        codigo: "FICHAS_COMPORTAMIENTO_VER",
+        label: "Visualizar ficha de comportamiento y asistencia",
+        critico: false,
+      },
+      {
         codigo: "PERSONAL_CREAR",
         label: "Crear nuevos colaboradores",
         critico: false,

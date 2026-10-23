@@ -10,15 +10,18 @@ public class LiquidacionDocenteDTO {
         String periodoTexto,
         LocalDate fechaInicio,
         LocalDate fechaFin,
-        double totalPagoIdeal,
-        double totalPagoReal,
-        double totalMontoDescontado,
+        double totalPagoEstimadoPeriodo,      // Proyección al 100% del período completo
+        double totalPagoIdealHastaHoy,        // Total teórico programado exigible hasta hoy
+        double totalPagoReal,                 // Total real devengado a hoy con deducciones biométricas
+        double totalMontoDescontado,          // Deducción acumulada hasta hoy
         double porcentajePerdida,
         double porcentajeCumplimientoGlobal,
-        double totalHorasProgramadas,
-        double totalHorasEfectivas,
-        double totalHorasDescontadas,
-        int totalClasesPeriodo,
+        double totalHorasProgramadasPeriodo,  // Total horas programadas de todo el período
+        double totalHorasProgramadasHastaHoy, // Horas programadas hasta hoy
+        double totalHorasEfectivas,           // Horas dictadas reales hasta hoy
+        double totalHorasDescontadas,         // Horas restadas hasta hoy
+        int totalClasesPeriodo,               // Clases totales del período
+        int totalClasesHastaHoy,              // Clases exigibles hasta hoy
         int totalDocentesEvaluados,
         DesgloseCausasDTO desgloseCausas,
         List<DocenteLiquidacionDTO> docentes
@@ -76,7 +79,7 @@ public class LiquidacionDocenteDTO {
         LocalDate fecha,
         String diaSemanaTexto,
         String tipoDesvio, // FALTA, LLEGADA_TARDE, RETIRO_ANTICIPADO, SALIDA_INTERMEDIA
-        String categoriaBadge, // 'bg-rose-50 text-rose-600', etc.
+        String categoriaBadge, 
         String materiaNombre,
         String detalleForense,
         long minutosPerdidos,

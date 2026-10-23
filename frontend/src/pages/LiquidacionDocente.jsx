@@ -22,9 +22,12 @@ import {
   UserX,
   ChevronLeft,
   ChevronRight,
+  CalendarX2,
+  Lock,
 } from "lucide-react";
 import { getLiquidacionDocente } from "../services/liquidacionDocenteService";
 import AuditDeviationsModal from "../components/liquidacion/AuditDeviationsModal";
+import { useAuth } from "../context/AuthContext";
 import {
   formatearFechaVisual,
   formatearHorasYMinutos,
@@ -33,7 +36,6 @@ import {
   calcularRangoSemana,
 } from "../utils/fechasFichaUtils";
 
-// Extracción de iniciales de nombre y apellido
 function obtenerIniciales(nombreCompleto = "") {
   if (!nombreCompleto) return "D";
   const partes = nombreCompleto.trim().split(" ").filter(Boolean);
@@ -41,7 +43,6 @@ function obtenerIniciales(nombreCompleto = "") {
   return (partes[0][0] + partes[1][0]).toUpperCase();
 }
 
-// Colores neutrales y ejecutivos para iniciales (SIN verde, rojo ni amarillo)
 function obtenerColorIniciales(texto = "") {
   const paletas = [
     "bg-indigo-50 text-indigo-700 border-indigo-200",
@@ -84,8 +85,15 @@ const MESES = [
 
 export default function LiquidacionDocente() {
   const navigate = useNavigate();
+  const { tienePermiso } = useAuth();
 
-  // Fecha local estricta
+  const puedeVerFicha =
+    tienePermiso("FICHAS_COMPORTAMIENTO_VER") ||
+    tienePermiso("PERSONAL_VER") ||
+    tienePermiso("PERM_ADMIN_TOTAL");
+
+  const [mostrarMetricas, setMostrarMetricas] = useState(true);
+
   const hoyIso = useMemo(() => {
     const d = new Date();
     const y = d.getFullYear();
@@ -94,13 +102,11 @@ export default function LiquidacionDocente() {
     return `${y}-${m}-${day}`;
   }, []);
 
-  // Estados de Filtros
   const [modalidad, setModalidad] = useState("SEMANAL");
   const [fechaBase, setFechaBase] = useState(hoyIso);
   const [fechaDesde, setFechaDesde] = useState(hoyIso);
   const [fechaHasta, setFechaHasta] = useState(hoyIso);
 
-  // Selector semanal estructurado (semana de qué mes)
   const [mesSemanal, setMesSemanal] = useState(() => new Date().getMonth() + 1);
   const [anioSemanal, setAnioSemanal] = useState(() =>
     new Date().getFullYear(),
@@ -110,7 +116,6 @@ export default function LiquidacionDocente() {
     return r.inicioSemanaStr;
   });
 
-  // Filtros de otros períodos
   const [mesSeleccionado, setMesSeleccionado] = useState(
     () => new Date().getMonth() + 1,
   );
@@ -123,16 +128,13 @@ export default function LiquidacionDocente() {
   const [busqueda, setBusqueda] = useState("");
   const [idDocenteSeleccionado, setIdDocenteSeleccionado] = useState("");
 
-  // Datos y estado de carga
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // Estados de Maestro-Detalle y Modal
   const [filasExpandidas, setFilasExpandidas] = useState(new Set());
   const [docenteParaModal, setDocenteParaModal] = useState(null);
   const [materiaParaModal, setMateriaParaModal] = useState(null);
 
-  // Generación de semanas dinámicas para el mes y año elegidos
   const semanasDelMes = useMemo(() => {
     const semanas = [];
     const primerDiaMes = new Date(anioSemanal, mesSemanal - 1, 1);
@@ -262,7 +264,65 @@ export default function LiquidacionDocente() {
     );
   });
 
-  // EVALUACIÓN DE LA JORNADA DIARIA
+  const irAFichaDocente = (idDocente) => {
+    if (!puedeVerFicha) return;
+
+    let modalidadFicha = "SEMANAL";
+    let fechaFicha = hoyIso;
+    let fechaHastaFicha = undefined;
+
+    switch (modalidad) {
+      case "DIARIO":
+        modalidadFicha = "DIARIO";
+        fechaFicha = fechaBase;
+        break;
+      case "SEMANAL":
+        modalidadFicha = "SEMANAL";
+        fechaFicha = lunesSeleccionado;
+        break;
+      case "MES":
+        modalidadFicha = "MENSUAL";
+        fechaFicha = `${anioSeleccionado}-${String(mesSeleccionado).padStart(2, "0")}-01`;
+        break;
+      case "TRIMESTRE": {
+        modalidadFicha = "TRIMESTRE";
+        const mesIni = (trimestreSeleccionado - 1) * 3 + 1;
+        fechaFicha = `${anioSeleccionado}-${String(mesIni).padStart(2, "0")}-01`;
+        break;
+      }
+      case "CUATRIMESTRE": {
+        modalidadFicha = "CUATRIMESTRE";
+        const mesIniCuat = cuatrimestreSeleccionado === 1 ? 3 : 8;
+        fechaFicha = `${anioSeleccionado}-${String(mesIniCuat).padStart(2, "0")}-01`;
+        break;
+      }
+      case "ANUAL": {
+        modalidadFicha = "RANGO_FECHAS";
+        fechaFicha = `${anioSeleccionado}-01-01`;
+        fechaHastaFicha = `${anioSeleccionado}-12-31`;
+        break;
+      }
+      case "RANGO":
+        modalidadFicha = "RANGO_FECHAS";
+        fechaFicha = fechaDesde;
+        fechaHastaFicha = fechaHasta;
+        break;
+      default:
+        modalidadFicha = "SEMANAL";
+        fechaFicha = lunesSeleccionado;
+    }
+
+    // Ruta de FichaComportamiento corregida a /comportamiento
+    navigate(`/fichas-comportamiento?empleadoId=${idDocente}`, {
+      state: {
+        empleadoId: idDocente,
+        modalidad: modalidadFicha,
+        fecha: fechaFicha,
+        fechaHasta: fechaHastaFicha,
+      },
+    });
+  };
+
   const estadoJornadaDiaria = useMemo(() => {
     if (modalidad !== "DIARIO" || !data) {
       return {
@@ -274,11 +334,11 @@ export default function LiquidacionDocente() {
     }
 
     const esFechaFutura = fechaBase > hoyIso;
-    const totalProg = data.totalHorasProgramadas || 0;
+    const totalProg =
+      data.totalHorasProgramadasPeriodo || data.totalHorasProgramadas || 0;
     const totalDict = data.totalHorasEfectivas || 0;
     const totalDesc = data.totalHorasDescontadas || 0;
 
-    // 1. DÍA FUTURO
     if (esFechaFutura) {
       if (totalProg > 0) {
         return {
@@ -296,7 +356,6 @@ export default function LiquidacionDocente() {
       };
     }
 
-    // 2. DÍA PASADO O DÍA DE HOY
     if (totalProg === 0 && totalDict === 0 && totalDesc === 0) {
       return {
         esSinHorario: true,
@@ -325,10 +384,10 @@ export default function LiquidacionDocente() {
 
   return (
     <div className="p-6 space-y-6 max-w-7xl mx-auto">
-      {/* 1. ENCABEZADO PRINCIPAL (SIN BOTONES DE DESGLOSAR/EXPORTAR NI BADGE) */}
+      {/* 1. ENCABEZADO CON BOTÓN A LA DERECHA */}
       <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs flex items-center justify-between gap-4">
         <div className="flex items-center gap-3.5">
-          <div className="w-12 h-12 rounded-2xl bg-emerald-600 flex items-center justify-center text-white shadow-xs">
+          <div className="w-12 h-12 rounded-2xl bg-emerald-600 flex items-center justify-center text-white shadow-xs shrink-0">
             <DollarSign className="w-6 h-6 stroke-[2.5]" />
           </div>
           <div>
@@ -336,11 +395,29 @@ export default function LiquidacionDocente() {
               Liquidación y Pagos Docente
             </h1>
             <p className="text-xs text-slate-500 mt-0.5">
-              Comparativa del pago ideal al 100% contra la realidad dictada y
-              cantidad de horas descontadas por desvíos.
+              Comparativa del estimado del período, lo devengado ideal hasta hoy
+              y el total real auditado con desvíos.
             </p>
           </div>
         </div>
+
+        <button
+          type="button"
+          onClick={() => setMostrarMetricas((prev) => !prev)}
+          title={
+            mostrarMetricas ? "Ocultar tarjetas KPI" : "Mostrar tarjetas KPI"
+          }
+          className="p-2.5 rounded-xl border border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-50 transition cursor-pointer flex items-center gap-1.5 shrink-0"
+        >
+          {mostrarMetricas ? (
+            <ChevronUp className="w-4 h-4 text-slate-600" />
+          ) : (
+            <ChevronDown className="w-4 h-4 text-slate-600" />
+          )}
+          <span className="text-xs font-semibold hidden sm:inline">
+            {mostrarMetricas ? "Ocultar métricas" : "Ver métricas"}
+          </span>
+        </button>
       </div>
 
       {/* 2. BARRA DE FILTROS Y PERÍODOS */}
@@ -350,7 +427,6 @@ export default function LiquidacionDocente() {
         </div>
 
         <div className="flex flex-wrap items-center justify-between gap-3">
-          {/* Pestañas de Modalidad */}
           <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl">
             {PERIODOS.map((p) => (
               <button
@@ -367,7 +443,6 @@ export default function LiquidacionDocente() {
             ))}
           </div>
 
-          {/* Buscador y Dropdown de Docente */}
           <div className="flex items-center gap-2 flex-1 max-w-md justify-end">
             <div className="relative flex-1 min-w-[160px]">
               <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -400,7 +475,6 @@ export default function LiquidacionDocente() {
         {/* CONTROLES CONTEXTUALES */}
         <div className="pt-2 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2 flex-wrap">
-            {/* SELECTOR SEMANAL: QUÉ SEMANA DE QUÉ MES */}
             {modalidad === "SEMANAL" && (
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-xs font-semibold text-slate-500">
@@ -459,7 +533,6 @@ export default function LiquidacionDocente() {
               </div>
             )}
 
-            {/* DIARIO */}
             {modalidad === "DIARIO" && (
               <div className="flex items-center gap-1.5">
                 <button
@@ -504,7 +577,6 @@ export default function LiquidacionDocente() {
               </div>
             )}
 
-            {/* MES */}
             {modalidad === "MES" && (
               <div className="flex items-center gap-2 text-xs">
                 <span className="font-semibold text-slate-500">
@@ -535,7 +607,6 @@ export default function LiquidacionDocente() {
               </div>
             )}
 
-            {/* TRIMESTRE */}
             {modalidad === "TRIMESTRE" && (
               <div className="flex items-center gap-2 text-xs">
                 <span className="font-semibold text-slate-500">Trimestre:</span>
@@ -554,7 +625,6 @@ export default function LiquidacionDocente() {
               </div>
             )}
 
-            {/* CUATRIMESTRE */}
             {modalidad === "CUATRIMESTRE" && (
               <div className="flex items-center gap-2 text-xs">
                 <span className="font-semibold text-slate-500">
@@ -575,7 +645,6 @@ export default function LiquidacionDocente() {
               </div>
             )}
 
-            {/* RANGO DESDE - HASTA */}
             {modalidad === "RANGO" && (
               <div className="flex items-center gap-2">
                 <label className="relative inline-flex items-center border border-slate-200 rounded-xl px-3 py-1.5 bg-slate-50 hover:bg-white shadow-2xs cursor-pointer">
@@ -635,7 +704,7 @@ export default function LiquidacionDocente() {
         </div>
       </div>
 
-      {/* CASO A: DÍA FUTURO CON HORARIO PROGRAMADO */}
+      {/* CASO A: DÍA FUTURO CON HORARIO */}
       {modalidad === "DIARIO" && estadoJornadaDiaria.esFuturoConHorario && (
         <div className="bg-indigo-50/60 border-2 border-indigo-200 rounded-3xl p-6 sm:p-8 text-center space-y-4 shadow-sm animate-fadeIn">
           <div className="w-14 h-14 mx-auto rounded-2xl bg-indigo-100 border border-indigo-200 flex items-center justify-center text-indigo-600 shadow-2xs">
@@ -653,7 +722,10 @@ export default function LiquidacionDocente() {
               Esta fecha es posterior al día de hoy. El claustro docente tiene
               registradas{" "}
               <strong>
-                {formatearHorasYMinutos(data?.totalHorasProgramadas)}
+                {formatearHorasYMinutos(
+                  data?.totalHorasProgramadasPeriodo ||
+                    data?.totalHorasProgramadas,
+                )}
               </strong>{" "}
               en {data?.totalClasesPeriodo || 0} comisiones que se liquidarán al
               completar su dictado.
@@ -690,7 +762,7 @@ export default function LiquidacionDocente() {
         </div>
       )}
 
-      {/* CASO B: DÍA SIN HORARIOS PROGRAMADOS */}
+      {/* CASO B: SIN HORARIOS */}
       {modalidad === "DIARIO" && estadoJornadaDiaria.esSinHorario && (
         <div className="bg-white border border-slate-200 rounded-3xl p-8 sm:p-12 text-center space-y-4 shadow-xs animate-fadeIn">
           <div className="w-16 h-16 mx-auto rounded-3xl bg-slate-50 border border-slate-200/80 flex items-center justify-center text-slate-400 shadow-2xs">
@@ -707,10 +779,6 @@ export default function LiquidacionDocente() {
               No existen franjas académicas asignadas para el día{" "}
               <strong>{formatearFechaVisual(fechaBase)}</strong> (
               {obtenerNombreDia(fechaBase)}).
-            </p>
-            <p className="text-[11px] text-slate-400">
-              Seleccione otro día utilizando el selector de fechas o los
-              navegadores rápidos.
             </p>
           </div>
 
@@ -744,7 +812,7 @@ export default function LiquidacionDocente() {
         </div>
       )}
 
-      {/* CASO C: INASISTENCIA GENERAL EN DÍA OBLIGATORIO */}
+      {/* CASO C: INASISTENCIA */}
       {modalidad === "DIARIO" && estadoJornadaDiaria.esInasistencia && (
         <div className="bg-rose-50/80 border-2 border-rose-300 rounded-3xl p-6 sm:p-8 text-center space-y-4 shadow-sm animate-fadeIn">
           <div className="w-14 h-14 mx-auto rounded-2xl bg-rose-100 border border-rose-200 flex items-center justify-center text-rose-600 shadow-2xs">
@@ -762,9 +830,12 @@ export default function LiquidacionDocente() {
               {obtenerNombreDia(fechaBase)}) constaban clases asignadas por un
               total de{" "}
               <strong>
-                {formatearHorasYMinutos(data?.totalHorasProgramadas)}
+                {formatearHorasYMinutos(
+                  data?.totalHorasProgramadasHastaHoy ||
+                    data?.totalHorasProgramadas,
+                )}
               </strong>
-              , pero no se registraron ingresos ni egresos en las terminales.
+              , pero no se registraron marcaciones.
             </p>
           </div>
 
@@ -794,148 +865,190 @@ export default function LiquidacionDocente() {
         (!estadoJornadaDiaria.esSinHorario &&
           !estadoJornadaDiaria.esFuturoConHorario)) && (
         <>
-          {/* 3. TARJETAS DE RESUMEN GLOBAL (KPIS) */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {/* KPI 1: Pago Ideal */}
-            <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs relative">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-                  Pago Ideal (100% Cátedras)
-                </span>
-                <div className="w-8 h-8 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center">
-                  <Bookmark className="w-4 h-4" />
-                </div>
-              </div>
-              <div className="text-2xl font-black text-slate-900 mt-2 font-mono">
-                ${Math.round(data?.totalPagoIdeal || 0).toLocaleString("es-AR")}
-              </div>
-              <div className="flex items-center gap-1.5 text-xs text-slate-400 mt-1">
-                <Clock className="w-3.5 h-3.5" />
-                <span>
-                  {formatearHorasYMinutos(data?.totalHorasProgramadas)}{" "}
-                  programadas ({data?.totalClasesPeriodo || 0} clases)
-                </span>
-              </div>
-              <div className="text-[11px] text-slate-400 mt-2 pt-2 border-t border-slate-100">
-                Monto teórico a abonar sin inasistencias ni desvíos
-              </div>
-            </div>
-
-            {/* KPI 2: Pago Real */}
-            <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs relative">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-                  Pago Real a Liquidar
-                </span>
-                <div className="w-8 h-8 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center">
-                  <DollarSign className="w-4 h-4" />
-                </div>
-              </div>
-              <div className="text-2xl font-black text-emerald-600 mt-2 font-mono">
-                ${Math.round(data?.totalPagoReal || 0).toLocaleString("es-AR")}
-              </div>
-              <div className="flex items-center gap-1.5 text-xs text-emerald-600 font-semibold mt-1">
-                <CheckCircle2 className="w-3.5 h-3.5" />
-                <span>
-                  {formatearHorasYMinutos(data?.totalHorasEfectivas)} dictadas y
-                  auditadas
-                </span>
-              </div>
-              <div className="flex items-center justify-between text-[11px] text-slate-500 mt-2 pt-2 border-t border-slate-100">
-                <span>Cumplimiento efectivo:</span>
-                <span className="font-bold text-emerald-600">
-                  {data?.porcentajeCumplimientoGlobal || 100}%
-                </span>
-              </div>
-            </div>
-
-            {/* KPI 3: Descuentos por Desvíos */}
-            <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs relative">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-                  Descuentos por Desvíos
-                </span>
-                <div className="w-8 h-8 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center">
-                  <TrendingDown className="w-4 h-4" />
-                </div>
-              </div>
-              <div className="text-2xl font-black text-rose-600 mt-2 font-mono">
-                -$
-                {Math.round(data?.totalMontoDescontado || 0).toLocaleString(
-                  "es-AR",
-                )}
-              </div>
-              <div className="flex items-center gap-1.5 text-xs text-rose-600 font-semibold mt-1">
-                <AlertTriangle className="w-3.5 h-3.5" />
-                <span>
-                  {formatearHorasYMinutos(data?.totalHorasDescontadas)}{" "}
-                  descontadas en el período
-                </span>
-              </div>
-              <div className="flex items-center justify-between text-[11px] text-slate-500 mt-2 pt-2 border-t border-slate-100">
-                <span>Deducción sobre lo ideal:</span>
-                <span className="font-bold text-rose-600">
-                  {data?.porcentajePerdida || 0}%
-                </span>
-              </div>
-            </div>
-
-            {/* KPI 4: Motivos de Descuento */}
-            <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs relative">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-                  Motivos de Descuento
-                </span>
-                <div className="w-8 h-8 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center">
-                  <Layers className="w-4 h-4" />
-                </div>
-              </div>
-              <div className="space-y-1 text-xs font-mono">
+          {/* 3. TARJETAS DE RESUMEN GLOBAL (5 KPIS) */}
+          {mostrarMetricas && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 animate-in fade-in duration-200">
+              {/* KPI 1: Estimado Período Completo */}
+              <div className="bg-slate-50 rounded-2xl border border-slate-200 p-5 shadow-xs relative">
                 <div className="flex items-center justify-between">
-                  <span className="text-slate-600 font-sans flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-rose-500" />{" "}
-                    Inasistencias:
+                  <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                    Total Estimado (Período)
                   </span>
-                  <span className="font-bold text-slate-700">
-                    {formatearHorasYMinutos(data?.desgloseCausas?.horasFaltas)}
-                  </span>
+                  <div className="w-8 h-8 rounded-full bg-slate-200 text-slate-600 flex items-center justify-center">
+                    <Bookmark className="w-4 h-4" />
+                  </div>
                 </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-slate-600 font-sans flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-amber-500" />{" "}
-                    Tardanzas:
-                  </span>
-                  <span className="font-bold text-slate-700">
+                <div className="text-2xl font-black text-slate-800 mt-2 font-mono">
+                  $
+                  {Math.round(
+                    data?.totalPagoEstimadoPeriodo || data?.totalPagoIdeal || 0,
+                  ).toLocaleString("es-AR")}
+                </div>
+                <div className="flex items-center gap-1.5 text-xs text-slate-500 mt-1">
+                  <Clock className="w-3.5 h-3.5" />
+                  <span>
                     {formatearHorasYMinutos(
-                      data?.desgloseCausas?.horasTardanzas,
-                    )}
+                      data?.totalHorasProgramadasPeriodo ||
+                        data?.totalHorasProgramadas,
+                    )}{" "}
+                    prog. total
                   </span>
                 </div>
+                <div className="text-[11px] text-slate-400 mt-2 pt-2 border-t border-slate-200">
+                  Estimación al 100% al completar el período
+                </div>
+              </div>
+
+              {/* KPI 2: Ideal Exigible Hasta Hoy */}
+              <div className="bg-white rounded-2xl border border-indigo-100 p-5 shadow-xs relative">
                 <div className="flex items-center justify-between">
-                  <span className="text-slate-600 font-sans flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-orange-500" />{" "}
-                    Retiros:
+                  <span className="text-[11px] font-bold text-indigo-700 uppercase tracking-wider">
+                    Total Ideal Hasta Hoy
                   </span>
-                  <span className="font-bold text-slate-700">
+                  <div className="w-8 h-8 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center">
+                    <Calendar className="w-4 h-4" />
+                  </div>
+                </div>
+                <div className="text-2xl font-black text-indigo-950 mt-2 font-mono">
+                  $
+                  {Math.round(
+                    data?.totalPagoIdealHastaHoy || data?.totalPagoIdeal || 0,
+                  ).toLocaleString("es-AR")}
+                </div>
+                <div className="flex items-center gap-1.5 text-xs text-indigo-600 mt-1">
+                  <Clock className="w-3.5 h-3.5" />
+                  <span>
                     {formatearHorasYMinutos(
-                      data?.desgloseCausas?.horasRetirosPrevios,
-                    )}
+                      data?.totalHorasProgramadasHastaHoy ||
+                        data?.totalHorasProgramadas,
+                    )}{" "}
+                    debidas a hoy
                   </span>
                 </div>
+                <div className="text-[11px] text-slate-400 mt-2 pt-2 border-t border-slate-100">
+                  Teórico de días transcurridos sin deducción
+                </div>
+              </div>
+
+              {/* KPI 3: Real Liquidado Hasta Hoy */}
+              <div className="bg-white rounded-2xl border border-emerald-200 p-5 shadow-xs relative">
                 <div className="flex items-center justify-between">
-                  <span className="text-slate-600 font-sans flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-purple-500" />{" "}
-                    Salidas:
+                  <span className="text-[11px] font-bold text-emerald-700 uppercase tracking-wider">
+                    Total Real (Hasta Hoy)
                   </span>
-                  <span className="font-bold text-slate-700">
-                    {formatearHorasYMinutos(
-                      data?.desgloseCausas?.horasSalidasIntermedias,
-                    )}
+                  <div className="w-8 h-8 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                    <DollarSign className="w-4 h-4" />
+                  </div>
+                </div>
+                <div className="text-2xl font-black text-emerald-600 mt-2 font-mono">
+                  $
+                  {Math.round(data?.totalPagoReal || 0).toLocaleString("es-AR")}
+                </div>
+                <div className="flex items-center gap-1.5 text-xs text-emerald-600 font-semibold mt-1">
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  <span>
+                    {formatearHorasYMinutos(data?.totalHorasEfectivas)} dictadas
+                    auditadas
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-[11px] text-slate-500 mt-2 pt-2 border-t border-slate-100">
+                  <span>Cumplimiento a hoy:</span>
+                  <span className="font-bold text-emerald-600">
+                    {data?.porcentajeCumplimientoGlobal || 100}%
                   </span>
                 </div>
               </div>
+
+              {/* KPI 4: Descuentos Aplicados */}
+              <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs relative">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                    Descuentos Aplicados
+                  </span>
+                  <div className="w-8 h-8 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center">
+                    <TrendingDown className="w-4 h-4" />
+                  </div>
+                </div>
+                <div className="text-2xl font-black text-rose-600 mt-2 font-mono">
+                  -$
+                  {Math.round(data?.totalMontoDescontado || 0).toLocaleString(
+                    "es-AR",
+                  )}
+                </div>
+                <div className="flex items-center gap-1.5 text-xs text-rose-600 font-semibold mt-1">
+                  <AlertTriangle className="w-3.5 h-3.5" />
+                  <span>
+                    {formatearHorasYMinutos(data?.totalHorasDescontadas)}{" "}
+                    descontadas
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-[11px] text-slate-500 mt-2 pt-2 border-t border-slate-100">
+                  <span>Deducción s/ ideal a hoy:</span>
+                  <span className="font-bold text-rose-600">
+                    {data?.porcentajePerdida || 0}%
+                  </span>
+                </div>
+              </div>
+
+              {/* KPI 5: Motivos de Descuento */}
+              <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs relative">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                    Motivos de Descuento
+                  </span>
+                  <div className="w-8 h-8 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center">
+                    <Layers className="w-4 h-4" />
+                  </div>
+                </div>
+                <div className="space-y-1 text-xs font-mono">
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-600 font-sans flex items-center gap-1.5 text-[11px]">
+                      <span className="w-2 h-2 rounded-full bg-rose-500" />{" "}
+                      Faltas:
+                    </span>
+                    <span className="font-bold text-slate-700">
+                      {formatearHorasYMinutos(
+                        data?.desgloseCausas?.horasFaltas,
+                      )}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-600 font-sans flex items-center gap-1.5 text-[11px]">
+                      <span className="w-2 h-2 rounded-full bg-amber-500" />{" "}
+                      Tardanzas:
+                    </span>
+                    <span className="font-bold text-slate-700">
+                      {formatearHorasYMinutos(
+                        data?.desgloseCausas?.horasTardanzas,
+                      )}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-600 font-sans flex items-center gap-1.5 text-[11px]">
+                      <span className="w-2 h-2 rounded-full bg-orange-500" />{" "}
+                      Retiros:
+                    </span>
+                    <span className="font-bold text-slate-700">
+                      {formatearHorasYMinutos(
+                        data?.desgloseCausas?.horasRetirosPrevios,
+                      )}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-600 font-sans flex items-center gap-1.5 text-[11px]">
+                      <span className="w-2 h-2 rounded-full bg-purple-500" />{" "}
+                      Salidas:
+                    </span>
+                    <span className="font-bold text-slate-700">
+                      {formatearHorasYMinutos(
+                        data?.desgloseCausas?.horasSalidasIntermedias,
+                      )}
+                    </span>
+                  </div>
+                </div>
+              </div>
             </div>
-          </div>
+          )}
 
           {/* 4. TABLA COMPARATIVA PRINCIPAL (MAESTRO - DETALLE) */}
           <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
@@ -973,7 +1086,7 @@ export default function LiquidacionDocente() {
                         Horas Descontadas (Motivos)
                       </th>
                       <th className="py-3 px-3 text-right">
-                        Pago Ideal (100%)
+                        Pago Ideal (Hasta Hoy)
                       </th>
                       <th className="py-3 px-3 text-right">
                         Pago Real Liquidado
@@ -1008,10 +1121,72 @@ export default function LiquidacionDocente() {
                         const expandido = filasExpandidas.has(d.idDocente);
                         const tieneClasesAsignadas =
                           d.comisiones && d.comisiones.length > 0;
+                        const tieneHorasProgramadas =
+                          (d.horasProgramadas || 0) > 0;
+
+                        if (!tieneHorasProgramadas) {
+                          return (
+                            <tr
+                              key={d.idDocente}
+                              className="bg-slate-50/50 hover:bg-slate-50 transition-colors"
+                            >
+                              <td className="py-3 px-4">
+                                <div className="flex items-center gap-3">
+                                  <div
+                                    className={`w-9 h-9 rounded-full border flex items-center justify-center font-bold text-xs select-none shadow-2xs shrink-0 ${obtenerColorIniciales(
+                                      d.nombreDocente,
+                                    )}`}
+                                  >
+                                    {obtenerIniciales(d.nombreDocente)}
+                                  </div>
+                                  <div>
+                                    <div className="font-bold text-slate-700 leading-snug">
+                                      {d.nombreDocente}
+                                    </div>
+                                    <div className="text-[10px] text-slate-400 mt-0.5">
+                                      {d.nroLegajo !== "S/L"
+                                        ? `Leg. ${d.nroLegajo}`
+                                        : "Sin legajo asignado"}
+                                    </div>
+                                  </div>
+                                </div>
+                              </td>
+
+                              <td colSpan={8} className="py-3 px-4 text-center">
+                                <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-100 text-slate-500 text-xs font-medium border border-slate-200/60">
+                                  <CalendarX2 className="w-4 h-4 text-slate-400 shrink-0" />
+                                  <span>
+                                    Sin cátedras ni clases programadas para este
+                                    período evaluado.
+                                  </span>
+                                </div>
+                              </td>
+
+                              <td className="py-3 px-4 text-center">
+                                {puedeVerFicha ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => irAFichaDocente(d.idDocente)}
+                                    className="px-2.5 py-1 text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 rounded-lg text-[11px] font-bold transition cursor-pointer"
+                                  >
+                                    Ficha
+                                  </button>
+                                ) : (
+                                  <span
+                                    className="inline-flex items-center gap-1 px-2.5 py-1 text-slate-300 bg-slate-50 border border-slate-200 rounded-lg text-[11px] font-semibold cursor-not-allowed select-none"
+                                    title="Sin permiso para ver ficha de comportamiento"
+                                  >
+                                    <Lock className="w-3 h-3" /> Ficha
+                                  </span>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        }
 
                         return (
                           <React.Fragment key={d.idDocente}>
-                            {/* FILA PRINCIPAL (DOCENTE) */}
+                            {/* FILA PRINCIPAL */}
                             <tr
                               className={`hover:bg-slate-50/80 transition cursor-pointer ${
                                 expandido ? "bg-slate-50/40" : ""
@@ -1031,7 +1206,6 @@ export default function LiquidacionDocente() {
                                     )}
                                   </button>
 
-                                  {/* INICIALES CON PALETA NEUTRAL */}
                                   <div
                                     className={`w-9 h-9 rounded-full border flex items-center justify-center font-bold text-xs select-none shadow-2xs shrink-0 ${obtenerColorIniciales(
                                       d.nombreDocente,
@@ -1156,22 +1330,29 @@ export default function LiquidacionDocente() {
                                   >
                                     {expandido ? "Ocultar" : "Desglosar"}
                                   </button>
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      navigate(
-                                        `/comportamiento?empleadoId=${d.idDocente}`,
-                                      )
-                                    }
-                                    className="px-2.5 py-1 text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 rounded-lg text-[11px] font-bold transition cursor-pointer"
-                                  >
-                                    Ficha
-                                  </button>
+                                  {puedeVerFicha ? (
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        irAFichaDocente(d.idDocente)
+                                      }
+                                      className="px-2.5 py-1 text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 rounded-lg text-[11px] font-bold transition cursor-pointer"
+                                    >
+                                      Ficha
+                                    </button>
+                                  ) : (
+                                    <span
+                                      className="inline-flex items-center gap-1 px-2.5 py-1 text-slate-300 bg-slate-50 border border-slate-200 rounded-lg text-[11px] font-semibold cursor-not-allowed select-none"
+                                      title="Sin permiso para ver ficha de comportamiento"
+                                    >
+                                      <Lock className="w-3 h-3" /> Ficha
+                                    </span>
+                                  )}
                                 </div>
                               </td>
                             </tr>
 
-                            {/* SUBFILAS DESPLEGABLES (COMISIONES / MATERIAS) */}
+                            {/* SUBFILAS */}
                             {expandido && (
                               <tr className="bg-slate-50/70 border-b border-slate-200">
                                 <td colSpan={10} className="p-4 pl-12">
@@ -1215,19 +1396,19 @@ export default function LiquidacionDocente() {
                                               Horas Desc.
                                             </th>
                                             <th className="pb-2 text-center">
-                                              Detalle Forense de Desvíos
+                                              Detalle
                                             </th>
                                             <th className="pb-2 text-right">
                                               Tarifa
                                             </th>
                                             <th className="pb-2 text-right">
-                                              Pago Ideal
+                                              Pago Estimado
                                             </th>
                                             <th className="pb-2 text-right">
                                               Pago Real
                                             </th>
                                             <th className="pb-2 text-right">
-                                              Deducción
+                                              Descuento
                                             </th>
                                             <th className="pb-2 text-center">
                                               % Cumpl.
@@ -1289,7 +1470,6 @@ export default function LiquidacionDocente() {
                                                 )}
                                               </td>
 
-                                              {/* DETALLE FORENSE CON BOTÓN [Ver detalle →] */}
                                               <td className="py-2.5 text-center">
                                                 {c.cantidadDesvios > 0 ? (
                                                   <div className="flex flex-col items-center gap-1">
@@ -1386,7 +1566,7 @@ export default function LiquidacionDocente() {
         </>
       )}
 
-      {/* 5. MODAL DE AUDITORÍA FORENSE ANTI-DESBORDE */}
+      {/* 5. MODAL DE AUDITORÍA FORENSE */}
       <AuditDeviationsModal
         isOpen={Boolean(docenteParaModal)}
         onClose={() => {

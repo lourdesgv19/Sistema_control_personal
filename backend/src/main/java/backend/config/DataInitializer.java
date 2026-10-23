@@ -30,8 +30,9 @@ public class DataInitializer implements CommandLineRunner {
 
     private void inicializarCatalogo() {
         List<Permiso> catalogo = List.of(
-            // Personal & Horarios
+            // Personal & Fichas
             new Permiso("PERSONAL_VER", "PERSONAL", "Visualizar padrón general y cronogramas semanales"),
+            new Permiso("FICHAS_COMPORTAMIENTO_VER", "PERSONAL", "Visualizar ficha de comportamiento y asistencia"),
             new Permiso("PERSONAL_CREAR", "PERSONAL", "Dar de alta colaboradores y asignar legajos/biometría"),
             new Permiso("PERSONAL_EDITAR", "PERSONAL", "Modificar datos personales y jornadas fijas/cátedras"),
             new Permiso("PERSONAL_BAJA_REACTIVAR", "PERSONAL", "Baja lógica y reactivación de colaboradores"),
@@ -67,7 +68,7 @@ public class DataInitializer implements CommandLineRunner {
             new Permiso("INCIDENTES_VER", "INCIDENTES", "Consultar el tablero de incidentes diarios y desvíos de asistencia"),
             new Permiso("INCIDENTES_JUSTIFICAR", "INCIDENTES", "Auditar, justificar o rechazar incidentes y anomalías de marcación"),
         
-            // Gestión de Materias & Liquidación Docente (Nuevo Módulo)
+            // Gestión de Materias & Liquidación Docente
             new Permiso("MATERIAS_VER", "MATERIAS", "Visualizar catálogo de cátedras y calendario semanal de clases"),
             new Permiso("MATERIAS_CREAR", "MATERIAS", "Crear materias y registrar comisiones en el sistema"),
             new Permiso("MATERIAS_EDITAR", "MATERIAS", "Modificar datos de cátedras, tarifas por hora y aulas predeterminadas"),
@@ -75,7 +76,6 @@ public class DataInitializer implements CommandLineRunner {
             new Permiso("LIQUIDACION_DOCENTE", "MATERIAS", "Consultar y exportar planillas de liquidación y montos acumulados por docente")
         );
 
-        // Inserta o actualiza cada permiso del catálogo en la base de datos
         for (Permiso p : catalogo) {
             jdbcTemplate.update("""
                 INSERT INTO permisos (codigo, modulo, descripcion)
@@ -89,21 +89,21 @@ public class DataInitializer implements CommandLineRunner {
         System.out.println(">>> Catálogo maestro de " + catalogo.size() + " permisos sincronizado en base de datos.");
     }
 
-private void inicializarAdminSiNoExiste() {
+    private void inicializarAdminSiNoExiste() {
         try {
             Integer existe = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM usuarios WHERE username = 'admin'",
                 Integer.class
             );
 
-            if (existe != null && existe > 0) return; // Si ya existe, sale y no pisa la contraseña
+            if (existe != null && existe > 0) return;
 
             String hash = passwordEncoder.encode("admin123");
 
             jdbcTemplate.update("""
                 INSERT INTO usuarios (username, password_hash, rol, activo, debe_cambiar_password, id_empleado, fecha_creacion, fecha_modificacion)
                 VALUES ('admin', ?, 'ADMINISTRADOR', 1, 1, NULL, NOW(), NOW())
-            """, hash); // debe_cambiar_password en 1 obliga a cambiar la clave al entrar por primera vez
+            """, hash);
 
             System.out.println(">>> Usuario 'admin' inicial creado con éxito.");
             actualizarPermisosAdmin();
@@ -122,7 +122,6 @@ private void inicializarAdminSiNoExiste() {
 
             if (idAdmin == null) return;
 
-            // Asigna o activa todos los permisos existentes en el catálogo al usuario 'admin'
             List<String> codigos = permisoRepo.findAllCodigos();
             for (String cod : codigos) {
                 jdbcTemplate.update("""

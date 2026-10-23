@@ -63,15 +63,19 @@ export default function FichaComportamiento() {
 
   const fechaInicial = location.state?.fecha || hoyIso;
   const modalidadInicial = location.state?.modalidad || "DIARIO";
+  const fechaHastaInicial = location.state?.fechaHasta || fechaInicial;
 
-  const [empleadoSeleccionado, setEmpleadoSeleccionado] = useState(null);
+  const [empleadoSeleccionado, setEmpleadoSeleccionado] = useState(() => {
+    const empId = location.state?.empleadoId || searchParams.get("empleadoId");
+    return empId ? { id: Number(empId) } : null;
+  });
   const [sidebarAbierto, setSidebarAbierto] = useState(true);
   const [menuImpresionAbierto, setMenuImpresionAbierto] = useState(false);
 
   // Modalidades: DIARIO | SEMANAL | MENSUAL | TRIMESTRE | CUATRIMESTRE | RANGO_FECHAS
   const [modalidad, setModalidad] = useState(modalidadInicial);
   const [fechaConsulta, setFechaConsulta] = useState(fechaInicial);
-  const [fechaHastaRango, setFechaHastaRango] = useState(fechaInicial);
+  const [fechaHastaRango, setFechaHastaRango] = useState(fechaHastaInicial);
 
   const [mesesExpandidos, setMesesExpandidos] = useState({});
   const [diaInspeccionado, setDiaInspeccionado] = useState(null);
@@ -115,6 +119,7 @@ export default function FichaComportamiento() {
     setMesesExpandidos({});
   };
 
+  // Sincronización cuando cambia la navegación (state o query params)
   useEffect(() => {
     const empId = location.state?.empleadoId || searchParams.get("empleadoId");
     if (empId) {
@@ -122,7 +127,10 @@ export default function FichaComportamiento() {
     }
     if (location.state?.fecha) {
       setFechaConsulta(location.state.fecha);
-      setModalidad("DIARIO");
+      setModalidad(location.state.modalidad || "DIARIO");
+      if (location.state.fechaHasta) {
+        setFechaHastaRango(location.state.fechaHasta);
+      }
       setDiaInspeccionado(null);
     }
   }, [location.state, searchParams]);
@@ -279,7 +287,7 @@ export default function FichaComportamiento() {
     );
   }, [fichaData]);
 
-  // EVALUACIÓN DE LA JORNADA DIARIA (CONTROL DE DÍAS FUTUROS vs PASADOS/HOY)
+  // EVALUACIÓN DE LA JORNADA DIARIA
   const estadoJornadaDiaria = useMemo(() => {
     if (modalidad !== "DIARIO") {
       return {
@@ -312,7 +320,6 @@ export default function FichaComportamiento() {
     // 1. DÍA FUTURO
     if (esFechaFutura) {
       if (tieneHorariosPlanificados) {
-        // Tiene horario fijado para un día que aún no ocurrió: NO ES ERROR, ES PROGRAMADO
         return {
           esSinHorario: false,
           esInasistencia: false,
@@ -321,7 +328,6 @@ export default function FichaComportamiento() {
           planificados: franjasTeoricas,
         };
       }
-      // Futuro sin horario laboral asignado
       return {
         esSinHorario: true,
         esInasistencia: false,
@@ -331,7 +337,6 @@ export default function FichaComportamiento() {
     }
 
     // 2. DÍA PASADO O DÍA DE HOY
-    // Tenía horario obligatorio pero no asistió (Ausencia)
     if (tieneHorariosPlanificados && !tienePresencia) {
       return {
         esSinHorario: false,
@@ -342,7 +347,6 @@ export default function FichaComportamiento() {
       };
     }
 
-    // No tenía horario asignado ni fichajes ni incidentes (Franco / Día sin horario)
     if (!tieneHorariosPlanificados && !tienePresencia && !tieneIncidentes) {
       return {
         esSinHorario: true,
@@ -360,7 +364,6 @@ export default function FichaComportamiento() {
     };
   }, [modalidad, fichaData, metricas, fechaConsulta, hoyIso]);
 
-  // AUTO-SCROLL A INCIDENTES: ÚNICAMENTE SI ES DÍA PASADO/HOY Y HUBO FALTA REAL
   useEffect(() => {
     if (
       modalidad === "DIARIO" &&
@@ -1078,7 +1081,7 @@ export default function FichaComportamiento() {
             </div>
           </div>
 
-          {/* ESCENARIO 1: DÍA FUTURO CON HORARIO PROGRAMADO (SIN ERROR NI INASISTENCIA) */}
+          {/* ESCENARIO 1: DÍA FUTURO CON HORARIO PROGRAMADO */}
           {modalidad === "DIARIO" && estadoJornadaDiaria.esFuturoConHorario && (
             <div className="bg-indigo-50/60 border-2 border-indigo-200 rounded-3xl p-6 sm:p-8 text-center space-y-4 shadow-sm animate-fadeIn">
               <div className="w-14 h-14 mx-auto rounded-2xl bg-indigo-100 border border-indigo-200 flex items-center justify-center text-indigo-600 shadow-2xs">
@@ -1100,7 +1103,6 @@ export default function FichaComportamiento() {
                 </p>
               </div>
 
-              {/* Lista limpia de los horarios a cumplir */}
               {Array.isArray(estadoJornadaDiaria.planificados) &&
                 estadoJornadaDiaria.planificados.length > 0 && (
                   <div className="max-w-lg mx-auto bg-white/95 border border-indigo-100 rounded-2xl p-3.5 text-left text-xs shadow-2xs">
@@ -1159,7 +1161,7 @@ export default function FichaComportamiento() {
             </div>
           )}
 
-          {/* ESCENARIO 2: PASADO / HOY CON HORARIO ASIGNADO PERO NO ASISTIÓ (INASISTENCIA REAL) */}
+          {/* ESCENARIO 2: PASADO / HOY CON HORARIO ASIGNADO PERO SIN ASISTENCIA */}
           {modalidad === "DIARIO" && estadoJornadaDiaria.esInasistencia && (
             <div className="bg-rose-50/80 border-2 border-rose-300 rounded-3xl p-6 sm:p-8 text-center space-y-4 shadow-sm animate-fadeIn">
               <div className="w-14 h-14 mx-auto rounded-2xl bg-rose-100 border border-rose-200 flex items-center justify-center text-rose-600 shadow-2xs">
@@ -1182,7 +1184,6 @@ export default function FichaComportamiento() {
                 </p>
               </div>
 
-              {/* Detalle de los horarios obligatorios incumplidos */}
               {Array.isArray(estadoJornadaDiaria.planificados) &&
                 estadoJornadaDiaria.planificados.length > 0 && (
                   <div className="max-w-lg mx-auto bg-white/90 border border-rose-200 rounded-2xl p-3.5 text-left text-xs shadow-2xs">
@@ -1245,7 +1246,7 @@ export default function FichaComportamiento() {
             </div>
           )}
 
-          {/* ESCENARIO 3: NO TIENE HORARIO ASIGNADO NI ACTIVIDAD (FRANCO / NO LABORABLE) */}
+          {/* ESCENARIO 3: SIN HORARIOS ASIGNADOS NI ACTIVIDAD (FRANCO) */}
           {modalidad === "DIARIO" && estadoJornadaDiaria.esSinHorario && (
             <div className="bg-white border border-slate-200 rounded-3xl p-8 sm:p-12 text-center space-y-4 shadow-xs animate-fadeIn">
               <div className="w-16 h-16 mx-auto rounded-3xl bg-slate-50 border border-slate-200/80 flex items-center justify-center text-slate-400 shadow-2xs">
@@ -1303,7 +1304,7 @@ export default function FichaComportamiento() {
             </div>
           )}
 
-          {/* RENDERIZADO DE MÉTRICAS KPI (CUANDO HAY ACTIVIDAD REAL O ES VISTA MULTI-DÍA) */}
+          {/* RENDERIZADO DE MÉTRICAS KPI */}
           {(modalidad !== "DIARIO" ||
             (!estadoJornadaDiaria.esSinHorario &&
               !estadoJornadaDiaria.esInasistencia &&
@@ -1434,7 +1435,7 @@ export default function FichaComportamiento() {
             </div>
           )}
 
-          {/* VISTA 1: DIARIO (LÍNEA DE TIEMPO Y TABLA INFERIOR) */}
+          {/* VISTA 1: DIARIO */}
           {modalidad === "DIARIO" &&
             !estadoJornadaDiaria.esSinHorario &&
             !estadoJornadaDiaria.esFuturoConHorario && (

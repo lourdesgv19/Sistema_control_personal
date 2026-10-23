@@ -3,9 +3,7 @@ import { useLocation } from "react-router-dom";
 import {
   BookOpen,
   Plus,
-  FileDown,
   Calendar,
-  DollarSign,
   ChevronDown,
   ChevronUp,
   Lock,
@@ -13,7 +11,6 @@ import {
 import { formatearHorasYMinutos } from "../utils/fechasFichaUtils";
 import CalendarioSemanalMaterias from "../components/materias/CalendarioSemanalMaterias";
 import CatalogoMateriasABM from "../components/materias/CatalogoMateriasABM";
-import TablaLiquidacionDocente from "../components/materias/TablaLiquidacionDocente";
 import ModalNuevaMateria from "../components/materias/ModalNuevaMateria";
 import ModalAlerta from "../components/comunes/ModalAlerta";
 import { useAuth } from "../context/AuthContext";
@@ -35,11 +32,10 @@ export default function GestionMaterias() {
     tienePermiso("MATERIAS_EDITAR") || tienePermiso("PERM_ADMIN_TOTAL");
   const puedeEliminar =
     tienePermiso("MATERIAS_ELIMINAR") || tienePermiso("PERM_ADMIN_TOTAL");
-  const puedeLiquidar =
-    tienePermiso("LIQUIDACION_DOCENTE") || tienePermiso("PERM_ADMIN_TOTAL");
 
   const [tab, setTab] = useState(() => {
-    return location.state?.tab || "calendario";
+    const tabInicial = location.state?.tab;
+    return tabInicial === "catalogo" ? "catalogo" : "calendario";
   });
   const [docenteSeleccionadoId, setDocenteSeleccionadoId] = useState(
     () => location.state?.docenteId || null,
@@ -64,8 +60,6 @@ export default function GestionMaterias() {
     clasesCompletas: 0,
     clasesDesvios: 0,
     clasesFaltas: 0,
-    totalLiquidar: 0,
-    totalDeduccion: 0,
   });
 
   const [modalAlerta, setModalAlerta] = useState({
@@ -113,7 +107,7 @@ export default function GestionMaterias() {
   }, [puedeVerMaterias, cargarDatos]);
 
   useEffect(() => {
-    if (location.state?.tab) {
+    if (location.state?.tab && location.state.tab !== "liquidacion") {
       setTab(location.state.tab);
     }
     if (location.state?.docenteId !== undefined) {
@@ -211,7 +205,6 @@ export default function GestionMaterias() {
       horaInicio: horario.horaInicio,
       horaFin: horario.horaFin,
       idDocenteTitular: horario.idDocente,
-      tarifaHora: horario.tarifaHora,
       idHorario: horario.idHorario,
       tipoFrecuencia: horario.tipoFrecuencia || "SEMANAL",
       repeticionesPeriodo: horario.repeticionesPeriodo || 1,
@@ -253,8 +246,8 @@ export default function GestionMaterias() {
               </h1>
             </div>
             <p className="text-xs text-slate-500">
-              Calendario semanal, semáforo de horas de clase dictadas y cálculo
-              de pago a docentes.
+              Calendario semanal, semáforo de horas de clase dictadas y
+              cumplimiento de cátedras.
             </p>
           </div>
         </div>
@@ -283,23 +276,12 @@ export default function GestionMaterias() {
               Nueva Materia
             </button>
           )}
-
-          {puedeLiquidar && (
-            <button
-              type="button"
-              onClick={() => setTab("liquidacion")}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition cursor-pointer"
-            >
-              <FileDown className="w-3.5 h-3.5" />
-              Exportar Liquidación
-            </button>
-          )}
         </div>
       </div>
 
       {/* 2. TARJETAS KPI */}
       {mostrarResumen && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 animate-in fade-in duration-200">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 animate-in fade-in duration-200">
           <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs">
             <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
               Horas Dictadas
@@ -360,20 +342,6 @@ export default function GestionMaterias() {
               computadas
             </span>
           </div>
-
-          <div className="bg-[#1e1e38] text-white rounded-2xl p-4 shadow-md flex flex-col justify-between">
-            <div>
-              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                Total a Liquidar
-              </span>
-              <div className="text-2xl font-bold text-white mt-1">
-                ${metricas.totalLiquidar.toLocaleString("es-AR")}
-              </div>
-            </div>
-            <span className="text-[11px] font-medium text-rose-300">
-              Deducción: -${metricas.totalDeduccion.toLocaleString("es-AR")}
-            </span>
-          </div>
         </div>
       )}
 
@@ -403,24 +371,10 @@ export default function GestionMaterias() {
           >
             <BookOpen className="w-4 h-4" /> Catálogo & ABM
           </button>
-
-          {puedeLiquidar && (
-            <button
-              type="button"
-              onClick={() => setTab("liquidacion")}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition cursor-pointer ${
-                tab === "liquidacion"
-                  ? "bg-white text-indigo-700 shadow-xs"
-                  : "hover:text-slate-900"
-              }`}
-            >
-              <DollarSign className="w-4 h-4" /> Liquidación & Pago Docente
-            </button>
-          )}
         </div>
       </div>
 
-      {/* 4. CONTENIDO CON SINCRONIZACIÓN AUTOMÁTICA */}
+      {/* 4. CONTENIDO */}
       {tab === "calendario" && (
         <CalendarioSemanalMaterias
           key={`cal-${recargarKey}`}
@@ -434,7 +388,6 @@ export default function GestionMaterias() {
               horaInicio: clase.horaInicio,
               horaFin: clase.horaFin,
               idDocenteTitular: clase.idDocente,
-              tarifaHora: clase.tarifaHora,
               idHorario: clase.idHorario,
             });
             setModalMateria(true);
@@ -453,7 +406,6 @@ export default function GestionMaterias() {
               nombre: materia.nombre,
               codigo: materia.codigo,
               aula: materia.aulaPredeterminada,
-              tarifaHora: materia.tarifaHora,
               idDocenteTitular: materia.idDocenteTitular,
             });
             setModalMateria(true);
@@ -465,8 +417,6 @@ export default function GestionMaterias() {
           puedeEliminar={puedeEliminar}
         />
       )}
-
-      {tab === "liquidacion" && puedeLiquidar && <TablaLiquidacionDocente />}
 
       {/* MODAL UNIFICADO: ALTA O EDICIÓN */}
       {modalMateria && (
