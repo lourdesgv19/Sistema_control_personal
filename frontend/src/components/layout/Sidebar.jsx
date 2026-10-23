@@ -14,6 +14,7 @@ import {
   LogOut,
   User,
   AlertCircle,
+  DollarSign,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import ModalAlerta from "../comunes/ModalAlerta";
@@ -92,6 +93,12 @@ export default function Sidebar() {
       label: "Gestión de Materias",
       icon: LayoutDashboard,
       permiso: "MATERIAS_VER",
+    },
+    {
+      to: "/liquidacion-docente",
+      label: "Liquidación Docente",
+      icon: DollarSign,
+      permiso: "LIQUIDACION_DOCENTE",
     },
     {
       to: "/fichajes",

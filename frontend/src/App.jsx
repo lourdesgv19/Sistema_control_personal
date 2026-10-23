@@ -14,6 +14,7 @@ import TableroIncidentesDiarios from "./pages/TableroIncidentesDiarios";
 import GestionMaterias from "./pages/GestionMaterias";
 import Perfil from "./pages/Perfil";
 import FichaComportamiento from "./pages/FichaComportamiento";
+import LiquidacionDocente from "./pages/LiquidacionDocente";
 
 export default function App() {
   return (
@@ -55,6 +56,15 @@ export default function App() {
             element={
               <ProtectedRoute permisoRequerido="MATERIAS_VER">
                 <GestionMaterias />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/liquidacion-docente"
+            element={
+              <ProtectedRoute permisoRequerido="LIQUIDACION_DOCENTE">
+                <LiquidacionDocente />
               </ProtectedRoute>
             }
           />
