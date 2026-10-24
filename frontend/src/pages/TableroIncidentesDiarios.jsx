@@ -57,7 +57,6 @@ export default function TableroIncidentesDiarios() {
 
   const hoyIso = useMemo(() => new Date().toISOString().split("T")[0], []);
 
-  // Modalidades: DIA | RANGO | TRIMESTRE | CUATRIMESTRE
   const [modoFiltroFecha, setModoFiltroFecha] = useState(
     () =>
       filtroNavegado?.modoFiltroFecha ||
@@ -187,22 +186,19 @@ export default function TableroIncidentesDiarios() {
       cargarDatos(paginaActual - 1, false);
     }, 250);
     return () => clearTimeout(timer);
-  }, [
-    fechaDesde,
-    fechaHasta,
-    modoFiltroFecha,
-    severidad,
-    categoria,
-    estado,
-    busqueda,
-    paginaActual,
-    cargarDatos,
-  ]);
+  }, [cargarDatos, paginaActual]);
 
+  // Sincronización en tiempo real con Debounce
   useEffect(() => {
+    let timerSync = null;
+
     const handleActualizacionTiempoReal = () => {
-      cargarDatos(paginaActual - 1, true);
+      if (timerSync) clearTimeout(timerSync);
+      timerSync = setTimeout(() => {
+        cargarDatos(paginaActual - 1, true);
+      }, 250);
     };
+
     window.addEventListener(
       "datos:actualizados",
       handleActualizacionTiempoReal,
@@ -211,7 +207,9 @@ export default function TableroIncidentesDiarios() {
       "conexion:restaurada",
       handleActualizacionTiempoReal,
     );
+
     return () => {
+      if (timerSync) clearTimeout(timerSync);
       window.removeEventListener(
         "datos:actualizados",
         handleActualizacionTiempoReal,
@@ -249,6 +247,7 @@ export default function TableroIncidentesDiarios() {
     marcasAbiertas: 0,
     total: 0,
   };
+
   const getIconoCargo = (legajo) => {
     if (legajo?.toLowerCase().includes("doc"))
       return <GraduationCap className="w-4 h-4 text-purple-600" />;
@@ -316,7 +315,6 @@ export default function TableroIncidentesDiarios() {
             ))}
           </div>
 
-          {/* SELECTORES DE FECHA SEGÚN MODALIDAD */}
           {modoFiltroFecha === "DIA" && (
             <div
               onClick={(e) => {
@@ -413,58 +411,6 @@ export default function TableroIncidentesDiarios() {
             </div>
           )}
 
-          {(modoFiltroFecha === "TRIMESTRE" ||
-            modoFiltroFecha === "CUATRIMESTRE") && (
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] text-slate-400 font-bold uppercase">
-                Desde Mes:
-              </span>
-              <select
-                value={fechaDesde.substring(0, 7)}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  if (val) {
-                    const startDate = `${val}-01`;
-                    setFechaDesde(startDate);
-                    const d = new Date(startDate);
-                    d.setMonth(
-                      d.getMonth() + (modoFiltroFecha === "TRIMESTRE" ? 3 : 4),
-                    );
-                    d.setDate(d.getDate() - 1);
-                    const y = d.getFullYear();
-                    const m = String(d.getMonth() + 1).padStart(2, "0");
-                    const day = String(d.getDate()).padStart(2, "0");
-                    setFechaHasta(`${y}-${m}-${day}`);
-                    setPaginaActual(1);
-                  }
-                }}
-                className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 font-semibold text-slate-800 outline-none cursor-pointer text-xs"
-              >
-                <option value={`${hoyIso.substring(0, 4)}-01`}>
-                  Enero (contar {modoFiltroFecha === "TRIMESTRE" ? "3" : "4"}{" "}
-                  meses)
-                </option>
-                <option value={`${hoyIso.substring(0, 4)}-02`}>Febrero</option>
-                <option value={`${hoyIso.substring(0, 4)}-03`}>Marzo</option>
-                <option value={`${hoyIso.substring(0, 4)}-04`}>Abril</option>
-                <option value={`${hoyIso.substring(0, 4)}-05`}>Mayo</option>
-                <option value={`${hoyIso.substring(0, 4)}-06`}>Junio</option>
-                <option value={`${hoyIso.substring(0, 4)}-07`}>Julio</option>
-                <option value={`${hoyIso.substring(0, 4)}-08`}>Agosto</option>
-                <option value={`${hoyIso.substring(0, 4)}-09`}>
-                  Septiembre
-                </option>
-                <option value={`${hoyIso.substring(0, 4)}-10`}>Octubre</option>
-                <option value={`${hoyIso.substring(0, 4)}-11`}>
-                  Noviembre
-                </option>
-                <option value={`${hoyIso.substring(0, 4)}-12`}>
-                  Diciembre
-                </option>
-              </select>
-            </div>
-          )}
-
           {modoFiltroFecha === "DIA" && (
             <div className="flex items-center gap-2 px-3.5 py-1.5 bg-indigo-50/80 border border-indigo-100 rounded-xl text-xs font-semibold text-indigo-950 select-none shadow-2xs">
               <Users className="w-4 h-4 text-indigo-600 shrink-0" />
@@ -488,7 +434,6 @@ export default function TableroIncidentesDiarios() {
         </div>
       </div>
 
-      {/* 2. TARJETAS KPI */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
         <div
           onClick={() => {
@@ -496,7 +441,11 @@ export default function TableroIncidentesDiarios() {
             setFiltroRapido("SALIDAS_EN_CLASE");
             setPaginaActual(1);
           }}
-          className={`p-4 rounded-2xl border transition cursor-pointer ${categoria === "SALIDAS_EN_CLASE" ? "bg-rose-600 text-white border-rose-600 shadow-md" : "bg-white text-slate-800 border-slate-200 hover:border-rose-300"}`}
+          className={`p-4 rounded-2xl border transition cursor-pointer ${
+            categoria === "SALIDAS_EN_CLASE"
+              ? "bg-rose-600 text-white border-rose-600 shadow-md"
+              : "bg-white text-slate-800 border-slate-200 hover:border-rose-300"
+          }`}
         >
           <div className="flex items-center justify-between text-xs">
             <span
@@ -528,7 +477,11 @@ export default function TableroIncidentesDiarios() {
             setFiltroRapido("LLEGADAS_TARDE");
             setPaginaActual(1);
           }}
-          className={`p-4 rounded-2xl border transition cursor-pointer ${categoria === "LLEGADAS_TARDE" ? "bg-amber-600 text-white border-amber-600 shadow-md" : "bg-white text-slate-800 border-slate-200 hover:border-amber-300"}`}
+          className={`p-4 rounded-2xl border transition cursor-pointer ${
+            categoria === "LLEGADAS_TARDE"
+              ? "bg-amber-600 text-white border-amber-600 shadow-md"
+              : "bg-white text-slate-800 border-slate-200 hover:border-amber-300"
+          }`}
         >
           <div className="flex items-center justify-between text-xs">
             <span
@@ -560,7 +513,11 @@ export default function TableroIncidentesDiarios() {
             setFiltroRapido("RETIROS_PREVIOS");
             setPaginaActual(1);
           }}
-          className={`p-4 rounded-2xl border transition cursor-pointer ${categoria === "RETIROS_PREVIOS" ? "bg-amber-800 text-white border-amber-800 shadow-md" : "bg-white text-slate-800 border-slate-200 hover:border-amber-600"}`}
+          className={`p-4 rounded-2xl border transition cursor-pointer ${
+            categoria === "RETIROS_PREVIOS"
+              ? "bg-amber-800 text-white border-amber-800 shadow-md"
+              : "bg-white text-slate-800 border-slate-200 hover:border-amber-600"
+          }`}
         >
           <div className="flex items-center justify-between text-xs">
             <span
@@ -592,7 +549,11 @@ export default function TableroIncidentesDiarios() {
             setFiltroRapido("SALIDAS_EXCESIVAS");
             setPaginaActual(1);
           }}
-          className={`p-4 rounded-2xl border transition cursor-pointer ${categoria === "SALIDAS_EXCESIVAS" ? "bg-sky-600 text-white border-sky-600 shadow-md" : "bg-white text-slate-800 border-slate-200 hover:border-sky-300"}`}
+          className={`p-4 rounded-2xl border transition cursor-pointer ${
+            categoria === "SALIDAS_EXCESIVAS"
+              ? "bg-sky-600 text-white border-sky-600 shadow-md"
+              : "bg-white text-slate-800 border-slate-200 hover:border-sky-300"
+          }`}
         >
           <div className="flex items-center justify-between text-xs">
             <span
@@ -624,7 +585,11 @@ export default function TableroIncidentesDiarios() {
             setFiltroRapido("AUSENCIAS");
             setPaginaActual(1);
           }}
-          className={`p-4 rounded-2xl border transition cursor-pointer ${categoria === "AUSENCIAS" ? "bg-slate-900 text-white border-slate-900 shadow-md" : "bg-white text-slate-800 border-slate-200 hover:border-slate-400"}`}
+          className={`p-4 rounded-2xl border transition cursor-pointer ${
+            categoria === "AUSENCIAS"
+              ? "bg-slate-900 text-white border-slate-900 shadow-md"
+              : "bg-white text-slate-800 border-slate-200 hover:border-slate-400"
+          }`}
         >
           <div className="flex items-center justify-between text-xs">
             <span
@@ -654,7 +619,11 @@ export default function TableroIncidentesDiarios() {
             setFiltroRapido("MARCAS_ABIERTAS");
             setPaginaActual(1);
           }}
-          className={`p-4 rounded-2xl border transition cursor-pointer ${categoria === "MARCAS_ABIERTAS" ? "bg-orange-600 text-white border-orange-600 shadow-md" : "bg-white text-slate-800 border-slate-200 hover:border-orange-300"}`}
+          className={`p-4 rounded-2xl border transition cursor-pointer ${
+            categoria === "MARCAS_ABIERTAS"
+              ? "bg-orange-600 text-white border-orange-600 shadow-md"
+              : "bg-white text-slate-800 border-slate-200 hover:border-orange-300"
+          }`}
         >
           <div className="flex items-center justify-between text-xs">
             <span
@@ -681,7 +650,6 @@ export default function TableroIncidentesDiarios() {
         </div>
       </div>
 
-      {/* 3. BARRA DE BÚSQUEDA Y FILTROS */}
       <div className="bg-white p-4 border border-slate-200 rounded-2xl shadow-xs space-y-3">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
           <div className="relative">
@@ -762,76 +730,8 @@ export default function TableroIncidentesDiarios() {
             )}
           </div>
         </div>
-
-        <div className="pt-2 border-t border-slate-100 flex items-center gap-2 flex-wrap text-xs font-semibold">
-          <span className="text-[10px] text-slate-400 uppercase tracking-wide mr-1">
-            Filtros directos:
-          </span>
-          <button
-            onClick={() => {
-              setCategoria("");
-              setFiltroRapido("TODOS");
-              setPaginaActual(1);
-            }}
-            className={`px-3 py-1 rounded-lg transition cursor-pointer ${filtroRapido === "TODOS" ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}
-          >
-            Todos ({metricas.total})
-          </button>
-          <button
-            onClick={() => {
-              setCategoria("SALIDAS_EN_CLASE");
-              setFiltroRapido("SALIDAS_EN_CLASE");
-              setPaginaActual(1);
-            }}
-            className={`px-3 py-1 rounded-lg border transition cursor-pointer ${filtroRapido === "SALIDAS_EN_CLASE" ? "bg-rose-600 text-white border-rose-600" : "border-rose-200 text-rose-700 bg-rose-50 hover:bg-rose-100"}`}
-          >
-            Críticas: Salidas en Clase ({metricas.salidasEnClase})
-          </button>
-          <button
-            onClick={() => {
-              setCategoria("LLEGADAS_TARDE");
-              setFiltroRapido("LLEGADAS_TARDE");
-              setPaginaActual(1);
-            }}
-            className={`px-3 py-1 rounded-lg border transition cursor-pointer ${filtroRapido === "LLEGADAS_TARDE" ? "bg-amber-600 text-white border-amber-600" : "border-amber-200 text-amber-700 bg-amber-50 hover:bg-amber-100"}`}
-          >
-            Tardanzas & Retiros (
-            {metricas.llegadasTarde + metricas.retirosPrevios})
-          </button>
-          <button
-            onClick={() => {
-              setCategoria("SALIDAS_EXCESIVAS");
-              setFiltroRapido("SALIDAS_EXCESIVAS");
-              setPaginaActual(1);
-            }}
-            className={`px-3 py-1 rounded-lg border transition cursor-pointer ${filtroRapido === "SALIDAS_EXCESIVAS" ? "bg-sky-600 text-white border-sky-600" : "border-sky-200 text-sky-700 bg-sky-50 hover:bg-sky-100"}`}
-          >
-            Salidas Excesivas ({metricas.salidasExcesivas})
-          </button>
-          <button
-            onClick={() => {
-              setCategoria("AUSENCIAS");
-              setFiltroRapido("AUSENCIAS");
-              setPaginaActual(1);
-            }}
-            className={`px-3 py-1 rounded-lg border transition cursor-pointer ${filtroRapido === "AUSENCIAS" ? "bg-slate-800 text-white border-slate-800" : "border-slate-200 text-slate-700 bg-slate-50 hover:bg-slate-100"}`}
-          >
-            Ausencias ({metricas.ausencias})
-          </button>
-          <button
-            onClick={() => {
-              setCategoria("MARCAS_ABIERTAS");
-              setFiltroRapido("MARCAS_ABIERTAS");
-              setPaginaActual(1);
-            }}
-            className={`px-3 py-1 rounded-lg border transition cursor-pointer ${filtroRapido === "MARCAS_ABIERTAS" ? "bg-orange-600 text-white border-orange-600" : "border-orange-200 text-orange-700 bg-orange-50 hover:bg-orange-100"}`}
-          >
-            Marcaciones Abiertas ({metricas.marcasAbiertas})
-          </button>
-        </div>
       </div>
 
-      {/* 4. TABLA CON FECHA VISIBLE EN DD/MM/AAAA */}
       <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-xs">
         <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -891,7 +791,13 @@ export default function TableroIncidentesDiarios() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span
-                        className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wider uppercase border ${inc.severidad === "CRÍTICA" ? "bg-rose-50 text-rose-700 border-rose-200" : inc.severidad === "ALTA" ? "bg-amber-50 text-amber-700 border-amber-200" : "bg-sky-50 text-sky-700 border-sky-200"}`}
+                        className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wider uppercase border ${
+                          inc.severidad === "CRÍTICA"
+                            ? "bg-rose-50 text-rose-700 border-rose-200"
+                            : inc.severidad === "ALTA"
+                              ? "bg-amber-50 text-amber-700 border-amber-200"
+                              : "bg-sky-50 text-sky-700 border-sky-200"
+                        }`}
                       >
                         {inc.severidad}
                       </span>
@@ -917,7 +823,11 @@ export default function TableroIncidentesDiarios() {
                     <td className="px-6 py-4 max-w-md">
                       <div className="font-semibold text-slate-800 flex items-center gap-1.5">
                         <span
-                          className={`w-1.5 h-1.5 rounded-full ${inc.severidad === "CRÍTICA" ? "bg-rose-500" : "bg-sky-500"}`}
+                          className={`w-1.5 h-1.5 rounded-full ${
+                            inc.severidad === "CRÍTICA"
+                              ? "bg-rose-500"
+                              : "bg-sky-500"
+                          }`}
                         />
                         <span>{inc.tipo}</span>
                       </div>
@@ -948,28 +858,12 @@ export default function TableroIncidentesDiarios() {
                           <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
                             ✓ OBSERVADA
                           </span>
-                          {inc.resolucionMotivo && (
-                            <span
-                              className="block text-[10px] text-slate-400 truncate max-w-[140px]"
-                              title={inc.resolucionMotivo}
-                            >
-                              {inc.resolucionMotivo}
-                            </span>
-                          )}
                         </div>
                       ) : inc.estado === "RECHAZADA" ? (
                         <div>
                           <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
                             ✓ RECHAZADA
                           </span>
-                          {inc.resolucionMotivo && (
-                            <span
-                              className="block text-[10px] text-slate-400 truncate max-w-[140px]"
-                              title={inc.resolucionMotivo}
-                            >
-                              {inc.resolucionMotivo}
-                            </span>
-                          )}
                         </div>
                       ) : (
                         <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
@@ -1022,7 +916,6 @@ export default function TableroIncidentesDiarios() {
           </table>
         </div>
 
-        {/* 5. PAGINACIÓN */}
         <div className="bg-white px-6 py-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
           <div className="text-slate-500">
             Mostrando{" "}
@@ -1055,7 +948,11 @@ export default function TableroIncidentesDiarios() {
                   key={num}
                   onClick={() => handleCambiarPagina(num)}
                   disabled={loading}
-                  className={`w-8 h-8 rounded-xl font-bold transition cursor-pointer ${paginaActual === num ? "bg-[#4b35e6] text-white shadow-xs" : "border border-slate-200 text-slate-600 hover:bg-slate-50"}`}
+                  className={`w-8 h-8 rounded-xl font-bold transition cursor-pointer ${
+                    paginaActual === num
+                      ? "bg-[#4b35e6] text-white shadow-xs"
+                      : "border border-slate-200 text-slate-600 hover:bg-slate-50"
+                  }`}
                 >
                   {num}
                 </button>
@@ -1075,7 +972,6 @@ export default function TableroIncidentesDiarios() {
         </div>
       </div>
 
-      {/* 6. MODAL DE RESOLUCIÓN */}
       <ModalJustificarIncidente
         incidente={incidenteSeleccionado}
         isOpen={modalAbierto}

@@ -43,7 +43,6 @@ export default function GestionMaterias() {
   const [mostrarResumen, setMostrarResumen] = useState(false);
   const [modalMateria, setModalMateria] = useState(false);
   const [materiaAEditar, setMateriaAEditar] = useState(null);
-  const [recargarKey, setRecargarKey] = useState(0);
 
   const [fechaLunes] = useState(() => {
     const d = new Date();
@@ -115,15 +114,22 @@ export default function GestionMaterias() {
     }
   }, [location.state]);
 
-  // Escuchar sincronización en tiempo real
+  // Sincronización en tiempo real con debounce
   useEffect(() => {
+    let timerSync = null;
+
     const handleSincronizacion = () => {
-      cargarDatos();
-      setRecargarKey((k) => k + 1);
+      if (timerSync) clearTimeout(timerSync);
+      timerSync = setTimeout(() => {
+        cargarDatos();
+      }, 250);
     };
+
     window.addEventListener("datos:actualizados", handleSincronizacion);
-    return () =>
+    return () => {
+      if (timerSync) clearTimeout(timerSync);
       window.removeEventListener("datos:actualizados", handleSincronizacion);
+    };
   }, [cargarDatos]);
 
   const handleEliminarMateria = async (id, nombre) => {
@@ -148,7 +154,7 @@ export default function GestionMaterias() {
             ? `\n... y ${data.totalHorariosAfectados - 5} comisiones más.`
             : "";
 
-        mensajeAviso = `ADVERTENCIA: Esta cátedra tiene ${data.totalHorariosAfectados} comisiones activas que también se darán de baja del cronograma de los docentes:\n\n${detalleHorarios}${sufijoMas}\n\n¿Desea confirmar la baja en cascada?`;
+        mensajeAviso = `ADVERTENCIA: Esta cátedra tiene ${data.totalHorariosAfectados} comisiones activas que también se darán de baja del cronograma:\n\n${detalleHorarios}${sufijoMas}\n\n¿Desea confirmar la baja en cascada?`;
       }
 
       setModalAlerta({
@@ -165,7 +171,6 @@ export default function GestionMaterias() {
             await deleteMateriaEnCascada(id);
             window.dispatchEvent(new CustomEvent("datos:actualizados"));
             await cargarDatos();
-            setRecargarKey((k) => k + 1);
             mostrarAviso(
               "success",
               "Baja Exitosa",
@@ -233,18 +238,15 @@ export default function GestionMaterias() {
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
-      {/* 1. HEADER */}
       <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
           <div className="w-12 h-12 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-[#4b35e6] shrink-0">
             <BookOpen className="w-6 h-6 stroke-[2]" />
           </div>
           <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-xl font-bold text-slate-900 tracking-tight">
-                Gestión de Materias
-              </h1>
-            </div>
+            <h1 className="text-xl font-bold text-slate-900 tracking-tight">
+              Gestión de Materias
+            </h1>
             <p className="text-xs text-slate-500">
               Calendario semanal, semáforo de horas de clase dictadas y
               cumplimiento de cátedras.
@@ -279,7 +281,6 @@ export default function GestionMaterias() {
         </div>
       </div>
 
-      {/* 2. TARJETAS KPI */}
       {mostrarResumen && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 animate-in fade-in duration-200">
           <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs">
@@ -345,7 +346,6 @@ export default function GestionMaterias() {
         </div>
       )}
 
-      {/* 3. TABS */}
       <div className="bg-white border border-slate-200 rounded-2xl p-1.5 shadow-xs flex items-center justify-between">
         <div className="flex bg-slate-100 p-1 rounded-xl text-xs font-semibold text-slate-600">
           <button
@@ -374,10 +374,8 @@ export default function GestionMaterias() {
         </div>
       </div>
 
-      {/* 4. CONTENIDO */}
       {tab === "calendario" && (
         <CalendarioSemanalMaterias
-          key={`cal-${recargarKey}`}
           onEditarMateriaParam={(clase) => {
             setMateriaAEditar({
               idMateria: clase.idMateria,
@@ -397,7 +395,6 @@ export default function GestionMaterias() {
 
       {tab === "catalogo" && (
         <CatalogoMateriasABM
-          key={`cat-${recargarKey}`}
           docenteInicialId={docenteSeleccionadoId}
           onNuevaMateria={handleAbrirCrear}
           onEditarMateria={(materia) => {
@@ -418,7 +415,6 @@ export default function GestionMaterias() {
         />
       )}
 
-      {/* MODAL UNIFICADO: ALTA O EDICIÓN */}
       {modalMateria && (
         <ModalNuevaMateria
           materiaAEditar={materiaAEditar}
@@ -428,7 +424,6 @@ export default function GestionMaterias() {
           }}
           onCreado={async () => {
             await cargarDatos();
-            setRecargarKey((prev) => prev + 1);
             mostrarAviso(
               "success",
               "Operación Exitosa",
@@ -440,7 +435,6 @@ export default function GestionMaterias() {
         />
       )}
 
-      {/* MODAL ALERTA CENTRALIZADO */}
       <ModalAlerta
         isOpen={modalAlerta.isOpen}
         tipo={modalAlerta.tipo}

@@ -26,6 +26,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Lock,
+  RotateCcw,
 } from "lucide-react";
 import {
   getHistorialImportaciones,
@@ -35,6 +36,7 @@ import {
   getFichajesPorImportacion,
   uploadArchivoFichajes,
   deleteHistorialImportacion,
+  reactivarHistorialImportacion,
   previsualizarVinculaciones,
   guardarVinculaciones,
 } from "../services/importacionService";
@@ -58,6 +60,30 @@ const formatearFechaHora24 = (fechaIso) => {
     second: "2-digit",
     hour12: false,
   });
+};
+
+const esRegistroActivo = (activo) => {
+  return activo === true || activo === 1 || activo === "1";
+};
+
+const StatusBadge = ({ activo }) => {
+  const isActivo = esRegistroActivo(activo);
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-semibold border ${
+        isActivo
+          ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+          : "bg-rose-50 text-rose-700 border-rose-200"
+      }`}
+    >
+      <span
+        className={`w-1.5 h-1.5 rounded-full ${
+          isActivo ? "bg-emerald-500" : "bg-rose-500"
+        }`}
+      ></span>
+      {isActivo ? "Activo" : "Eliminado"}
+    </span>
+  );
 };
 
 const ESTADO_INICIAL_EMPLEADO = {
@@ -258,7 +284,6 @@ function BuscadorEmpleadoSelect({
 export default function ImportacionFichajes() {
   const { tienePermiso } = useAuth();
 
-  // Permisos granulares del módulo FICHAJES
   const puedeImportar = tienePermiso("FICHAJES_IMPORTAR");
   const puedeVincular = tienePermiso("FICHAJES_VINCULAR");
   const puedeEliminarLote = tienePermiso("FICHAJES_ELIMINAR_LOTE");
@@ -269,11 +294,14 @@ export default function ImportacionFichajes() {
   const [empleados, setEmpleados] = useState([]);
   const [conteoSinVincular, setConteoSinVincular] = useState(0);
 
-  // Catálogos para el modal de registro de empleados
+  // Filtro por Estado: 'ACTIVOS' | 'TODOS' | 'INACTIVOS'
+  const [filtroEstadoHistorial, setFiltroEstadoHistorial] = useState("ACTIVOS");
+
+  // Catálogos auxiliares
   const [categoriasActivas, setCategoriasActivas] = useState([]);
   const [cargosActivos, setCargosActivos] = useState([]);
 
-  // Estados de Marcaciones Paginadas en Servidor
+  // Paginación servidor
   const [fichajesPaginados, setFichajesPaginados] = useState([]);
   const [paginaFichajes, setPaginaFichajes] = useState(0);
   const [totalPaginasFichajes, setTotalPaginasFichajes] = useState(1);
@@ -283,7 +311,7 @@ export default function ImportacionFichajes() {
 
   // Vistas y subida
   const [archivo, setArchivo] = useState(null);
-  const [vistaActual, setVistaActual] = useState("historial"); // 'historial' | 'asistente' | 'marcaciones'
+  const [vistaActual, setVistaActual] = useState("historial");
   const [resultadoSubida, setResultadoSubida] = useState(null);
   const [errorGlobal, setErrorGlobal] = useState("");
 
@@ -301,11 +329,11 @@ export default function ImportacionFichajes() {
   const [vinculaciones, setVinculaciones] = useState([]);
   const [cargandoAsistente, setCargandoAsistente] = useState(false);
 
-  // Modal Registro Empleado Reutilizado
+  // Modal Registro Empleado
   const [modalRegistro, setModalRegistro] = useState(false);
   const [formEmpleado, setFormEmpleado] = useState(ESTADO_INICIAL_EMPLEADO);
 
-  // Modal Alerta Centralizado
+  // Modal Alerta
   const [modalAlerta, setModalAlerta] = useState({
     isOpen: false,
     tipo: "info",
@@ -398,7 +426,7 @@ export default function ImportacionFichajes() {
     }
   }, []);
 
-  // Consulta al backend para el modal de un lote específico
+  // Consulta para el modal de un lote
   const consultarFichajesDelLote = useCallback(async (id, nombre, fecha) => {
     setCargandoModalFichajes(true);
     try {
@@ -412,50 +440,60 @@ export default function ImportacionFichajes() {
     }
   }, []);
 
-  // Carga inicial al montar el componente
+  // Carga inicial
   useEffect(() => {
     cargarDatos();
   }, [cargarDatos]);
 
-  // Sincronización automática en TIEMPO REAL (SSE) o al restaurarse la conexión
+  // Sincronización automática con Debounce para eventos de tiempo real
   useEffect(() => {
-    const handleActualizacionTiempoReal = async () => {
-      cargarDatos();
-      if (vistaActual === "marcaciones") {
-        cargarMarcacionesServidor(busquedaFichaje, paginaFichajes);
-      } else if (vistaActual === "asistente" && !archivo) {
-        try {
-          const datos = await getPendientesVinculacion();
-          setVinculaciones(Array.isArray(datos) ? datos : []);
-        } catch (err) {
-          console.error("Error refrescando vinculaciones:", err);
+    let timerActualizacion = null;
+
+    const ejecutarActualizacionSilenciosa = () => {
+      if (timerActualizacion) clearTimeout(timerActualizacion);
+
+      timerActualizacion = setTimeout(async () => {
+        cargarDatos();
+
+        if (vistaActual === "marcaciones") {
+          cargarMarcacionesServidor(busquedaFichaje, paginaFichajes);
+        } else if (vistaActual === "asistente" && !archivo) {
+          try {
+            const datos = await getPendientesVinculacion();
+            setVinculaciones(Array.isArray(datos) ? datos : []);
+          } catch (err) {
+            console.error("Error refrescando vinculaciones:", err);
+          }
         }
-      }
-      if (modalArchivo.isOpen && modalArchivo.item) {
-        consultarFichajesDelLote(
-          modalArchivo.item.id,
-          filtroModalNombre,
-          filtroModalFecha,
-        );
-      }
+
+        if (modalArchivo.isOpen && modalArchivo.item) {
+          consultarFichajesDelLote(
+            modalArchivo.item.id,
+            filtroModalNombre,
+            filtroModalFecha,
+          );
+        }
+      }, 150);
     };
 
     window.addEventListener(
       "datos:actualizados",
-      handleActualizacionTiempoReal,
+      ejecutarActualizacionSilenciosa,
     );
     window.addEventListener(
       "conexion:restaurada",
-      handleActualizacionTiempoReal,
+      ejecutarActualizacionSilenciosa,
     );
+
     return () => {
+      if (timerActualizacion) clearTimeout(timerActualizacion);
       window.removeEventListener(
         "datos:actualizados",
-        handleActualizacionTiempoReal,
+        ejecutarActualizacionSilenciosa,
       );
       window.removeEventListener(
         "conexion:restaurada",
-        handleActualizacionTiempoReal,
+        ejecutarActualizacionSilenciosa,
       );
     };
   }, [
@@ -472,23 +510,21 @@ export default function ImportacionFichajes() {
     filtroModalFecha,
   ]);
 
-  // Cargar marcaciones al ingresar a la vista o cambiar de página
+  // Consulta controlada para el padrón general
   useEffect(() => {
-    if (vistaActual === "marcaciones") {
-      cargarMarcacionesServidor(busquedaFichaje, paginaFichajes);
-    }
-  }, [vistaActual, paginaFichajes, cargarMarcacionesServidor, busquedaFichaje]);
+    if (vistaActual !== "marcaciones") return;
 
-  // Debounce para el buscador del padrón general
-  useEffect(() => {
-    if (vistaActual === "marcaciones") {
-      const timer = setTimeout(() => {
-        setPaginaFichajes(0);
-        cargarMarcacionesServidor(busquedaFichaje, 0);
-      }, 350);
-      return () => clearTimeout(timer);
-    }
-  }, [busquedaFichaje, vistaActual, cargarMarcacionesServidor]);
+    const timer = setTimeout(() => {
+      cargarMarcacionesServidor(busquedaFichaje, paginaFichajes);
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [vistaActual, busquedaFichaje, paginaFichajes, cargarMarcacionesServidor]);
+
+  const handleCambioBusqueda = (e) => {
+    setBusquedaFichaje(e.target.value);
+    setPaginaFichajes(0);
+  };
 
   const handleAbrirModalLote = (item) => {
     setFiltroModalNombre("");
@@ -534,7 +570,6 @@ export default function ImportacionFichajes() {
       setResultadoSubida(res);
       const archivoSubido = archivo;
       setArchivo(null);
-      await cargarDatos();
 
       if (puedeVincular) {
         try {
@@ -580,13 +615,14 @@ export default function ImportacionFichajes() {
     }
   };
 
+  // Baja lógica
   const handleEliminarHistorial = (id, nombre) => {
     if (!puedeEliminarLote) return;
     setModalAlerta({
       isOpen: true,
       tipo: "danger",
       titulo: "¿Dar de baja importación?",
-      mensaje: `¿Desea dar de baja la importación de "${nombre}" y desestimar sus marcaciones asociadas?`,
+      mensaje: `¿Desea dar de baja lógica el lote "${nombre}" y desestimar temporalmente sus marcaciones asociadas?`,
       textoConfirmar: "Sí, dar de baja",
       textoCancelar: "Cancelar",
       mostrarCancelar: true,
@@ -594,14 +630,10 @@ export default function ImportacionFichajes() {
         setModalAlerta((prev) => ({ ...prev, isOpen: false }));
         try {
           await deleteHistorialImportacion(id);
-          await cargarDatos();
-          if (vistaActual === "marcaciones") {
-            cargarMarcacionesServidor(busquedaFichaje, paginaFichajes);
-          }
           mostrarAviso(
             "success",
             "Baja Confirmada",
-            `El registro de "${nombre}" fue dado de baja.`,
+            `El lote "${nombre}" fue dado de baja correctamente.`,
           );
         } catch (err) {
           mostrarAviso(
@@ -609,6 +641,38 @@ export default function ImportacionFichajes() {
             "Error",
             err.response?.data?.message ||
               "No se pudo dar de baja el registro.",
+          );
+        }
+      },
+    });
+  };
+
+  // Reactivación lógica
+  const handleReactivarHistorial = (id, nombre) => {
+    if (!puedeEliminarLote) return;
+    setModalAlerta({
+      isOpen: true,
+      tipo: "info",
+      titulo: "¿Reactivar importación?",
+      mensaje: `¿Desea reactivar la importación de "${nombre}" y restablecer sus marcaciones asociadas en los cómputos?`,
+      textoConfirmar: "Sí, reactivar",
+      textoCancelar: "Cancelar",
+      mostrarCancelar: true,
+      onConfirmar: async () => {
+        setModalAlerta((prev) => ({ ...prev, isOpen: false }));
+        try {
+          await reactivarHistorialImportacion(id);
+          mostrarAviso(
+            "success",
+            "Reactivación Exitosa",
+            `El lote "${nombre}" y sus marcaciones han sido reactivados.`,
+          );
+        } catch (err) {
+          mostrarAviso(
+            "danger",
+            "Error",
+            err.response?.data?.message ||
+              "No se pudo reactivar el registro de importación.",
           );
         }
       },
@@ -660,7 +724,6 @@ export default function ImportacionFichajes() {
     );
   };
 
-  // Disparar alta rápida abriendo ModalRegistroEmpleado
   const handleAbrirRegistroNuevo = ({ sJobNo, sName }) => {
     if (!puedeCrearEmpleado) return;
     const partes = (sName || "").trim().split(" ");
@@ -677,12 +740,10 @@ export default function ImportacionFichajes() {
     setModalRegistro(true);
   };
 
-  // Envío del ModalRegistroEmpleado
   const handleGuardarNuevoEmpleado = async (e) => {
     e.preventDefault();
     try {
       const nuevo = await createEmpleado(formEmpleado);
-
       const empsActualizados = await getEmpleados();
       setEmpleados(empsActualizados);
 
@@ -732,7 +793,7 @@ export default function ImportacionFichajes() {
         "Vinculaciones Guardadas",
         "Los IDs biométricos fueron asignados correctamente a los empleados y marcas históricas.",
       );
-      await cargarDatos();
+      cargarDatos();
       setVistaActual("historial");
     } catch (err) {
       mostrarAviso(
@@ -743,6 +804,16 @@ export default function ImportacionFichajes() {
       );
     }
   };
+
+  // Filtrado reactivo contemplando valores booleanos y numéricos de MySQL
+  const historialFiltrado = useMemo(() => {
+    return historial.filter((h) => {
+      const activo = esRegistroActivo(h.activo);
+      if (filtroEstadoHistorial === "ACTIVOS") return activo;
+      if (filtroEstadoHistorial === "INACTIVOS") return !activo;
+      return true;
+    });
+  }, [historial, filtroEstadoHistorial]);
 
   const vinculacionesOrdenadas = useMemo(() => {
     return [...vinculaciones].sort((a, b) => {
@@ -778,7 +849,6 @@ export default function ImportacionFichajes() {
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Alternar entre Marcaciones e Historial (Accesible para FICHAJES_VER) */}
           <button
             onClick={() =>
               setVistaActual(
@@ -804,7 +874,6 @@ export default function ImportacionFichajes() {
             )}
           </button>
 
-          {/* Botón Asistente: Sujeto a FICHAJES_VINCULAR */}
           {puedeVincular ? (
             (conteoSinVincular > 0 || vistaActual === "asistente") && (
               <button
@@ -840,7 +909,7 @@ export default function ImportacionFichajes() {
         </div>
       </div>
 
-      {/* 2. ZONA DE CARGA (Controlada por FICHAJES_IMPORTAR) */}
+      {/* 2. ZONA DE CARGA */}
       <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs">
         {puedeImportar ? (
           <div className="flex flex-col md:flex-row items-center justify-between gap-6">
@@ -1072,7 +1141,7 @@ export default function ImportacionFichajes() {
                 type="text"
                 placeholder="Buscar por nombre, ID o Serial..."
                 value={busquedaFichaje}
-                onChange={(e) => setBusquedaFichaje(e.target.value)}
+                onChange={handleCambioBusqueda}
                 className="pl-9 pr-3 py-1.5 border border-slate-200 rounded-xl text-xs outline-none focus:border-indigo-500 w-64"
               />
             </div>
@@ -1185,7 +1254,7 @@ export default function ImportacionFichajes() {
         </div>
       ) : (
         <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs space-y-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <h2 className="text-sm font-bold text-slate-900">
                 Historial de Importaciones
@@ -1195,16 +1264,33 @@ export default function ImportacionFichajes() {
                 por fecha de carga.
               </p>
             </div>
-            <button
-              onClick={cargarDatos}
-              disabled={loading}
-              className="p-2 border border-slate-200 hover:bg-slate-50 rounded-xl text-slate-600 transition disabled:opacity-50 cursor-pointer"
-              title="Actualizar listado"
-            >
-              <RefreshCw
-                className={`w-4 h-4 ${loading ? "animate-spin" : ""}`}
-              />
-            </button>
+
+            <div className="flex items-center gap-3">
+              {/* FILTRO POR ESTADO */}
+              <div className="flex items-center gap-2 text-xs">
+                <span className="text-slate-500 font-medium">Estado:</span>
+                <select
+                  value={filtroEstadoHistorial}
+                  onChange={(e) => setFiltroEstadoHistorial(e.target.value)}
+                  className="bg-white border border-slate-200 text-slate-700 font-semibold rounded-xl px-3 py-1.5 text-xs outline-none focus:border-indigo-600 transition shadow-xs cursor-pointer"
+                >
+                  <option value="ACTIVOS">Solo Activos</option>
+                  <option value="TODOS">Todos los lotes</option>
+                  <option value="INACTIVOS">Solo Eliminados (Bajas)</option>
+                </select>
+              </div>
+
+              <button
+                onClick={cargarDatos}
+                disabled={loading}
+                className="p-2 border border-slate-200 hover:bg-slate-50 rounded-xl text-slate-600 transition disabled:opacity-50 cursor-pointer"
+                title="Actualizar listado"
+              >
+                <RefreshCw
+                  className={`w-4 h-4 ${loading ? "animate-spin" : ""}`}
+                />
+              </button>
+            </div>
           </div>
 
           <div className="overflow-x-auto">
@@ -1217,99 +1303,140 @@ export default function ImportacionFichajes() {
                   <th className="py-3 px-4">Procesadas</th>
                   <th className="py-3 px-4">Nulos/Omitidos</th>
                   <th className="py-3 px-4">Errores</th>
+                  <th className="py-3 px-4">Estado</th>
                   <th className="py-3 px-4">Usuario</th>
                   <th className="py-3 px-4 text-right">Acciones</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {historial.length === 0 ? (
+                {historialFiltrado.length === 0 ? (
                   <tr>
                     <td
-                      colSpan="8"
+                      colSpan="9"
                       className="text-center py-8 text-slate-400 italic"
                     >
                       {loading
                         ? "Cargando historial..."
-                        : "No se registran importaciones previas en el sistema."}
+                        : "No se registran importaciones con el filtro seleccionado."}
                     </td>
                   </tr>
                 ) : (
-                  historial.map((h) => (
-                    <tr
-                      key={h.id}
-                      className="hover:bg-slate-50/60 transition group"
-                    >
-                      <td className="py-3.5 px-4 font-semibold text-slate-700 whitespace-nowrap font-mono">
-                        <div className="flex items-center gap-2">
-                          <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                          {formatearFechaHora24(h.fechaImportacion)}
-                        </div>
-                      </td>
-                      <td className="py-3.5 px-4">
-                        <div className="flex items-center gap-1.5 font-medium text-slate-800">
-                          <FileText className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
-                          <span>{h.nombreArchivo}</span>
-                        </div>
-                      </td>
-                      <td className="py-3.5 px-4 font-bold text-slate-700">
-                        {h.totalFilas}
-                      </td>
-                      <td className="py-3.5 px-4">
-                        <span className="bg-emerald-50 text-emerald-700 font-bold px-2 py-0.5 rounded-md">
-                          {h.procesadasOk}
-                        </span>
-                      </td>
-                      <td className="py-3.5 px-4">
-                        <span className="bg-amber-50 text-amber-700 font-bold px-2 py-0.5 rounded-md">
-                          {h.registrosNulos || 0}
-                        </span>
-                      </td>
-                      <td className="py-3.5 px-4">
-                        <span
-                          className={`font-bold px-2 py-0.5 rounded-md ${
-                            h.errores > 0
-                              ? "bg-rose-50 text-rose-700 border border-rose-200"
-                              : "text-slate-400"
-                          }`}
-                        >
-                          {h.errores}
-                        </span>
-                      </td>
-                      <td className="py-3.5 px-4 text-slate-500">
-                        {h.usuarioResponsable || "Sistema"}
-                      </td>
-                      <td className="py-3.5 px-4 text-right">
-                        <div className="flex items-center justify-end gap-1 text-slate-400">
-                          <button
-                            onClick={() => handleAbrirModalLote(h)}
-                            className="p-1.5 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition cursor-pointer"
-                            title="Ver filas y detalle de esta importación"
-                          >
-                            <Eye className="w-4 h-4" />
-                          </button>
-
-                          {puedeEliminarLote ? (
-                            <button
-                              onClick={() =>
-                                handleEliminarHistorial(h.id, h.nombreArchivo)
-                              }
-                              className="p-1.5 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer"
-                              title="Dar de baja este registro de importación"
-                            >
-                              <Trash2 className="w-4 h-4 text-rose-500" />
-                            </button>
-                          ) : (
+                  historialFiltrado.map((h) => {
+                    const estaActivo = esRegistroActivo(h.activo);
+                    return (
+                      <tr
+                        key={h.id}
+                        className={`transition group ${
+                          !estaActivo
+                            ? "bg-slate-50/75 opacity-75"
+                            : "hover:bg-slate-50/60"
+                        }`}
+                      >
+                        <td className="py-3.5 px-4 font-semibold text-slate-700 whitespace-nowrap font-mono">
+                          <div className="flex items-center gap-2">
+                            <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                            {formatearFechaHora24(h.fechaImportacion)}
+                          </div>
+                        </td>
+                        <td className="py-3.5 px-4">
+                          <div className="flex items-center gap-1.5 font-medium text-slate-800">
+                            <FileText
+                              className={`w-3.5 h-3.5 shrink-0 ${
+                                estaActivo
+                                  ? "text-indigo-500"
+                                  : "text-slate-400"
+                              }`}
+                            />
                             <span
-                              className="p-1.5 text-slate-200 cursor-not-allowed"
-                              title="Requiere permiso FICHAJES_ELIMINAR_LOTE"
+                              className={
+                                !estaActivo ? "line-through text-slate-500" : ""
+                              }
                             >
-                              <Trash2 className="w-4 h-4" />
+                              {h.nombreArchivo}
                             </span>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))
+                          </div>
+                        </td>
+                        <td className="py-3.5 px-4 font-bold text-slate-700">
+                          {h.totalFilas}
+                        </td>
+                        <td className="py-3.5 px-4">
+                          <span className="bg-emerald-50 text-emerald-700 font-bold px-2 py-0.5 rounded-md">
+                            {h.procesadasOk}
+                          </span>
+                        </td>
+                        <td className="py-3.5 px-4">
+                          <span className="bg-amber-50 text-amber-700 font-bold px-2 py-0.5 rounded-md">
+                            {h.registrosNulos || 0}
+                          </span>
+                        </td>
+                        <td className="py-3.5 px-4">
+                          <span
+                            className={`font-bold px-2 py-0.5 rounded-md ${
+                              h.errores > 0
+                                ? "bg-rose-50 text-rose-700 border border-rose-200"
+                                : "text-slate-400"
+                            }`}
+                          >
+                            {h.errores}
+                          </span>
+                        </td>
+                        <td className="py-3.5 px-4">
+                          <StatusBadge activo={h.activo} />
+                        </td>
+                        <td className="py-3.5 px-4 text-slate-500">
+                          {h.usuarioResponsable || "Sistema"}
+                        </td>
+                        <td className="py-3.5 px-4 text-right">
+                          <div className="flex items-center justify-end gap-1 text-slate-400">
+                            <button
+                              onClick={() => handleAbrirModalLote(h)}
+                              className="p-1.5 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition cursor-pointer"
+                              title="Ver filas y detalle de esta importación"
+                            >
+                              <Eye className="w-4 h-4" />
+                            </button>
+
+                            {puedeEliminarLote ? (
+                              estaActivo ? (
+                                <button
+                                  onClick={() =>
+                                    handleEliminarHistorial(
+                                      h.id,
+                                      h.nombreArchivo,
+                                    )
+                                  }
+                                  className="p-1.5 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer"
+                                  title="Dar de baja este registro de importación"
+                                >
+                                  <Trash2 className="w-4 h-4 text-rose-500" />
+                                </button>
+                              ) : (
+                                <button
+                                  onClick={() =>
+                                    handleReactivarHistorial(
+                                      h.id,
+                                      h.nombreArchivo,
+                                    )
+                                  }
+                                  className="p-1.5 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition cursor-pointer"
+                                  title="Reactivar importación y sus fichajes"
+                                >
+                                  <RotateCcw className="w-4 h-4 text-emerald-600" />
+                                </button>
+                              )
+                            ) : (
+                              <span
+                                className="p-1.5 text-slate-200 cursor-not-allowed"
+                                title="Requiere permiso FICHAJES_ELIMINAR_LOTE"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>
@@ -1504,7 +1631,7 @@ export default function ImportacionFichajes() {
         </div>
       )}
 
-      {/* MODAL REUTILIZADO DE REGISTRO DE EMPLEADOS */}
+      {/* MODAL REGISTRO EMPLEADO */}
       <ModalRegistroEmpleado
         isOpen={modalRegistro}
         onClose={() => setModalRegistro(false)}

@@ -64,6 +64,11 @@ public interface EmpleadoFichajeRepository extends JpaRepository<EmpleadoFichaje
             @Param("fecha") LocalDateTime fecha
     );
 
+    @Modifying
+    @Transactional
+    @Query("UPDATE EmpleadoFichaje f SET f.activo = true, f.fechaBaja = null WHERE f.importacion.id = :importacionId")
+    void reactivarFichajesPorImportacion(@Param("importacionId") Long importacionId);
+
     boolean existsBySerialNo(Long serialNo);
 
     // Cantidad de fichajes huérfanos sin empleado asignado

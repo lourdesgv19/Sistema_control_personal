@@ -2,13 +2,11 @@ package backend.model;
 
 import jakarta.persistence.*;
 import org.hibernate.annotations.SQLDelete;
-import org.hibernate.annotations.SQLRestriction;
 import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "importaciones_fichajes")
 @SQLDelete(sql = "UPDATE importaciones_fichajes SET activo = false, fecha_baja = NOW() WHERE id = ?")
-@SQLRestriction("activo = true")
 public class ImportacionHistorial {
 
     @Id

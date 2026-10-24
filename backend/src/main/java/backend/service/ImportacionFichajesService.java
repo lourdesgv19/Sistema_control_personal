@@ -309,6 +309,21 @@ try {
         // Notificar al Frontend que se dio de baja un lote
         notificacionService.notificarCambio("BAJA_IMPORTACION");
     }
+    
+    @Transactional
+    public void reactivarHistorial(Long id) {
+    ImportacionHistorial h = historialRepo.findById(id)
+            .orElseThrow(() -> new RuntimeException("Importación no encontrada"));
+
+    h.setActivo(true);
+    h.setFechaBaja(null);
+    historialRepo.save(h);
+
+    // Reactivar las marcaciones asociadas al lote
+    fichajeRepo.reactivarFichajesPorImportacion(id);
+
+    notificacionService.notificarCambio("REACTIVACION_IMPORTACION");
+}
 
     public record FilaFichajeRaw(String sName, String sJobNo, String fecha, String hora, String status, Long serialNo) {}
 }

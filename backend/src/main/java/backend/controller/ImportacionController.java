@@ -95,4 +95,11 @@ public class ImportacionController {
         vinculacionService.guardarVinculaciones(asignaciones);
         return ResponseEntity.ok().build();
     }
+
+    @PatchMapping("/historial/{id}/reactivar")
+    public ResponseEntity<Void> reactivarHistorial(@PathVariable Long id) {
+        importacionService.reactivarHistorial(id);
+        return ResponseEntity.noContent().build();
+    }
+
 }

@@ -7,7 +7,6 @@ const api = axios.create({
   },
 });
 
-// Interceptor de Peticiones: inyecta el token Bearer si existe
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem("token");
@@ -19,24 +18,36 @@ api.interceptors.request.use(
   (error) => Promise.reject(error),
 );
 
-// Interceptor de Respuestas: gestión de sesión e ignorar rutas de login
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    // Si la llamada fue exitosa, notificamos que el servidor está online
+    window.dispatchEvent(
+      new CustomEvent("servidor:estado", { detail: { ok: true } }),
+    );
+    return response;
+  },
   (error) => {
     const originalRequest = error.config;
     const url = originalRequest?.url || "";
 
-    // 1. Verificar si la petición que falló corresponde al endpoint de autenticación
+    // Notificación inmediata si el backend no responde o hay error de red
+    if (
+      !error.response ||
+      error.code === "ERR_NETWORK" ||
+      error.message === "Network Error"
+    ) {
+      window.dispatchEvent(
+        new CustomEvent("servidor:estado", { detail: { ok: false } }),
+      );
+    }
+
     const esRutaLogin =
       url.includes("/auth/login") ||
       url.includes("/api/auth/login") ||
       url.endsWith("/login");
 
-    // 2. Solo despachar logout si el 401 proviene de una sesión en uso, no del formulario de login
     if (error.response?.status === 401 && !esRutaLogin) {
-      console.warn(
-        "⚠️ Token expirado o sesión inválida. Despachando evento de logout.",
-      );
+      console.warn("⚠️ Token expirado o sesión inválida.");
       localStorage.removeItem("token");
       localStorage.removeItem("user");
       window.dispatchEvent(new CustomEvent("auth:logout"));
@@ -46,6 +57,5 @@ api.interceptors.response.use(
   },
 );
 
-// 4. Exportar tanto 'api' como 'default' (y alias 'apiClient' por compatibilidad)
 export { api, api as apiClient };
 export default api;

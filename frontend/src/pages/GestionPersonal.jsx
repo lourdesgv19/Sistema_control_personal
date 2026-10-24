@@ -102,12 +102,10 @@ export default function GestionPersonal() {
   const navigate = useNavigate();
   const { tienePermiso } = useAuth();
 
-  // Permisos granulares de Personal
   const puedePersonalCrear = tienePermiso("PERSONAL_CREAR");
   const puedePersonalEditar = tienePermiso("PERSONAL_EDITAR");
   const puedePersonalBajaReactivar = tienePermiso("PERSONAL_BAJA_REACTIVAR");
 
-  // Permisos granulares de Horarios
   const puedeHorariosVer =
     tienePermiso("HORARIOS_VER") || tienePermiso("PERSONAL_VER");
   const puedeHorariosGestionar = tienePermiso("HORARIOS_GESTIONAR");
@@ -120,23 +118,19 @@ export default function GestionPersonal() {
   const [cargos, setCargos] = useState([]);
   const [horarios, setHorarios] = useState([]);
 
-  // Periodicidad de franjas
   const [tipoFrecuencia, setTipoFrecuencia] = useState("SEMANAL");
   const [repeticionesPeriodo, setRepeticionesPeriodo] = useState(1);
   const [semanaAlterna, setSemanaAlterna] = useState("PAR");
 
-  // Paginación del Servidor
   const [paginaActual, setPaginaActual] = useState(1);
   const [totalPaginas, setTotalPaginas] = useState(1);
   const [totalElementos, setTotalElementos] = useState(0);
 
-  // Filtros
   const [searchTerm, setSearchTerm] = useState("");
   const [filterCategoria, setFilterCategoria] = useState("TODAS");
   const [filterEstado, setFilterEstado] = useState("TODOS");
   const [soloIncompletos, setSoloIncompletos] = useState(false);
 
-  // Modales
   const [modalRegistro, setModalRegistro] = useState(false);
   const [editandoEmpleadoId, setEditandoEmpleadoId] = useState(null);
   const [formEmpleado, setFormEmpleado] = useState(FORM_EMP_INICIAL);
@@ -233,21 +227,25 @@ export default function GestionPersonal() {
   }, []);
 
   const cargarEmpleadosServidor = useCallback(
-    async (page = 0) => {
+    async (
+      page = 0,
+      q = searchTerm,
+      cat = filterCategoria,
+      est = filterEstado,
+    ) => {
       setLoading(true);
       try {
         const catId =
-          filterCategoria !== "TODAS"
+          cat !== "TODAS"
             ? categorias.find(
-                (c) =>
-                  c.nombre?.toLowerCase() === filterCategoria.toLowerCase(),
+                (c) => c.nombre?.toLowerCase() === cat.toLowerCase(),
               )?.id
             : null;
 
         const res = await getEmpleadosPaginados(
-          searchTerm,
+          q,
           catId,
-          filterEstado,
+          est,
           page,
           ITEMS_POR_PAGINA,
         );
@@ -274,17 +272,50 @@ export default function GestionPersonal() {
     cargarResumenGlobal();
   }, [cargarCatalogos, cargarResumenGlobal]);
 
-  // Escuchar sincronización en tiempo real
+  // Recarga controlada de búsqueda y filtros con Debounce
   useEffect(() => {
+    const timer = setTimeout(() => {
+      cargarEmpleadosServidor(
+        paginaActual - 1,
+        searchTerm,
+        filterCategoria,
+        filterEstado,
+      );
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [
+    searchTerm,
+    filterCategoria,
+    filterEstado,
+    paginaActual,
+    cargarEmpleadosServidor,
+  ]);
+
+  // Sincronización en tiempo real protegida con Debounce (Evita saturar el backend)
+  useEffect(() => {
+    let timerSync = null;
+
     const handleSincronizacionGlobal = () => {
-      cargarCatalogos();
-      cargarEmpleadosServidor(paginaActual - 1);
-      cargarResumenGlobal();
+      if (timerSync) clearTimeout(timerSync);
+
+      timerSync = setTimeout(() => {
+        cargarCatalogos();
+        cargarEmpleadosServidor(paginaActual - 1);
+        cargarResumenGlobal();
+      }, 300);
     };
+
     window.addEventListener("datos:actualizados", handleSincronizacionGlobal);
+    window.addEventListener("conexion:restaurada", handleSincronizacionGlobal);
+
     return () => {
+      if (timerSync) clearTimeout(timerSync);
       window.removeEventListener(
         "datos:actualizados",
+        handleSincronizacionGlobal,
+      );
+      window.removeEventListener(
+        "conexion:restaurada",
         handleSincronizacionGlobal,
       );
     };
@@ -294,13 +325,6 @@ export default function GestionPersonal() {
     cargarResumenGlobal,
     paginaActual,
   ]);
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      cargarEmpleadosServidor(paginaActual - 1);
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [cargarEmpleadosServidor, paginaActual]);
 
   const categoriasActivas = useMemo(
     () => categorias.filter((c) => c.activo !== false),
@@ -423,7 +447,6 @@ export default function GestionPersonal() {
         );
       }
 
-      window.dispatchEvent(new CustomEvent("datos:actualizados"));
       await cargarEmpleadosServidor(paginaActual - 1);
       cargarResumenGlobal();
       setModalRegistro(false);
@@ -451,7 +474,6 @@ export default function GestionPersonal() {
         setModalAlerta((prev) => ({ ...prev, isOpen: false }));
         try {
           await deleteEmpleado(id);
-          window.dispatchEvent(new CustomEvent("datos:actualizados"));
           await cargarEmpleadosServidor(paginaActual - 1);
           cargarResumenGlobal();
           mostrarAviso(
@@ -485,7 +507,6 @@ export default function GestionPersonal() {
         setModalAlerta((prev) => ({ ...prev, isOpen: false }));
         try {
           await reactivarEmpleado(id);
-          window.dispatchEvent(new CustomEvent("datos:actualizados"));
           await cargarEmpleadosServidor(paginaActual - 1);
           cargarResumenGlobal();
           mostrarAviso(
@@ -527,13 +548,12 @@ export default function GestionPersonal() {
       mostrarAviso(
         "danger",
         "Acceso Denegado",
-        "No posee permiso (HORARIOS_ELIMINAR) para quitar horarios asignados.",
+        "No posee permiso (HORARIOS_ELIMINAR).",
       );
       return;
     }
     try {
       await removeEmpleadoHorario(horarioId);
-      window.dispatchEvent(new CustomEvent("datos:actualizados"));
       const [horariosActualizados, metricasActualizadas] = await Promise.all([
         getEmpleadoHorarios(empleadoSeleccionado.id),
         getMetricasEmpleado(empleadoSeleccionado.id),
@@ -642,7 +662,6 @@ export default function GestionPersonal() {
         }
       }
 
-      window.dispatchEvent(new CustomEvent("datos:actualizados"));
       const [horariosActualizados, metricasActualizadas] = await Promise.all([
         getEmpleadoHorarios(empleadoSeleccionado.id),
         getMetricasEmpleado(empleadoSeleccionado.id),
@@ -654,7 +673,7 @@ export default function GestionPersonal() {
       mostrarAviso(
         "success",
         "Turno Asignado",
-        "Se generaron las franjas horarias con la periodicidad establecida.",
+        "Se generaron las franjas horarias con éxito.",
       );
     } catch (err) {
       const mensaje = err.response?.data?.message || "";
@@ -684,7 +703,6 @@ export default function GestionPersonal() {
 
   return (
     <div className="p-6 lg:p-8 max-w-7xl mx-auto space-y-6 font-sans">
-      {/* 1. HEADER */}
       <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
           <div className="w-12 h-12 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 shadow-xs">
@@ -743,7 +761,6 @@ export default function GestionPersonal() {
         </div>
       </div>
 
-      {/* 2. TARJETAS GLOBALES */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <button
           type="button"
@@ -874,7 +891,6 @@ export default function GestionPersonal() {
         </button>
       </div>
 
-      {/* 3. FILTROS */}
       <div className="bg-white p-3 border border-slate-200 rounded-2xl shadow-xs flex flex-col lg:flex-row lg:items-center justify-between gap-3">
         <div className="relative flex-1">
           <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -919,7 +935,6 @@ export default function GestionPersonal() {
         </div>
       </div>
 
-      {/* 4. TABLA DE EMPLEADOS */}
       <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-xs">
         <table className="w-full text-left text-xs">
           <thead className="bg-[#f8fafc] text-slate-500 font-bold uppercase text-[10px] border-b border-slate-100">
@@ -1017,11 +1032,6 @@ export default function GestionPersonal() {
                           )}
                         </span>
                       </div>
-                      {emp.email && (
-                        <div className="text-[10px] text-slate-400">
-                          {emp.email}
-                        </div>
-                      )}
                     </td>
 
                     <td className="px-6 py-4">
@@ -1103,7 +1113,6 @@ export default function GestionPersonal() {
 
                     <td className="px-6 py-4 text-right">
                       <div className="flex items-center justify-end gap-2 text-slate-400">
-                        {/* Botón rápido Completar Datos */}
                         {incompleto && puedePersonalEditar && (
                           <button
                             onClick={() => abrirModalEditar(emp)}
@@ -1125,7 +1134,6 @@ export default function GestionPersonal() {
                           </button>
                         )}
 
-                        {/* Si no es docente, permite asignar horario/turno regular */}
                         {!esDocente && puedeHorariosGestionar && (
                           <button
                             onClick={() =>
@@ -1148,7 +1156,6 @@ export default function GestionPersonal() {
                           </button>
                         )}
 
-                        {/* Si es docente, redirige a Gestión de Materias pasando docenteId para desglosar sus materias */}
                         {esDocente && puedeHorariosGestionar && (
                           <button
                             onClick={() =>
@@ -1223,7 +1230,6 @@ export default function GestionPersonal() {
           </tbody>
         </table>
 
-        {/* 5. PAGINACIÓN */}
         <div className="bg-white px-6 py-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
           <div className="text-slate-500">
             Mostrando{" "}
@@ -1280,7 +1286,6 @@ export default function GestionPersonal() {
         </div>
       </div>
 
-      {/* RENDERIZADO DE MODALES */}
       <ModalRegistroEmpleado
         isOpen={modalRegistro}
         onClose={() => setModalRegistro(false)}

@@ -50,6 +50,10 @@ export const deleteHistorialImportacion = async (id) => {
   return (await apiClient.delete(`/importacion/historial/${id}`)).data;
 };
 
+export const reactivarHistorialImportacion = async (id) => {
+  return (await apiClient.patch(`/importacion/historial/${id}/reactivar`)).data;
+};
+
 export const previsualizarVinculaciones = async (archivo) => {
   const formData = new FormData();
   formData.append("archivo", archivo);
