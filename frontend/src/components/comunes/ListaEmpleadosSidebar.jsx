@@ -1,12 +1,11 @@
-import React, { useState, useEffect, useMemo, useCallback } from "react";
-import {
-  Users,
-  Search,
-  Loader2,
-  X,
-  ChevronLeft,
-  ChevronRight,
-} from "lucide-react";
+import React, {
+  useState,
+  useEffect,
+  useMemo,
+  useCallback,
+  useRef,
+} from "react";
+import { Users, Search, Loader2, X, ChevronLeft } from "lucide-react";
 import { getEmpleadosActivos } from "../../services/empleadoService";
 import { getCategorias } from "../../services/configuracionService";
 
@@ -23,7 +22,16 @@ export default function ListaEmpleadosSidebar({
   const [busqueda, setBusqueda] = useState("");
   const [loading, setLoading] = useState(true);
 
-  // 1. Cargar nómina y categorías
+  // Referencias para evitar re-ejecuciones por cambio de props
+  const callbackSeleccionarRef = useRef(onSeleccionarEmpleado);
+  callbackSeleccionarRef.current = onSeleccionarEmpleado;
+
+  const idSeleccionadoRef = useRef(empleadoSeleccionadoId);
+  idSeleccionadoRef.current = empleadoSeleccionadoId;
+
+  const yaInicializadoRef = useRef(false);
+
+  // 1. Cargar nómina y categorías (Solo consulta API una sola vez o ante cambios reales)
   const cargarDatos = useCallback(async () => {
     setLoading(true);
     try {
@@ -40,25 +48,50 @@ export default function ListaEmpleadosSidebar({
       setEmpleados(listaEmp);
       setCategorias(listaCat);
 
-      if (
-        listaEmp.length > 0 &&
-        (!empleadoSeleccionadoId ||
-          !listaEmp.some((e) => e.id === empleadoSeleccionadoId))
-      ) {
-        onSeleccionarEmpleado?.(listaEmp[0]);
+      // Selección inicial única: solo si no hay empleado seleccionado previamente
+      if (!yaInicializadoRef.current && listaEmp.length > 0) {
+        if (
+          !idSeleccionadoRef.current ||
+          !listaEmp.some((e) => e.id === idSeleccionadoRef.current)
+        ) {
+          callbackSeleccionarRef.current?.(listaEmp[0]);
+        }
+        yaInicializadoRef.current = true;
       }
     } catch (err) {
       console.error("Error al cargar datos en ListaEmpleadosSidebar:", err);
     } finally {
       setLoading(false);
     }
-  }, [empleadoSeleccionadoId, onSeleccionarEmpleado]);
+  }, []); // Sin dependencias que cambien con cada click
 
+  // Carga inicial
   useEffect(() => {
     cargarDatos();
   }, [cargarDatos]);
 
-  // 2. Filtro dinámico
+  // Sincronización en tiempo real protegida con Debounce (solo si hay cambios en BD o reconexión)
+  useEffect(() => {
+    let timerSync = null;
+
+    const handleSincronizacion = () => {
+      if (timerSync) clearTimeout(timerSync);
+      timerSync = setTimeout(() => {
+        cargarDatos();
+      }, 300);
+    };
+
+    window.addEventListener("datos:actualizados", handleSincronizacion);
+    window.addEventListener("conexion:restaurada", handleSincronizacion);
+
+    return () => {
+      if (timerSync) clearTimeout(timerSync);
+      window.removeEventListener("datos:actualizados", handleSincronizacion);
+      window.removeEventListener("conexion:restaurada", handleSincronizacion);
+    };
+  }, [cargarDatos]);
+
+  // 2. Filtro dinámico en memoria (0 consultas HTTP)
   const empleadosFiltrados = useMemo(() => {
     return empleados.filter((emp) => {
       const coincideCategoria =
@@ -85,7 +118,6 @@ export default function ListaEmpleadosSidebar({
 
   const handleSelect = (emp) => {
     onSeleccionarEmpleado?.(emp);
-    // En móviles, se cierra el drawer automáticamente al elegir un empleado
     if (window.innerWidth < 1024 && onClose) {
       onClose();
     }
@@ -103,7 +135,7 @@ export default function ListaEmpleadosSidebar({
         }`}
       />
 
-      {/* CONTENEDOR PRINCIPAL: Drawer en móvil, colapsable en Desktop */}
+      {/* CONTENEDOR PRINCIPAL */}
       <aside
         className={`
           fixed lg:static top-0 left-0 z-50 h-full lg:h-auto w-80 sm:w-88 lg:w-full
@@ -128,7 +160,6 @@ export default function ListaEmpleadosSidebar({
               </span>
             </div>
 
-            {/* Botón cerrar para móvil y botón colapsar para escritorio */}
             <button
               type="button"
               onClick={onClose}

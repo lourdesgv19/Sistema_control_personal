@@ -109,32 +109,36 @@ export default function GestionUsuarios() {
     }
   }, []);
 
+  // Consulta paginada protegida contra valores no numéricos
   const cargarUsuariosServidor = useCallback(
     async (page = 0) => {
       setLoading(true);
       try {
+        const paginaSegura = Math.max(0, parseInt(page, 10) || 0);
+
         const res = await getUsuariosPaginados(
-          searchTerm,
-          filtroRol,
-          filtroEstado,
-          page,
+          searchTerm.trim(),
+          filtroRol || "TODOS",
+          filtroEstado || "TODOS",
+          paginaSegura,
           ITEMS_POR_PAGINA,
         );
+
         if (res && res.content) {
           setUsuarios(res.content);
-          setTotalPaginas(res.totalPages || 1);
-          setTotalElementos(res.totalElements || 0);
-          setPaginaActual(res.number + 1);
+          setTotalPaginas(res.totalPages || res.page?.totalPages || 1);
+          setTotalElementos(res.totalElements || res.page?.totalElements || 0);
+          setPaginaActual((res.number ?? res.page?.number ?? paginaSegura) + 1);
         } else {
           setUsuarios(Array.isArray(res) ? res : []);
+          setTotalPaginas(1);
+          setTotalElementos(0);
         }
       } catch (err) {
         console.error("Error al cargar usuarios paginados:", err);
-        mostrarAviso(
-          "danger",
-          "Error",
-          "No se pudo obtener la lista de usuarios.",
-        );
+        setUsuarios([]);
+        setTotalPaginas(1);
+        setTotalElementos(0);
       } finally {
         setLoading(false);
       }
@@ -252,6 +256,16 @@ export default function GestionUsuarios() {
     });
   };
 
+  // Cálculo seguro para evitar renderizar NaN
+  const elementosTotalesNum = Number(totalElementos) || 0;
+  const paginasTotalesNum = Number(totalPaginas) || 1;
+  const desdeItem =
+    elementosTotalesNum === 0 ? 0 : (paginaActual - 1) * ITEMS_POR_PAGINA + 1;
+  const hastaItem = Math.min(
+    paginaActual * ITEMS_POR_PAGINA,
+    elementosTotalesNum,
+  );
+
   return (
     <div className="p-6 lg:p-8 max-w-7xl mx-auto space-y-6 font-sans">
       {/* 1. CABECERA */}
@@ -313,7 +327,7 @@ export default function GestionUsuarios() {
           </div>
           <div className="mt-3">
             <div className="text-2xl font-bold text-slate-900">
-              {resumenGlobal.total}
+              {Number(resumenGlobal.total) || 0}
             </div>
             <div className="text-[10px] text-slate-500 font-medium mt-0.5">
               Usuarios registrados
@@ -342,7 +356,7 @@ export default function GestionUsuarios() {
           </div>
           <div className="mt-3">
             <div className="text-2xl font-bold text-slate-900">
-              {resumenGlobal.administradores}
+              {Number(resumenGlobal.administradores) || 0}
             </div>
             <div className="text-[10px] text-purple-600 font-medium mt-0.5">
               Activos con control total
@@ -371,7 +385,7 @@ export default function GestionUsuarios() {
           </div>
           <div className="mt-3">
             <div className="text-2xl font-bold text-slate-900">
-              {resumenGlobal.auditores}
+              {Number(resumenGlobal.auditores) || 0}
             </div>
             <div className="text-[10px] text-indigo-600 font-medium mt-0.5">
               Activos para fichajes
@@ -400,7 +414,7 @@ export default function GestionUsuarios() {
           </div>
           <div className="mt-3">
             <div className="text-2xl font-bold text-slate-900">
-              {resumenGlobal.inactivos}
+              {Number(resumenGlobal.inactivos) || 0}
             </div>
             <div className="text-[10px] text-rose-600 font-medium mt-0.5">
               Sin acceso al panel
@@ -552,7 +566,6 @@ export default function GestionUsuarios() {
 
                     <td className="px-6 py-4 text-right">
                       <div className="flex items-center justify-end gap-2 text-slate-400">
-                        {/* 1. Reset Clave protegido: DESHABILITADO PARA ADMIN */}
                         {!esAdminRaiz ? (
                           puedeResetPassword ? (
                             <button
@@ -582,7 +595,6 @@ export default function GestionUsuarios() {
                           </span>
                         )}
 
-                        {/* 2. Permisos */}
                         {puedeGestionarAccesos ? (
                           <button
                             onClick={() => abrirModalPermisos(u)}
@@ -605,7 +617,6 @@ export default function GestionUsuarios() {
                           </span>
                         )}
 
-                        {/* 3. Suspender / Reactivar */}
                         {!esAdminRaiz && !esUsuarioActual ? (
                           puedeSuspender ? (
                             u.activo !== false ? (
@@ -654,17 +665,11 @@ export default function GestionUsuarios() {
         <div className="bg-white px-6 py-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
           <div className="text-slate-500">
             Mostrando{" "}
+            <span className="font-bold text-slate-800">{desdeItem}</span> a{" "}
+            <span className="font-bold text-slate-800">{hastaItem}</span> de{" "}
             <span className="font-bold text-slate-800">
-              {totalElementos === 0
-                ? 0
-                : (paginaActual - 1) * ITEMS_POR_PAGINA + 1}
+              {elementosTotalesNum}
             </span>{" "}
-            a{" "}
-            <span className="font-bold text-slate-800">
-              {Math.min(paginaActual * ITEMS_POR_PAGINA, totalElementos)}
-            </span>{" "}
-            de{" "}
-            <span className="font-bold text-slate-800">{totalElementos}</span>{" "}
             usuarios
           </div>
 
@@ -678,7 +683,7 @@ export default function GestionUsuarios() {
               <ChevronLeft className="w-4 h-4" />
             </button>
 
-            {Array.from({ length: totalPaginas }, (_, i) => i + 1).map(
+            {Array.from({ length: paginasTotalesNum }, (_, i) => i + 1).map(
               (num) => (
                 <button
                   key={num}
@@ -697,9 +702,9 @@ export default function GestionUsuarios() {
 
             <button
               onClick={() =>
-                setPaginaActual((prev) => Math.min(prev + 1, totalPaginas))
+                setPaginaActual((prev) => Math.min(prev + 1, paginasTotalesNum))
               }
-              disabled={paginaActual === totalPaginas || loading}
+              disabled={paginaActual === paginasTotalesNum || loading}
               className="p-2 border border-slate-200 rounded-xl hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer"
               title="Página Siguiente"
             >

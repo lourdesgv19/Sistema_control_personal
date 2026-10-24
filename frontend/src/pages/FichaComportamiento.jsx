@@ -104,6 +104,30 @@ export default function FichaComportamiento() {
     return calcularOffsetPrimerDia(fichaData.diasPeriodo[0].fecha);
   }, [fichaData]);
 
+  // Agrupación automática de días por mes para el modo RANGO_FECHAS
+  const mesesDelRango = useMemo(() => {
+    if (!fichaData?.diasPeriodo || fichaData.diasPeriodo.length === 0)
+      return [];
+
+    const mapa = {};
+    fichaData.diasPeriodo.forEach((d) => {
+      const mesKey = d.fecha.substring(0, 7); // AAAA-MM
+      if (!mapa[mesKey]) {
+        mapa[mesKey] = {
+          mesKey,
+          nombreMes: obtenerNombreMes(d.fecha),
+          dias: [],
+        };
+      }
+      mapa[mesKey].dias.push(d);
+    });
+
+    return Object.values(mapa).map((m) => ({
+      ...m,
+      diasOffset: calcularOffsetPrimerDia(m.dias[0].fecha),
+    }));
+  }, [fichaData]);
+
   const toggleMes = (mesKey) => {
     setMesesExpandidos((prev) => ({ ...prev, [mesKey]: !prev[mesKey] }));
   };
@@ -167,10 +191,17 @@ export default function FichaComportamiento() {
     cargarFicha();
   }, [cargarFicha]);
 
+  // Sincronización en tiempo real protegida con debounce (Evita ráfagas y sobrecarga del servidor)
   useEffect(() => {
+    let timerSync = null;
+
     const handleActualizacionTiempoReal = () => {
-      cargarFicha();
+      if (timerSync) clearTimeout(timerSync);
+      timerSync = setTimeout(() => {
+        cargarFicha();
+      }, 250);
     };
+
     window.addEventListener(
       "datos:actualizados",
       handleActualizacionTiempoReal,
@@ -179,7 +210,9 @@ export default function FichaComportamiento() {
       "conexion:restaurada",
       handleActualizacionTiempoReal,
     );
+
     return () => {
+      if (timerSync) clearTimeout(timerSync);
       window.removeEventListener(
         "datos:actualizados",
         handleActualizacionTiempoReal,
@@ -336,7 +369,7 @@ export default function FichaComportamiento() {
       };
     }
 
-    // 2. DÍA PASADO O DÍA DE HOY
+    // 2. DÍA PASADO O DÍA DE HOY: Tenía horario y NO registró presencia
     if (tieneHorariosPlanificados && !tienePresencia) {
       return {
         esSinHorario: false,
@@ -347,6 +380,7 @@ export default function FichaComportamiento() {
       };
     }
 
+    // 3. DÍA PASADO O HOY: No tenía horario ni presencia ni desvíos (Franco)
     if (!tieneHorariosPlanificados && !tienePresencia && !tieneIncidentes) {
       return {
         esSinHorario: true,
@@ -484,9 +518,28 @@ export default function FichaComportamiento() {
   const renderCardInspeccionDiaria = () => {
     if (!diaInspeccionado) return null;
     const fechaDiaStr = String(diaInspeccionado.fecha || "").split("T")[0];
-    const incidentesDelDia = (fichaData?.incidentes || []).filter((inc) =>
-      !inc.fecha ? true : String(inc.fecha).split("T")[0] === fechaDiaStr,
-    );
+
+    // FILTRADO DEFENSIVO: Si hubo presencia real en el día, descartamos el incidente de inasistencia erróneo
+    const huboPresencia =
+      diaInspeccionado.presenciaNetaMinutos > 0 ||
+      (diaInspeccionado.primeraEntrada &&
+        diaInspeccionado.primeraEntrada !== "--:--");
+
+    const incidentesDelDia = (fichaData?.incidentes || []).filter((inc) => {
+      const matchFecha = !inc.fecha
+        ? true
+        : String(inc.fecha).split("T")[0] === fechaDiaStr;
+      if (!matchFecha) return false;
+      if (
+        huboPresencia &&
+        String(inc.tipo || "")
+          .toLowerCase()
+          .includes("inasistencia")
+      ) {
+        return false;
+      }
+      return true;
+    });
 
     return (
       <div className="bg-white border-2 border-indigo-500/80 rounded-3xl p-5 shadow-sm space-y-4 transition-all animate-fadeIn">
@@ -601,36 +654,165 @@ export default function FichaComportamiento() {
             </div>
           )}
         </div>
+      </div>
+    );
+  };
 
-        <div className="space-y-1.5">
-          <div className="flex items-center gap-1.5 text-xs font-bold text-slate-800 uppercase tracking-wider">
-            <Clock className="w-3.5 h-3.5 text-indigo-600" />
-            <span>
-              INTERVALOS RECONSTRUIDOS DEL DÍA (
-              {diaInspeccionado.presenciaNetaMinutos > 0 ? "1" : "0"})
-            </span>
+  // Cuadrícula interactiva de 7 columnas estilo calendario
+  const renderCuadriculaCalendario = (dias, offset) => {
+    return (
+      <div className="grid grid-cols-7 gap-2">
+        {["LUN", "MAR", "MIÉ", "JUE", "VIE", "SÁB", "DOM"].map((d) => (
+          <div
+            key={d}
+            className="text-center font-bold text-[10px] text-slate-400 py-1 uppercase"
+          >
+            {d}
           </div>
-          {diaInspeccionado.presenciaNetaMinutos > 0 ? (
-            <div className="p-3 bg-emerald-50/60 border border-emerald-200 rounded-2xl flex items-center justify-between text-xs max-w-sm">
-              <div>
-                <div className="font-bold text-emerald-900 flex items-center gap-1">
-                  <span>✓ PRESENCIA</span>
-                </div>
-                <div className="font-mono text-slate-600 text-[11px] mt-0.5">
-                  {diaInspeccionado.primeraEntrada} hs →{" "}
-                  {diaInspeccionado.ultimoEgreso} hs
-                </div>
+        ))}
+
+        {Array.from({ length: offset }).map((_, idx) => (
+          <div
+            key={`vacio-${idx}`}
+            className="border border-transparent rounded-2xl min-h-[90px] hidden sm:block pointer-events-none opacity-0"
+          />
+        ))}
+
+        {(dias || []).map((dia) => {
+          const numDia = dia.fecha.split("-")[2];
+          const esHoy = dia.fecha === hoyIso;
+          const estaSeleccionado = diaInspeccionado?.fecha === dia.fecha;
+
+          const esFuturo = dia.estadoGeneral === "FUTURO" || dia.fecha > hoyIso;
+          const esSinRegistro =
+            !esFuturo && dia.estadoGeneral === "SIN_REGISTRO";
+
+          const huboPresencia =
+            dia.presenciaNetaMinutos > 0 ||
+            (dia.primeraEntrada && dia.primeraEntrada !== "--:--");
+
+          // Limpieza de incidentes falsos de inasistencia si hubo fichajes reales
+          const incidentesValidos = (fichaData?.incidentes || []).filter(
+            (inc) => {
+              const matchFecha = String(inc.fecha).split("T")[0] === dia.fecha;
+              if (!matchFecha) return false;
+              if (
+                huboPresencia &&
+                String(inc.tipo || "")
+                  .toLowerCase()
+                  .includes("inasistencia")
+              ) {
+                return false;
+              }
+              return true;
+            },
+          );
+
+          const tieneCritica = incidentesValidos.some(
+            (inc) =>
+              inc.severidad === "CRÍTICA" ||
+              inc.severidad === "CRITICA" ||
+              inc.tipo?.toLowerCase().includes("clase"),
+          );
+
+          const esCritica =
+            !esFuturo &&
+            (dia.estadoGeneral === "INFRACCION" ||
+              esSinRegistro ||
+              tieneCritica);
+          const esDesvio =
+            !esCritica &&
+            !esFuturo &&
+            (incidentesValidos.length > 0 || dia.estadoGeneral === "DESVIO");
+          const esSalidaIntermedia =
+            !esCritica && !esDesvio && dia.salidasIntermedias > 0;
+          const esNormal =
+            !esCritica && !esDesvio && dia.presenciaNetaMinutos > 0;
+
+          let cardBgClasses =
+            "bg-white border-slate-200 hover:border-slate-300";
+          if (estaSeleccionado)
+            cardBgClasses =
+              "bg-indigo-50/50 border-indigo-500 ring-2 ring-indigo-300 shadow-sm";
+          else if (esFuturo)
+            cardBgClasses = "bg-slate-50/40 border-slate-200/60 opacity-60";
+          else if (esCritica)
+            cardBgClasses =
+              "bg-rose-50/70 border-rose-300 hover:border-rose-400 hover:shadow-sm";
+          else if (esDesvio)
+            cardBgClasses =
+              "bg-amber-50/50 border-amber-300 hover:border-amber-400 hover:shadow-sm";
+          else if (esSalidaIntermedia)
+            cardBgClasses =
+              "bg-sky-50/50 border-sky-300 hover:border-sky-400 hover:shadow-sm";
+          else if (esNormal)
+            cardBgClasses =
+              "bg-emerald-50/40 border-emerald-300 hover:border-emerald-400 hover:shadow-sm";
+          else if (esSinRegistro)
+            cardBgClasses = "bg-slate-50/70 border-slate-200";
+
+          return (
+            <div
+              key={dia.fecha}
+              onClick={() => {
+                if (diaInspeccionado?.fecha === dia.fecha)
+                  setDiaInspeccionado(null);
+                else setDiaInspeccionado(dia);
+              }}
+              className={`border rounded-2xl p-2.5 min-h-[90px] flex flex-col justify-between hover:shadow-xs transition cursor-pointer ${cardBgClasses}`}
+            >
+              <div className="flex items-center justify-between text-xs font-bold text-slate-800">
+                <span
+                  className={`text-sm font-black ${esCritica ? "text-rose-900" : ""}`}
+                >
+                  {numDia}
+                </span>
+                {esHoy && (
+                  <span className="px-1.5 py-0.2 bg-indigo-600 text-white text-[9px] font-bold rounded-md uppercase tracking-wider">
+                    HOY
+                  </span>
+                )}
+                {!esHoy && incidentesValidos.length > 0 ? (
+                  <span className="w-2 h-2 rounded-full bg-rose-500" />
+                ) : !esHoy && dia.presenciaNetaMinutos > 0 ? (
+                  <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                ) : null}
               </div>
-              <span className="font-bold text-emerald-950">
-                {diaInspeccionado.presenciaNetaTexto}
-              </span>
+
+              {esDocente &&
+                dia.clasesDictadasTexto &&
+                dia.clasesDictadasTexto !== "0h 0m / 0h 0m" && (
+                  <div
+                    className={`mt-1 text-[9px] font-bold px-1.5 py-0.5 rounded-md w-fit ${
+                      esCritica
+                        ? "bg-rose-100 text-rose-800 border border-rose-200"
+                        : "bg-purple-100 text-purple-800 border border-purple-200"
+                    } flex items-center gap-1`}
+                  >
+                    <GraduationCap className="w-2.5 h-2.5" />
+                    <span>
+                      Clase: {String(dia.clasesDictadasTexto).split(" (")[0]}
+                    </span>
+                  </div>
+                )}
+
+              {dia.presenciaNetaMinutos > 0 ? (
+                <div className="space-y-1 mt-1">
+                  <div className="text-[10px] text-slate-500 font-mono">
+                    {dia.primeraEntrada} → {dia.ultimoEgreso}
+                  </div>
+                  <span className="inline-block px-2 py-0.5 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-md text-[10px] font-bold">
+                    {dia.presenciaNetaTexto}
+                  </span>
+                </div>
+              ) : (
+                <span className="text-[10px] text-slate-400 italic mt-1">
+                  {esSinRegistro ? "Ausencia" : "Sin horario"}
+                </span>
+              )}
             </div>
-          ) : (
-            <div className="p-3 bg-slate-50 border border-slate-200 rounded-2xl text-xs text-slate-500 italic">
-              Sin actividad ni intervalos de presencia registrados en este día.
-            </div>
-          )}
-        </div>
+          );
+        })}
       </div>
     );
   };
@@ -639,6 +821,7 @@ export default function FichaComportamiento() {
     <div className="p-4 sm:p-6 lg:p-8 max-w-[1600px] mx-auto space-y-5 font-sans relative">
       <style>{`@media print { body { background: white !important; } .no-print { display: none !important; } .print-full { width: 100% !important; margin: 0 !important; } }`}</style>
 
+      {/* 1. BARRA SUPERIOR DE ACCIÓN / SIDEBAR */}
       <div className="flex items-center justify-between no-print">
         <button
           type="button"
@@ -649,7 +832,6 @@ export default function FichaComportamiento() {
             <>
               <PanelLeftClose className="w-4 h-4 text-indigo-600" />
               <span className="hidden sm:inline">Ocultar listado</span>
-              <span className="sm:hidden">Ocultar</span>
             </>
           ) : (
             <>
@@ -669,6 +851,7 @@ export default function FichaComportamiento() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+        {/* SIDEBAR LISTA DE EMPLEADOS */}
         <div
           className={`no-print transition-all duration-300 ${sidebarAbierto ? "lg:col-span-3 block" : "lg:hidden"}`}
         >
@@ -680,6 +863,7 @@ export default function FichaComportamiento() {
           />
         </div>
 
+        {/* ÁREA DE CONTENIDO */}
         <div
           className={`print-full space-y-5 transition-all duration-300 ${sidebarAbierto ? "lg:col-span-9" : "lg:col-span-12"}`}
         >
@@ -726,6 +910,7 @@ export default function FichaComportamiento() {
           </div>
 
           {/* BARRA DE FECHA Y NAVEGACIÓN */}
+
           <div className="bg-white border border-slate-200 rounded-2xl p-3 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="font-semibold text-slate-600 text-xs">
@@ -758,6 +943,7 @@ export default function FichaComportamiento() {
                 <div
                   onClick={(e) => {
                     const input = e.currentTarget.querySelector("input");
+
                     if (input && typeof input.showPicker === "function")
                       input.showPicker();
                   }}
@@ -766,7 +952,9 @@ export default function FichaComportamiento() {
                   <span className="font-mono font-semibold text-slate-800 text-xs select-none pointer-events-none">
                     {formatearFechaVisual(fechaConsulta)}
                   </span>
+
                   <CalendarIcon className="w-4 h-4 text-slate-400 ml-2 pointer-events-none" />
+
                   <input
                     type="date"
                     value={fechaConsulta}
@@ -782,6 +970,7 @@ export default function FichaComportamiento() {
                 <div
                   onClick={(e) => {
                     const input = e.currentTarget.querySelector("input");
+
                     if (input && typeof input.showPicker === "function")
                       input.showPicker();
                   }}
@@ -791,7 +980,9 @@ export default function FichaComportamiento() {
                     {formatearFechaVisual(inicioSemanaStr)} →{" "}
                     {formatearFechaVisual(finSemanaStr)}
                   </span>
+
                   <CalendarIcon className="w-4 h-4 text-slate-400 ml-2 pointer-events-none" />
+
                   <input
                     type="date"
                     value={fechaConsulta}
@@ -807,6 +998,7 @@ export default function FichaComportamiento() {
                 <div
                   onClick={(e) => {
                     const input = e.currentTarget.querySelector("input");
+
                     if (input && typeof input.showPicker === "function")
                       input.showPicker();
                   }}
@@ -817,7 +1009,9 @@ export default function FichaComportamiento() {
                     {formatearFechaVisual(inicioMesStr)} Al{" "}
                     {formatearFechaVisual(finMesStr)})
                   </span>
+
                   <CalendarIcon className="w-4 h-4 text-slate-400 ml-2 pointer-events-none" />
+
                   <input
                     type="month"
                     value={fechaConsulta.substring(0, 7)}
@@ -835,6 +1029,7 @@ export default function FichaComportamiento() {
                   <span className="text-[10px] text-slate-400 font-bold uppercase">
                     Desde Mes a Elección
                   </span>
+
                   <select
                     value={fechaConsulta.substring(0, 7)}
                     onChange={(e) => {
@@ -847,34 +1042,45 @@ export default function FichaComportamiento() {
                       Enero (contar {modalidad === "TRIMESTRE" ? "3" : "4"}{" "}
                       meses)
                     </option>
+
                     <option value={`${hoyIso.substring(0, 4)}-02`}>
                       Febrero
                     </option>
+
                     <option value={`${hoyIso.substring(0, 4)}-03`}>
                       Marzo
                     </option>
+
                     <option value={`${hoyIso.substring(0, 4)}-04`}>
                       Abril
                     </option>
+
                     <option value={`${hoyIso.substring(0, 4)}-05`}>Mayo</option>
+
                     <option value={`${hoyIso.substring(0, 4)}-06`}>
                       Junio
                     </option>
+
                     <option value={`${hoyIso.substring(0, 4)}-07`}>
                       Julio
                     </option>
+
                     <option value={`${hoyIso.substring(0, 4)}-08`}>
                       Agosto
                     </option>
+
                     <option value={`${hoyIso.substring(0, 4)}-09`}>
                       Septiembre
                     </option>
+
                     <option value={`${hoyIso.substring(0, 4)}-10`}>
                       Octubre
                     </option>
+
                     <option value={`${hoyIso.substring(0, 4)}-11`}>
                       Noviembre
                     </option>
+
                     <option value={`${hoyIso.substring(0, 4)}-12`}>
                       Diciembre
                     </option>
@@ -887,6 +1093,7 @@ export default function FichaComportamiento() {
                   <div
                     onClick={(e) => {
                       const input = e.currentTarget.querySelector("input");
+
                       if (input && typeof input.showPicker === "function")
                         input.showPicker();
                     }}
@@ -895,27 +1102,35 @@ export default function FichaComportamiento() {
                     <span className="text-[10px] text-slate-400 uppercase mr-1.5 select-none font-bold pointer-events-none">
                       Desde:
                     </span>
+
                     <span className="font-mono font-semibold text-slate-800 text-xs select-none pointer-events-none">
                       {formatearFechaVisual(fechaConsulta)}
                     </span>
+
                     <CalendarIcon className="w-3.5 h-3.5 text-slate-400 ml-2 pointer-events-none" />
+
                     <input
                       type="date"
                       value={fechaConsulta}
                       onChange={(e) => {
                         const val = e.target.value;
+
                         if (val) {
                           setFechaConsulta(val);
+
                           if (val > fechaHastaRango) setFechaHastaRango(val);
                         }
                       }}
                       className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
                     />
                   </div>
+
                   <ArrowRight className="w-3.5 h-3.5 text-slate-400" />
+
                   <div
                     onClick={(e) => {
                       const input = e.currentTarget.querySelector("input");
+
                       if (input && typeof input.showPicker === "function")
                         input.showPicker();
                     }}
@@ -924,16 +1139,20 @@ export default function FichaComportamiento() {
                     <span className="text-[10px] text-slate-400 uppercase mr-1.5 select-none font-bold pointer-events-none">
                       Hasta:
                     </span>
+
                     <span className="font-mono font-semibold text-slate-800 text-xs select-none pointer-events-none">
                       {formatearFechaVisual(fechaHastaRango)}
                     </span>
+
                     <CalendarIcon className="w-3.5 h-3.5 text-slate-400 ml-2 pointer-events-none" />
+
                     <input
                       type="date"
                       value={fechaHastaRango}
                       min={fechaConsulta}
                       onChange={(e) => {
                         const val = e.target.value;
+
                         if (val) setFechaHastaRango(val);
                       }}
                       className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
@@ -953,6 +1172,7 @@ export default function FichaComportamiento() {
                     <ChevronRight className="w-4 h-4" />
                   </button>
                 )}
+
               {modalidad === "DIARIO" && (
                 <span className="text-slate-400 font-normal">
                   ({obtenerNombreDia(fechaConsulta)})
@@ -969,6 +1189,7 @@ export default function FichaComportamiento() {
                 <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-700" />
                 Exportar CSV
               </button>
+
               <div className="relative">
                 <button
                   type="button"
@@ -976,15 +1197,19 @@ export default function FichaComportamiento() {
                   className="flex items-center gap-1.5 px-3 py-1.5 border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 rounded-xl font-bold transition shadow-2xs cursor-pointer text-xs"
                 >
                   <Printer className="w-3.5 h-3.5 text-slate-600" />
+
                   <span>Imprimir / PDF</span>
+
                   <ChevronDown className="w-3 h-3 text-slate-400 ml-0.5" />
                 </button>
+
                 {menuImpresionAbierto && (
                   <>
                     <div
                       className="fixed inset-0 z-40"
                       onClick={() => setMenuImpresionAbierto(false)}
                     />
+
                     <div className="absolute right-0 mt-1.5 w-56 bg-white border border-slate-200 rounded-2xl shadow-lg z-50 py-1.5 overflow-hidden animate-fadeIn">
                       <button
                         type="button"
@@ -994,16 +1219,20 @@ export default function FichaComportamiento() {
                         <div className="p-1 rounded-lg bg-slate-100 text-slate-700">
                           <Printer className="w-3.5 h-3.5" />
                         </div>
+
                         <div>
                           <div className="font-bold text-slate-900">
                             Imprimir (B&W)
                           </div>
+
                           <div className="text-[10px] text-slate-400">
                             Apto blanco y negro / fotocopia
                           </div>
                         </div>
                       </button>
+
                       <div className="border-t border-slate-100 my-1" />
+
                       <button
                         type="button"
                         onClick={() => emitirReportePdf(true)}
@@ -1012,10 +1241,12 @@ export default function FichaComportamiento() {
                         <div className="p-1 rounded-lg bg-indigo-100 text-indigo-700">
                           <Palette className="w-3.5 h-3.5" />
                         </div>
+
                         <div>
                           <div className="font-bold text-indigo-950">
                             Generar PDF Color
                           </div>
+
                           <div className="text-[10px] text-indigo-500">
                             Diseño institucional en color
                           </div>
@@ -1031,7 +1262,7 @@ export default function FichaComportamiento() {
           {/* CABECERA DE DATOS DEL EMPLEADO */}
           <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div className="flex items-center gap-4">
-              <div className="w-14 h-14 rounded-2xl bg-[#1e293b] flex items-center justify-center text-white font-bold text-base shadow-md overflow-hidden shrink-0">
+              <div className="w-14 h-14 rounded-2xl bg-[#1e293b] flex items-center justify-center text-white font-bold text-base shadow-md shrink-0">
                 <Users className="w-7 h-7 text-indigo-400" />
               </div>
               <div>
@@ -1050,38 +1281,19 @@ export default function FichaComportamiento() {
                   </span>{" "}
                   • {fichaData?.departamento}
                 </div>
-                <div className="flex items-center gap-2 mt-2">
-                  <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-md bg-amber-50 text-amber-800 border border-amber-200">
-                    {fichaData?.etiquetaTurno}
-                  </span>
-                </div>
               </div>
             </div>
             <div className="border border-slate-100 bg-slate-50/60 p-4 rounded-2xl text-right shrink-0 min-w-[170px]">
               <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                {modalidad === "DIARIO"
-                  ? "CUMPLIMIENTO JORNADA"
-                  : "CUMPLIMIENTO PERÍODO"}
+                CUMPLIMIENTO
               </div>
-              <div
-                className={`text-3xl font-black mt-1 ${
-                  estadoJornadaDiaria.esInasistencia
-                    ? "text-rose-600"
-                    : estadoJornadaDiaria.esSinHorario ||
-                        estadoJornadaDiaria.esFuturoConHorario
-                      ? "text-slate-400"
-                      : "text-slate-900"
-                }`}
-              >
-                {estadoJornadaDiaria.esSinHorario ||
-                estadoJornadaDiaria.esFuturoConHorario
-                  ? "—"
-                  : `${fichaData?.porcentajeCumplimiento || 0}%`}
+              <div className="text-3xl font-black mt-1 text-slate-900">
+                {fichaData?.porcentajeCumplimiento || 0}%
               </div>
             </div>
           </div>
 
-          {/* ESCENARIO 1: DÍA FUTURO CON HORARIO PROGRAMADO */}
+          {/* --- ESCENARIOS DIARIOS --- */}
           {modalidad === "DIARIO" && estadoJornadaDiaria.esFuturoConHorario && (
             <div className="bg-indigo-50/60 border-2 border-indigo-200 rounded-3xl p-6 sm:p-8 text-center space-y-4 shadow-sm animate-fadeIn">
               <div className="w-14 h-14 mx-auto rounded-2xl bg-indigo-100 border border-indigo-200 flex items-center justify-center text-indigo-600 shadow-2xs">
@@ -1127,41 +1339,9 @@ export default function FichaComportamiento() {
                     </div>
                   </div>
                 )}
-
-              <div className="flex flex-wrap items-center justify-center gap-2.5 pt-2">
-                <button
-                  type="button"
-                  onClick={() => moverFecha(-1)}
-                  className="px-3.5 py-2 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer shadow-2xs"
-                >
-                  <ChevronLeft className="w-4 h-4" />
-                  Día anterior
-                </button>
-                <button
-                  type="button"
-                  onClick={() => moverFecha(1)}
-                  className="px-3.5 py-2 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer shadow-2xs"
-                >
-                  Día siguiente
-                  <ChevronRight className="w-4 h-4" />
-                </button>
-                {fechaConsulta !== hoyIso && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setFechaConsulta(hoyIso);
-                      setDiaInspeccionado(null);
-                    }}
-                    className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition cursor-pointer shadow-2xs"
-                  >
-                    Volver a Hoy
-                  </button>
-                )}
-              </div>
             </div>
           )}
 
-          {/* ESCENARIO 2: PASADO / HOY CON HORARIO ASIGNADO PERO SIN ASISTENCIA */}
           {modalidad === "DIARIO" && estadoJornadaDiaria.esInasistencia && (
             <div className="bg-rose-50/80 border-2 border-rose-300 rounded-3xl p-6 sm:p-8 text-center space-y-4 shadow-sm animate-fadeIn">
               <div className="w-14 h-14 mx-auto rounded-2xl bg-rose-100 border border-rose-200 flex items-center justify-center text-rose-600 shadow-2xs">
@@ -1208,45 +1388,9 @@ export default function FichaComportamiento() {
                     </div>
                   </div>
                 )}
-
-              <div className="flex flex-wrap items-center justify-center gap-2.5 pt-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setTabInferior("INCIDENTES");
-                    if (tablaDetalleRef.current) {
-                      tablaDetalleRef.current.scrollIntoView({
-                        behavior: "smooth",
-                        block: "start",
-                      });
-                    }
-                  }}
-                  className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-2xs"
-                >
-                  <AlertTriangle className="w-3.5 h-3.5" />
-                  Ver Incidencia y Justificar Abajo
-                </button>
-                <button
-                  type="button"
-                  onClick={() => moverFecha(-1)}
-                  className="px-3.5 py-2 bg-white hover:bg-slate-50 border border-rose-200 text-slate-700 rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer shadow-2xs"
-                >
-                  <ChevronLeft className="w-4 h-4" />
-                  Día anterior
-                </button>
-                <button
-                  type="button"
-                  onClick={() => moverFecha(1)}
-                  className="px-3.5 py-2 bg-white hover:bg-slate-50 border border-rose-200 text-slate-700 rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer shadow-2xs"
-                >
-                  Día siguiente
-                  <ChevronRight className="w-4 h-4" />
-                </button>
-              </div>
             </div>
           )}
 
-          {/* ESCENARIO 3: SIN HORARIOS ASIGNADOS NI ACTIVIDAD (FRANCO) */}
           {modalidad === "DIARIO" && estadoJornadaDiaria.esSinHorario && (
             <div className="bg-white border border-slate-200 rounded-3xl p-8 sm:p-12 text-center space-y-4 shadow-xs animate-fadeIn">
               <div className="w-16 h-16 mx-auto rounded-3xl bg-slate-50 border border-slate-200/80 flex items-center justify-center text-slate-400 shadow-2xs">
@@ -1265,49 +1409,13 @@ export default function FichaComportamiento() {
                   <strong>{formatearFechaVisual(fechaConsulta)}</strong> (
                   {obtenerNombreDia(fechaConsulta)}).
                 </p>
-                <p className="text-[11px] text-slate-400">
-                  Por favor, seleccione otro día utilizando el selector de
-                  fechas o los botones de navegación.
-                </p>
-              </div>
-
-              <div className="flex flex-wrap items-center justify-center gap-2.5 pt-3">
-                <button
-                  type="button"
-                  onClick={() => moverFecha(-1)}
-                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer"
-                >
-                  <ChevronLeft className="w-4 h-4" />
-                  Día anterior
-                </button>
-                <button
-                  type="button"
-                  onClick={() => moverFecha(1)}
-                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer"
-                >
-                  Día siguiente
-                  <ChevronRight className="w-4 h-4" />
-                </button>
-                {fechaConsulta !== hoyIso && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setFechaConsulta(hoyIso);
-                      setDiaInspeccionado(null);
-                    }}
-                    className="px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-xs font-bold transition cursor-pointer"
-                  >
-                    Volver a Hoy
-                  </button>
-                )}
               </div>
             </div>
           )}
 
-          {/* RENDERIZADO DE MÉTRICAS KPI */}
+          {/* TARJETAS KPI DE LA JORNADA / PERÍODO */}
           {(modalidad !== "DIARIO" ||
             (!estadoJornadaDiaria.esSinHorario &&
-              !estadoJornadaDiaria.esInasistencia &&
               !estadoJornadaDiaria.esFuturoConHorario)) && (
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
               <div className="bg-white border border-slate-200 p-4 rounded-2xl shadow-xs flex flex-col justify-between">
@@ -1317,13 +1425,9 @@ export default function FichaComportamiento() {
                     : "DÍAS EN SEDE"}
                 </span>
                 <div className="text-sm font-black text-slate-900 mt-2 font-mono">
-                  {modalidad === "DIARIO" ? (
-                    `${metricas.primeraEntrada} hs → ${metricas.ultimoEgreso} hs`
-                  ) : (
-                    <span className="text-base font-bold font-sans text-slate-800">
-                      {metricas.primeraEntrada}
-                    </span>
-                  )}
+                  {modalidad === "DIARIO"
+                    ? `${metricas.primeraEntrada} hs → ${metricas.ultimoEgreso} hs`
+                    : metricas.primeraEntrada}
                 </div>
               </div>
 
@@ -1335,11 +1439,6 @@ export default function FichaComportamiento() {
                   <div className="text-xl font-black text-emerald-950 mt-1">
                     {metricas.presenciaNetaTexto}
                   </div>
-                  {modalidad !== "DIARIO" && (
-                    <div className="text-[10px] font-semibold text-emerald-700 mt-0.5">
-                      {metricas.ultimoEgreso}
-                    </div>
-                  )}
                 </div>
               </div>
 
@@ -1356,16 +1455,6 @@ export default function FichaComportamiento() {
                         .split("/")[0]
                         .trim()}
                     </div>
-                    <div className="text-[10px] font-semibold text-purple-700 mt-0.5 font-mono">
-                      de{" "}
-                      {String(
-                        metricas.clasesDictadasTexto || "0h 0m / 0h 0m (0%)",
-                      ).split("/")[1]
-                        ? String(metricas.clasesDictadasTexto)
-                            .split("/")[1]
-                            .trim()
-                        : "0h 0m"}
-                    </div>
                   </div>
                 </div>
               )}
@@ -1378,9 +1467,6 @@ export default function FichaComportamiento() {
                   <div className="text-xl font-black text-rose-950 mt-1">
                     -{metricas.horasEnContraTexto || "0h 0m"}
                   </div>
-                  <div className="text-[10px] font-semibold text-rose-700 mt-0.5">
-                    {metricas.diasConDeficit || 0} día(s) con faltante
-                  </div>
                 </div>
               </div>
 
@@ -1389,13 +1475,8 @@ export default function FichaComportamiento() {
                   SALIDAS INTERMEDIAS
                 </span>
                 <div className="text-base font-black text-amber-950 mt-1">
-                  {metricas.salidasIntermediasCantidad}{" "}
-                  {metricas.salidasIntermediasCantidad === 1
-                    ? "salida"
-                    : "salidas"}
-                  <div className="text-[11px] font-bold text-amber-800">
-                    ({metricas.salidasIntermediasMinutos} min)
-                  </div>
+                  {metricas.salidasIntermediasCantidad} (
+                  {metricas.salidasIntermediasMinutos} min)
                 </div>
               </div>
 
@@ -1413,8 +1494,7 @@ export default function FichaComportamiento() {
                     setModalListaIncidentesAbierto(true);
                   }
                 }}
-                title="Haga clic para ver y justificar los incidentes registrados"
-                className="p-4 rounded-2xl shadow-xs flex flex-col justify-between transition cursor-pointer select-none border bg-white hover:bg-rose-50/40 border-rose-200 hover:border-rose-400"
+                className="p-4 rounded-2xl shadow-xs flex flex-col justify-between transition cursor-pointer select-none border bg-white hover:bg-rose-50/40 border-rose-200"
               >
                 <div className="flex items-center justify-between">
                   <span className="text-[10px] font-bold uppercase tracking-wider block text-rose-600">
@@ -1435,7 +1515,7 @@ export default function FichaComportamiento() {
             </div>
           )}
 
-          {/* VISTA 1: DIARIO */}
+          {/* --- VISTA 1: DIARIO (LÍNEA DE TIEMPO Y TABLA INFERIOR) --- */}
           {modalidad === "DIARIO" &&
             !estadoJornadaDiaria.esSinHorario &&
             !estadoJornadaDiaria.esFuturoConHorario && (
@@ -1446,24 +1526,6 @@ export default function FichaComportamiento() {
                       <div className="flex items-center gap-2 font-bold text-xs uppercase tracking-wider text-slate-800">
                         <Clock className="w-4 h-4 text-indigo-600" />
                         <span>Línea de Tiempo (06:00 a 22:00 hs)</span>
-                      </div>
-                      <div className="flex items-center gap-3 text-[11px] font-bold">
-                        <span className="flex items-center gap-1.5 text-indigo-700">
-                          <span className="w-2.5 h-2.5 rounded-sm bg-indigo-600" />{" "}
-                          Planificado
-                        </span>
-                        <span className="flex items-center gap-1.5 text-emerald-700">
-                          <span className="w-2.5 h-2.5 rounded-sm bg-emerald-500" />{" "}
-                          Presencia
-                        </span>
-                        <span className="flex items-center gap-1.5 text-amber-700">
-                          <span className="w-2.5 h-2.5 rounded-sm bg-amber-400" />{" "}
-                          Salida Interm.
-                        </span>
-                        <span className="flex items-center gap-1.5 text-rose-700">
-                          <span className="w-2.5 h-2.5 rounded-sm bg-rose-500" />{" "}
-                          Infracción
-                        </span>
                       </div>
                     </div>
 
@@ -1489,7 +1551,6 @@ export default function FichaComportamiento() {
                                 width: `${widthPct}%`,
                               }}
                               className="absolute top-1 bottom-1 bg-purple-600 text-white rounded-lg px-2 flex items-center text-[10px] font-bold shadow-xs truncate"
-                              title={`${p.etiqueta}: ${p.horaInicio} - ${p.horaFin}`}
                             >
                               {p.etiqueta} ({p.horaInicio} a {p.horaFin})
                             </div>
@@ -1525,7 +1586,7 @@ export default function FichaComportamiento() {
                   </div>
                 )}
 
-                {/* TABLA DE DETALLES INFERIOR */}
+                {/* TABLA INFERIOR COMPLETA (INTERVALOS, INCIDENTES, BRUTOS) */}
                 <div
                   ref={tablaDetalleRef}
                   className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-xs scroll-mt-6"
@@ -1622,25 +1683,23 @@ export default function FichaComportamiento() {
                     {tabInferior === "INCIDENTES" && (
                       <div className="space-y-2">
                         {(fichaData?.incidentes || [])
-                          .filter((inc) =>
-                            !inc.fecha
-                              ? true
-                              : String(inc.fecha).split("T")[0] ===
-                                fechaConsulta,
+                          .filter(
+                            (inc) =>
+                              !inc.fecha ||
+                              String(inc.fecha).split("T")[0] === fechaConsulta,
                           )
                           .map((inc) =>
                             renderItemIncidenteInteractivo(inc, false),
                           )}
-                        {(fichaData?.incidentes || []).filter((inc) =>
-                          !inc.fecha
-                            ? true
-                            : String(inc.fecha).split("T")[0] === fechaConsulta,
+                        {(fichaData?.incidentes || []).filter(
+                          (inc) =>
+                            !inc.fecha ||
+                            String(inc.fecha).split("T")[0] === fechaConsulta,
                         ).length === 0 && (
                           <div className="p-3 bg-emerald-50/60 border border-emerald-200 rounded-2xl flex items-center gap-2 text-xs text-emerald-800 font-medium">
                             <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
                             <span>
-                              Sin incidentes ni ausencias registradas en esta
-                              fecha.
+                              Sin incidentes registrados en esta fecha.
                             </span>
                           </div>
                         )}
@@ -1680,7 +1739,311 @@ export default function FichaComportamiento() {
               </>
             )}
 
-          {/* VISTA MULTIMES: TRIMESTRE O CUATRIMESTRE */}
+          {/* --- VISTA 2: SEMANAL (TABLA CON DISCRIMINACIÓN FRANCO vs FALTA REAL) --- */}
+          {modalidad === "SEMANAL" && (
+            <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-xs space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">
+                    Desglose Semanal • ({formatearFechaVisual(inicioSemanaStr)}{" "}
+                    al {formatearFechaVisual(finSemanaStr)})
+                  </h3>
+                  <p className="text-[11px] text-slate-500">
+                    Haga clic en "Ver Día" para abrir la inspección detallada de
+                    cualquier jornada.
+                  </p>
+                </div>
+                <span className="px-3 py-1 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-xl font-bold text-xs">
+                  Total: {metricas.presenciaNetaTexto} presenciales
+                </span>
+              </div>
+
+              {renderCardInspeccionDiaria()}
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-[#f8fafc] text-slate-500 uppercase text-[10px] font-bold border-b border-slate-100">
+                    <tr>
+                      <th className="px-4 py-3">Fecha</th>
+                      <th className="px-4 py-3">Día</th>
+                      <th className="px-4 py-3">1ra Entrada</th>
+                      <th className="px-4 py-3">Último Egreso</th>
+                      <th className="px-4 py-3">Presencia Neta</th>
+                      <th className="px-4 py-3">Salidas Interm.</th>
+                      <th className="px-4 py-3">Incidentes</th>
+                      <th className="px-4 py-3">Cumplimiento</th>
+                      <th className="px-4 py-3 text-right no-print">Acción</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 text-slate-700">
+                    {(fichaData?.diasPeriodo || []).map((dia) => {
+                      const estaInspeccionado =
+                        diaInspeccionado?.fecha === dia.fecha;
+
+                      // Evaluación estricta de turno/obligación horaria
+                      const tieneHorario =
+                        dia.tieneHorarioLaboral === true ||
+                        (dia.totalHorasPlanificadasMinutos &&
+                          dia.totalHorasPlanificadasMinutos > 0) ||
+                        (dia.planificados && dia.planificados.length > 0) ||
+                        dia.estadoGeneral === "SIN_REGISTRO" ||
+                        dia.estadoGeneral === "INFRACCION" ||
+                        dia.estadoGeneral === "DESVIO" ||
+                        dia.totalIncidentes > 0;
+
+                      const huboActividad =
+                        dia.presenciaNetaMinutos > 0 ||
+                        (dia.primeraEntrada && dia.primeraEntrada !== "--:--");
+
+                      // CASO 1: NO tenía horario asignado y NO asistió (Franco / Sin obligación)
+                      const esFrancoSinActividad =
+                        !tieneHorario && !huboActividad;
+
+                      if (esFrancoSinActividad) {
+                        return (
+                          <tr
+                            key={dia.fecha}
+                            className={`transition ${
+                              estaInspeccionado
+                                ? "bg-indigo-50/70 font-semibold"
+                                : "bg-slate-50/40 hover:bg-slate-50/80"
+                            }`}
+                          >
+                            <td className="px-4 py-3 font-mono font-bold text-slate-500">
+                              {formatearFechaVisual(dia.fecha)}
+                            </td>
+                            <td className="px-4 py-3 font-semibold text-slate-500">
+                              {dia.diaSemana}
+                            </td>
+                            <td
+                              colSpan={6}
+                              className="px-4 py-3 text-slate-400 italic"
+                            >
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg bg-slate-100 text-slate-600 text-[11px] font-medium border border-slate-200/60">
+                                Sin horario asignado para este día / Sin
+                                actividad registrada
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 text-right no-print">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (diaInspeccionado?.fecha === dia.fecha)
+                                    setDiaInspeccionado(null);
+                                  else setDiaInspeccionado(dia);
+                                }}
+                                className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-semibold text-slate-500 hover:bg-slate-200 transition"
+                              >
+                                <Eye className="w-3.5 h-3.5" />
+                                {estaInspeccionado ? "Cerrar" : "Ver Día"}
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      }
+
+                      // CASO 2: Tenía horario y NO fue a trabajar -> FALTA / INASISTENCIA REAL
+                      const esFalta = tieneHorario && !huboActividad;
+
+                      return (
+                        <tr
+                          key={dia.fecha}
+                          className={`transition ${
+                            estaInspeccionado
+                              ? "bg-indigo-50/70 font-semibold"
+                              : esFalta
+                                ? "bg-rose-50/40 hover:bg-rose-50/70"
+                                : "hover:bg-slate-50/70"
+                          }`}
+                        >
+                          <td className="px-4 py-3 font-mono font-bold text-slate-900">
+                            {formatearFechaVisual(dia.fecha)}
+                          </td>
+                          <td className="px-4 py-3 font-semibold">
+                            {dia.diaSemana}
+                          </td>
+                          <td className="px-4 py-3 font-mono">
+                            {esFalta ? (
+                              <span className="text-rose-600 font-bold">
+                                --:--
+                              </span>
+                            ) : (
+                              dia.primeraEntrada
+                            )}
+                          </td>
+                          <td className="px-4 py-3 font-mono">
+                            {esFalta ? (
+                              <span className="text-rose-600 font-bold">
+                                --:--
+                              </span>
+                            ) : (
+                              dia.ultimoEgreso
+                            )}
+                          </td>
+                          <td className="px-4 py-3 font-bold">
+                            {esFalta ? (
+                              <span className="text-rose-600 font-bold">
+                                0h 00m
+                              </span>
+                            ) : (
+                              <span className="text-emerald-700">
+                                {dia.presenciaNetaTexto}
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3">
+                            {dia.salidasIntermedias > 0 ? (
+                              `${dia.salidasIntermedias} (${dia.minutosFuera} min)`
+                            ) : (
+                              <span className="text-slate-400">0</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3">
+                            {esFalta ? (
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-600 text-white shadow-2xs">
+                                ⚠ Ausencia / Falta
+                              </span>
+                            ) : dia.totalIncidentes > 0 ? (
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200">
+                                ⚠ {dia.totalIncidentes} desvío(s)
+                              </span>
+                            ) : (
+                              <span className="text-slate-400">-</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 font-bold">
+                            <span
+                              className={
+                                esFalta || dia.porcentajeCumplimiento < 100
+                                  ? "text-rose-600"
+                                  : "text-emerald-700"
+                              }
+                            >
+                              {esFalta
+                                ? "0%"
+                                : `${dia.porcentajeCumplimiento}%`}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-right no-print">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (diaInspeccionado?.fecha === dia.fecha)
+                                  setDiaInspeccionado(null);
+                                else setDiaInspeccionado(dia);
+                              }}
+                              className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold cursor-pointer transition ${
+                                estaInspeccionado
+                                  ? "bg-indigo-600 text-white shadow-xs"
+                                  : esFalta
+                                    ? "bg-rose-100 hover:bg-rose-200 text-rose-800 font-bold"
+                                    : "bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200"
+                              }`}
+                            >
+                              <Eye className="w-3.5 h-3.5" />
+                              {estaInspeccionado ? "Cerrar" : "Ver Día"}
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* --- VISTA 3: RANGO DE FECHAS (CALENDARIO CON MESES SEPARADOS) --- */}
+          {modalidad === "RANGO_FECHAS" && (
+            <div className="space-y-6">
+              <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs flex items-center justify-between">
+                <div>
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800">
+                    Calendario del Rango ({formatearFechaVisual(fechaConsulta)}{" "}
+                    al {formatearFechaVisual(fechaHastaRango)})
+                  </h3>
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    Meses diferenciados para una lectura clara de asistencia e
+                    incidentes.
+                  </p>
+                </div>
+                <span className="px-3 py-1 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-xl font-bold text-xs">
+                  Total: {metricas.presenciaNetaTexto} presenciales
+                </span>
+              </div>
+
+              {renderCardInspeccionDiaria()}
+
+              {mesesDelRango.map((mes) => (
+                <div
+                  key={mes.mesKey}
+                  className="bg-white border border-slate-200 rounded-3xl p-5 shadow-xs space-y-4"
+                >
+                  <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 font-bold">
+                        <CalendarIcon className="w-4 h-4" />
+                      </div>
+                      <h4 className="text-sm font-black text-slate-900 uppercase tracking-wide">
+                        {mes.nombreMes}
+                      </h4>
+                    </div>
+                    <span className="text-[11px] text-slate-400 font-medium">
+                      {mes.dias.length} días comprendidos
+                    </span>
+                  </div>
+
+                  {renderCuadriculaCalendario(mes.dias, mes.diasOffset)}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* --- VISTA 4: MENSUAL --- */}
+          {modalidad === "MENSUAL" && (
+            <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-xs space-y-4">
+              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <CalendarIcon className="w-4 h-4 text-indigo-600" />
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800">
+                      Calendario Mensual • {fichaData?.periodoTexto}
+                    </h3>
+                  </div>
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    Toque cualquier día para ver sus marcas y justificar
+                    desvíos.
+                  </p>
+                </div>
+                <div className="flex items-center gap-3 text-[11px] font-bold">
+                  <span className="flex items-center gap-1 text-emerald-700">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500" />{" "}
+                    Normal
+                  </span>
+                  <span className="flex items-center gap-1 text-rose-700">
+                    <span className="w-2 h-2 rounded-full bg-rose-500" />{" "}
+                    Infracción
+                  </span>
+                  <span className="flex items-center gap-1 text-amber-700">
+                    <span className="w-2 h-2 rounded-full bg-amber-400" />{" "}
+                    Desvío
+                  </span>
+                  <span className="flex items-center gap-1 text-slate-400">
+                    <span className="w-2 h-2 rounded-full bg-slate-300" /> Sin
+                    Registro
+                  </span>
+                </div>
+              </div>
+
+              {renderCardInspeccionDiaria()}
+              {renderCuadriculaCalendario(
+                fichaData?.diasPeriodo,
+                diasOffsetInicioMes,
+              )}
+            </div>
+          )}
+
+          {/* --- VISTA 5: MULTIMES (TRIMESTRE / CUATRIMESTRE) --- */}
           {(modalidad === "TRIMESTRE" || modalidad === "CUATRIMESTRE") && (
             <div className="space-y-4">
               <div className="flex items-center justify-between bg-white border border-slate-200 rounded-2xl p-4 shadow-xs">
@@ -1689,9 +2052,6 @@ export default function FichaComportamiento() {
                     LISTA DE MESES DEL{" "}
                     {modalidad === "TRIMESTRE" ? "TRIMESTRE" : "CUATRIMESTRE"}
                   </span>
-                  <span className="text-[10px] text-slate-400">
-                    Toque para expandir el calendario con cada día
-                  </span>
                 </div>
                 <div className="flex items-center gap-2">
                   <button
@@ -1699,7 +2059,7 @@ export default function FichaComportamiento() {
                     onClick={expandirTodos}
                     className="px-3 py-1.5 bg-indigo-50 text-indigo-700 font-bold rounded-xl text-xs hover:bg-indigo-100 transition cursor-pointer"
                   >
-                    Expandir Todos los Meses
+                    Expandir Todos
                   </button>
                   <button
                     type="button"
@@ -1724,10 +2084,6 @@ export default function FichaComportamiento() {
                           <CalendarIcon className="w-5 h-5" />
                         </div>
                         <div>
-                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-indigo-100 text-indigo-800 uppercase block w-fit mb-0.5">
-                            Mes {mes.orden} de{" "}
-                            {modalidad === "TRIMESTRE" ? "3" : "4"}
-                          </span>
                           <h4 className="text-base font-black text-slate-900">
                             {mes.nombreMes}
                           </h4>
@@ -1738,30 +2094,6 @@ export default function FichaComportamiento() {
                         <span className="px-3 py-1 bg-slate-100 text-slate-700 rounded-xl flex items-center gap-1">
                           <Clock className="w-3 h-3" /> {mes.presenciaNetaTexto}
                         </span>
-                        <span className="px-3 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-xl flex items-center gap-1">
-                          <CheckCircle2 className="w-3 h-3" /> {mes.diasEnSede}{" "}
-                          días en sede
-                        </span>
-                        <span
-                          className={`px-3 py-1 border rounded-xl flex items-center gap-1 ${
-                            mes.totalIncidentes > 0
-                              ? "bg-amber-50 text-amber-700 border-amber-200"
-                              : "bg-slate-50 text-slate-400 border-slate-200"
-                          }`}
-                        >
-                          <AlertTriangle className="w-3 h-3" />{" "}
-                          {mes.totalIncidentes} desvío(s)
-                        </span>
-                        {esDocente && (
-                          <span className="px-3 py-1 bg-purple-50 text-purple-700 border border-purple-200 rounded-xl flex items-center gap-1">
-                            <GraduationCap className="w-3 h-3" />{" "}
-                            {
-                              String(
-                                mes.clasesDictadasTexto || "0h 0m / 0h 0m",
-                              ).split(" (")[0]
-                            }
-                          </span>
-                        )}
                         <button
                           type="button"
                           onClick={() => toggleMes(mes.mesKey)}
@@ -1778,189 +2110,10 @@ export default function FichaComportamiento() {
                     {isExpanded && (
                       <div className="p-5 border-t border-slate-100">
                         {renderCardInspeccionDiaria()}
-                        <div className="grid grid-cols-7 gap-2.5 mt-4">
-                          {[
-                            "LUN",
-                            "MAR",
-                            "MIÉ",
-                            "JUE",
-                            "VIE",
-                            "SÁB",
-                            "DOM",
-                          ].map((d) => (
-                            <div
-                              key={d}
-                              className="text-center font-bold text-[11px] text-slate-500 py-1 uppercase tracking-wider"
-                            >
-                              {d}
-                            </div>
-                          ))}
-                          {Array.from({ length: mes.diasOffset }).map(
-                            (_, idx) => (
-                              <div
-                                key={`vacio-${mes.mesKey}-${idx}`}
-                                className="border border-transparent rounded-2xl min-h-[110px] hidden sm:block pointer-events-none opacity-0"
-                              />
-                            ),
-                          )}
-                          {(mes.diasPeriodo || []).map((dia) => {
-                            const numDia = parseInt(
-                              dia.fecha.split("-")[2],
-                              10,
-                            );
-                            const esHoy = dia.fecha === hoyIso;
-                            const estaSeleccionado =
-                              diaInspeccionado?.fecha === dia.fecha;
-                            const esFuturo =
-                              dia.estadoGeneral === "FUTURO" ||
-                              dia.fecha > hoyIso;
-                            const esSinRegistro =
-                              !esFuturo && dia.estadoGeneral === "SIN_REGISTRO";
-
-                            const esCritica =
-                              !esFuturo &&
-                              (dia.estadoGeneral === "INFRACCION" ||
-                                esSinRegistro ||
-                                (fichaData?.incidentes || []).some(
-                                  (inc) =>
-                                    String(inc.fecha).split("T")[0] ===
-                                      dia.fecha &&
-                                    (inc.severidad === "CRÍTICA" ||
-                                      inc.severidad === "CRITICA" ||
-                                      inc.tipo
-                                        ?.toLowerCase()
-                                        .includes("clase")),
-                                ));
-                            const esDesvio =
-                              !esCritica &&
-                              !esFuturo &&
-                              (dia.totalIncidentes > 0 ||
-                                dia.estadoGeneral === "DESVIO");
-                            const esSalidaIntermedia =
-                              !esCritica &&
-                              !esDesvio &&
-                              dia.salidasIntermedias > 0;
-                            const esNormal =
-                              !esCritica &&
-                              !esDesvio &&
-                              dia.presenciaNetaMinutos > 0;
-
-                            let cardBgClasses =
-                              "bg-white border-slate-200 hover:border-slate-300";
-                            if (estaSeleccionado)
-                              cardBgClasses =
-                                "bg-indigo-50/50 border-indigo-500 ring-2 ring-indigo-300 shadow-sm";
-                            else if (esFuturo)
-                              cardBgClasses =
-                                "bg-slate-50/40 border-slate-200/60 opacity-60";
-                            else if (esCritica)
-                              cardBgClasses =
-                                "bg-rose-50/70 border-rose-300 hover:border-rose-400 hover:shadow-sm";
-                            else if (esDesvio)
-                              cardBgClasses =
-                                "bg-amber-50/50 border-amber-300 hover:border-amber-400 hover:shadow-sm";
-                            else if (esSalidaIntermedia)
-                              cardBgClasses =
-                                "bg-sky-50/50 border-sky-300 hover:border-sky-400 hover:shadow-sm";
-                            else if (esNormal)
-                              cardBgClasses =
-                                "bg-emerald-50/40 border-emerald-300 hover:border-emerald-400 hover:shadow-sm";
-                            else if (esSinRegistro)
-                              cardBgClasses = "bg-slate-50/70 border-slate-200";
-
-                            return (
-                              <div
-                                key={dia.fecha}
-                                onClick={() => {
-                                  if (diaInspeccionado?.fecha === dia.fecha)
-                                    setDiaInspeccionado(null);
-                                  else setDiaInspeccionado(dia);
-                                }}
-                                className={`border rounded-2xl p-2.5 min-h-[110px] flex flex-col justify-between transition-all cursor-pointer select-none ${cardBgClasses}`}
-                              >
-                                <div>
-                                  <div className="flex items-center justify-between text-xs font-bold text-slate-800">
-                                    <span
-                                      className={`text-sm font-black ${esCritica ? "text-rose-900" : ""}`}
-                                    >
-                                      {numDia}
-                                    </span>
-                                    {esHoy && (
-                                      <span className="px-1.5 py-0.2 bg-indigo-600 text-white text-[9px] font-bold rounded-md uppercase tracking-wider">
-                                        HOY
-                                      </span>
-                                    )}
-                                  </div>
-
-                                  {esDocente &&
-                                    dia.clasesDictadasTexto &&
-                                    dia.clasesDictadasTexto !==
-                                      "0h 0m / 0h 0m" && (
-                                      <div
-                                        className={`mt-1.5 text-[9px] font-bold px-1.5 py-0.5 rounded-md w-fit ${
-                                          esCritica
-                                            ? "bg-rose-100 text-rose-800 border border-rose-200"
-                                            : "bg-purple-100 text-purple-800 border border-purple-200"
-                                        } flex items-center gap-1`}
-                                      >
-                                        <GraduationCap className="w-2.5 h-2.5" />
-                                        <span>
-                                          Clase:{" "}
-                                          {
-                                            String(
-                                              dia.clasesDictadasTexto,
-                                            ).split(" (")[0]
-                                          }
-                                        </span>
-                                      </div>
-                                    )}
-
-                                  {esSinRegistro && (
-                                    <div className="text-[10px] font-bold text-rose-700 mt-1">
-                                      Ausencia
-                                    </div>
-                                  )}
-                                </div>
-
-                                <div className="mt-2">
-                                  {esFuturo ? (
-                                    <span className="text-[10px] text-slate-400 font-medium">
-                                      Programado
-                                    </span>
-                                  ) : esCritica ? (
-                                    <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-rose-600 text-white text-[10px] font-bold shadow-2xs">
-                                      <span>
-                                        ⚠ Crítica (
-                                        {Math.max(1, dia.totalIncidentes)})
-                                      </span>
-                                    </div>
-                                  ) : esDesvio ? (
-                                    <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-500 text-white text-[10px] font-bold shadow-2xs">
-                                      <Clock className="w-3 h-3 stroke-[2.5]" />
-                                      <span>
-                                        Desvío ({dia.totalIncidentes})
-                                      </span>
-                                    </div>
-                                  ) : esSalidaIntermedia ? (
-                                    <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-sky-500 text-white text-[10px] font-bold shadow-2xs">
-                                      <span>
-                                        Salida ({dia.salidasIntermedias})
-                                      </span>
-                                    </div>
-                                  ) : esNormal ? (
-                                    <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-600 text-white text-[10px] font-bold shadow-2xs">
-                                      <span>✓ {dia.presenciaNetaTexto}</span>
-                                    </div>
-                                  ) : (
-                                    <span className="text-[10px] text-slate-400 italic">
-                                      Sin registros
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
+                        {renderCuadriculaCalendario(
+                          mes.diasPeriodo,
+                          mes.diasOffset,
+                        )}
                       </div>
                     )}
                   </div>
@@ -1968,303 +2121,10 @@ export default function FichaComportamiento() {
               })}
             </div>
           )}
-
-          {/* VISTA 2: SEMANAL O RANGO DE FECHAS */}
-          {(modalidad === "SEMANAL" || modalidad === "RANGO_FECHAS") && (
-            <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-xs space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-sm font-bold text-slate-900">
-                    Desglose de Asistencia •{" "}
-                    {modalidad === "SEMANAL"
-                      ? `Semanal (${formatearFechaVisual(inicioSemanaStr)} al ${formatearFechaVisual(finSemanaStr)})`
-                      : `Rango (${formatearFechaVisual(fechaConsulta)} al ${formatearFechaVisual(fechaHastaRango)})`}
-                  </h3>
-                  <p className="text-[11px] text-slate-500">
-                    Haga clic en "Ver Día" para abrir los detalles y la línea de
-                    tiempo de cualquier jornada.
-                  </p>
-                </div>
-                <span className="px-3 py-1 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-xl font-bold text-xs">
-                  Total: {metricas.presenciaNetaTexto} presenciales
-                </span>
-              </div>
-
-              {renderCardInspeccionDiaria()}
-
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs">
-                  <thead className="bg-[#f8fafc] text-slate-500 uppercase text-[10px] font-bold border-b border-slate-100">
-                    <tr>
-                      <th className="px-4 py-3">Fecha (dd/mm/aaaa)</th>
-                      <th className="px-4 py-3">Día</th>
-                      <th className="px-4 py-3">1ra Entrada</th>
-                      <th className="px-4 py-3">Último Egreso</th>
-                      <th className="px-4 py-3">Presencia Neta</th>
-                      <th className="px-4 py-3">Salidas Interm.</th>
-                      <th className="px-4 py-3">Incidentes</th>
-                      <th className="px-4 py-3">Cumplimiento</th>
-                      <th className="px-4 py-3 text-right no-print">Acción</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 text-slate-700">
-                    {(fichaData?.diasPeriodo || []).map((dia) => {
-                      const estaInspeccionado =
-                        diaInspeccionado?.fecha === dia.fecha;
-                      return (
-                        <tr
-                          key={dia.fecha}
-                          className={`transition ${
-                            estaInspeccionado
-                              ? "bg-indigo-50/70 font-semibold"
-                              : "hover:bg-slate-50/70"
-                          }`}
-                        >
-                          <td className="px-4 py-3 font-mono font-bold text-slate-900">
-                            {formatearFechaVisual(dia.fecha)}
-                          </td>
-                          <td className="px-4 py-3 font-semibold">
-                            {dia.diaSemana}
-                          </td>
-                          <td className="px-4 py-3 font-mono">
-                            {dia.primeraEntrada}
-                          </td>
-                          <td className="px-4 py-3 font-mono">
-                            {dia.ultimoEgreso}
-                          </td>
-                          <td className="px-4 py-3 font-bold text-emerald-700">
-                            {dia.presenciaNetaTexto}
-                          </td>
-                          <td className="px-4 py-3">
-                            {dia.salidasIntermedias} ({dia.minutosFuera} min)
-                          </td>
-                          <td className="px-4 py-3">
-                            {dia.totalIncidentes > 0 ? (
-                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200">
-                                ⚠ {dia.totalIncidentes} desvío(s)
-                              </span>
-                            ) : (
-                              <span className="text-slate-400">-</span>
-                            )}
-                          </td>
-                          <td className="px-4 py-3 font-bold">
-                            <span
-                              className={
-                                dia.porcentajeCumplimiento < 100
-                                  ? "text-amber-700"
-                                  : "text-emerald-700"
-                              }
-                            >
-                              {dia.porcentajeCumplimiento}%
-                            </span>
-                          </td>
-                          <td className="px-4 py-3 text-right no-print">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                if (diaInspeccionado?.fecha === dia.fecha) {
-                                  setDiaInspeccionado(null);
-                                } else {
-                                  setDiaInspeccionado(dia);
-                                }
-                              }}
-                              className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold cursor-pointer transition ${
-                                estaInspeccionado
-                                  ? "bg-indigo-600 text-white shadow-xs"
-                                  : "bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200"
-                              }`}
-                            >
-                              <Eye className="w-3.5 h-3.5" />
-                              {estaInspeccionado ? "Cerrar" : "Ver Día"}
-                            </button>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-
-          {/* VISTA 3: MENSUAL */}
-          {modalidad === "MENSUAL" && (
-            <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-xs space-y-4">
-              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <CalendarIcon className="w-4 h-4 text-indigo-600" />
-                    <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800">
-                      Calendario Mensual • {fichaData?.periodoTexto}
-                    </h3>
-                  </div>
-                  <p className="text-[11px] text-slate-500 mt-0.5">
-                    Toque cualquier día para ver sus marcas, desvíos y detalles
-                    en específico.
-                  </p>
-                </div>
-                <div className="flex items-center gap-3 text-[11px] font-bold">
-                  <span className="flex items-center gap-1 text-emerald-700">
-                    <span className="w-2 h-2 rounded-full bg-emerald-500" />{" "}
-                    Normal
-                  </span>
-                  <span className="flex items-center gap-1 text-rose-700">
-                    <span className="w-2 h-2 rounded-full bg-rose-500" />{" "}
-                    Infracción
-                  </span>
-                  <span className="flex items-center gap-1 text-amber-700">
-                    <span className="w-2 h-2 rounded-full bg-amber-400" />{" "}
-                    Desvío
-                  </span>
-                  <span className="flex items-center gap-1 text-slate-400">
-                    <span className="w-2 h-2 rounded-full bg-slate-300" /> Sin
-                    Registro
-                  </span>
-                </div>
-              </div>
-
-              {renderCardInspeccionDiaria()}
-
-              <div className="grid grid-cols-7 gap-2">
-                {["LUN", "MAR", "MIÉ", "JUE", "VIE", "SÁB", "DOM"].map((d) => (
-                  <div
-                    key={d}
-                    className="text-center font-bold text-[10px] text-slate-400 py-1 uppercase"
-                  >
-                    {d}
-                  </div>
-                ))}
-
-                {Array.from({ length: diasOffsetInicioMes }).map((_, idx) => (
-                  <div
-                    key={`vacio-${idx}`}
-                    className="border border-transparent rounded-2xl min-h-[90px] hidden sm:block pointer-events-none opacity-0"
-                  />
-                ))}
-
-                {(fichaData?.diasPeriodo || []).map((dia) => {
-                  const numDia = dia.fecha.split("-")[2];
-                  const esHoy = dia.fecha === hoyIso;
-                  const estaSeleccionado =
-                    diaInspeccionado?.fecha === dia.fecha;
-
-                  const esFuturo =
-                    dia.estadoGeneral === "FUTURO" || dia.fecha > hoyIso;
-                  const esSinRegistro =
-                    !esFuturo && dia.estadoGeneral === "SIN_REGISTRO";
-
-                  const esCritica =
-                    !esFuturo &&
-                    (dia.estadoGeneral === "INFRACCION" ||
-                      esSinRegistro ||
-                      (fichaData?.incidentes || []).some(
-                        (inc) =>
-                          String(inc.fecha).split("T")[0] === dia.fecha &&
-                          (inc.severidad === "CRÍTICA" ||
-                            inc.severidad === "CRITICA" ||
-                            inc.tipo?.toLowerCase().includes("clase")),
-                      ));
-                  const esDesvio =
-                    !esCritica &&
-                    !esFuturo &&
-                    (dia.totalIncidentes > 0 || dia.estadoGeneral === "DESVIO");
-                  const esSalidaIntermedia =
-                    !esCritica && !esDesvio && dia.salidasIntermedias > 0;
-                  const esNormal =
-                    !esCritica && !esDesvio && dia.presenciaNetaMinutos > 0;
-
-                  let cardBgClasses =
-                    "bg-white border-slate-200 hover:border-slate-300";
-                  if (estaSeleccionado)
-                    cardBgClasses =
-                      "bg-indigo-50/50 border-indigo-500 ring-2 ring-indigo-300 shadow-sm";
-                  else if (esFuturo)
-                    cardBgClasses =
-                      "bg-slate-50/40 border-slate-200/60 opacity-60";
-                  else if (esCritica)
-                    cardBgClasses =
-                      "bg-rose-50/70 border-rose-300 hover:border-rose-400 hover:shadow-sm";
-                  else if (esDesvio)
-                    cardBgClasses =
-                      "bg-amber-50/50 border-amber-300 hover:border-amber-400 hover:shadow-sm";
-                  else if (esSalidaIntermedia)
-                    cardBgClasses =
-                      "bg-sky-50/50 border-sky-300 hover:border-sky-400 hover:shadow-sm";
-                  else if (esNormal)
-                    cardBgClasses =
-                      "bg-emerald-50/40 border-emerald-300 hover:border-emerald-400 hover:shadow-sm";
-                  else if (esSinRegistro)
-                    cardBgClasses = "bg-slate-50/70 border-slate-200";
-
-                  return (
-                    <div
-                      key={dia.fecha}
-                      onClick={() => {
-                        if (diaInspeccionado?.fecha === dia.fecha)
-                          setDiaInspeccionado(null);
-                        else setDiaInspeccionado(dia);
-                      }}
-                      className={`border rounded-2xl p-2.5 min-h-[90px] flex flex-col justify-between hover:shadow-xs transition cursor-pointer ${cardBgClasses}`}
-                    >
-                      <div className="flex items-center justify-between text-xs font-bold text-slate-800">
-                        <span
-                          className={`text-sm font-black ${esCritica ? "text-rose-900" : ""}`}
-                        >
-                          {numDia}
-                        </span>
-                        {esHoy && (
-                          <span className="px-1.5 py-0.2 bg-indigo-600 text-white text-[9px] font-bold rounded-md uppercase tracking-wider">
-                            HOY
-                          </span>
-                        )}
-                        {!esHoy && dia.totalIncidentes > 0 ? (
-                          <span className="w-2 h-2 rounded-full bg-rose-500" />
-                        ) : !esHoy && dia.presenciaNetaMinutos > 0 ? (
-                          <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                        ) : null}
-                      </div>
-
-                      {esDocente &&
-                        dia.clasesDictadasTexto &&
-                        dia.clasesDictadasTexto !== "0h 0m / 0h 0m" && (
-                          <div
-                            className={`mt-1 text-[9px] font-bold px-1.5 py-0.5 rounded-md w-fit ${
-                              esCritica
-                                ? "bg-rose-100 text-rose-800 border border-rose-200"
-                                : "bg-purple-100 text-purple-800 border border-purple-200"
-                            } flex items-center gap-1`}
-                          >
-                            <GraduationCap className="w-2.5 h-2.5" />
-                            <span>
-                              Clase:{" "}
-                              {String(dia.clasesDictadasTexto).split(" (")[0]}
-                            </span>
-                          </div>
-                        )}
-
-                      {dia.presenciaNetaMinutos > 0 ? (
-                        <div className="space-y-1 mt-1">
-                          <div className="text-[10px] text-slate-500 font-mono">
-                            {dia.primeraEntrada} → {dia.ultimoEgreso}
-                          </div>
-                          <span className="inline-block px-2 py-0.5 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-md text-[10px] font-bold">
-                            {dia.presenciaNetaTexto}
-                          </span>
-                        </div>
-                      ) : (
-                        <span className="text-[10px] text-slate-400 italic mt-1">
-                          {esSinRegistro ? "Ausencia" : "Franco"}
-                        </span>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
         </div>
       </div>
 
+      {/* MODAL LISTA DE INCIDENTES DEL PERÍODO */}
       {modalListaIncidentesAbierto && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl w-full max-w-3xl shadow-2xl overflow-hidden border border-slate-200 animate-in zoom-in-95 max-h-[90vh] flex flex-col">
@@ -2307,6 +2167,7 @@ export default function FichaComportamiento() {
         </div>
       )}
 
+      {/* MODAL DE JUSTIFICACIÓN DIRECTA */}
       <ModalJustificarIncidente
         incidente={incidenteSeleccionado}
         isOpen={modalJustificarAbierto}
