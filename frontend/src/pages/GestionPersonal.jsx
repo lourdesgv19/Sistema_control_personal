@@ -1,4 +1,10 @@
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import React, {
+  useState,
+  useEffect,
+  useMemo,
+  useCallback,
+  useRef,
+} from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Users,
@@ -118,6 +124,15 @@ export default function GestionPersonal() {
   const [cargos, setCargos] = useState([]);
   const [horarios, setHorarios] = useState([]);
 
+  // Referencia para acceder a categorías dentro de callbacks sin provocar renders en bucle
+  const categoriasRef = useRef([]);
+  useEffect(() => {
+    categoriasRef.current = categorias;
+  }, [categorias]);
+
+  // Bandera de control para evitar peticiones duplicadas en vuelo
+  const cargandoPaginacionRef = useRef(false);
+
   const [tipoFrecuencia, setTipoFrecuencia] = useState("SEMANAL");
   const [repeticionesPeriodo, setRepeticionesPeriodo] = useState(1);
   const [semanaAlterna, setSemanaAlterna] = useState("PAR");
@@ -226,6 +241,7 @@ export default function GestionPersonal() {
     }
   }, []);
 
+  // Consulta paginada y filtrada blindada contra bucles y valores NaN
   const cargarEmpleadosServidor = useCallback(
     async (
       page = 0,
@@ -233,27 +249,41 @@ export default function GestionPersonal() {
       cat = filterCategoria,
       est = filterEstado,
     ) => {
+      if (cargandoPaginacionRef.current) return;
+
+      const pageSegura = Number.isNaN(Number(page))
+        ? 0
+        : Math.max(0, parseInt(page, 10) || 0);
+
+      cargandoPaginacionRef.current = true;
       setLoading(true);
+
       try {
-        const catId =
-          cat !== "TODAS"
-            ? categorias.find(
-                (c) => c.nombre?.toLowerCase() === cat.toLowerCase(),
-              )?.id
-            : null;
+        let catId = null;
+        if (cat && cat !== "TODAS") {
+          const encontrada = categoriasRef.current.find(
+            (c) => c.nombre?.toLowerCase() === cat.toLowerCase(),
+          );
+          if (encontrada) catId = encontrada.id;
+        }
 
         const res = await getEmpleadosPaginados(
-          q,
+          (q || "").trim(),
           catId,
           est,
-          page,
+          pageSegura,
           ITEMS_POR_PAGINA,
         );
+
         if (res && res.content) {
           setEmpleados(res.content);
-          setTotalPaginas(res.totalPages || 1);
-          setTotalElementos(res.totalElements || 0);
-          setPaginaActual(res.number + 1);
+          setTotalPaginas(Number(res.totalPages) || 1);
+          setTotalElementos(Number(res.totalElements) || 0);
+
+          const paginaServidor = (Number(res.number) || 0) + 1;
+          setPaginaActual((prev) =>
+            prev !== paginaServidor ? paginaServidor : prev,
+          );
         } else {
           setEmpleados(Array.isArray(res) ? res : []);
         }
@@ -262,9 +292,10 @@ export default function GestionPersonal() {
         setEmpleados([]);
       } finally {
         setLoading(false);
+        cargandoPaginacionRef.current = false;
       }
     },
-    [categorias, filterCategoria, filterEstado, searchTerm],
+    [filterCategoria, filterEstado, searchTerm],
   );
 
   useEffect(() => {
@@ -275,8 +306,9 @@ export default function GestionPersonal() {
   // Recarga controlada de búsqueda y filtros con Debounce
   useEffect(() => {
     const timer = setTimeout(() => {
+      const pageIndex = Math.max(0, (Number(paginaActual) || 1) - 1);
       cargarEmpleadosServidor(
-        paginaActual - 1,
+        pageIndex,
         searchTerm,
         filterCategoria,
         filterEstado,
@@ -291,7 +323,7 @@ export default function GestionPersonal() {
     cargarEmpleadosServidor,
   ]);
 
-  // Sincronización en tiempo real protegida con Debounce (Evita saturar el backend)
+  // Sincronización en tiempo real protegida con Debounce
   useEffect(() => {
     let timerSync = null;
 
@@ -300,7 +332,8 @@ export default function GestionPersonal() {
 
       timerSync = setTimeout(() => {
         cargarCatalogos();
-        cargarEmpleadosServidor(paginaActual - 1);
+        const pageIndex = Math.max(0, (Number(paginaActual) || 1) - 1);
+        cargarEmpleadosServidor(pageIndex);
         cargarResumenGlobal();
       }, 300);
     };
@@ -447,7 +480,7 @@ export default function GestionPersonal() {
         );
       }
 
-      await cargarEmpleadosServidor(paginaActual - 1);
+      await cargarEmpleadosServidor(Math.max(0, paginaActual - 1));
       cargarResumenGlobal();
       setModalRegistro(false);
     } catch (err) {
@@ -474,7 +507,7 @@ export default function GestionPersonal() {
         setModalAlerta((prev) => ({ ...prev, isOpen: false }));
         try {
           await deleteEmpleado(id);
-          await cargarEmpleadosServidor(paginaActual - 1);
+          await cargarEmpleadosServidor(Math.max(0, paginaActual - 1));
           cargarResumenGlobal();
           mostrarAviso(
             "success",
@@ -507,7 +540,7 @@ export default function GestionPersonal() {
         setModalAlerta((prev) => ({ ...prev, isOpen: false }));
         try {
           await reactivarEmpleado(id);
-          await cargarEmpleadosServidor(paginaActual - 1);
+          await cargarEmpleadosServidor(Math.max(0, paginaActual - 1));
           cargarResumenGlobal();
           mostrarAviso(
             "success",
@@ -560,7 +593,7 @@ export default function GestionPersonal() {
       ]);
       setHorariosEmpleado(horariosActualizados);
       setMetricasEmpleado(metricasActualizadas);
-      await cargarEmpleadosServidor(paginaActual - 1);
+      await cargarEmpleadosServidor(Math.max(0, paginaActual - 1));
       mostrarAviso(
         "success",
         "Horario Eliminado",
@@ -668,7 +701,7 @@ export default function GestionPersonal() {
       ]);
       setHorariosEmpleado(horariosActualizados);
       setMetricasEmpleado(metricasActualizadas);
-      await cargarEmpleadosServidor(paginaActual - 1);
+      await cargarEmpleadosServidor(Math.max(0, paginaActual - 1));
       setModalAsignarTurno(false);
       mostrarAviso(
         "success",
@@ -1230,54 +1263,65 @@ export default function GestionPersonal() {
           </tbody>
         </table>
 
+        {/* Paginador blindado contra NaN */}
         <div className="bg-white px-6 py-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
           <div className="text-slate-500">
             Mostrando{" "}
             <span className="font-bold text-slate-800">
-              {totalElementos === 0
+              {Number(totalElementos) === 0
                 ? 0
-                : (paginaActual - 1) * ITEMS_POR_PAGINA + 1}
+                : (Math.max(1, Number(paginaActual) || 1) - 1) *
+                    ITEMS_POR_PAGINA +
+                  1}
             </span>{" "}
             a{" "}
             <span className="font-bold text-slate-800">
-              {Math.min(paginaActual * ITEMS_POR_PAGINA, totalElementos)}
+              {Math.min(
+                Math.max(1, Number(paginaActual) || 1) * ITEMS_POR_PAGINA,
+                Number(totalElementos) || 0,
+              )}
             </span>{" "}
             de{" "}
-            <span className="font-bold text-slate-800">{totalElementos}</span>{" "}
+            <span className="font-bold text-slate-800">
+              {Number(totalElementos) || 0}
+            </span>{" "}
             empleados
           </div>
 
           <div className="flex items-center gap-1.5">
             <button
               onClick={() => setPaginaActual((prev) => Math.max(prev - 1, 1))}
-              disabled={paginaActual === 1 || loading}
+              disabled={paginaActual <= 1 || loading}
               className="p-2 border border-slate-200 rounded-xl hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer"
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
 
-            {Array.from({ length: totalPaginas }, (_, i) => i + 1).map(
-              (num) => (
-                <button
-                  key={num}
-                  onClick={() => setPaginaActual(num)}
-                  disabled={loading}
-                  className={`w-8 h-8 rounded-xl font-bold transition cursor-pointer ${
-                    paginaActual === num
-                      ? "bg-[#4b35e6] text-white shadow-xs"
-                      : "border border-slate-200 text-slate-600 hover:bg-slate-50"
-                  }`}
-                >
-                  {num}
-                </button>
-              ),
-            )}
+            {Array.from(
+              { length: Math.max(1, Number(totalPaginas) || 1) },
+              (_, i) => i + 1,
+            ).map((num) => (
+              <button
+                key={num}
+                onClick={() => setPaginaActual(num)}
+                disabled={loading}
+                className={`w-8 h-8 rounded-xl font-bold transition cursor-pointer ${
+                  paginaActual === num
+                    ? "bg-[#4b35e6] text-white shadow-xs"
+                    : "border border-slate-200 text-slate-600 hover:bg-slate-50"
+                }`}
+              >
+                {num}
+              </button>
+            ))}
 
             <button
               onClick={() =>
-                setPaginaActual((prev) => Math.min(prev + 1, totalPaginas))
+                setPaginaActual((prev) =>
+                  Math.min(prev + 1, Math.max(1, Number(totalPaginas) || 1)),
+                )
               }
-              disabled={paginaActual === totalPaginas || loading}
+              disabled={paginaActual >= totalPaginas || loading}
               className="p-2 border border-slate-200 rounded-xl hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer"
             >
               <ChevronRight className="w-4 h-4" />

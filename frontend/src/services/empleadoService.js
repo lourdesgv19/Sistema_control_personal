@@ -19,8 +19,22 @@ export const getEmpleadosPaginados = async (
   page = 0,
   size = 15,
 ) => {
-  const params = { q, estado, page, size };
-  if (categoriaId) params.categoriaId = categoriaId;
+  // Asegura que page sea un número entero y nunca NaN
+  const pageSegura = Number.isNaN(Number(page))
+    ? 0
+    : Math.max(0, parseInt(page, 10) || 0);
+
+  const params = {
+    q,
+    estado,
+    page: pageSegura,
+    size: Number(size) || 15,
+  };
+
+  if (categoriaId) {
+    params.categoriaId = categoriaId;
+  }
+
   return (await apiClient.get("/empleados", { params })).data;
 };
 
