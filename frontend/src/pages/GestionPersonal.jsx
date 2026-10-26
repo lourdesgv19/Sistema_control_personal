@@ -276,20 +276,48 @@ export default function GestionPersonal() {
         );
 
         if (res && res.content) {
-          setEmpleados(res.content);
-          setTotalPaginas(Number(res.totalPages) || 1);
-          setTotalElementos(Number(res.totalElements) || 0);
+          const lista = Array.isArray(res.content) ? res.content : [];
+          setEmpleados(lista);
+
+          // Si totalElements no viene o es 0 pero hay elementos en la lista, usamos lista.length como respaldo
+          const totalReal =
+            res.totalElements !== undefined &&
+            res.totalElements !== null &&
+            Number(res.totalElements) > 0
+              ? Number(res.totalElements)
+              : lista.length;
+
+          setTotalElementos(totalReal);
+          setTotalPaginas(
+            Math.max(
+              1,
+              Number(res.totalPages) ||
+                Math.ceil(totalReal / ITEMS_POR_PAGINA) ||
+                1,
+            ),
+          );
 
           const paginaServidor = (Number(res.number) || 0) + 1;
           setPaginaActual((prev) =>
             prev !== paginaServidor ? paginaServidor : prev,
           );
+        } else if (Array.isArray(res)) {
+          setEmpleados(res);
+          setTotalElementos(res.length);
+          setTotalPaginas(
+            Math.max(1, Math.ceil(res.length / ITEMS_POR_PAGINA)),
+          );
+          setPaginaActual(1);
         } else {
-          setEmpleados(Array.isArray(res) ? res : []);
+          setEmpleados([]);
+          setTotalElementos(0);
+          setTotalPaginas(1);
         }
       } catch (err) {
         console.error("Error al cargar empleados del servidor:", err);
         setEmpleados([]);
+        setTotalElementos(0);
+        setTotalPaginas(1);
       } finally {
         setLoading(false);
         cargandoPaginacionRef.current = false;
@@ -1263,36 +1291,46 @@ export default function GestionPersonal() {
           </tbody>
         </table>
 
-        {/* Paginador blindado contra NaN */}
+        {/* Paginador blindado contra 0 y NaN */}
         <div className="bg-white px-6 py-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
           <div className="text-slate-500">
-            Mostrando{" "}
-            <span className="font-bold text-slate-800">
-              {Number(totalElementos) === 0
-                ? 0
-                : (Math.max(1, Number(paginaActual) || 1) - 1) *
+            {Math.max(Number(totalElementos) || 0, empleados.length) === 0 ? (
+              <span>
+                Mostrando <span className="font-bold text-slate-800">0</span> de{" "}
+                <span className="font-bold text-slate-800">0</span> empleados
+              </span>
+            ) : (
+              <span>
+                Mostrando{" "}
+                <span className="font-bold text-slate-800">
+                  {(Math.max(1, Number(paginaActual) || 1) - 1) *
                     ITEMS_POR_PAGINA +
-                  1}
-            </span>{" "}
-            a{" "}
-            <span className="font-bold text-slate-800">
-              {Math.min(
-                Math.max(1, Number(paginaActual) || 1) * ITEMS_POR_PAGINA,
-                Number(totalElementos) || 0,
-              )}
-            </span>{" "}
-            de{" "}
-            <span className="font-bold text-slate-800">
-              {Number(totalElementos) || 0}
-            </span>{" "}
-            empleados
+                    1}
+                </span>{" "}
+                a{" "}
+                <span className="font-bold text-slate-800">
+                  {Math.min(
+                    Math.max(1, Number(paginaActual) || 1) * ITEMS_POR_PAGINA,
+                    Math.max(Number(totalElementos) || 0, empleados.length),
+                  )}
+                </span>{" "}
+                de{" "}
+                <span className="font-bold text-slate-800">
+                  {Math.max(Number(totalElementos) || 0, empleados.length)}
+                </span>{" "}
+                empleados
+              </span>
+            )}
           </div>
 
           <div className="flex items-center gap-1.5">
             <button
-              onClick={() => setPaginaActual((prev) => Math.max(prev - 1, 1))}
-              disabled={paginaActual <= 1 || loading}
+              onClick={() =>
+                setPaginaActual((prev) => Math.max((Number(prev) || 1) - 1, 1))
+              }
+              disabled={Number(paginaActual) <= 1 || loading}
               className="p-2 border border-slate-200 rounded-xl hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer"
+              title="Página Anterior"
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
@@ -1306,7 +1344,7 @@ export default function GestionPersonal() {
                 onClick={() => setPaginaActual(num)}
                 disabled={loading}
                 className={`w-8 h-8 rounded-xl font-bold transition cursor-pointer ${
-                  paginaActual === num
+                  (Number(paginaActual) || 1) === num
                     ? "bg-[#4b35e6] text-white shadow-xs"
                     : "border border-slate-200 text-slate-600 hover:bg-slate-50"
                 }`}
@@ -1318,11 +1356,15 @@ export default function GestionPersonal() {
             <button
               onClick={() =>
                 setPaginaActual((prev) =>
-                  Math.min(prev + 1, Math.max(1, Number(totalPaginas) || 1)),
+                  Math.min(
+                    (Number(prev) || 1) + 1,
+                    Math.max(1, Number(totalPaginas) || 1),
+                  ),
                 )
               }
-              disabled={paginaActual >= totalPaginas || loading}
+              disabled={Number(paginaActual) >= Number(totalPaginas) || loading}
               className="p-2 border border-slate-200 rounded-xl hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer"
+              title="Página Siguiente"
             >
               <ChevronRight className="w-4 h-4" />
             </button>

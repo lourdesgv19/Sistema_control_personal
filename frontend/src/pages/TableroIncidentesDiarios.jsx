@@ -136,9 +136,13 @@ export default function TableroIncidentesDiarios() {
   }, [location.state]);
 
   const cargarDatos = useCallback(
-    async (pageIndex, silencioso = false) => {
+    async (pageIndex = 0, silencioso = false) => {
       if (!silencioso) setLoading(true);
       try {
+        const pageSegura = Number.isNaN(Number(pageIndex))
+          ? 0
+          : Math.max(0, parseInt(pageIndex, 10) || 0);
+
         const params = {
           fechaDesde: fechaDesde,
           fechaHasta: modoFiltroFecha === "DIA" ? fechaDesde : fechaHasta,
@@ -146,26 +150,62 @@ export default function TableroIncidentesDiarios() {
           categoria: categoria || undefined,
           estado: estado || undefined,
           busqueda: busqueda.trim() || undefined,
-          page: pageIndex,
+          page: pageSegura,
           size: ITEMS_POR_PAGINA,
         };
 
         const data = await getTableroIncidentes(params);
         setTableroData(data);
 
-        if (data && data.incidentesPaginados) {
-          setIncidentes(data.incidentesPaginados.content || []);
-          setTotalPaginas(data.incidentesPaginados.totalPages || 1);
-          setTotalElementos(data.incidentesPaginados.totalElements || 0);
-          setPaginaActual((data.incidentesPaginados.number || 0) + 1);
+        // Extraer el objeto paginado según el DTO (TableroIncidentesDTO)
+        const pag =
+          data?.incidentesPaginados ||
+          data?.incidentes ||
+          (data?.content ? data : null);
+
+        if (pag && Array.isArray(pag.content)) {
+          const lista = pag.content;
+          setIncidentes(lista);
+
+          // Si totalElements no viene o es 0 pero hay elementos en la lista, usamos lista.length como respaldo
+          const totalReal =
+            pag.totalElements !== undefined &&
+            pag.totalElements !== null &&
+            Number(pag.totalElements) > 0
+              ? Number(pag.totalElements)
+              : lista.length;
+
+          setTotalElementos(totalReal);
+          setTotalPaginas(
+            Math.max(
+              1,
+              Number(pag.totalPages) ||
+                Math.ceil(totalReal / ITEMS_POR_PAGINA) ||
+                1,
+            ),
+          );
+
+          const pageNum = (Number(pag.number) || 0) + 1;
+          setPaginaActual((prev) => (prev !== pageNum ? pageNum : prev));
+        } else if (Array.isArray(pag)) {
+          setIncidentes(pag);
+          setTotalElementos(pag.length);
+          setTotalPaginas(
+            Math.max(1, Math.ceil(pag.length / ITEMS_POR_PAGINA)),
+          );
+          setPaginaActual(1);
         } else {
           setIncidentes([]);
-          setTotalPaginas(1);
           setTotalElementos(0);
+          setTotalPaginas(1);
         }
       } catch (err) {
         console.error("Error al cargar incidentes:", err);
-        if (!silencioso) setIncidentes([]);
+        if (!silencioso) {
+          setIncidentes([]);
+          setTotalElementos(0);
+          setTotalPaginas(1);
+        }
       } finally {
         if (!silencioso) setLoading(false);
       }
@@ -916,53 +956,81 @@ export default function TableroIncidentesDiarios() {
           </table>
         </div>
 
+        {/* CONTROL DE PAGINACIÓN BLINDADO */}
+        {/* CONTROL DE PAGINACIÓN */}
         <div className="bg-white px-6 py-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
           <div className="text-slate-500">
-            Mostrando{" "}
-            <span className="font-bold text-slate-800">
-              {totalElementos === 0
-                ? 0
-                : (paginaActual - 1) * ITEMS_POR_PAGINA + 1}
-            </span>{" "}
-            a{" "}
-            <span className="font-bold text-slate-800">
-              {Math.min(paginaActual * ITEMS_POR_PAGINA, totalElementos)}
-            </span>{" "}
-            de{" "}
-            <span className="font-bold text-slate-800">{totalElementos}</span>{" "}
-            incidentes
+            {incidentes.length === 0 ? (
+              <span>
+                Mostrando <span className="font-bold text-slate-800">0</span> de{" "}
+                <span className="font-bold text-slate-800">0</span> incidentes
+              </span>
+            ) : (
+              <span>
+                Mostrando{" "}
+                <span className="font-bold text-slate-800">
+                  {(Math.max(1, Number(paginaActual) || 1) - 1) *
+                    ITEMS_POR_PAGINA +
+                    1}
+                </span>{" "}
+                a{" "}
+                <span className="font-bold text-slate-800">
+                  {Math.min(
+                    Math.max(1, Number(paginaActual) || 1) * ITEMS_POR_PAGINA,
+                    Math.max(Number(totalElementos) || 0, incidentes.length),
+                  )}
+                </span>{" "}
+                de{" "}
+                <span className="font-bold text-slate-800">
+                  {Math.max(Number(totalElementos) || 0, incidentes.length)}
+                </span>{" "}
+                incidentes
+              </span>
+            )}
           </div>
 
           <div className="flex items-center gap-1.5">
             <button
-              onClick={() => handleCambiarPagina(Math.max(paginaActual - 1, 1))}
-              disabled={paginaActual === 1 || loading}
+              onClick={() =>
+                handleCambiarPagina(
+                  Math.max((Number(paginaActual) || 1) - 1, 1),
+                )
+              }
+              disabled={Number(paginaActual) <= 1 || loading}
               className="p-2 border border-slate-200 rounded-xl hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer"
               title="Página Anterior"
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
-            {Array.from({ length: totalPaginas }, (_, i) => i + 1).map(
-              (num) => (
-                <button
-                  key={num}
-                  onClick={() => handleCambiarPagina(num)}
-                  disabled={loading}
-                  className={`w-8 h-8 rounded-xl font-bold transition cursor-pointer ${
-                    paginaActual === num
-                      ? "bg-[#4b35e6] text-white shadow-xs"
-                      : "border border-slate-200 text-slate-600 hover:bg-slate-50"
-                  }`}
-                >
-                  {num}
-                </button>
-              ),
-            )}
+
+            {Array.from(
+              { length: Math.max(1, Number(totalPaginas) || 1) },
+              (_, i) => i + 1,
+            ).map((num) => (
+              <button
+                key={num}
+                onClick={() => handleCambiarPagina(num)}
+                disabled={loading}
+                className={`w-8 h-8 rounded-xl font-bold transition cursor-pointer ${
+                  (Number(paginaActual) || 1) === num
+                    ? "bg-[#4b35e6] text-white shadow-xs"
+                    : "border border-slate-200 text-slate-600 hover:bg-slate-50"
+                }`}
+              >
+                {num}
+              </button>
+            ))}
+
             <button
               onClick={() =>
-                handleCambiarPagina(Math.min(paginaActual + 1, totalPaginas))
+                handleCambiarPagina(
+                  Math.min(
+                    (Number(paginaActual) || 1) + 1,
+                    Math.max(1, Number(totalPaginas) || 1),
+                  ),
+                )
               }
-              disabled={paginaActual === totalPaginas || loading}
+              disabled={Number(paginaActual) >= Number(totalPaginas) || loading}
               className="p-2 border border-slate-200 rounded-xl hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer"
               title="Página Siguiente"
             >
