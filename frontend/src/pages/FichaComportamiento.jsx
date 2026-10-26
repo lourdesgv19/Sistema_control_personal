@@ -32,6 +32,7 @@ import ListaEmpleadosSidebar from "../components/comunes/ListaEmpleadosSidebar";
 import ModalJustificarIncidente from "../components/incidentes/ModalJustificarIncidente";
 import { getFichaComportamiento } from "../services/fichaComportamientoService";
 import { resolverIncidente } from "../services/incidenteService";
+import { getEmpleadoHorarios } from "../services/empleadoService";
 import { useAuth } from "../context/AuthContext";
 import { useLocation, useSearchParams } from "react-router-dom";
 import { generarPdfFichaComportamiento } from "../utils/generadorPdfFicha";
@@ -85,6 +86,7 @@ export default function FichaComportamiento() {
 
   const [loadingFicha, setLoadingFicha] = useState(false);
   const [fichaData, setFichaData] = useState(null);
+  const [horariosConfigurados, setHorariosConfigurados] = useState([]);
 
   const [incidenteSeleccionado, setIncidenteSeleccionado] = useState(null);
   const [modalJustificarAbierto, setModalJustificarAbierto] = useState(false);
@@ -103,6 +105,85 @@ export default function FichaComportamiento() {
     if (!fichaData?.diasPeriodo || fichaData.diasPeriodo.length === 0) return 0;
     return calcularOffsetPrimerDia(fichaData.diasPeriodo[0].fecha);
   }, [fichaData]);
+
+  // Carga de la grilla de horarios del empleado (Lunes a Domingo)
+  useEffect(() => {
+    const empId = empleadoSeleccionado?.id;
+    if (empId) {
+      getEmpleadoHorarios(empId)
+        .then((res) => setHorariosConfigurados(Array.isArray(res) ? res : []))
+        .catch(() => setHorariosConfigurados([]));
+    } else {
+      setHorariosConfigurados([]);
+    }
+  }, [empleadoSeleccionado?.id]);
+
+  // Mapeo indexado por número de día (1 = Lunes, ..., 7 = Domingo)
+  const mapaHorariosPorDiaSemana = useMemo(() => {
+    const mapa = { 1: [], 2: [], 3: [], 4: [], 5: [], 6: [], 7: [] };
+    const aliasDias = {
+      lunes: 1,
+      lun: 1,
+      martes: 2,
+      mar: 2,
+      miercoles: 3,
+      miércoles: 3,
+      mié: 3,
+      mie: 3,
+      jueves: 4,
+      jue: 4,
+      viernes: 5,
+      vie: 5,
+      sabado: 6,
+      sábado: 6,
+      sáb: 6,
+      sab: 6,
+      domingo: 7,
+      dom: 7,
+    };
+
+    horariosConfigurados.forEach((h) => {
+      if (h.activo === false) return;
+
+      let diaNum = null;
+      if (typeof h.diaSemana === "number") {
+        diaNum = h.diaSemana;
+      } else if (typeof h.diaSemana === "string") {
+        diaNum = aliasDias[h.diaSemana.toLowerCase().trim()] || null;
+      }
+
+      if (diaNum && mapa[diaNum]) {
+        mapa[diaNum].push({
+          nombre:
+            h.materia?.nombre ||
+            h.etiqueta ||
+            h.nombreTurno ||
+            "Turno Programado",
+          entrada: (h.horaEntrada || "00:00").substring(0, 5),
+          salida: (h.horaSalida || h.horaEgreso || "00:00").substring(0, 5),
+        });
+      }
+    });
+
+    return mapa;
+  }, [horariosConfigurados]);
+
+  // Obtener horarios programados a partir de una fecha ISO (AAAA-MM-DD)
+  const obtenerHorariosDeFecha = useCallback(
+    (fechaStr) => {
+      if (!fechaStr) return [];
+      const partes = String(fechaStr).split("T")[0].split("-");
+      if (partes.length !== 3) return [];
+      const d = new Date(
+        parseInt(partes[0], 10),
+        parseInt(partes[1], 10) - 1,
+        parseInt(partes[2], 10),
+      );
+      const diaNum = d.getDay() === 0 ? 7 : d.getDay();
+      return mapaHorariosPorDiaSemana[diaNum] || [];
+    },
+    [mapaHorariosPorDiaSemana],
+  );
 
   // Agrupación automática de días por mes para el modo RANGO_FECHAS
   const mesesDelRango = useMemo(() => {
@@ -143,7 +224,7 @@ export default function FichaComportamiento() {
     setMesesExpandidos({});
   };
 
-  // Sincronización cuando cambia la navegación (state o query params)
+  // Sincronización cuando cambia la navegación
   useEffect(() => {
     const empId = location.state?.empleadoId || searchParams.get("empleadoId");
     if (empId) {
@@ -191,7 +272,7 @@ export default function FichaComportamiento() {
     cargarFicha();
   }, [cargarFicha]);
 
-  // Sincronización en tiempo real protegida con debounce (Evita ráfagas y sobrecarga del servidor)
+  // Sincronización en tiempo real protegida con debounce
   useEffect(() => {
     let timerSync = null;
 
@@ -332,10 +413,17 @@ export default function FichaComportamiento() {
     }
 
     const esFechaFutura = fechaConsulta > hoyIso;
+    const horariosFecha = obtenerHorariosDeFecha(fechaConsulta);
     const franjasTeoricas =
-      fichaData?.planificados || fichaData?.planificado || [];
-    const tieneHorariosPlanificados =
-      Array.isArray(franjasTeoricas) && franjasTeoricas.length > 0;
+      fichaData?.planificado && fichaData.planificado.length > 0
+        ? fichaData.planificado
+        : horariosFecha.map((h) => ({
+            etiqueta: h.nombre,
+            horaInicio: h.entrada,
+            horaFin: h.salida,
+          }));
+
+    const tieneHorariosPlanificados = franjasTeoricas.length > 0;
 
     const tienePresencia =
       (fichaData?.presenciaReal && fichaData.presenciaReal.length > 0) ||
@@ -369,7 +457,7 @@ export default function FichaComportamiento() {
       };
     }
 
-    // 2. DÍA PASADO O DÍA DE HOY: Tenía horario y NO registró presencia
+    // 2. DÍA PASADO O HOY: Tenía horario y NO registró presencia
     if (tieneHorariosPlanificados && !tienePresencia) {
       return {
         esSinHorario: false,
@@ -396,7 +484,14 @@ export default function FichaComportamiento() {
       esFuturoConHorario: false,
       tieneDatos: true,
     };
-  }, [modalidad, fichaData, metricas, fechaConsulta, hoyIso]);
+  }, [
+    modalidad,
+    fichaData,
+    metricas,
+    fechaConsulta,
+    hoyIso,
+    obtenerHorariosDeFecha,
+  ]);
 
   useEffect(() => {
     if (
@@ -425,6 +520,18 @@ export default function FichaComportamiento() {
   const renderItemIncidenteInteractivo = (inc, mostrarFecha = false) => {
     const esCritica =
       inc.severidad === "CRÍTICA" || inc.severidad === "CRITICA";
+
+    // Detección de inasistencia / falta
+    const esInasistencia =
+      (inc.tipo || "").toLowerCase().includes("inasistencia") ||
+      (inc.tipo || "").toLowerCase().includes("ausencia") ||
+      (inc.tipo || "").toLowerCase().includes("falta");
+
+    // Horarios que el empleado debía cumplir en la fecha del incidente
+    const horariosProgramados = inc.fecha
+      ? obtenerHorariosDeFecha(inc.fecha)
+      : [];
+
     return (
       <div
         key={inc.id}
@@ -434,21 +541,32 @@ export default function FichaComportamiento() {
             : "bg-amber-50/80 border-amber-200"
         }`}
       >
-        <div>
+        <div className="space-y-1">
           <div className="flex items-center gap-2 flex-wrap">
             {mostrarFecha && inc.fecha && (
               <span className="font-mono font-bold text-indigo-900 bg-white/90 border border-slate-200 px-2.5 py-0.5 rounded-md text-[11px]">
                 {formatearFechaVisual(inc.fecha)}
               </span>
             )}
-            <span className="font-mono font-bold text-slate-700">
-              {inc.hora} hs
-            </span>
+
+            {/* Ocultar la hora ficticia 00:00 hs cuando se trate de una inasistencia */}
+            {!esInasistencia &&
+              inc.hora &&
+              inc.hora !== "00:00" &&
+              inc.hora !== "00:00:00" && (
+                <span className="font-mono font-bold text-slate-700 bg-white/70 border border-slate-200 px-2 py-0.5 rounded-md text-[11px]">
+                  {inc.hora.substring(0, 5)} hs
+                </span>
+              )}
+
             <span
-              className={`font-bold ${esCritica ? "text-rose-950" : "text-amber-950"}`}
+              className={`font-bold ${
+                esCritica ? "text-rose-950" : "text-amber-950"
+              }`}
             >
               {inc.tipo}
             </span>
+
             <span
               className={`text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${
                 esCritica
@@ -459,7 +577,29 @@ export default function FichaComportamiento() {
               {inc.severidad}
             </span>
           </div>
-          <div className="text-[11px] text-slate-600 mt-1">{inc.detalle}</div>
+
+          <div className="text-[11px] text-slate-600">{inc.detalle}</div>
+
+          {/* Horario que debía cumplir el empleado en esa jornada */}
+          {horariosProgramados.length > 0 && (
+            <div className="flex items-center gap-1.5 pt-0.5 flex-wrap">
+              <span className="text-[10px] uppercase font-bold text-slate-400">
+                Horario pautado:
+              </span>
+              {horariosProgramados.map((h, idx) => (
+                <span
+                  key={idx}
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-white border border-rose-200 text-rose-900 font-mono text-[10px] font-bold shadow-2xs"
+                >
+                  <Clock className="w-3 h-3 text-rose-600 shrink-0" />
+                  <span>
+                    {h.nombre ? `${h.nombre}: ` : ""}
+                    {h.entrada} hs → {h.salida} hs
+                  </span>
+                </span>
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
@@ -519,7 +659,6 @@ export default function FichaComportamiento() {
     if (!diaInspeccionado) return null;
     const fechaDiaStr = String(diaInspeccionado.fecha || "").split("T")[0];
 
-    // FILTRADO DEFENSIVO: Si hubo presencia real en el día, descartamos el incidente de inasistencia erróneo
     const huboPresencia =
       diaInspeccionado.presenciaNetaMinutos > 0 ||
       (diaInspeccionado.primeraEntrada &&
@@ -540,6 +679,8 @@ export default function FichaComportamiento() {
       }
       return true;
     });
+
+    const horariosDia = obtenerHorariosDeFecha(diaInspeccionado.fecha);
 
     return (
       <div className="bg-white border-2 border-indigo-500/80 rounded-3xl p-5 shadow-sm space-y-4 transition-all animate-fadeIn">
@@ -580,6 +721,26 @@ export default function FichaComportamiento() {
             </button>
           </div>
         </div>
+
+        {/* Detalle del Horario Asignado para la fecha inspeccionada */}
+        {horariosDia.length > 0 && (
+          <div className="p-3 bg-indigo-50/50 border border-indigo-100 rounded-2xl flex flex-wrap items-center justify-between gap-2 text-xs">
+            <div className="flex items-center gap-2 text-indigo-900 font-bold">
+              <Clock className="w-3.5 h-3.5 text-indigo-600" />
+              <span>Horarios Teóricos Asignados:</span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {horariosDia.map((h, i) => (
+                <span
+                  key={i}
+                  className="px-2.5 py-1 bg-white border border-indigo-200 text-indigo-950 rounded-xl font-medium text-[11px]"
+                >
+                  <strong>{h.nombre}:</strong> {h.entrada} hs → {h.salida} hs
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div
           className={`grid grid-cols-2 ${esDocente ? "md:grid-cols-5" : "md:grid-cols-4"} gap-3 text-xs`}
@@ -674,7 +835,7 @@ export default function FichaComportamiento() {
         {Array.from({ length: offset }).map((_, idx) => (
           <div
             key={`vacio-${idx}`}
-            className="border border-transparent rounded-2xl min-h-[90px] hidden sm:block pointer-events-none opacity-0"
+            className="border border-transparent rounded-2xl min-h-[95px] hidden sm:block pointer-events-none opacity-0"
           />
         ))}
 
@@ -684,14 +845,13 @@ export default function FichaComportamiento() {
           const estaSeleccionado = diaInspeccionado?.fecha === dia.fecha;
 
           const esFuturo = dia.estadoGeneral === "FUTURO" || dia.fecha > hoyIso;
-          const esSinRegistro =
-            !esFuturo && dia.estadoGeneral === "SIN_REGISTRO";
+          const horariosProgramados = obtenerHorariosDeFecha(dia.fecha);
+          const tieneHorarioAsignado = horariosProgramados.length > 0;
 
           const huboPresencia =
             dia.presenciaNetaMinutos > 0 ||
             (dia.primeraEntrada && dia.primeraEntrada !== "--:--");
 
-          // Limpieza de incidentes falsos de inasistencia si hubo fichajes reales
           const incidentesValidos = (fichaData?.incidentes || []).filter(
             (inc) => {
               const matchFecha = String(inc.fecha).split("T")[0] === dia.fecha;
@@ -715,6 +875,12 @@ export default function FichaComportamiento() {
               inc.tipo?.toLowerCase().includes("clase"),
           );
 
+          // Si el día ya pasó o es hoy, tiene horario programado y NO hubo presencia, es Ausencia/Falta
+          const esSinRegistro =
+            !esFuturo &&
+            (dia.estadoGeneral === "SIN_REGISTRO" ||
+              (tieneHorarioAsignado && !huboPresencia));
+
           const esCritica =
             !esFuturo &&
             (dia.estadoGeneral === "INFRACCION" ||
@@ -734,6 +900,9 @@ export default function FichaComportamiento() {
           if (estaSeleccionado)
             cardBgClasses =
               "bg-indigo-50/50 border-indigo-500 ring-2 ring-indigo-300 shadow-sm";
+          else if (esFuturo && tieneHorarioAsignado)
+            cardBgClasses =
+              "bg-indigo-50/30 border-indigo-200/80 hover:border-indigo-400";
           else if (esFuturo)
             cardBgClasses = "bg-slate-50/40 border-slate-200/60 opacity-60";
           else if (esCritica)
@@ -749,7 +918,7 @@ export default function FichaComportamiento() {
             cardBgClasses =
               "bg-emerald-50/40 border-emerald-300 hover:border-emerald-400 hover:shadow-sm";
           else if (esSinRegistro)
-            cardBgClasses = "bg-slate-50/70 border-slate-200";
+            cardBgClasses = "bg-rose-50/60 border-rose-200";
 
           return (
             <div
@@ -759,7 +928,7 @@ export default function FichaComportamiento() {
                   setDiaInspeccionado(null);
                 else setDiaInspeccionado(dia);
               }}
-              className={`border rounded-2xl p-2.5 min-h-[90px] flex flex-col justify-between hover:shadow-xs transition cursor-pointer ${cardBgClasses}`}
+              className={`border rounded-2xl p-2.5 min-h-[95px] flex flex-col justify-between hover:shadow-xs transition cursor-pointer ${cardBgClasses}`}
             >
               <div className="flex items-center justify-between text-xs font-bold text-slate-800">
                 <span
@@ -796,13 +965,39 @@ export default function FichaComportamiento() {
                   </div>
                 )}
 
+              {/* RENDER DE CASILLA:
+                  1. Hubo presencia real -> Horas de Entrada/Salida efectivas
+                  2. Pasado u Hoy con Ausencia -> Horario exigido que debía cumplir
+                  3. Futuro con turno -> Horario programado
+                  4. Sin turno -> Sin horario
+              */}
               {dia.presenciaNetaMinutos > 0 ? (
-                <div className="space-y-1 mt-1">
+                <div className="space-y-0.5 mt-1">
                   <div className="text-[10px] text-slate-500 font-mono">
                     {dia.primeraEntrada} → {dia.ultimoEgreso}
                   </div>
-                  <span className="inline-block px-2 py-0.5 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-md text-[10px] font-bold">
+                  <span className="inline-block px-1.5 py-0.2 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-md text-[9px] font-bold">
                     {dia.presenciaNetaTexto}
+                  </span>
+                </div>
+              ) : esSinRegistro && tieneHorarioAsignado ? (
+                <div className="space-y-0.5 mt-1">
+                  <div className="text-[10px] text-rose-700 font-mono font-bold">
+                    {horariosProgramados[0].entrada} →{" "}
+                    {horariosProgramados[0].salida}
+                  </div>
+                  <span className="inline-block px-1.5 py-0.2 bg-rose-100 text-rose-800 border border-rose-200 rounded-md text-[9px] font-black uppercase tracking-wider truncate max-w-full">
+                    Ausencia ({horariosProgramados[0].nombre})
+                  </span>
+                </div>
+              ) : esFuturo && tieneHorarioAsignado ? (
+                <div className="space-y-0.5 mt-1">
+                  <div className="text-[10px] text-indigo-700 font-mono font-bold">
+                    {horariosProgramados[0].entrada} →{" "}
+                    {horariosProgramados[0].salida}
+                  </div>
+                  <span className="inline-block px-1.5 py-0.2 bg-indigo-100 text-indigo-800 rounded-md text-[9px] font-semibold truncate max-w-full">
+                    {horariosProgramados[0].nombre}
                   </span>
                 </div>
               ) : (
@@ -910,7 +1105,6 @@ export default function FichaComportamiento() {
           </div>
 
           {/* BARRA DE FECHA Y NAVEGACIÓN */}
-
           <div className="bg-white border border-slate-200 rounded-2xl p-3 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="font-semibold text-slate-600 text-xs">
@@ -943,7 +1137,6 @@ export default function FichaComportamiento() {
                 <div
                   onClick={(e) => {
                     const input = e.currentTarget.querySelector("input");
-
                     if (input && typeof input.showPicker === "function")
                       input.showPicker();
                   }}
@@ -952,9 +1145,7 @@ export default function FichaComportamiento() {
                   <span className="font-mono font-semibold text-slate-800 text-xs select-none pointer-events-none">
                     {formatearFechaVisual(fechaConsulta)}
                   </span>
-
                   <CalendarIcon className="w-4 h-4 text-slate-400 ml-2 pointer-events-none" />
-
                   <input
                     type="date"
                     value={fechaConsulta}
@@ -970,7 +1161,6 @@ export default function FichaComportamiento() {
                 <div
                   onClick={(e) => {
                     const input = e.currentTarget.querySelector("input");
-
                     if (input && typeof input.showPicker === "function")
                       input.showPicker();
                   }}
@@ -980,9 +1170,7 @@ export default function FichaComportamiento() {
                     {formatearFechaVisual(inicioSemanaStr)} →{" "}
                     {formatearFechaVisual(finSemanaStr)}
                   </span>
-
                   <CalendarIcon className="w-4 h-4 text-slate-400 ml-2 pointer-events-none" />
-
                   <input
                     type="date"
                     value={fechaConsulta}
@@ -998,7 +1186,6 @@ export default function FichaComportamiento() {
                 <div
                   onClick={(e) => {
                     const input = e.currentTarget.querySelector("input");
-
                     if (input && typeof input.showPicker === "function")
                       input.showPicker();
                   }}
@@ -1009,9 +1196,7 @@ export default function FichaComportamiento() {
                     {formatearFechaVisual(inicioMesStr)} Al{" "}
                     {formatearFechaVisual(finMesStr)})
                   </span>
-
                   <CalendarIcon className="w-4 h-4 text-slate-400 ml-2 pointer-events-none" />
-
                   <input
                     type="month"
                     value={fechaConsulta.substring(0, 7)}
@@ -1029,7 +1214,6 @@ export default function FichaComportamiento() {
                   <span className="text-[10px] text-slate-400 font-bold uppercase">
                     Desde Mes a Elección
                   </span>
-
                   <select
                     value={fechaConsulta.substring(0, 7)}
                     onChange={(e) => {
@@ -1042,45 +1226,34 @@ export default function FichaComportamiento() {
                       Enero (contar {modalidad === "TRIMESTRE" ? "3" : "4"}{" "}
                       meses)
                     </option>
-
                     <option value={`${hoyIso.substring(0, 4)}-02`}>
                       Febrero
                     </option>
-
                     <option value={`${hoyIso.substring(0, 4)}-03`}>
                       Marzo
                     </option>
-
                     <option value={`${hoyIso.substring(0, 4)}-04`}>
                       Abril
                     </option>
-
                     <option value={`${hoyIso.substring(0, 4)}-05`}>Mayo</option>
-
                     <option value={`${hoyIso.substring(0, 4)}-06`}>
                       Junio
                     </option>
-
                     <option value={`${hoyIso.substring(0, 4)}-07`}>
                       Julio
                     </option>
-
                     <option value={`${hoyIso.substring(0, 4)}-08`}>
                       Agosto
                     </option>
-
                     <option value={`${hoyIso.substring(0, 4)}-09`}>
                       Septiembre
                     </option>
-
                     <option value={`${hoyIso.substring(0, 4)}-10`}>
                       Octubre
                     </option>
-
                     <option value={`${hoyIso.substring(0, 4)}-11`}>
                       Noviembre
                     </option>
-
                     <option value={`${hoyIso.substring(0, 4)}-12`}>
                       Diciembre
                     </option>
@@ -1093,7 +1266,6 @@ export default function FichaComportamiento() {
                   <div
                     onClick={(e) => {
                       const input = e.currentTarget.querySelector("input");
-
                       if (input && typeof input.showPicker === "function")
                         input.showPicker();
                     }}
@@ -1102,22 +1274,17 @@ export default function FichaComportamiento() {
                     <span className="text-[10px] text-slate-400 uppercase mr-1.5 select-none font-bold pointer-events-none">
                       Desde:
                     </span>
-
                     <span className="font-mono font-semibold text-slate-800 text-xs select-none pointer-events-none">
                       {formatearFechaVisual(fechaConsulta)}
                     </span>
-
                     <CalendarIcon className="w-3.5 h-3.5 text-slate-400 ml-2 pointer-events-none" />
-
                     <input
                       type="date"
                       value={fechaConsulta}
                       onChange={(e) => {
                         const val = e.target.value;
-
                         if (val) {
                           setFechaConsulta(val);
-
                           if (val > fechaHastaRango) setFechaHastaRango(val);
                         }
                       }}
@@ -1130,7 +1297,6 @@ export default function FichaComportamiento() {
                   <div
                     onClick={(e) => {
                       const input = e.currentTarget.querySelector("input");
-
                       if (input && typeof input.showPicker === "function")
                         input.showPicker();
                     }}
@@ -1139,20 +1305,16 @@ export default function FichaComportamiento() {
                     <span className="text-[10px] text-slate-400 uppercase mr-1.5 select-none font-bold pointer-events-none">
                       Hasta:
                     </span>
-
                     <span className="font-mono font-semibold text-slate-800 text-xs select-none pointer-events-none">
                       {formatearFechaVisual(fechaHastaRango)}
                     </span>
-
                     <CalendarIcon className="w-3.5 h-3.5 text-slate-400 ml-2 pointer-events-none" />
-
                     <input
                       type="date"
                       value={fechaHastaRango}
                       min={fechaConsulta}
                       onChange={(e) => {
                         const val = e.target.value;
-
                         if (val) setFechaHastaRango(val);
                       }}
                       className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
@@ -1197,9 +1359,7 @@ export default function FichaComportamiento() {
                   className="flex items-center gap-1.5 px-3 py-1.5 border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 rounded-xl font-bold transition shadow-2xs cursor-pointer text-xs"
                 >
                   <Printer className="w-3.5 h-3.5 text-slate-600" />
-
                   <span>Imprimir / PDF</span>
-
                   <ChevronDown className="w-3 h-3 text-slate-400 ml-0.5" />
                 </button>
 
@@ -1219,12 +1379,10 @@ export default function FichaComportamiento() {
                         <div className="p-1 rounded-lg bg-slate-100 text-slate-700">
                           <Printer className="w-3.5 h-3.5" />
                         </div>
-
                         <div>
                           <div className="font-bold text-slate-900">
                             Imprimir (B&W)
                           </div>
-
                           <div className="text-[10px] text-slate-400">
                             Apto blanco y negro / fotocopia
                           </div>
@@ -1241,12 +1399,10 @@ export default function FichaComportamiento() {
                         <div className="p-1 rounded-lg bg-indigo-100 text-indigo-700">
                           <Palette className="w-3.5 h-3.5" />
                         </div>
-
                         <div>
                           <div className="font-bold text-indigo-950">
                             Generar PDF Color
                           </div>
-
                           <div className="text-[10px] text-indigo-500">
                             Diseño institucional en color
                           </div>
@@ -1515,7 +1671,7 @@ export default function FichaComportamiento() {
             </div>
           )}
 
-          {/* --- VISTA 1: DIARIO (LÍNEA DE TIEMPO Y TABLA INFERIOR) --- */}
+          {/* --- VISTA 1: DIARIO --- */}
           {modalidad === "DIARIO" &&
             !estadoJornadaDiaria.esSinHorario &&
             !estadoJornadaDiaria.esFuturoConHorario && (
@@ -1586,7 +1742,7 @@ export default function FichaComportamiento() {
                   </div>
                 )}
 
-                {/* TABLA INFERIOR COMPLETA (INTERVALOS, INCIDENTES, BRUTOS) */}
+                {/* TABLA INFERIOR COMPLETA */}
                 <div
                   ref={tablaDetalleRef}
                   className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-xs scroll-mt-6"
@@ -1739,7 +1895,7 @@ export default function FichaComportamiento() {
               </>
             )}
 
-          {/* --- VISTA 2: SEMANAL (TABLA CON DISCRIMINACIÓN FRANCO vs FALTA REAL) --- */}
+          {/* --- VISTA 2: SEMANAL (MOSTRANDO HORARIOS PROGRAMADOS DE CADA DÍA) --- */}
           {modalidad === "SEMANAL" && (
             <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-xs space-y-4">
               <div className="flex items-center justify-between">
@@ -1780,22 +1936,17 @@ export default function FichaComportamiento() {
                       const estaInspeccionado =
                         diaInspeccionado?.fecha === dia.fecha;
 
-                      // Evaluación estricta de turno/obligación horaria
-                      const tieneHorario =
-                        dia.tieneHorarioLaboral === true ||
-                        (dia.totalHorasPlanificadasMinutos &&
-                          dia.totalHorasPlanificadasMinutos > 0) ||
-                        (dia.planificados && dia.planificados.length > 0) ||
-                        dia.estadoGeneral === "SIN_REGISTRO" ||
-                        dia.estadoGeneral === "INFRACCION" ||
-                        dia.estadoGeneral === "DESVIO" ||
-                        dia.totalIncidentes > 0;
+                      const esFuturo = dia.fecha > hoyIso;
+                      const horariosProgramados = obtenerHorariosDeFecha(
+                        dia.fecha,
+                      );
+                      const tieneHorario = horariosProgramados.length > 0;
 
                       const huboActividad =
                         dia.presenciaNetaMinutos > 0 ||
                         (dia.primeraEntrada && dia.primeraEntrada !== "--:--");
 
-                      // CASO 1: NO tenía horario asignado y NO asistió (Franco / Sin obligación)
+                      // CASO 1: NO tenía horario asignado y NO asistió (Franco)
                       const esFrancoSinActividad =
                         !tieneHorario && !huboActividad;
 
@@ -1832,7 +1983,7 @@ export default function FichaComportamiento() {
                                     setDiaInspeccionado(null);
                                   else setDiaInspeccionado(dia);
                                 }}
-                                className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-semibold text-slate-500 hover:bg-slate-200 transition"
+                                className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-semibold text-slate-500 hover:bg-slate-200 transition cursor-pointer"
                               >
                                 <Eye className="w-3.5 h-3.5" />
                                 {estaInspeccionado ? "Cerrar" : "Ver Día"}
@@ -1842,8 +1993,70 @@ export default function FichaComportamiento() {
                         );
                       }
 
-                      // CASO 2: Tenía horario y NO fue a trabajar -> FALTA / INASISTENCIA REAL
-                      const esFalta = tieneHorario && !huboActividad;
+                      // CASO 2: DÍA FUTURO CON HORARIO PROGRAMADO
+                      if (esFuturo && tieneHorario && !huboActividad) {
+                        const hProg = horariosProgramados[0];
+                        return (
+                          <tr
+                            key={dia.fecha}
+                            className={`transition ${
+                              estaInspeccionado
+                                ? "bg-indigo-50/70 font-semibold"
+                                : "bg-indigo-50/20 hover:bg-indigo-50/40"
+                            }`}
+                          >
+                            <td className="px-4 py-3 font-mono font-bold text-slate-900">
+                              {formatearFechaVisual(dia.fecha)}
+                            </td>
+                            <td className="px-4 py-3 font-semibold">
+                              {dia.diaSemana}
+                            </td>
+                            <td className="px-4 py-3 font-mono text-indigo-700 font-bold">
+                              {hProg.entrada} hs
+                            </td>
+                            <td className="px-4 py-3 font-mono text-indigo-700 font-bold">
+                              {hProg.salida} hs
+                            </td>
+                            <td className="px-4 py-3">
+                              <span className="text-[11px] text-indigo-900 font-medium bg-indigo-100/70 px-2 py-0.5 rounded-md">
+                                {hProg.nombre}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 text-slate-400">0</td>
+                            <td className="px-4 py-3">
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-800 border border-indigo-200">
+                                Programado
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 font-bold text-slate-400">
+                              -
+                            </td>
+                            <td className="px-4 py-3 text-right no-print">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (diaInspeccionado?.fecha === dia.fecha)
+                                    setDiaInspeccionado(null);
+                                  else setDiaInspeccionado(dia);
+                                }}
+                                className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold cursor-pointer transition ${
+                                  estaInspeccionado
+                                    ? "bg-indigo-600 text-white shadow-xs"
+                                    : "bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200"
+                                }`}
+                              >
+                                <Eye className="w-3.5 h-3.5" />
+                                {estaInspeccionado ? "Cerrar" : "Ver Día"}
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      }
+
+                      // CASO 3: Tenía horario y NO fue a trabajar (FALTA REAL EN DÍA PASADO)
+                      const esFalta =
+                        tieneHorario && !huboActividad && !esFuturo;
+                      const hExigido = horariosProgramados[0] || null;
 
                       return (
                         <tr
@@ -1864,18 +2077,32 @@ export default function FichaComportamiento() {
                           </td>
                           <td className="px-4 py-3 font-mono">
                             {esFalta ? (
-                              <span className="text-rose-600 font-bold">
-                                --:--
-                              </span>
+                              <div className="leading-tight">
+                                <span className="text-rose-600 font-bold block">
+                                  --:--
+                                </span>
+                                {hExigido && (
+                                  <span className="text-[10px] text-slate-400 block font-normal">
+                                    Debía: {hExigido.entrada} hs
+                                  </span>
+                                )}
+                              </div>
                             ) : (
                               dia.primeraEntrada
                             )}
                           </td>
                           <td className="px-4 py-3 font-mono">
                             {esFalta ? (
-                              <span className="text-rose-600 font-bold">
-                                --:--
-                              </span>
+                              <div className="leading-tight">
+                                <span className="text-rose-600 font-bold block">
+                                  --:--
+                                </span>
+                                {hExigido && (
+                                  <span className="text-[10px] text-slate-400 block font-normal">
+                                    Debía: {hExigido.salida} hs
+                                  </span>
+                                )}
+                              </div>
                             ) : (
                               dia.ultimoEgreso
                             )}
@@ -1900,9 +2127,16 @@ export default function FichaComportamiento() {
                           </td>
                           <td className="px-4 py-3">
                             {esFalta ? (
-                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-600 text-white shadow-2xs">
-                                ⚠ Ausencia / Falta
-                              </span>
+                              <div className="space-y-0.5">
+                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-600 text-white shadow-2xs block w-fit">
+                                  ⚠ Ausencia / Falta
+                                </span>
+                                {hExigido && (
+                                  <span className="text-[10px] text-slate-500 font-medium block">
+                                    {hExigido.nombre}
+                                  </span>
+                                )}
+                              </div>
                             ) : dia.totalIncidentes > 0 ? (
                               <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200">
                                 ⚠ {dia.totalIncidentes} desvío(s)
@@ -1953,7 +2187,7 @@ export default function FichaComportamiento() {
             </div>
           )}
 
-          {/* --- VISTA 3: RANGO DE FECHAS (CALENDARIO CON MESES SEPARADOS) --- */}
+          {/* --- VISTA 3: RANGO DE FECHAS (CALENDARIO MULTIMES) --- */}
           {modalidad === "RANGO_FECHAS" && (
             <div className="space-y-6">
               <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs flex items-center justify-between">
@@ -2011,8 +2245,8 @@ export default function FichaComportamiento() {
                     </h3>
                   </div>
                   <p className="text-[11px] text-slate-500 mt-0.5">
-                    Toque cualquier día para ver sus marcas y justificar
-                    desvíos.
+                    Toque cualquier día para ver sus marcas, horarios y
+                    justificar desvíos.
                   </p>
                 </div>
                 <div className="flex items-center gap-3 text-[11px] font-bold">
@@ -2027,6 +2261,10 @@ export default function FichaComportamiento() {
                   <span className="flex items-center gap-1 text-amber-700">
                     <span className="w-2 h-2 rounded-full bg-amber-400" />{" "}
                     Desvío
+                  </span>
+                  <span className="flex items-center gap-1 text-blue-700">
+                    <span className="w-2 h-2 rounded-full bg-blue-400" />{" "}
+                    Programado
                   </span>
                   <span className="flex items-center gap-1 text-slate-400">
                     <span className="w-2 h-2 rounded-full bg-slate-300" /> Sin
