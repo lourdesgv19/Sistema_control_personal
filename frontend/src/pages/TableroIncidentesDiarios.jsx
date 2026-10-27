@@ -40,6 +40,23 @@ function formatearFechaVisual(fechaIso) {
   return soloFecha;
 }
 
+function obtenerRangoMultiMes(mesAnoStr, cantidadMeses) {
+  if (!mesAnoStr) return null;
+  const [anioStr, mesStr] = mesAnoStr.split("-");
+  const anioInicio = parseInt(anioStr, 10);
+  const mesNumInicio = parseInt(mesStr, 10);
+
+  const totalMeses = mesNumInicio + cantidadMeses - 1;
+  const mesFin = ((totalMeses - 1) % 12) + 1;
+  const anioFin = anioInicio + Math.floor((totalMeses - 1) / 12);
+
+  const ultimoDia = new Date(anioFin, mesFin, 0).getDate();
+  const desde = `${anioInicio}-${String(mesNumInicio).padStart(2, "0")}-01`;
+  const hasta = `${anioFin}-${String(mesFin).padStart(2, "0")}-${String(ultimoDia).padStart(2, "0")}`;
+
+  return { desde, hasta };
+}
+
 export default function TableroIncidentesDiarios() {
   const { tienePermiso } = useAuth();
   const puedeJustificar = tienePermiso("INCIDENTES_JUSTIFICAR");
@@ -56,6 +73,7 @@ export default function TableroIncidentesDiarios() {
   }, []);
 
   const hoyIso = useMemo(() => new Date().toISOString().split("T")[0], []);
+  const anioActual = useMemo(() => new Date().getFullYear(), []);
 
   const [modoFiltroFecha, setModoFiltroFecha] = useState(
     () =>
@@ -69,6 +87,14 @@ export default function TableroIncidentesDiarios() {
   const [fechaHasta, setFechaHasta] = useState(
     () => filtroNavegado?.fecha || filtrosGuardados?.fechaHasta || hoyIso,
   );
+
+  // Mes base seleccionado para Trimestre / Cuatrimestre (formato YYYY-MM)
+  const [mesBaseSeleccionado, setMesBaseSeleccionado] = useState(
+    () =>
+      (filtrosGuardados?.fechaDesde || hoyIso).substring(0, 7) ||
+      `${anioActual}-01`,
+  );
+
   const [paginaActual, setPaginaActual] = useState(1);
   const [busqueda, setBusqueda] = useState(
     () => filtroNavegado?.busqueda || filtrosGuardados?.busqueda || "",
@@ -96,11 +122,47 @@ export default function TableroIncidentesDiarios() {
   const [modalAbierto, setModalAbierto] = useState(false);
   const [modoSoloLectura, setModoSoloLectura] = useState(false);
 
+  // Sincronizar fechas cuando se cambia a TRIMESTRE o CUATRIMESTRE
+  const aplicarRangoPeriodo = useCallback((modo, mesAno) => {
+    if (modo === "TRIMESTRE") {
+      const rango = obtenerRangoMultiMes(mesAno, 3);
+      if (rango) {
+        setFechaDesde(rango.desde);
+        setFechaHasta(rango.hasta);
+      }
+    } else if (modo === "CUATRIMESTRE") {
+      const rango = obtenerRangoMultiMes(mesAno, 4);
+      if (rango) {
+        setFechaDesde(rango.desde);
+        setFechaHasta(rango.hasta);
+      }
+    }
+  }, []);
+
+  const handleCambioModo = (key) => {
+    setModoFiltroFecha(key);
+    setPaginaActual(1);
+    if (key === "DIA") {
+      setFechaHasta(fechaDesde);
+    } else if (key === "TRIMESTRE") {
+      aplicarRangoPeriodo("TRIMESTRE", mesBaseSeleccionado);
+    } else if (key === "CUATRIMESTRE") {
+      aplicarRangoPeriodo("CUATRIMESTRE", mesBaseSeleccionado);
+    }
+  };
+
+  const handleCambioMesBase = (nuevoMesAno) => {
+    setMesBaseSeleccionado(nuevoMesAno);
+    setPaginaActual(1);
+    aplicarRangoPeriodo(modoFiltroFecha, nuevoMesAno);
+  };
+
   useEffect(() => {
     const estadoAGuardar = {
       modoFiltroFecha,
       fechaDesde,
       fechaHasta,
+      mesBaseSeleccionado,
       paginaActual,
       busqueda,
       severidad,
@@ -113,6 +175,7 @@ export default function TableroIncidentesDiarios() {
     modoFiltroFecha,
     fechaDesde,
     fechaHasta,
+    mesBaseSeleccionado,
     paginaActual,
     busqueda,
     severidad,
@@ -157,7 +220,6 @@ export default function TableroIncidentesDiarios() {
         const data = await getTableroIncidentes(params);
         setTableroData(data);
 
-        // Extraer el objeto paginado según el DTO (TableroIncidentesDTO)
         const pag =
           data?.incidentesPaginados ||
           data?.incidentes ||
@@ -167,7 +229,6 @@ export default function TableroIncidentesDiarios() {
           const lista = pag.content;
           setIncidentes(lista);
 
-          // Si totalElements no viene o es 0 pero hay elementos en la lista, usamos lista.length como respaldo
           const totalReal =
             pag.totalElements !== undefined &&
             pag.totalElements !== null &&
@@ -228,7 +289,6 @@ export default function TableroIncidentesDiarios() {
     return () => clearTimeout(timer);
   }, [cargarDatos, paginaActual]);
 
-  // Sincronización en tiempo real con Debounce
   useEffect(() => {
     let timerSync = null;
 
@@ -329,6 +389,7 @@ export default function TableroIncidentesDiarios() {
         </div>
 
         <div className="flex items-center gap-3 flex-wrap">
+          {/* BOTONES DE MODO DE FILTRADO */}
           <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs font-semibold overflow-x-auto">
             {[
               { label: "Un Día", key: "DIA" },
@@ -339,11 +400,7 @@ export default function TableroIncidentesDiarios() {
               <button
                 key={key}
                 type="button"
-                onClick={() => {
-                  setModoFiltroFecha(key);
-                  if (key === "DIA") setFechaHasta(fechaDesde);
-                  setPaginaActual(1);
-                }}
+                onClick={() => handleCambioModo(key)}
                 className={`px-3 py-1 rounded-lg transition cursor-pointer whitespace-nowrap ${
                   modoFiltroFecha === key
                     ? "bg-white text-indigo-700 shadow-xs border border-slate-200 font-bold"
@@ -355,6 +412,7 @@ export default function TableroIncidentesDiarios() {
             ))}
           </div>
 
+          {/* DATEPICKER UN DÍA */}
           {modoFiltroFecha === "DIA" && (
             <div
               onClick={(e) => {
@@ -386,6 +444,7 @@ export default function TableroIncidentesDiarios() {
             </div>
           )}
 
+          {/* DATEPICKERS RANGO LIBRE */}
           {modoFiltroFecha === "RANGO" && (
             <div className="flex items-center gap-2">
               <div
@@ -451,6 +510,37 @@ export default function TableroIncidentesDiarios() {
             </div>
           )}
 
+          {/* SELECTOR DE MESES IDENTICO A FICHADECOMPORTAMIENTO */}
+          {(modoFiltroFecha === "TRIMESTRE" ||
+            modoFiltroFecha === "CUATRIMESTRE") && (
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] text-slate-400 font-bold uppercase whitespace-nowrap">
+                Desde Mes a Elección
+              </span>
+              <select
+                value={mesBaseSeleccionado}
+                onChange={(e) => handleCambioMesBase(e.target.value)}
+                className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 font-semibold text-slate-800 text-xs outline-none cursor-pointer focus:border-indigo-500 bg-white"
+              >
+                <option value={`${anioActual}-01`}>
+                  Enero (contar {modoFiltroFecha === "TRIMESTRE" ? "3" : "4"}{" "}
+                  meses)
+                </option>
+                <option value={`${anioActual}-02`}>Febrero</option>
+                <option value={`${anioActual}-03`}>Marzo</option>
+                <option value={`${anioActual}-04`}>Abril</option>
+                <option value={`${anioActual}-05`}>Mayo</option>
+                <option value={`${anioActual}-06`}>Junio</option>
+                <option value={`${anioActual}-07`}>Julio</option>
+                <option value={`${anioActual}-08`}>Agosto</option>
+                <option value={`${anioActual}-09`}>Septiembre</option>
+                <option value={`${anioActual}-10`}>Octubre</option>
+                <option value={`${anioActual}-11`}>Noviembre</option>
+                <option value={`${anioActual}-12`}>Diciembre</option>
+              </select>
+            </div>
+          )}
+
           {modoFiltroFecha === "DIA" && (
             <div className="flex items-center gap-2 px-3.5 py-1.5 bg-indigo-50/80 border border-indigo-100 rounded-xl text-xs font-semibold text-indigo-950 select-none shadow-2xs">
               <Users className="w-4 h-4 text-indigo-600 shrink-0" />
@@ -468,12 +558,14 @@ export default function TableroIncidentesDiarios() {
             onClick={() => cargarDatos(paginaActual - 1, false)}
             disabled={loading}
             className="p-2 border border-slate-200 rounded-xl hover:bg-slate-50 text-slate-600 transition cursor-pointer"
+            title="Actualizar datos"
           >
             <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
           </button>
         </div>
       </div>
 
+      {/* TARJETAS DE MÉTRICAS */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
         <div
           onClick={() => {
@@ -690,6 +782,7 @@ export default function TableroIncidentesDiarios() {
         </div>
       </div>
 
+      {/* FILTROS ADICIONALES */}
       <div className="bg-white p-4 border border-slate-200 rounded-2xl shadow-xs space-y-3">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
           <div className="relative">
@@ -772,6 +865,7 @@ export default function TableroIncidentesDiarios() {
         </div>
       </div>
 
+      {/* TABLA DE INCIDENTES */}
       <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-xs">
         <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -956,8 +1050,7 @@ export default function TableroIncidentesDiarios() {
           </table>
         </div>
 
-        {/* CONTROL DE PAGINACIÓN BLINDADO */}
-        {/* CONTROL DE PAGINACIÓN */}
+        {/* PAGINACIÓN */}
         <div className="bg-white px-6 py-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
           <div className="text-slate-500">
             {incidentes.length === 0 ? (
