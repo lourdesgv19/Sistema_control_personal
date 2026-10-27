@@ -1,18 +1,22 @@
 package backend.service;
 
 import backend.dto.ExcepcionLicenciaDTOs.*;
+import backend.dto.ExcepcionMetricasDTO;
 import backend.model.Empleado;
 import backend.model.ExcepcionLicencia;
 import backend.model.Usuario;
 import backend.repositories.EmpleadoRepository;
 import backend.repositories.ExcepcionLicenciaRepository;
 import backend.repositories.UsuarioRepository;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
-import java.util.stream.Collectors;
 
 @Service
 public class ExcepcionLicenciaService {
@@ -20,87 +24,52 @@ public class ExcepcionLicenciaService {
     private final ExcepcionLicenciaRepository excepcionRepo;
     private final EmpleadoRepository empleadoRepo;
     private final UsuarioRepository usuarioRepo;
+    private final AuditorHelperService auditor;
 
-public ExcepcionLicenciaService(
+    public ExcepcionLicenciaService(
             ExcepcionLicenciaRepository excepcionRepo,
             EmpleadoRepository empleadoRepo,
-            UsuarioRepository usuarioRepo) {
+            UsuarioRepository usuarioRepo,
+            AuditorHelperService auditor) {
         this.excepcionRepo = excepcionRepo;
         this.empleadoRepo = empleadoRepo;
         this.usuarioRepo = usuarioRepo;
+        this.auditor = auditor;
     }
 
     @Transactional(readOnly = true)
-    public ResumenPanelDTO obtenerPanel(String busqueda, String estado, String tipo, String categoria) {
+    public ExcepcionMetricasDTO obtenerMetricasGlobales() {
         LocalDate hoy = LocalDate.now();
-        List<ExcepcionLicencia> todas = excepcionRepo.listarConFiltros(estado, tipo, busqueda);
-
-        // Mapear cada una calculando en tiempo real su condición temporal
-        List<DetalleLicenciaDTO> listado = todas.stream()
-            .map(e -> calcularDetalle(e, hoy))
-            .filter(d -> {
-                if (categoria == null || categoria.isBlank() || categoria.equalsIgnoreCase("TODAS")) return true;
-                if (d.esInstitucional()) return categoria.equalsIgnoreCase("INSTITUCIONAL");
-                return d.rolArea() != null && d.rolArea().equalsIgnoreCase(categoria);
-            })
-            .collect(Collectors.toList());
-
-        // Contadores superiores de tarjetas métricas
-        long enCursoHoy = listado.stream().filter(d -> "EN_CURSO".equals(d.condicionTemporal())).count();
-        long proximas = listado.stream().filter(d -> "PROXIMA".equals(d.condicionTemporal())).count();
-        long finalizadas = listado.stream().filter(d -> "FINALIZADA".equals(d.condicionTemporal())).count();
-        long pendientesRrhh = listado.stream().filter(d -> "PENDIENTE_RRHH".equals(d.estado())).count();
-        long totalRegistros = listado.size();
-
-        // Agrupación de desglose por agente
-        Map<String, List<DetalleLicenciaDTO>> agrupado = new LinkedHashMap<>();
-        
-        // Colocar primero a los institucionales si existen
-        List<DetalleLicenciaDTO> institucionales = listado.stream().filter(DetalleLicenciaDTO::esInstitucional).toList();
-        if (!institucionales.isEmpty()) {
-            agrupado.put("INSTITUCIONAL", institucionales);
-        }
-
-        // Agrupar el resto por empleado
-        listado.stream()
-            .filter(d -> !d.esInstitucional())
-            .forEach(d -> {
-                String key = "EMP_" + d.idEmpleado();
-                agrupado.computeIfAbsent(key, k -> new ArrayList<>()).add(d);
-            });
-
-        List<AgenteDesgloseDTO> desgloseAgentes = new ArrayList<>();
-
-        for (Map.Entry<String, List<DetalleLicenciaDTO>> entry : agrupado.entrySet()) {
-            List<DetalleLicenciaDTO> listaAgente = entry.getValue();
-            DetalleLicenciaDTO primerItem = listaAgente.get(0);
-
-            int totalDias = listaAgente.stream().mapToInt(DetalleLicenciaDTO::diasDuracion).sum();
-            int enCurso = (int) listaAgente.stream().filter(d -> "EN_CURSO".equals(d.condicionTemporal())).count();
-            int pendientes = (int) listaAgente.stream().filter(d -> "PENDIENTE_RRHH".equals(d.estado())).count();
-            int prox = (int) listaAgente.stream().filter(d -> "PROXIMA".equals(d.condicionTemporal())).count();
-            int fin = (int) listaAgente.stream().filter(d -> "FINALIZADA".equals(d.condicionTemporal())).count();
-
-            if (primerItem.esInstitucional()) {
-                desgloseAgentes.add(new AgenteDesgloseDTO(
-                    null, true, "Toda la Institución (Asuetos y Feriados)", "TF", "", "Institucional",
-                    "Alcance general a todo el personal docente y no docente",
-                    totalDias, listaAgente.size(), enCurso, pendientes, prox, fin, listaAgente
-                ));
-            } else {
-                String iniciales = obtenerIniciales(primerItem.nombreEmpleado());
-                desgloseAgentes.add(new AgenteDesgloseDTO(
-                    primerItem.idEmpleado(), false, primerItem.nombreEmpleado(), iniciales,
-                    primerItem.legajoEmpleado(), primerItem.rolArea(), "",
-                    totalDias, listaAgente.size(), enCurso, pendientes, prox, fin, listaAgente
-                ));
-            }
-        }
-
-        return new ResumenPanelDTO(
-            enCursoHoy, proximas, finalizadas, pendientesRrhh, totalRegistros,
-            hoy.toString(), desgloseAgentes, listado
+        return new ExcepcionMetricasDTO(
+            excepcionRepo.contarEnCursoHoy(hoy),
+            excepcionRepo.contarProximas(hoy),
+            excepcionRepo.contarFinalizadas(hoy),
+            excepcionRepo.contarPendientesRrhh(),
+            excepcionRepo.contarTotalActivos()
         );
+    }
+
+    @Transactional(readOnly = true)
+    public Page<DetalleLicenciaDTO> listarPaginado(
+            String busqueda,
+            String estado,
+            String tipo,
+            String filtroKpi,
+            String filtroActivo,
+            int page,
+            int size) {
+
+        LocalDate hoy = LocalDate.now();
+        Pageable pageable = PageRequest.of(Math.max(0, page), Math.max(1, size));
+
+        String act = (filtroActivo != null && !filtroActivo.isBlank()) ? filtroActivo.toUpperCase() : "ACTIVOS";
+        String est = (estado != null && !estado.isBlank()) ? estado.toUpperCase() : "TODOS";
+        String tip = (tipo != null && !tipo.isBlank()) ? tipo.toUpperCase() : "TODOS";
+        String kpi = (filtroKpi != null && !filtroKpi.isBlank()) ? filtroKpi.toUpperCase() : "TODOS";
+        String q = (busqueda != null) ? busqueda.trim() : "";
+
+        return excepcionRepo.listarPaginado(act, est, tip, kpi, q, hoy, pageable)
+                .map(e -> calcularDetalle(e, hoy));
     }
 
     @Transactional
@@ -108,10 +77,12 @@ public ExcepcionLicenciaService(
         ExcepcionLicencia e = new ExcepcionLicencia();
         e.setEsInstitucional(req.esInstitucional() || req.idEmpleado() == null);
 
+        String destinatario = "Toda la Institución";
         if (!e.getEsInstitucional()) {
             Empleado emp = empleadoRepo.findById(req.idEmpleado())
                 .orElseThrow(() -> new IllegalArgumentException("Empleado no encontrado con ID: " + req.idEmpleado()));
             e.setEmpleado(emp);
+            destinatario = emp.getApellido() + ", " + emp.getNombre() + " (Legajo: " + emp.getNroLegajo() + ")";
         }
 
         e.setTipo(req.tipo());
@@ -127,7 +98,63 @@ public ExcepcionLicenciaService(
         e.setRegistradoPor(usuario);
 
         ExcepcionLicencia guardada = excepcionRepo.save(e);
+
+        auditor.registrar(
+            "CREAR_EXCEPCION_LICENCIA",
+            "EXCEPCIONES",
+            String.format("Alta de %s para %s del %s al %s (%d días). Motivo: %s",
+                guardada.getTipoEtiqueta(),
+                destinatario,
+                guardada.getFechaInicio(),
+                guardada.getFechaFin(),
+                guardada.getDiasDuracion(),
+                guardada.getMotivoDictamen())
+        );
+
         return calcularDetalle(guardada, LocalDate.now());
+    }
+
+    @Transactional
+    public DetalleLicenciaDTO actualizarLicencia(Long id, CrearExcepcionRequest req) {
+        ExcepcionLicencia e = excepcionRepo.findById(id)
+            .orElseThrow(() -> new IllegalArgumentException("Excepción no encontrada con ID: " + id));
+
+        e.setEsInstitucional(req.esInstitucional() || req.idEmpleado() == null);
+        String destinatario = "Toda la Institución";
+
+        if (!e.getEsInstitucional()) {
+            Empleado emp = empleadoRepo.findById(req.idEmpleado())
+                .orElseThrow(() -> new IllegalArgumentException("Empleado no encontrado con ID: " + req.idEmpleado()));
+            e.setEmpleado(emp);
+            destinatario = emp.getApellido() + ", " + emp.getNombre() + " (Legajo: " + emp.getNroLegajo() + ")";
+        } else {
+            e.setEmpleado(null);
+        }
+
+        e.setTipo(req.tipo());
+        e.setTipoEtiqueta(formatearTipoEtiqueta(req.tipo()));
+        e.setFechaInicio(req.fechaInicio());
+        e.setFechaFin(req.fechaFin());
+
+        long dias = ChronoUnit.DAYS.between(req.fechaInicio(), req.fechaFin()) + 1;
+        e.setDiasDuracion((int) Math.max(1, dias));
+        e.setMotivoDictamen(req.motivoDictamen());
+
+        ExcepcionLicencia modificada = excepcionRepo.save(e);
+
+        auditor.registrar(
+            "ACTUALIZAR_EXCEPCION_LICENCIA",
+            "EXCEPCIONES",
+            String.format("Modificación de %s #%d para %s (Vigencia: %s al %s). Motivo: %s",
+                modificada.getTipoEtiqueta(),
+                modificada.getId(),
+                destinatario,
+                modificada.getFechaInicio(),
+                modificada.getFechaFin(),
+                modificada.getMotivoDictamen())
+        );
+
+        return calcularDetalle(modificada, LocalDate.now());
     }
 
     @Transactional
@@ -135,16 +162,82 @@ public ExcepcionLicenciaService(
         ExcepcionLicencia e = excepcionRepo.findById(id)
             .orElseThrow(() -> new IllegalArgumentException("Registro no encontrado con ID: " + id));
 
+        String estadoAnterior = e.getEstado();
         e.setEstado(req.nuevoEstado());
         if (req.observaciones() != null) {
             e.setObservacionesRrhh(req.observaciones());
         }
-        return calcularDetalle(excepcionRepo.save(e), LocalDate.now());
+
+        ExcepcionLicencia dictaminada = excepcionRepo.save(e);
+
+        String destinatario = dictaminada.getEmpleado() != null
+            ? dictaminada.getEmpleado().getApellido() + ", " + dictaminada.getEmpleado().getNombre() + " (#" + dictaminada.getEmpleado().getNroLegajo() + ")"
+            : "Toda la Institución";
+
+        String accionAuditoria = "APROBADA".equalsIgnoreCase(req.nuevoEstado()) 
+            ? "APROBAR_EXCEPCION_LICENCIA" 
+            : "RECHAZAR_EXCEPCION_LICENCIA";
+
+        auditor.registrar(
+            accionAuditoria,
+            "EXCEPCIONES",
+            String.format("Dictamen de %s #%d de %s: cambió de '%s' a '%s'. Observaciones RRHH: %s",
+                dictaminada.getTipoEtiqueta(),
+                dictaminada.getId(),
+                destinatario,
+                estadoAnterior,
+                dictaminada.getEstado(),
+                dictaminada.getObservacionesRrhh() != null ? dictaminada.getObservacionesRrhh() : "Sin observaciones adicionales")
+        );
+
+        return calcularDetalle(dictaminada, LocalDate.now());
     }
 
     @Transactional
     public void bajaLogica(Long id) {
+        ExcepcionLicencia e = excepcionRepo.findById(id)
+            .orElseThrow(() -> new IllegalArgumentException("Registro no encontrado con ID: " + id));
+
+        String destinatario = e.getEmpleado() != null
+            ? e.getEmpleado().getApellido() + ", " + e.getEmpleado().getNombre() + " (#" + e.getEmpleado().getNroLegajo() + ")"
+            : "Toda la Institución";
+
         excepcionRepo.deleteById(id);
+
+        auditor.registrar(
+            "BAJA_EXCEPCION_LICENCIA",
+            "EXCEPCIONES",
+            String.format("Anulación / Baja de %s #%d para %s (%s al %s). Motivo original: %s",
+                e.getTipoEtiqueta(),
+                e.getId(),
+                destinatario,
+                e.getFechaInicio(),
+                e.getFechaFin(),
+                e.getMotivoDictamen())
+        );
+    }
+
+    @Transactional
+    public void reactivarLicencia(Long id) {
+        ExcepcionLicencia e = excepcionRepo.findById(id)
+            .orElseThrow(() -> new IllegalArgumentException("Registro no encontrado con ID: " + id));
+
+        excepcionRepo.reactivarPorId(id);
+
+        String destinatario = e.getEmpleado() != null
+            ? e.getEmpleado().getApellido() + ", " + e.getEmpleado().getNombre() + " (#" + e.getEmpleado().getNroLegajo() + ")"
+            : "Toda la Institución";
+
+        auditor.registrar(
+            "REACTIVAR_EXCEPCION_LICENCIA",
+            "EXCEPCIONES",
+            String.format("Reactivación de %s #%d para %s (%s al %s).",
+                e.getTipoEtiqueta(),
+                e.getId(),
+                destinatario,
+                e.getFechaInicio(),
+                e.getFechaFin())
+        );
     }
 
     private DetalleLicenciaDTO calcularDetalle(ExcepcionLicencia e, LocalDate hoy) {
@@ -193,22 +286,17 @@ public ExcepcionLicenciaService(
         String nombreEmp = emp != null ? (emp.getApellido() + ", " + emp.getNombre()) : "Toda la Institución";
         String legajo = emp != null ? emp.getNroLegajo() : "";
 
-        // OBTENCIÓN SEGURA DEL ESTAMENTO / ÁREA / ROL:
         String rolArea = "Personal";
         if (e.getEsInstitucional() || emp == null) {
             rolArea = "Institucional";
         } else {
-            // 1. Si el empleado tiene categorías asociadas (Docente, Administrativo, Servicios Generales)
             if (emp.getCategorias() != null && !emp.getCategorias().isEmpty()) {
                 rolArea = emp.getCategorias().get(0).getNombre(); 
-            } 
-            // 2. Si no tiene categoría pero sí tiene un usuario con rol asignado en la tabla 'usuarios'
-            else {
+            } else {
                 Optional<Usuario> usuarioOpt = usuarioRepo.findByEmpleadoId(emp.getId());
                 if (usuarioOpt.isPresent() && usuarioOpt.get().getRol() != null) {
                     rolArea = formatearRolUsuario(usuarioOpt.get().getRol());
                 } else if (emp.getNroLegajo() != null) {
-                    // Fallback visual por prefijo de legajo (ej: #DOC-1021, #ADM-2015, #GEN-3035)
                     String leg = emp.getNroLegajo().toUpperCase();
                     if (leg.contains("DOC")) rolArea = "Docente";
                     else if (leg.contains("ADM")) rolArea = "Administrativo";
@@ -233,6 +321,7 @@ public ExcepcionLicenciaService(
             e.getMotivoDictamen(),
             e.getObservacionesRrhh(),
             e.getCreadoEn(),
+            Boolean.TRUE.equals(e.getActivo()),
             condicion,
             textoProgreso,
             detalleVigencia,
@@ -240,32 +329,6 @@ public ExcepcionLicenciaService(
             transcurridos,
             restantes
         );
-    }
-
-    @Transactional
-    public DetalleLicenciaDTO actualizarLicencia(Long id, CrearExcepcionRequest req) {
-    ExcepcionLicencia e = excepcionRepo.findById(id)
-        .orElseThrow(() -> new IllegalArgumentException("Excepción no encontrada con ID: " + id));
-
-    e.setEsInstitucional(req.esInstitucional() || req.idEmpleado() == null);
-    if (!e.getEsInstitucional()) {
-        Empleado emp = empleadoRepo.findById(req.idEmpleado())
-            .orElseThrow(() -> new IllegalArgumentException("Empleado no encontrado con ID: " + req.idEmpleado()));
-        e.setEmpleado(emp);
-    } else {
-        e.setEmpleado(null);
-    }
-
-    e.setTipo(req.tipo());
-    e.setTipoEtiqueta(formatearTipoEtiqueta(req.tipo()));
-    e.setFechaInicio(req.fechaInicio());
-    e.setFechaFin(req.fechaFin());
-
-    long dias = ChronoUnit.DAYS.between(req.fechaInicio(), req.fechaFin()) + 1;
-    e.setDiasDuracion((int) Math.max(1, dias));
-    e.setMotivoDictamen(req.motivoDictamen());
-
-    return calcularDetalle(excepcionRepo.save(e), LocalDate.now());
     }
 
     private String formatearRolUsuario(String rol) {

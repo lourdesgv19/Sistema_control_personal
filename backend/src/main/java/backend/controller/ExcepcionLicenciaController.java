@@ -1,7 +1,9 @@
 package backend.controller;
 
 import backend.dto.ExcepcionLicenciaDTOs.*;
+import backend.dto.ExcepcionMetricasDTO;
 import backend.service.ExcepcionLicenciaService;
+import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -18,13 +20,21 @@ public class ExcepcionLicenciaController {
         this.service = service;
     }
 
-    @GetMapping("/panel")
-    public ResponseEntity<ResumenPanelDTO> obtenerPanel(
-            @RequestParam(required = false, defaultValue = "") String busqueda,
-            @RequestParam(required = false, defaultValue = "TODOS") String estado,
-            @RequestParam(required = false, defaultValue = "TODOS") String tipo,
-            @RequestParam(required = false, defaultValue = "TODAS") String categoria) {
-        return ResponseEntity.ok(service.obtenerPanel(busqueda, estado, tipo, categoria));
+    @GetMapping("/metricas")
+    public ResponseEntity<ExcepcionMetricasDTO> obtenerMetricas() {
+        return ResponseEntity.ok(service.obtenerMetricasGlobales());
+    }
+
+    @GetMapping("/paginado")
+    public ResponseEntity<Page<DetalleLicenciaDTO>> listarPaginado(
+            @RequestParam(defaultValue = "") String busqueda,
+            @RequestParam(defaultValue = "TODOS") String estado,
+            @RequestParam(defaultValue = "TODOS") String tipo,
+            @RequestParam(defaultValue = "TODOS") String filtroKpi,
+            @RequestParam(defaultValue = "ACTIVOS") String filtroActivo,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "15") int size) {
+        return ResponseEntity.ok(service.listarPaginado(busqueda, estado, tipo, filtroKpi, filtroActivo, page, size));
     }
 
     @PostMapping
@@ -33,6 +43,13 @@ public class ExcepcionLicenciaController {
             Authentication auth) {
         String usuario = auth != null ? auth.getName() : "ADMIN";
         return new ResponseEntity<>(service.registrarLicencia(request, usuario), HttpStatus.CREATED);
+    }
+
+    @PutMapping("/{id}")
+    public ResponseEntity<DetalleLicenciaDTO> actualizar(
+            @PathVariable Long id,
+            @RequestBody CrearExcepcionRequest request) {
+        return ResponseEntity.ok(service.actualizarLicencia(id, request));
     }
 
     @PatchMapping("/{id}/dictaminar")
@@ -48,10 +65,9 @@ public class ExcepcionLicenciaController {
         return ResponseEntity.noContent().build();
     }
 
-    @PutMapping("/{id}")
-    public ResponseEntity<DetalleLicenciaDTO> actualizar(
-        @PathVariable Long id,
-        @RequestBody CrearExcepcionRequest request) {
-    return ResponseEntity.ok(service.actualizarLicencia(id, request));
+    @PatchMapping("/{id}/reactivar")
+    public ResponseEntity<Void> reactivar(@PathVariable Long id) {
+        service.reactivarLicencia(id);
+        return ResponseEntity.noContent().build();
     }
 }

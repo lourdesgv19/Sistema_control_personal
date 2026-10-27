@@ -89,6 +89,19 @@ export const getBadgeAccionPorModulo = (modulo, accion = "") => {
     return "bg-indigo-50 text-indigo-700 border-indigo-300";
   }
 
+  // 7. Licencias y Excepciones -> Rosa
+  if (
+    mod === "EXCEPCION" ||
+    mod === "EXCEPCIONES" ||
+    mod === "LICENCIA" ||
+    acc.includes("LICEN") ||
+    acc.includes("EXCEP") ||
+    acc.includes("LICENCIA") ||
+    acc.includes("EXCEPCIONES")
+  ) {
+    return "bg-blue-50 text-blue-700 border-blue-300";
+  }
+
   // Por defecto (Gris Pizarra)
   return "bg-slate-100 text-slate-700 border-slate-300";
 };

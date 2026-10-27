@@ -22,20 +22,19 @@ public class FichaComportamientoService {
 
     private static final Logger log = LoggerFactory.getLogger(FichaComportamientoService.class);
 
-    // Lista de motivos u observaciones comunes estándar cargadas en el sistema
     private static final List<String> MOTIVOS_JUSTIFICACION_COMUNES = List.of(
-            "Certificado médico presentado",
-            "Trámites personales autorizados",
-            "Falla técnica en reloj biométrico",
-            "Problemas de transporte o tránsito",
-            "Razones de fuerza mayor / Urgencia",
-            "Cuidado de familiar directo",
-            "Mesa de examen o capacitación"     
+            "Autorización formal de Decanato / Dirección Académica",
+            "Comisión de servicio institucional en otra sede",
+            "Urgencia de salud / consulta médica imprevista",
+            "Falla técnica o corte de energía en el biométrico",
+            "Compensación horaria acordada previamente"
     );
-private final EmpleadoRepository empleadoRepo;
+
+    private final EmpleadoRepository empleadoRepo;
     private final EmpleadoHorarioRepository horarioRepo;
     private final EmpleadoFichajeRepository fichajeRepo;
     private final IncidenteAsistenciaRepository incidenteRepo;
+    private final ExcepcionLicenciaRepository excepcionRepo;
     private final EvaluadorIncidentesService evaluadorService;
     private final HorarioService horarioService;
 
@@ -44,12 +43,14 @@ private final EmpleadoRepository empleadoRepo;
             EmpleadoHorarioRepository horarioRepo,
             EmpleadoFichajeRepository fichajeRepo,
             IncidenteAsistenciaRepository incidenteRepo,
+            ExcepcionLicenciaRepository excepcionRepo,
             EvaluadorIncidentesService evaluadorService,
             HorarioService horarioService) {
         this.empleadoRepo = empleadoRepo;
         this.horarioRepo = horarioRepo;
         this.fichajeRepo = fichajeRepo;
         this.incidenteRepo = incidenteRepo;
+        this.excepcionRepo = excepcionRepo;
         this.evaluadorService = evaluadorService;
         this.horarioService = horarioService;
     }
@@ -146,7 +147,7 @@ private final EmpleadoRepository empleadoRepo;
                 .sorted(Comparator.comparing(EmpleadoFichaje::getHoraFichaje))
                 .toList();
 
-        // 3. Verificación de ausencias en memoria
+        // 3. Verificación de ausencias considerando licencias vigentes
         try {
             evaluadorService.asegurarAusenciasEmpleadoRango(emp, horarios, fichajesPeriodo, fechaInicio, fechaFin);
         } catch (Exception e) {
@@ -159,6 +160,11 @@ private final EmpleadoRepository empleadoRepo;
         ).getContent().stream()
                 .filter(i -> i.getEmpleado() != null && i.getEmpleado().getId().equals(emp.getId()))
                 .toList();
+
+        // Obtener licencias o asuetos vigentes en el rango
+        List<ExcepcionLicencia> excepcionesPeriodo = excepcionRepo.buscarExcepcionesVigentesEnRango(
+                emp.getId(), fechaInicio, fechaFin
+        );
 
         // 5. Línea de tiempo diaria específica
         List<FichaComportamientoDTO.IntervaloLineaTiempoDTO> planificados = new ArrayList<>();
@@ -299,12 +305,25 @@ private final EmpleadoRepository empleadoRepo;
                     .distinct()
                     .count();
 
+            // Verificación de Licencia / Asueto institucional para el día
+            boolean tieneLicenciaOAsueto = excepcionesPeriodo.stream().anyMatch(e ->
+                    !d.isBefore(e.getFechaInicio()) && !d.isAfter(e.getFechaFin())
+            );
+
             String estadoDia;
 
             if (esFuturo) {
                 cumplimientoDia = 0;
                 minutosDiferencia = 0;
                 estadoDia = (minutosTeoricosDia == 0) ? "FRANCO" : "FUTURO";
+            } else if (tieneLicenciaOAsueto && !huboPresencia) {
+                // Día amparado por licencia médica, vacaciones o asueto
+                diasEvaluadosHastaHoy++;
+                cumplimientoDia = 100;
+                minutosDiferencia = 0;
+                estadoDia = "LICENCIA";
+                totalHorasUtilesPeriodo += horasTeoricasDia;
+                totalHorasTeoricasPeriodo += horasTeoricasDia;
             } else {
                 diasEvaluadosHastaHoy++;
                 totalHorasTeoricasPeriodo += horasTeoricasDia;
@@ -362,8 +381,12 @@ private final EmpleadoRepository empleadoRepo;
 
             if (esDocente && !clasesDelDia.isEmpty()) {
                 minClaseTeoricos = evaluadorService.calcularMinutosClaseTeoricos(clasesDelDia);
-                if (!esFuturo) {
+                if (!esFuturo && !tieneLicenciaOAsueto) {
                     minClaseEfectivos = evaluadorService.calcularMinutosClaseEfectivos(clasesDelDia, fDia, d);
+                    totalMinClasesTeoricasPeriodo += minClaseTeoricos;
+                    totalMinClasesEfectivasPeriodo += minClaseEfectivos;
+                } else if (tieneLicenciaOAsueto) {
+                    minClaseEfectivos = minClaseTeoricos; // Justificado por licencia
                     totalMinClasesTeoricasPeriodo += minClaseTeoricos;
                     totalMinClasesEfectivasPeriodo += minClaseEfectivos;
                 }
@@ -416,10 +439,7 @@ private final EmpleadoRepository empleadoRepo;
                 .map(i -> i.getIdEventoAgrupador() != null ? i.getIdEventoAgrupador() : ("ID_" + i.getId()))
                 .distinct().count();
 
-        // =========================================================================
-        // CÁLCULO DE ESTADOS DE INCIDENTES Y TOP DE JUSTIFICACIONES (BACKEND)
-        // Regla: Motivos computados EXCLUSIVAMENTE para JUSTIFICADAS y OBSERVADAS
-        // =========================================================================
+        // 7. Cálculo de resoluciones y top de justificaciones en backend
         int pendientes = 0;
         int justificados = 0;
         int observados = 0;
@@ -436,7 +456,6 @@ private final EmpleadoRepository empleadoRepo;
                 default -> pendientes++;
             }
 
-            // Excluir PENDIENTES y RECHAZADAS del ranking de justificaciones
             boolean esAuditableParaTop = "JUSTIFICADA".equalsIgnoreCase(est) || "JUSTIFICADO".equalsIgnoreCase(est)
                     || "OBSERVADA".equalsIgnoreCase(est) || "OBSERVADO".equalsIgnoreCase(est);
 
@@ -465,7 +484,6 @@ private final EmpleadoRepository empleadoRepo;
 
         int incidentesProcesados = justificados + observados + rechazados;
 
-        // Total de Clases Dictadas para la tarjeta superior
         String clasesDictadasGral;
         if (esDocente && totalMinClasesTeoricasPeriodo > 0) {
             int porcGlobal = (int) Math.min(100, Math.round(((double) totalMinClasesEfectivasPeriodo / totalMinClasesTeoricasPeriodo) * 100.0));
@@ -546,7 +564,7 @@ private final EmpleadoRepository empleadoRepo;
             }
         }
 
-        return texto.trim();
+        return texto.length() > 32 ? texto.substring(0, 30).trim() + "..." : texto.trim();
     }
 
     private String normalizarTexto(String input) {

@@ -18,12 +18,12 @@ public class ExcepcionLicenciaDTOs {
     ) {}
 
     public record AgenteDesgloseDTO(
-        Long idEmpleado,           // null si es Institucional
+        Long idEmpleado,
         boolean esInstitucional,
-        String nombreCompleto,     // "Toda la Facultad (Asuetos y Feriados)" o "Apellido, Nombre"
-        String iniciales,          // "PM", "LM", etc.
+        String nombreCompleto,
+        String iniciales,
         String nroLegajo,
-        String rolArea,            // "Servicios Generales", "Administrativo", "Docente", etc.
+        String rolArea,
         String departamento,
         int totalDias,
         int totalRegistros,
@@ -50,17 +50,17 @@ public class ExcepcionLicenciaDTOs {
         String motivoDictamen,
         String observacionesRrhh,
         LocalDateTime creadoEn,
-        // Cálculos de condición temporal en tiempo real
-        String condicionTemporal,   // "EN_CURSO", "PROXIMA", "FINALIZADA"
-        String textoProgreso,       // Ej: "Día 1/5 (Quedan 4d)", "Inicia en 11 días", "Finalizó hace 7 días"
-        String detalleVigencia,     // Ej: "En curso: van 1 de 5 días • Restan 4 días para que finalice"
-        int porcentajeProgreso,     // 0 a 100
+        boolean activo,            // Estado de baja lógica
+        String condicionTemporal,  // EN_CURSO, PROXIMA, FINALIZADA
+        String textoProgreso,
+        String detalleVigencia,
+        int porcentajeProgreso,
         int diasTranscurridos,
         int diasRestantes
     ) {}
 
     public record CrearExcepcionRequest(
-        Long idEmpleado,           // null para Toda la Facultad
+        Long idEmpleado,
         boolean esInstitucional,
         String tipo,
         LocalDate fechaInicio,

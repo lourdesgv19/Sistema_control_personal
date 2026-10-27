@@ -4,10 +4,12 @@ import backend.dto.ResumenPresenciaFichajesDTO;
 import backend.model.Empleado;
 import backend.model.EmpleadoFichaje;
 import backend.model.EmpleadoHorario;
+import backend.model.ExcepcionLicencia;
 import backend.model.IncidenteAsistencia;
 import backend.repositories.EmpleadoFichajeRepository;
 import backend.repositories.EmpleadoHorarioRepository;
 import backend.repositories.EmpleadoRepository;
+import backend.repositories.ExcepcionLicenciaRepository;
 import backend.repositories.IncidenteAsistenciaRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -30,6 +32,7 @@ public class EvaluadorIncidentesService {
     private final EmpleadoHorarioRepository horarioRepo;
     private final EmpleadoFichajeRepository fichajeRepo;
     private final IncidenteAsistenciaRepository incidenteRepo;
+    private final ExcepcionLicenciaRepository excepcionRepo;
     private final HorarioService horarioService;
 
     public EvaluadorIncidentesService(
@@ -37,11 +40,13 @@ public class EvaluadorIncidentesService {
             EmpleadoHorarioRepository horarioRepo,
             EmpleadoFichajeRepository fichajeRepo,
             IncidenteAsistenciaRepository incidenteRepo,
+            ExcepcionLicenciaRepository excepcionRepo,
             HorarioService horarioService) {
         this.empleadoRepo = empleadoRepo;
         this.horarioRepo = horarioRepo;
         this.fichajeRepo = fichajeRepo;
         this.incidenteRepo = incidenteRepo;
+        this.excepcionRepo = excepcionRepo;
         this.horarioService = horarioService;
     }
 
@@ -50,85 +55,6 @@ public class EvaluadorIncidentesService {
     public void cierreDiarioAutomatico() {
         evaluarFecha(LocalDate.now());
     }
-
-    // =========================================================================
-    // CÁLCULO EXCLUSIVO DE HORAS DE CLASE (DOCENTES) EN MINUTOS EXACTOS
-    // =========================================================================
-
-    public long calcularMinutosClaseTeoricos(List<EmpleadoHorario> franjasDia) {
-        if (franjasDia == null || franjasDia.isEmpty()) return 0;
-        long minutosTotales = 0;
-        for (EmpleadoHorario h : franjasDia) {
-            if (h.getMateria() != null && h.getHoraEntrada() != null && h.getHoraSalida() != null) {
-                long m = Duration.between(h.getHoraEntrada(), h.getHoraSalida()).toMinutes();
-                if (m > 0) minutosTotales += m;
-            }
-        }
-        return minutosTotales;
-    }
-
-    /**
-     * Cuenta los minutos exactos de presencia real solapados con el horario de cada cátedra.
-     * No redondea por tolerancia: si ingresó 08:07 a una clase de 08:00, computa desde las 08:07.
-     */
-    public long calcularMinutosClaseEfectivos(List<EmpleadoHorario> franjasDia, List<EmpleadoFichaje> fichajesDelDia, LocalDate fecha) {
-        if (franjasDia == null || franjasDia.isEmpty() || fichajesDelDia == null || fichajesDelDia.isEmpty()) return 0;
-
-        List<EmpleadoHorario> clasesDelDia = franjasDia.stream()
-                .filter(h -> h.getMateria() != null && h.getHoraEntrada() != null && h.getHoraSalida() != null)
-                .toList();
-
-        if (clasesDelDia.isEmpty()) return 0;
-
-        List<EmpleadoFichaje> marcasDelDia = fichajesDelDia.stream()
-                .filter(f -> f.getHoraFichaje() != null && f.getHoraFichaje().toLocalDate().equals(fecha))
-                .sorted(Comparator.comparing(EmpleadoFichaje::getHoraFichaje))
-                .toList();
-
-        if (marcasDelDia.isEmpty()) return 0;
-
-        // Reconstrucción de intervalos reales de permanencia física
-        List<IntervaloReal> intervalosPresencia = new ArrayList<>();
-        LocalTime ultimaEntrada = null;
-
-        for (EmpleadoFichaje f : marcasDelDia) {
-            boolean esIngreso = esTipoIngreso(f.getTipoEvento());
-            boolean esSalida = esTipoSalida(f.getTipoEvento());
-
-            if (esIngreso) {
-                ultimaEntrada = f.getHoraFichaje().toLocalTime();
-            } else if (esSalida && ultimaEntrada != null) {
-                intervalosPresencia.add(new IntervaloReal(ultimaEntrada, f.getHoraFichaje().toLocalTime()));
-                ultimaEntrada = null;
-            }
-        }
-        if (ultimaEntrada != null) {
-            intervalosPresencia.add(new IntervaloReal(ultimaEntrada, LocalTime.of(23, 59, 59)));
-        }
-
-        long minutosEfectivos = 0;
-        for (EmpleadoHorario clase : clasesDelDia) {
-            LocalTime inicioClase = clase.getHoraEntrada();
-            LocalTime finClase = clase.getHoraSalida();
-
-            for (IntervaloReal pres : intervalosPresencia) {
-                if (pres.inicio().isBefore(finClase) && pres.fin().isAfter(inicioClase)) {
-                    // Solape exacto al minuto
-                    LocalTime solapeInicio = pres.inicio().isAfter(inicioClase) ? pres.inicio() : inicioClase;
-                    LocalTime solapeFin = pres.fin().isBefore(finClase) ? pres.fin() : finClase;
-
-                    long lapso = Duration.between(solapeInicio, solapeFin).toMinutes();
-                    if (lapso > 0) {
-                        minutosEfectivos += lapso;
-                    }
-                }
-            }
-        }
-
-        return minutosEfectivos;
-    }
-
-    private record IntervaloReal(LocalTime inicio, LocalTime fin) {}
 
     // =========================================================================
     // AUDITORÍA GENERAL DE JORNADA E INCIDENTES
@@ -158,6 +84,14 @@ public class EvaluadorIncidentesService {
             Empleado empleado = entry.getKey();
             List<EmpleadoHorario> franjas = entry.getValue();
 
+            // 0. CONTROL DE LICENCIA O ASUETO VIGENTE:
+            // Si el empleado tiene licencia aprobada/pendiente o es asueto institucional, NO se generan incidentes
+            if (excepcionRepo.tieneExcepcionOAsueto(empleado.getId(), fecha)) {
+                // Limpiar posibles incidentes que hubieran quedado registrados para este día
+                eliminarIncidentesDeFecha(fecha, empleado.getId());
+                continue;
+            }
+
             // 1. Obtener fichajes del día ordenados
             List<EmpleadoFichaje> fichajes = fichajeRepo.findAll().stream()
                     .filter(f -> f.getEmpleado() != null && f.getEmpleado().getId().equals(empleado.getId()))
@@ -169,7 +103,6 @@ public class EvaluadorIncidentesService {
                     .sorted(Comparator.comparing(EmpleadoFichaje::getHoraFichaje))
                     .toList();
 
-            // Sumatoria de minutos teóricos pautados para el empleado
             long minutosTeoricosDia = 0;
             for (EmpleadoHorario fh : franjas) {
                 if (fh.getHoraEntrada() != null && fh.getHoraSalida() != null) {
@@ -177,9 +110,7 @@ public class EvaluadorIncidentesService {
                 }
             }
 
-            // =========================================================================
-            // REGLA 4: INASISTENCIA REAL VS PRESENCIA
-            // =========================================================================
+            // REGLA 1: Ausencia en jornada obligatoria
             if (fichajes.isEmpty()) {
                 if (!existeIncidente(fecha, empleado.getId(), "AUSENCIAS")) {
                     IncidenteAsistencia inc = new IncidenteAsistencia();
@@ -189,18 +120,16 @@ public class EvaluadorIncidentesService {
                     inc.setSeveridad("CRÍTICA");
                     inc.setCategoriaRegla("AUSENCIAS");
                     inc.setTipo("Inasistencia injustificada en jornada obligatoria");
-                    inc.setDetalle("El empleado tenía jornada obligatoria pero no registró marcaciones.");
+                    inc.setDetalle("El empleado no registró ninguna marcación durante su día asignado.");
                     inc.setEstado("PENDIENTE");
                     inc.setIdEventoAgrupador("AUSENCIA_" + fecha + "_" + empleado.getId());
                     incidentesAGuardar.add(inc);
                 }
                 continue;
             } else {
-                // Auto-limpieza de inasistencias en caso de haber fichajes reales para la fecha
                 eliminarFalsasInasistencias(fecha, empleado.getId());
             }
 
-            // Construir los intervalos fuera de la institución
             long minutosPresenciaReal = 0;
             long minutosFueraAcumulados = 0;
             int cantidadSalidas = 0;
@@ -245,9 +174,7 @@ public class EvaluadorIncidentesService {
 
             LocalTime horaPrimerIngreso = primerIngreso.getHoraFichaje().toLocalTime();
 
-            // =========================================================================
-            // REGLA 4 (Continuación): CUMPLIÓ SUS HORAS EN OTRO TURNO (DESVÍO DE TURNO)
-            // =========================================================================
+            // REGLA: Cumplió sus horas en otro turno (desvío de turno)
             if (minutosPresenciaReal >= (minutosTeoricosDia - 15) && horaPrimerIngreso.isAfter(finTurnoGeneral)) {
                 if (!existeIncidente(fecha, empleado.getId(), "DESVIO_TURNO")) {
                     IncidenteAsistencia inc = new IncidenteAsistencia();
@@ -268,9 +195,7 @@ public class EvaluadorIncidentesService {
                 continue;
             }
 
-            // =========================================================================
-            // REGLA 2: EVALUAR TARDANZA SEGÚN TOLERANCIA DEL EMPLEADO
-            // =========================================================================
+            // REGLA 2: Llegadas Tarde
             int tolIngreso = empleado.getToleranciaIngresoMin() != null ? empleado.getToleranciaIngresoMin() : 15;
             LocalTime limiteTolerancia = inicioTurnoGeneral.plusMinutes(tolIngreso);
 
@@ -292,11 +217,8 @@ public class EvaluadorIncidentesService {
                 }
             }
 
-            // =========================================================================
-            // REGLA 3: SALIDAS INTERMEDIAS ACUMULADAS VS TOLERANCIA DEL EMPLEADO
-            // =========================================================================
+            // REGLA 3: Salidas Excesivas
             int maxTiempoFueraMin = empleado.getTiempoMaxFueraMin() != null ? empleado.getTiempoMaxFueraMin() : 30;
-
             if (minutosFueraAcumulados > maxTiempoFueraMin) {
                 if (!existeIncidente(fecha, empleado.getId(), "SALIDAS_EXCESIVAS")) {
                     IncidenteAsistencia incExceso = new IncidenteAsistencia();
@@ -314,21 +236,17 @@ public class EvaluadorIncidentesService {
                 }
             }
 
-            // =========================================================================
-            // REGLA 2B: SALIDAS DURANTE CLASE (CRÍTICAS) & RETIROS PREVIOS
-            // =========================================================================
+            // REGLA 4: Salidas en Clase & Retiros Previos
             for (EmpleadoHorario franja : franjas) {
                 LocalTime inicioFranja = franja.getHoraEntrada();
                 LocalTime salidaEsperada = franja.getHoraSalida();
                 int tolEgreso = empleado.getToleranciaEgresoMin() != null ? empleado.getToleranciaEgresoMin() : 10;
 
-                // Salida dentro del dictado de clase (Docentes)
                 if (franja.getMateria() != null && inicioFranja != null && salidaEsperada != null) {
                     for (Map.Entry<LocalTime, Long> sInterm : salidasDetalle.entrySet()) {
                         LocalTime horaSalida = sInterm.getKey();
                         long duracion = sInterm.getValue();
 
-                        // Ocurre estrictamente dentro del horario de la materia
                         if (horaSalida.isAfter(inicioFranja) && horaSalida.isBefore(salidaEsperada.minusMinutes(tolEgreso))) {
                             String grupoUnico = "SALIDA_CLASE_" + fecha + "_" + horaSalida.toString().substring(0, 5) + "_" + empleado.getId();
                             if (!existeIncidente(fecha, empleado.getId(), "SALIDAS_EN_CLASE")) {
@@ -350,7 +268,6 @@ public class EvaluadorIncidentesService {
                     }
                 }
 
-                // Retiro anticipado
                 if (ultimoEgreso != null && salidaEsperada != null) {
                     LocalTime horaEgresoReal = ultimoEgreso.getHoraFichaje().toLocalTime();
                     LocalTime limiteSalida = salidaEsperada.minusMinutes(tolEgreso);
@@ -375,7 +292,7 @@ public class EvaluadorIncidentesService {
                 }
             }
 
-            // Fichada abierta (sin egreso)
+            // REGLA 5: Marcas abiertas
             if (ultimoEgreso == null && fichajes.size() == 1) {
                 if (!existeIncidente(fecha, empleado.getId(), "MARCAS_ABIERTAS")) {
                     IncidenteAsistencia inc = new IncidenteAsistencia();
@@ -400,6 +317,10 @@ public class EvaluadorIncidentesService {
         }
     }
 
+    // =========================================================================
+    // ASEGURAR AUSENCIAS EN RANGO (CONSIDERANDO LICENCIAS Y ASUETOS)
+    // =========================================================================
+
     @Transactional
     public void asegurarAusenciasEmpleadoRango(Empleado emp, List<EmpleadoHorario> horariosActivos,
                                                List<EmpleadoFichaje> fichajesPeriodo,
@@ -416,13 +337,26 @@ public class EvaluadorIncidentesService {
                 .map(f -> f.getHoraFichaje().toLocalDate())
                 .collect(Collectors.toSet());
 
+        // Recuperar en 1 sola consulta todas las excepciones/asuelos del rango para el empleado
+        List<ExcepcionLicencia> excepcionesRango = excepcionRepo.buscarExcepcionesVigentesEnRango(emp.getId(), desde, hasta);
+
         List<IncidenteAsistencia> nuevasAusencias = new ArrayList<>();
         LocalDate hoy = LocalDate.now();
         LocalDate limite = hasta.isAfter(hoy) ? hoy : hasta;
 
         LocalDate cur = desde;
         while (!cur.isAfter(limite)) {
-            if (diasConHorario.contains(cur.getDayOfWeek().getValue()) && !diasConFichaje.contains(cur)) {
+            final LocalDate fActual = cur;
+
+            // Verificar si el día está cubierto por alguna licencia o asueto
+            boolean tieneLicenciaOAsueto = excepcionesRango.stream().anyMatch(e ->
+                !fActual.isBefore(e.getFechaInicio()) && !fActual.isAfter(e.getFechaFin())
+            );
+
+            if (tieneLicenciaOAsueto) {
+                // Si había ausencias registradas previamente para este día de licencia, se limpian
+                eliminarIncidentesDeFecha(fActual, emp.getId());
+            } else if (diasConHorario.contains(cur.getDayOfWeek().getValue()) && !diasConFichaje.contains(cur)) {
                 if (!existeIncidente(cur, emp.getId(), "AUSENCIAS")) {
                     IncidenteAsistencia inc = new IncidenteAsistencia();
                     inc.setFecha(cur);
@@ -447,6 +381,19 @@ public class EvaluadorIncidentesService {
         }
     }
 
+    private void eliminarIncidentesDeFecha(LocalDate fecha, Long idEmpleado) {
+        List<IncidenteAsistencia> incs = incidenteRepo.findAll().stream()
+                .filter(i -> i.getEmpleado() != null && i.getEmpleado().getId().equals(idEmpleado))
+                .filter(i -> i.getFecha() != null && i.getFecha().equals(fecha))
+                .toList();
+
+        if (!incs.isEmpty()) {
+            incidenteRepo.deleteAll(incs);
+            log.info(">>> Eliminados {} incidentes en {} para empleado {} por existir licencia o asueto vigente.",
+                    incs.size(), fecha, idEmpleado);
+        }
+    }
+
     private void eliminarFalsasInasistencias(LocalDate fecha, Long idEmpleado) {
         List<IncidenteAsistencia> falsas = incidenteRepo.findAll().stream()
                 .filter(i -> i.getEmpleado() != null && i.getEmpleado().getId().equals(idEmpleado))
@@ -457,14 +404,85 @@ public class EvaluadorIncidentesService {
 
         if (!falsas.isEmpty()) {
             incidenteRepo.deleteAll(falsas);
-            log.info(">>> Auto-limpieza: eliminadas {} inasistencias falsas para el empleado {} en {}.",
-                    falsas.size(), idEmpleado, fecha);
         }
     }
 
     private boolean existeIncidente(LocalDate fecha, Long idEmpleado, String categoria) {
         return incidenteRepo.existeIncidentePorFechaEmpleadoYCategoria(fecha, idEmpleado, categoria);
     }
+
+    // =========================================================================
+    // CÁLCULO DE MINUTOS DE CLASE DOCENTE
+    // =========================================================================
+
+    public long calcularMinutosClaseTeoricos(List<EmpleadoHorario> franjasDia) {
+        if (franjasDia == null || franjasDia.isEmpty()) return 0;
+        long minutosTotales = 0;
+        for (EmpleadoHorario h : franjasDia) {
+            if (h.getMateria() != null && h.getHoraEntrada() != null && h.getHoraSalida() != null) {
+                long m = Duration.between(h.getHoraEntrada(), h.getHoraSalida()).toMinutes();
+                if (m > 0) minutosTotales += m;
+            }
+        }
+        return minutosTotales;
+    }
+
+    public long calcularMinutosClaseEfectivos(List<EmpleadoHorario> franjasDia, List<EmpleadoFichaje> fichajesDelDia, LocalDate fecha) {
+        if (franjasDia == null || franjasDia.isEmpty() || fichajesDelDia == null || fichajesDelDia.isEmpty()) return 0;
+
+        List<EmpleadoHorario> clasesDelDia = franjasDia.stream()
+                .filter(h -> h.getMateria() != null && h.getHoraEntrada() != null && h.getHoraSalida() != null)
+                .toList();
+
+        if (clasesDelDia.isEmpty()) return 0;
+
+        List<EmpleadoFichaje> marcasDelDia = fichajesDelDia.stream()
+                .filter(f -> f.getHoraFichaje() != null && f.getHoraFichaje().toLocalDate().equals(fecha))
+                .sorted(Comparator.comparing(EmpleadoFichaje::getHoraFichaje))
+                .toList();
+
+        if (marcasDelDia.isEmpty()) return 0;
+
+        List<IntervaloReal> intervalosPresencia = new ArrayList<>();
+        LocalTime ultimaEntrada = null;
+
+        for (EmpleadoFichaje f : marcasDelDia) {
+            boolean esIngreso = esTipoIngreso(f.getTipoEvento());
+            boolean esSalida = esTipoSalida(f.getTipoEvento());
+
+            if (esIngreso) {
+                ultimaEntrada = f.getHoraFichaje().toLocalTime();
+            } else if (esSalida && ultimaEntrada != null) {
+                intervalosPresencia.add(new IntervaloReal(ultimaEntrada, f.getHoraFichaje().toLocalTime()));
+                ultimaEntrada = null;
+            }
+        }
+        if (ultimaEntrada != null) {
+            intervalosPresencia.add(new IntervaloReal(ultimaEntrada, LocalTime.of(23, 59, 59)));
+        }
+
+        long minutosEfectivos = 0;
+        for (EmpleadoHorario clase : clasesDelDia) {
+            LocalTime inicioClase = clase.getHoraEntrada();
+            LocalTime finClase = clase.getHoraSalida();
+
+            for (IntervaloReal pres : intervalosPresencia) {
+                if (pres.inicio().isBefore(finClase) && pres.fin().isAfter(inicioClase)) {
+                    LocalTime solapeInicio = pres.inicio().isAfter(inicioClase) ? pres.inicio() : inicioClase;
+                    LocalTime solapeFin = pres.fin().isBefore(finClase) ? pres.fin() : finClase;
+
+                    long lapso = Duration.between(solapeInicio, solapeFin).toMinutes();
+                    if (lapso > 0) {
+                        minutosEfectivos += lapso;
+                    }
+                }
+            }
+        }
+
+        return minutosEfectivos;
+    }
+
+    private record IntervaloReal(LocalTime inicio, LocalTime fin) {}
 
     @Transactional(readOnly = true)
     public ResumenPresenciaFichajesDTO calcularHorasRealesDia(Long empleadoId, LocalDate fecha) {
@@ -514,11 +532,6 @@ public class EvaluadorIncidentesService {
         }
 
         boolean excedeSalidas = cantidadSalidas > maxSalidasPermitidas || minutosFuera > maxTiempoFueraMin;
-        if (minutosFuera > maxTiempoFueraMin) {
-            advertencias.add(String.format("Salidas intermedias acumularon %d min fuera (máximo permitido: %d min).",
-                    minutosFuera, maxTiempoFueraMin));
-        }
-
         double horasNetas = Math.round((minutosPresencia / 60.0) * 100.0) / 100.0;
         double horasFuera = Math.round((minutosFuera / 60.0) * 100.0) / 100.0;
 
@@ -526,38 +539,38 @@ public class EvaluadorIncidentesService {
     }
 
     @Transactional(readOnly = true)
-    public ResumenPresenciaFichajesDTO calcularHorasRealesRango(Long empleadoId, LocalDate desde, LocalDate hasta) {
-        if (empleadoId == null || desde == null || hasta == null || hasta.isBefore(desde)) {
-            return new ResumenPresenciaFichajesDTO(0.0, 0.0, 0, false, List.of());
-        }
-
-        double totalHorasNetas = 0.0;
-        double totalHorasFuera = 0.0;
-        int totalSalidas = 0;
-        boolean huboExceso = false;
-        List<String> todasAdvertencias = new ArrayList<>();
-
-        LocalDate actual = desde;
-        while (!actual.isAfter(hasta)) {
-            ResumenPresenciaFichajesDTO resDia = calcularHorasRealesDia(empleadoId, actual);
-            totalHorasNetas += resDia.horasNetasTrabajadas();
-            totalHorasFuera += resDia.horasSalidasIntermedias();
-            totalSalidas += resDia.cantidadSalidasIntermedias();
-
-            if (resDia.excedeSalidasIntermedias()) {
-                huboExceso = true;
-            }
-            actual = actual.plusDays(1);
-        }
-
-        return new ResumenPresenciaFichajesDTO(
-                Math.round(totalHorasNetas * 100.0) / 100.0,
-                Math.round(totalHorasFuera * 100.0) / 100.0,
-                totalSalidas,
-                huboExceso,
-                todasAdvertencias
-        );
+public ResumenPresenciaFichajesDTO calcularHorasRealesRango(Long empleadoId, LocalDate desde, LocalDate hasta) {
+    if (empleadoId == null || desde == null || hasta == null || hasta.isBefore(desde)) {
+        return new ResumenPresenciaFichajesDTO(0.0, 0.0, 0, false, List.of());
     }
+
+    double totalHorasNetas = 0.0;
+    double totalHorasFuera = 0.0;
+    int totalSalidas = 0;
+    boolean huboExceso = false;
+    List<String> todasAdvertencias = new ArrayList<>();
+
+    LocalDate actual = desde;
+    while (!actual.isAfter(hasta)) {
+        ResumenPresenciaFichajesDTO resDia = calcularHorasRealesDia(empleadoId, actual);
+        totalHorasNetas += resDia.horasNetasTrabajadas();
+        totalHorasFuera += resDia.horasSalidasIntermedias();
+        totalSalidas += resDia.cantidadSalidasIntermedias();
+
+        if (resDia.excedeSalidasIntermedias()) {
+            huboExceso = true;
+        }
+        actual = actual.plusDays(1);
+    }
+
+    return new ResumenPresenciaFichajesDTO(
+            Math.round(totalHorasNetas * 100.0) / 100.0,
+            Math.round(totalHorasFuera * 100.0) / 100.0,
+            totalSalidas,
+            huboExceso,
+            todasAdvertencias
+    );
+}
 
     private boolean esTipoSalida(String tipo) {
         if (tipo == null) return false;
