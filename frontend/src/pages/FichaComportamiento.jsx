@@ -35,6 +35,7 @@ import {
   HelpCircle,
   FileCheck,
   BarChart3,
+  CalendarRange,
 } from "lucide-react";
 import ListaEmpleadosSidebar from "../components/comunes/ListaEmpleadosSidebar";
 import ModalJustificarIncidente from "../components/incidentes/ModalJustificarIncidente";
@@ -117,6 +118,38 @@ export default function FichaComportamiento() {
     if (!fichaData?.diasPeriodo || fichaData.diasPeriodo.length === 0) return 0;
     return calcularOffsetPrimerDia(fichaData.diasPeriodo[0].fecha);
   }, [fichaData]);
+
+  // Texto amigable del período contemplado para mostrar en modales y reportes
+  const textoRangoContemplado = useMemo(() => {
+    if (modalidad === "DIARIO") {
+      return `Jornada del ${formatearFechaVisual(fechaConsulta)} (${obtenerNombreDia(fechaConsulta)})`;
+    }
+    if (modalidad === "SEMANAL") {
+      return `Semana del ${formatearFechaVisual(inicioSemanaStr)} al ${formatearFechaVisual(finSemanaStr)}`;
+    }
+    if (modalidad === "MENSUAL") {
+      return `${obtenerNombreMes(fechaConsulta)} (${formatearFechaVisual(inicioMesStr)} al ${formatearFechaVisual(finMesStr)})`;
+    }
+    if (modalidad === "RANGO_FECHAS") {
+      return `Rango del ${formatearFechaVisual(fechaConsulta)} al ${formatearFechaVisual(fechaHastaRango)}`;
+    }
+    if (modalidad === "TRIMESTRE" || modalidad === "CUATRIMESTRE") {
+      return (
+        fichaData?.periodoTexto ||
+        `Período desde ${formatearFechaVisual(fechaConsulta)}`
+      );
+    }
+    return fichaData?.periodoTexto || formatearFechaVisual(fechaConsulta);
+  }, [
+    modalidad,
+    fechaConsulta,
+    fechaHastaRango,
+    inicioSemanaStr,
+    finSemanaStr,
+    inicioMesStr,
+    finMesStr,
+    fichaData,
+  ]);
 
   useEffect(() => {
     const empId = empleadoSeleccionado?.id;
@@ -230,11 +263,6 @@ export default function FichaComportamiento() {
 
   const colapsarTodos = () => {
     setMesesExpandidos({});
-  };
-
-  const volverAAuditoriaPrincipal = () => {
-    setModalListaIncidentesAbierto(false);
-    setModalKpiJustificacionesAbierto(true);
   };
 
   useEffect(() => {
@@ -385,7 +413,6 @@ export default function FichaComportamiento() {
     setDiaInspeccionado(null);
   };
 
-  // DATOS ENTREGADOS 100% POR EL BACKEND
   const metricas = fichaData?.metricas || {
     primeraEntrada: "--:--",
     ultimoEgreso: "--:--",
@@ -528,6 +555,11 @@ export default function FichaComportamiento() {
     loadingFicha,
     fechaConsulta,
   ]);
+
+  const volverAAuditoriaPrincipal = () => {
+    setModalListaIncidentesAbierto(false);
+    setModalKpiJustificacionesAbierto(true);
+  };
 
   const abrirModalListaFiltrada = (filtro) => {
     setFiltroEstadoModal(filtro);
@@ -1491,7 +1523,7 @@ export default function FichaComportamiento() {
                 type="button"
                 onClick={() => setModalKpiJustificacionesAbierto(true)}
                 className="inline-flex items-center gap-1.5 px-3 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-2xl text-xs font-bold transition border border-indigo-200 cursor-pointer shadow-2xs"
-                title="Ver desglose analítico de justificaciones y ranking de motivos"
+                title="Ver desglose analítico de justificaciones y ranking de motivos para este período"
               >
                 <FileCheck className="w-4 h-4 text-indigo-600" />
                 <span>
@@ -2434,29 +2466,56 @@ export default function FichaComportamiento() {
         </div>
       </div>
 
-      {/* 1. NUEVO MODAL DEDICADO: AUDITORÍA DE JUSTIFICACIONES Y TOP MOTIVOS */}
+      {/* 1. MODAL DEDICADO: AUDITORÍA DE JUSTIFICACIONES CON RANGO DE FECHAS CLARO */}
       {modalKpiJustificacionesAbierto && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl w-full max-w-3xl shadow-2xl overflow-hidden border border-slate-200 animate-in zoom-in-95 max-h-[92vh] flex flex-col">
+            {/* Header del Modal */}
             <div className="bg-[#111827] px-6 py-4 text-white flex items-center justify-between shrink-0">
-              <div className="flex items-center gap-2.5 font-bold text-sm">
-                <FileCheck className="w-5 h-5 text-indigo-400" />
-                <span>Auditoría de Descargos y Motivos de Justificación</span>
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center text-indigo-400">
+                  <FileCheck className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm tracking-tight text-white">
+                    Auditoría de Descargos y Motivos de Justificación
+                  </h3>
+                  <div className="flex items-center gap-1.5 text-[11px] text-slate-300 mt-0.5">
+                    <CalendarRange className="w-3.5 h-3.5 text-indigo-400" />
+                    <span>{textoRangoContemplado}</span>
+                  </div>
+                </div>
               </div>
               <button
                 type="button"
                 onClick={() => setModalKpiJustificacionesAbierto(false)}
-                className="text-slate-400 hover:text-white cursor-pointer"
+                className="text-slate-400 hover:text-white cursor-pointer p-1 rounded-lg hover:bg-slate-800 transition"
               >
                 <X className="w-5 h-5" />
               </button>
+            </div>
+
+            {/* Banner superior de alcance temporal dentro del modal */}
+            <div className="bg-indigo-50/70 border-b border-indigo-100 px-6 py-2.5 flex items-center justify-between gap-3 text-xs">
+              <div className="flex items-center gap-2 text-indigo-950 font-medium">
+                <span className="font-bold uppercase tracking-wider text-[10px] bg-indigo-600 text-white px-2 py-0.5 rounded-md shadow-2xs">
+                  {modalidad.replace("_", " ")}
+                </span>
+                <span>
+                  Período analizado:{" "}
+                  <strong className="font-bold">{textoRangoContemplado}</strong>
+                </span>
+              </div>
+              <span className="text-[11px] font-mono text-indigo-700 bg-white border border-indigo-200/80 px-2 py-0.5 rounded-lg shadow-2xs">
+                Empleado ID: {empleadoSeleccionado?.id || fichaData?.empleadoId}
+              </span>
             </div>
 
             <div className="p-6 space-y-6 overflow-y-auto flex-1">
               {/* Tarjetas de Estados de Incidentes */}
               <div className="space-y-2">
                 <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                  Distribución por Estado de Resolución
+                  Distribución de Resoluciones en este Período
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                   {/* Pendientes */}
@@ -2568,8 +2627,8 @@ export default function FichaComportamiento() {
                 {!metricas.topJustificaciones ||
                 metricas.topJustificaciones.length === 0 ? (
                   <div className="p-8 text-center text-slate-400 text-xs italic">
-                    Aún no constan justificaciones u observaciones fundamentadas
-                    en este período.
+                    No constan justificaciones u observaciones fundamentadas
+                    para el período seleccionado ({textoRangoContemplado}).
                   </div>
                 ) : (
                   <div className="space-y-3">
@@ -2630,7 +2689,7 @@ export default function FichaComportamiento() {
                 }}
                 className="text-xs font-bold text-indigo-600 hover:text-indigo-800 hover:underline cursor-pointer"
               >
-                Ver todos los incidentes detallados →
+                Ver listado de incidentes del período →
               </button>
 
               <button
@@ -2651,7 +2710,6 @@ export default function FichaComportamiento() {
           <div className="bg-white rounded-3xl w-full max-w-3xl shadow-2xl overflow-hidden border border-slate-200 animate-in zoom-in-95 max-h-[90vh] flex flex-col">
             <div className="bg-[#111827] px-6 py-4 text-white flex items-center justify-between shrink-0">
               <div className="flex items-center gap-3">
-                {/* Botón de retroceso en el header */}
                 <button
                   type="button"
                   onClick={volverAAuditoriaPrincipal}
@@ -2662,12 +2720,16 @@ export default function FichaComportamiento() {
                   <span className="hidden sm:inline">Volver</span>
                 </button>
 
-                <div className="flex items-center gap-2 font-bold text-sm">
-                  <AlertTriangle className="w-5 h-5 text-rose-400" />
-                  <span>
-                    Listado de Incidentes Registrados (
-                    {incidentesFiltradosModal.length})
-                  </span>
+                <div>
+                  <div className="flex items-center gap-2 font-bold text-sm">
+                    <AlertTriangle className="w-4 h-4 text-rose-400" />
+                    <span>
+                      Listado de Incidentes ({incidentesFiltradosModal.length})
+                    </span>
+                  </div>
+                  <div className="text-[10px] text-slate-400 font-mono mt-0.5">
+                    {textoRangoContemplado}
+                  </div>
                 </div>
               </div>
 
@@ -2679,7 +2741,6 @@ export default function FichaComportamiento() {
               </button>
             </div>
 
-            {/* Pestañas de filtrado */}
             <div className="bg-slate-100 px-6 py-2.5 border-b border-slate-200 flex items-center gap-2 overflow-x-auto text-xs font-semibold">
               {[
                 {
@@ -2726,11 +2787,11 @@ export default function FichaComportamiento() {
               ))}
             </div>
 
-            {/* Lista de incidentes */}
             <div className="p-6 space-y-3 overflow-y-auto flex-1">
               {incidentesFiltradosModal.length === 0 ? (
                 <div className="p-8 text-center text-slate-400 italic text-xs">
-                  No se registran incidentes bajo el estado seleccionado.
+                  No se registran incidentes bajo el estado seleccionado para{" "}
+                  {textoRangoContemplado}.
                 </div>
               ) : (
                 incidentesFiltradosModal.map((inc) =>
@@ -2738,8 +2799,6 @@ export default function FichaComportamiento() {
                 )
               )}
             </div>
-
-            {/* Footer con botón para volver a la Auditoría y botón Cerrar */}
             <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between shrink-0">
               <button
                 type="button"

@@ -546,7 +546,7 @@ private final EmpleadoRepository empleadoRepo;
             }
         }
 
-        return texto.length() > 32 ? texto.substring(0, 30).trim() + "..." : texto;
+        return texto.trim();
     }
 
     private String normalizarTexto(String input) {
