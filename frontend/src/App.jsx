@@ -15,6 +15,7 @@ import GestionMaterias from "./pages/GestionMaterias";
 import Perfil from "./pages/Perfil";
 import FichaComportamiento from "./pages/FichaComportamiento";
 import LiquidacionDocente from "./pages/LiquidacionDocente";
+import ExcepcionesLicencias from "./pages/ExcepcionesLicencias";
 
 export default function App() {
   return (
@@ -65,6 +66,15 @@ export default function App() {
             element={
               <ProtectedRoute permisoRequerido="LIQUIDACION_DOCENTE">
                 <LiquidacionDocente />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/excepciones-licencias"
+            element={
+              <ProtectedRoute permisoRequerido="EXCEPCIONES_VER">
+                <ExcepcionesLicencias />
               </ProtectedRoute>
             }
           />

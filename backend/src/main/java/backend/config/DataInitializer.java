@@ -26,6 +26,7 @@ public class DataInitializer implements CommandLineRunner {
     public void run(String... args) {
         inicializarCatalogo();
         inicializarAdminSiNoExiste();
+        actualizarPermisosAdmin();
     }
 
     private void inicializarCatalogo() {
@@ -73,7 +74,13 @@ public class DataInitializer implements CommandLineRunner {
             new Permiso("MATERIAS_CREAR", "MATERIAS", "Crear materias y registrar comisiones en el sistema"),
             new Permiso("MATERIAS_EDITAR", "MATERIAS", "Modificar datos de cátedras, tarifas por hora y aulas predeterminadas"),
             new Permiso("MATERIAS_ELIMINAR", "MATERIAS", "Dar de baja lógica o reactivar cátedras del catálogo institucional"),
-            new Permiso("LIQUIDACION_DOCENTE", "MATERIAS", "Consultar y exportar planillas de liquidación y montos acumulados por docente")
+            new Permiso("LIQUIDACION_DOCENTE", "MATERIAS", "Consultar y exportar planillas de liquidación y montos acumulados por docente"),
+
+            // Excepciones y Licencias (Nuevo Módulo)
+            new Permiso("EXCEPCIONES_VER", "EXCEPCIONES", "Visualizar módulo de excepciones, licencias vigentes y desglose por agente"),
+            new Permiso("EXCEPCIONES_CREAR", "EXCEPCIONES", "Registrar licencias particulares y asuetos/feriados institucionales"),
+            new Permiso("EXCEPCIONES_DICTAMINAR", "EXCEPCIONES", "Auditar, dictaminar, aprobar o rechazar solicitudes de licencias"),
+            new Permiso("EXCEPCIONES_ELIMINAR", "EXCEPCIONES", "Anular o dar de baja registros de licencias y excepciones")
         );
 
         for (Permiso p : catalogo) {
@@ -106,8 +113,6 @@ public class DataInitializer implements CommandLineRunner {
             """, hash);
 
             System.out.println(">>> Usuario 'admin' inicial creado con éxito.");
-            actualizarPermisosAdmin();
-            
         } catch (Exception e) {
             System.err.println("Error al inicializar usuario administrador: " + e.getMessage());
         }

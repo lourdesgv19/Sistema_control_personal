@@ -121,6 +121,18 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.DELETE, "/api/materias/**")
                     .hasAnyAuthority("MATERIAS_ELIMINAR", "PERM_ADMIN_TOTAL")
 
+                // 12. Excepciones y Licencias
+                .requestMatchers(HttpMethod.GET, "/api/excepciones-licencias/**")
+                    .hasAnyAuthority("EXCEPCIONES_VER", "PERM_ADMIN_TOTAL")
+                .requestMatchers(HttpMethod.POST, "/api/excepciones-licencias/**")
+                    .hasAnyAuthority("EXCEPCIONES_CREAR", "PERM_ADMIN_TOTAL")
+                .requestMatchers(HttpMethod.PATCH, "/api/excepciones-licencias/*/dictaminar")
+                    .hasAnyAuthority("EXCEPCIONES_DICTAMINAR", "PERM_ADMIN_TOTAL")
+                .requestMatchers(HttpMethod.DELETE, "/api/excepciones-licencias/**")
+                    .hasAnyAuthority("EXCEPCIONES_ELIMINAR", "PERM_ADMIN_TOTAL")
+                .requestMatchers(HttpMethod.PUT, "/api/excepciones-licencias/**")
+                    .hasAnyAuthority("EXCEPCIONES_CREAR", "PERM_ADMIN_TOTAL")
+
                 .anyRequest().authenticated()
             )
             .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);

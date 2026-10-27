@@ -40,21 +40,37 @@ function formatearFechaVisual(fechaIso) {
   return soloFecha;
 }
 
-function obtenerRangoMultiMes(mesAnoStr, cantidadMeses) {
-  if (!mesAnoStr) return null;
-  const [anioStr, mesStr] = mesAnoStr.split("-");
-  const anioInicio = parseInt(anioStr, 10);
-  const mesNumInicio = parseInt(mesStr, 10);
+// Cálculo de lunes a domingo para la semana
+function calcularRangoSemana(fechaStr) {
+  if (!fechaStr) return { inicio: "", fin: "" };
+  const partes = String(fechaStr).split("T")[0].split("-");
+  if (partes.length !== 3) return { inicio: fechaStr, fin: fechaStr };
 
-  const totalMeses = mesNumInicio + cantidadMeses - 1;
-  const mesFin = ((totalMeses - 1) % 12) + 1;
-  const anioFin = anioInicio + Math.floor((totalMeses - 1) / 12);
+  const d = new Date(
+    parseInt(partes[0], 10),
+    parseInt(partes[1], 10) - 1,
+    parseInt(partes[2], 10),
+  );
+  const diaSemana = d.getDay(); // 0: Dom, 1: Lun, ...
+  const diffLunes = diaSemana === 0 ? -6 : 1 - diaSemana;
 
-  const ultimoDia = new Date(anioFin, mesFin, 0).getDate();
-  const desde = `${anioInicio}-${String(mesNumInicio).padStart(2, "0")}-01`;
-  const hasta = `${anioFin}-${String(mesFin).padStart(2, "0")}-${String(ultimoDia).padStart(2, "0")}`;
+  const lunes = new Date(d);
+  lunes.setDate(d.getDate() + diffLunes);
 
-  return { desde, hasta };
+  const domingo = new Date(lunes);
+  domingo.setDate(lunes.getDate() + 6);
+
+  const formatear = (dateObj) => {
+    const y = dateObj.getFullYear();
+    const m = String(dateObj.getMonth() + 1).padStart(2, "0");
+    const day = String(dateObj.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  };
+
+  return {
+    inicio: formatear(lunes),
+    fin: formatear(domingo),
+  };
 }
 
 export default function TableroIncidentesDiarios() {
@@ -73,8 +89,8 @@ export default function TableroIncidentesDiarios() {
   }, []);
 
   const hoyIso = useMemo(() => new Date().toISOString().split("T")[0], []);
-  const anioActual = useMemo(() => new Date().getFullYear(), []);
 
+  // Modalidades: DIA | SEMANAL | RANGO | TRIMESTRE | CUATRIMESTRE
   const [modoFiltroFecha, setModoFiltroFecha] = useState(
     () =>
       filtroNavegado?.modoFiltroFecha ||
@@ -87,14 +103,6 @@ export default function TableroIncidentesDiarios() {
   const [fechaHasta, setFechaHasta] = useState(
     () => filtroNavegado?.fecha || filtrosGuardados?.fechaHasta || hoyIso,
   );
-
-  // Mes base seleccionado para Trimestre / Cuatrimestre (formato YYYY-MM)
-  const [mesBaseSeleccionado, setMesBaseSeleccionado] = useState(
-    () =>
-      (filtrosGuardados?.fechaDesde || hoyIso).substring(0, 7) ||
-      `${anioActual}-01`,
-  );
-
   const [paginaActual, setPaginaActual] = useState(1);
   const [busqueda, setBusqueda] = useState(
     () => filtroNavegado?.busqueda || filtrosGuardados?.busqueda || "",
@@ -122,47 +130,11 @@ export default function TableroIncidentesDiarios() {
   const [modalAbierto, setModalAbierto] = useState(false);
   const [modoSoloLectura, setModoSoloLectura] = useState(false);
 
-  // Sincronizar fechas cuando se cambia a TRIMESTRE o CUATRIMESTRE
-  const aplicarRangoPeriodo = useCallback((modo, mesAno) => {
-    if (modo === "TRIMESTRE") {
-      const rango = obtenerRangoMultiMes(mesAno, 3);
-      if (rango) {
-        setFechaDesde(rango.desde);
-        setFechaHasta(rango.hasta);
-      }
-    } else if (modo === "CUATRIMESTRE") {
-      const rango = obtenerRangoMultiMes(mesAno, 4);
-      if (rango) {
-        setFechaDesde(rango.desde);
-        setFechaHasta(rango.hasta);
-      }
-    }
-  }, []);
-
-  const handleCambioModo = (key) => {
-    setModoFiltroFecha(key);
-    setPaginaActual(1);
-    if (key === "DIA") {
-      setFechaHasta(fechaDesde);
-    } else if (key === "TRIMESTRE") {
-      aplicarRangoPeriodo("TRIMESTRE", mesBaseSeleccionado);
-    } else if (key === "CUATRIMESTRE") {
-      aplicarRangoPeriodo("CUATRIMESTRE", mesBaseSeleccionado);
-    }
-  };
-
-  const handleCambioMesBase = (nuevoMesAno) => {
-    setMesBaseSeleccionado(nuevoMesAno);
-    setPaginaActual(1);
-    aplicarRangoPeriodo(modoFiltroFecha, nuevoMesAno);
-  };
-
   useEffect(() => {
     const estadoAGuardar = {
       modoFiltroFecha,
       fechaDesde,
       fechaHasta,
-      mesBaseSeleccionado,
       paginaActual,
       busqueda,
       severidad,
@@ -175,7 +147,6 @@ export default function TableroIncidentesDiarios() {
     modoFiltroFecha,
     fechaDesde,
     fechaHasta,
-    mesBaseSeleccionado,
     paginaActual,
     busqueda,
     severidad,
@@ -291,7 +262,6 @@ export default function TableroIncidentesDiarios() {
 
   useEffect(() => {
     let timerSync = null;
-
     const handleActualizacionTiempoReal = () => {
       if (timerSync) clearTimeout(timerSync);
       timerSync = setTimeout(() => {
@@ -393,6 +363,7 @@ export default function TableroIncidentesDiarios() {
           <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs font-semibold overflow-x-auto">
             {[
               { label: "Un Día", key: "DIA" },
+              { label: "Semanal", key: "SEMANAL" },
               { label: "Rango", key: "RANGO" },
               { label: "Trimestre", key: "TRIMESTRE" },
               { label: "Cuatrimestre", key: "CUATRIMESTRE" },
@@ -400,7 +371,31 @@ export default function TableroIncidentesDiarios() {
               <button
                 key={key}
                 type="button"
-                onClick={() => handleCambioModo(key)}
+                onClick={() => {
+                  setModoFiltroFecha(key);
+                  if (key === "DIA") {
+                    setFechaHasta(fechaDesde);
+                  } else if (key === "SEMANAL") {
+                    const rango = calcularRangoSemana(fechaDesde);
+                    setFechaDesde(rango.inicio);
+                    setFechaHasta(rango.fin);
+                  } else if (key === "TRIMESTRE" || key === "CUATRIMESTRE") {
+                    const mesesContar = key === "TRIMESTRE" ? 3 : 4;
+                    const mesBase =
+                      fechaDesde.substring(0, 7) ||
+                      `${hoyIso.substring(0, 4)}-01`;
+                    const startDate = `${mesBase}-01`;
+                    setFechaDesde(startDate);
+                    const d = new Date(startDate);
+                    d.setMonth(d.getMonth() + mesesContar);
+                    d.setDate(d.getDate() - 1);
+                    const y = d.getFullYear();
+                    const m = String(d.getMonth() + 1).padStart(2, "0");
+                    const day = String(d.getDate()).padStart(2, "0");
+                    setFechaHasta(`${y}-${m}-${day}`);
+                  }
+                  setPaginaActual(1);
+                }}
                 className={`px-3 py-1 rounded-lg transition cursor-pointer whitespace-nowrap ${
                   modoFiltroFecha === key
                     ? "bg-white text-indigo-700 shadow-xs border border-slate-200 font-bold"
@@ -436,6 +431,40 @@ export default function TableroIncidentesDiarios() {
                   if (e.target.value) {
                     setFechaDesde(e.target.value);
                     setFechaHasta(e.target.value);
+                    setPaginaActual(1);
+                  }
+                }}
+                className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+              />
+            </div>
+          )}
+
+          {/* DATEPICKER SEMANAL */}
+          {modoFiltroFecha === "SEMANAL" && (
+            <div
+              onClick={(e) => {
+                const input = e.currentTarget.querySelector("input");
+                if (input && typeof input.showPicker === "function")
+                  input.showPicker();
+              }}
+              className="relative flex items-center gap-2 border border-slate-200 rounded-xl px-3 py-1.5 bg-slate-50 hover:bg-white focus-within:bg-white focus-within:border-indigo-500 transition shadow-2xs cursor-pointer"
+            >
+              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider shrink-0 pointer-events-none">
+                Semana:
+              </span>
+              <span className="text-slate-800 text-xs font-semibold font-mono pointer-events-none">
+                {formatearFechaVisual(fechaDesde)} →{" "}
+                {formatearFechaVisual(fechaHasta)}
+              </span>
+              <Calendar className="w-3.5 h-3.5 text-slate-400 pointer-events-none ml-1" />
+              <input
+                type="date"
+                value={fechaDesde}
+                onChange={(e) => {
+                  if (e.target.value) {
+                    const rango = calcularRangoSemana(e.target.value);
+                    setFechaDesde(rango.inicio);
+                    setFechaHasta(rango.fin);
                     setPaginaActual(1);
                   }
                 }}
@@ -510,33 +539,55 @@ export default function TableroIncidentesDiarios() {
             </div>
           )}
 
-          {/* SELECTOR DE MESES IDENTICO A FICHADECOMPORTAMIENTO */}
+          {/* SELECTOR TRIMESTRE / CUATRIMESTRE (ESTILO FICHA DE COMPORTAMIENTO) */}
           {(modoFiltroFecha === "TRIMESTRE" ||
             modoFiltroFecha === "CUATRIMESTRE") && (
             <div className="flex items-center gap-2">
               <span className="text-[10px] text-slate-400 font-bold uppercase whitespace-nowrap">
-                Desde Mes a Elección
+                Desde Mes:
               </span>
               <select
-                value={mesBaseSeleccionado}
-                onChange={(e) => handleCambioMesBase(e.target.value)}
-                className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 font-semibold text-slate-800 text-xs outline-none cursor-pointer focus:border-indigo-500 bg-white"
+                value={fechaDesde.substring(0, 7)}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (val) {
+                    const startDate = `${val}-01`;
+                    setFechaDesde(startDate);
+                    const d = new Date(startDate);
+                    d.setMonth(
+                      d.getMonth() + (modoFiltroFecha === "TRIMESTRE" ? 3 : 4),
+                    );
+                    d.setDate(d.getDate() - 1);
+                    const y = d.getFullYear();
+                    const m = String(d.getMonth() + 1).padStart(2, "0");
+                    const day = String(d.getDate()).padStart(2, "0");
+                    setFechaHasta(`${y}-${m}-${day}`);
+                    setPaginaActual(1);
+                  }
+                }}
+                className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 font-semibold text-slate-800 outline-none cursor-pointer text-xs bg-white"
               >
-                <option value={`${anioActual}-01`}>
+                <option value={`${hoyIso.substring(0, 4)}-01`}>
                   Enero (contar {modoFiltroFecha === "TRIMESTRE" ? "3" : "4"}{" "}
                   meses)
                 </option>
-                <option value={`${anioActual}-02`}>Febrero</option>
-                <option value={`${anioActual}-03`}>Marzo</option>
-                <option value={`${anioActual}-04`}>Abril</option>
-                <option value={`${anioActual}-05`}>Mayo</option>
-                <option value={`${anioActual}-06`}>Junio</option>
-                <option value={`${anioActual}-07`}>Julio</option>
-                <option value={`${anioActual}-08`}>Agosto</option>
-                <option value={`${anioActual}-09`}>Septiembre</option>
-                <option value={`${anioActual}-10`}>Octubre</option>
-                <option value={`${anioActual}-11`}>Noviembre</option>
-                <option value={`${anioActual}-12`}>Diciembre</option>
+                <option value={`${hoyIso.substring(0, 4)}-02`}>Febrero</option>
+                <option value={`${hoyIso.substring(0, 4)}-03`}>Marzo</option>
+                <option value={`${hoyIso.substring(0, 4)}-04`}>Abril</option>
+                <option value={`${hoyIso.substring(0, 4)}-05`}>Mayo</option>
+                <option value={`${hoyIso.substring(0, 4)}-06`}>Junio</option>
+                <option value={`${hoyIso.substring(0, 4)}-07`}>Julio</option>
+                <option value={`${hoyIso.substring(0, 4)}-08`}>Agosto</option>
+                <option value={`${hoyIso.substring(0, 4)}-09`}>
+                  Septiembre
+                </option>
+                <option value={`${hoyIso.substring(0, 4)}-10`}>Octubre</option>
+                <option value={`${hoyIso.substring(0, 4)}-11`}>
+                  Noviembre
+                </option>
+                <option value={`${hoyIso.substring(0, 4)}-12`}>
+                  Diciembre
+                </option>
               </select>
             </div>
           )}
@@ -565,7 +616,7 @@ export default function TableroIncidentesDiarios() {
         </div>
       </div>
 
-      {/* TARJETAS DE MÉTRICAS */}
+      {/* TARJETAS KPI */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
         <div
           onClick={() => {
@@ -782,7 +833,7 @@ export default function TableroIncidentesDiarios() {
         </div>
       </div>
 
-      {/* FILTROS ADICIONALES */}
+      {/* BARRA DE BÚSQUEDA Y FILTROS */}
       <div className="bg-white p-4 border border-slate-200 rounded-2xl shadow-xs space-y-3">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
           <div className="relative">

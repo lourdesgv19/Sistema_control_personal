@@ -8,6 +8,7 @@ import {
   Clock,
   AlertTriangle,
   FileBarChart2,
+  CalendarCheck,
   Settings,
   ShieldCheck,
   History,
@@ -15,6 +16,7 @@ import {
   User,
   AlertCircle,
   DollarSign,
+  TextCursor,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import ModalAlerta from "../comunes/ModalAlerta";
@@ -70,13 +72,6 @@ export default function Sidebar() {
       permiso: "INCIDENTES_VER",
     },
     {
-      to: "/personal",
-      label: "Gestión de Personal",
-      icon: Users,
-      permiso: "PERSONAL_VER",
-      badgeCount: incompletosCount,
-    },
-    {
       to: "/fichas-comportamiento",
       label: "Fichas de Comportamiento",
       icon: ClipboardList,
@@ -90,9 +85,16 @@ export default function Sidebar() {
     },
     {
       to: "/materias",
-      label: "Gestión de Materias",
+      label: "Calendario semanal de Materias",
       icon: LayoutDashboard,
       permiso: "MATERIAS_VER",
+      TextCursor: "Calendario semanal y Materias",
+    },
+    {
+      to: "/excepciones-licencias",
+      label: "Excepciones y Licencias",
+      icon: CalendarCheck,
+      permiso: "EXCEPCIONES_VER",
     },
     {
       to: "/liquidacion-docente",
@@ -107,16 +109,11 @@ export default function Sidebar() {
       permiso: "FICHAJES_VER",
     },
     {
-      to: "/reportes",
-      label: "Métricas y Reportes",
-      icon: FileBarChart2,
-      permiso: "REPORTES_VER",
-    },
-    {
-      to: "/configuracion",
-      label: "Tipos y Configuración",
-      icon: Settings,
-      permiso: "CONFIG_VER",
+      to: "/personal",
+      label: "Gestión de Personal",
+      icon: Users,
+      permiso: "PERSONAL_VER",
+      badgeCount: incompletosCount,
     },
     {
       to: "/usuarios",
@@ -129,6 +126,12 @@ export default function Sidebar() {
       label: "Auditoría de Movimientos",
       icon: History,
       permiso: "AUDITORIA_VER",
+    },
+    {
+      to: "/configuracion",
+      label: "Tipos y Configuración",
+      icon: Settings,
+      permiso: "CONFIG_VER",
     },
   ];
 

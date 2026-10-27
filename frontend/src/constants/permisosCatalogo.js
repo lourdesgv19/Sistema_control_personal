@@ -112,6 +112,34 @@ export const MODULOS_PERMISOS = [
     ],
   },
   {
+    id: "EXCEPCIONES",
+    nombre: "Excepciones & Licencias",
+    descripcion:
+      "Control de ausencias justificadas, licencias médicas, vacaciones y asuetos",
+    permisos: [
+      {
+        codigo: "EXCEPCIONES_VER",
+        label: "Visualizar panel y desglose por agente",
+        critico: false,
+      },
+      {
+        codigo: "EXCEPCIONES_CREAR",
+        label: "Registrar licencias o asuetos institucionales",
+        critico: false,
+      },
+      {
+        codigo: "EXCEPCIONES_DICTAMINAR",
+        label: "Aprobar o rechazar solicitudes de licencias (RRHH)",
+        critico: true,
+      },
+      {
+        codigo: "EXCEPCIONES_ELIMINAR",
+        label: "Anular o dar de baja excepciones cargadas",
+        critico: true,
+      },
+    ],
+  },
+  {
     id: "FICHAJES",
     nombre: "Fichajes & Biometría",
     descripcion: "Importación masiva de marcaciones y vinculación con lectores",
@@ -135,34 +163,6 @@ export const MODULOS_PERMISOS = [
         codigo: "FICHAJES_ELIMINAR_LOTE",
         label: "Eliminar lotes importados",
         critico: true,
-      },
-    ],
-  },
-  {
-    id: "CONFIGURACION",
-    nombre: "Configuración del Sistema",
-    descripcion:
-      "Mantenimiento de tablas maestras de categorías, cargos y turnos",
-    permisos: [
-      {
-        codigo: "CONFIG_VER",
-        label: "Ver tablas de configuración",
-        critico: false,
-      },
-      {
-        codigo: "CONFIG_EDITAR_CATEGORIAS",
-        label: "Gestionar categorías de personal",
-        critico: false,
-      },
-      {
-        codigo: "CONFIG_EDITAR_CARGOS",
-        label: "Gestionar cargos y puestos",
-        critico: false,
-      },
-      {
-        codigo: "CONFIG_EDITAR_TURNOS",
-        label: "Gestionar moldes y plantillas de horario",
-        critico: false,
       },
     ],
   },
@@ -204,6 +204,34 @@ export const MODULOS_PERMISOS = [
         codigo: "AUDITORIA_VER",
         label: "Visualizar panel de movimientos y métricas",
         critico: true,
+      },
+    ],
+  },
+  {
+    id: "CONFIGURACION",
+    nombre: "Configuración del Sistema",
+    descripcion:
+      "Mantenimiento de tablas maestras de categorías, cargos y turnos",
+    permisos: [
+      {
+        codigo: "CONFIG_VER",
+        label: "Ver tablas de configuración",
+        critico: false,
+      },
+      {
+        codigo: "CONFIG_EDITAR_CATEGORIAS",
+        label: "Gestionar categorías de personal",
+        critico: false,
+      },
+      {
+        codigo: "CONFIG_EDITAR_CARGOS",
+        label: "Gestionar cargos y puestos",
+        critico: false,
+      },
+      {
+        codigo: "CONFIG_EDITAR_TURNOS",
+        label: "Gestionar moldes y plantillas de horario",
+        critico: false,
       },
     ],
   },
