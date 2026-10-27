@@ -8,6 +8,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.text.Normalizer;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -20,7 +22,17 @@ public class FichaComportamientoService {
 
     private static final Logger log = LoggerFactory.getLogger(FichaComportamientoService.class);
 
-    private final EmpleadoRepository empleadoRepo;
+    // Lista de motivos u observaciones comunes estándar cargadas en el sistema
+    private static final List<String> MOTIVOS_JUSTIFICACION_COMUNES = List.of(
+            "Certificado médico presentado",
+            "Trámites personales autorizados",
+            "Falla técnica en reloj biométrico",
+            "Problemas de transporte o tránsito",
+            "Razones de fuerza mayor / Urgencia",
+            "Cuidado de familiar directo",
+            "Mesa de examen o capacitación"     
+    );
+private final EmpleadoRepository empleadoRepo;
     private final EmpleadoHorarioRepository horarioRepo;
     private final EmpleadoFichajeRepository fichajeRepo;
     private final IncidenteAsistenciaRepository incidenteRepo;
@@ -256,7 +268,6 @@ public class FichaComportamientoService {
         int diasConDeficit = 0;
         int diasConHorasExtra = 0;
 
-        // Acumuladores de docencia exclusivamente para días con materias
         long totalMinClasesTeoricasPeriodo = 0;
         long totalMinClasesEfectivasPeriodo = 0;
 
@@ -341,9 +352,6 @@ public class FichaComportamientoService {
             String entDia = fDia.isEmpty() ? "--:--" : fDia.get(0).getHoraFichaje().toLocalTime().toString().substring(0, 5);
             String salDia = fDia.size() < 2 ? "--:--" : fDia.get(fDia.size() - 1).getHoraFichaje().toLocalTime().toString().substring(0, 5);
 
-            // =========================================================================
-            // REGLA CLAVE: COMPARAR ÚNICAMENTE DÍAS CON CLASES ASIGNADAS
-            // =========================================================================
             List<EmpleadoHorario> clasesDelDia = horarios.stream()
                     .filter(h -> h.getMateria() != null && h.getDiaSemana() != null && h.getDiaSemana() == d.getDayOfWeek().getValue())
                     .toList();
@@ -408,10 +416,54 @@ public class FichaComportamientoService {
                 .map(i -> i.getIdEventoAgrupador() != null ? i.getIdEventoAgrupador() : ("ID_" + i.getId()))
                 .distinct().count();
 
-        int incidentesProcesados = (int) incsPeriodo.stream().filter(i -> {
-            String estado = i.getEstado();
-            return "JUSTIFICADA".equalsIgnoreCase(estado) || "OBSERVADA".equalsIgnoreCase(estado) || "RECHAZADA".equalsIgnoreCase(estado);
-        }).count();
+        // =========================================================================
+        // CÁLCULO DE ESTADOS DE INCIDENTES Y TOP DE JUSTIFICACIONES (BACKEND)
+        // Regla: Motivos computados EXCLUSIVAMENTE para JUSTIFICADAS y OBSERVADAS
+        // =========================================================================
+        int pendientes = 0;
+        int justificados = 0;
+        int observados = 0;
+        int rechazados = 0;
+
+        Map<String, Long> conteoMotivosDictamen = new HashMap<>();
+
+        for (IncidenteAsistencia inc : incsPeriodo) {
+            String est = inc.getEstado() != null ? inc.getEstado().toUpperCase().trim() : "PENDIENTE";
+            switch (est) {
+                case "JUSTIFICADA", "JUSTIFICADO" -> justificados++;
+                case "OBSERVADA", "OBSERVADO" -> observados++;
+                case "RECHAZADA", "RECHAZADO" -> rechazados++;
+                default -> pendientes++;
+            }
+
+            // Excluir PENDIENTES y RECHAZADAS del ranking de justificaciones
+            boolean esAuditableParaTop = "JUSTIFICADA".equalsIgnoreCase(est) || "JUSTIFICADO".equalsIgnoreCase(est)
+                    || "OBSERVADA".equalsIgnoreCase(est) || "OBSERVADO".equalsIgnoreCase(est);
+
+            if (esAuditableParaTop) {
+                String motivoRaw = null;
+                if (inc.getResolucionMotivo() != null && !inc.getResolucionMotivo().isBlank()) {
+                    motivoRaw = inc.getResolucionMotivo().trim();
+                } else if (inc.getResolucionMotivo() != null && !inc.getResolucionMotivo().isBlank()) {
+                    motivoRaw = inc.getResolucionMotivo().trim();
+                }
+
+                if (motivoRaw != null && !motivoRaw.isBlank()) {
+                    String categoriaMotivo = categorizarTextoJustificacion(motivoRaw);
+                    conteoMotivosDictamen.put(categoriaMotivo, conteoMotivosDictamen.getOrDefault(categoriaMotivo, 0L) + 1L);
+                }
+            }
+        }
+
+        int totalConMotivoAuditable = conteoMotivosDictamen.values().stream().mapToInt(Long::intValue).sum();
+
+        List<FichaComportamientoDTO.TopJustificacionDTO> topJustificaciones = conteoMotivosDictamen.entrySet().stream()
+                .map(entry -> new FichaComportamientoDTO.TopJustificacionDTO(entry.getKey(), entry.getValue()))
+                .sorted(Comparator.comparing(FichaComportamientoDTO.TopJustificacionDTO::cantidad).reversed())
+                .limit(3)
+                .toList();
+
+        int incidentesProcesados = justificados + observados + rechazados;
 
         // Total de Clases Dictadas para la tarjeta superior
         String clasesDictadasGral;
@@ -429,7 +481,8 @@ public class FichaComportamientoService {
                 totalIncidentesAgrupados, incidentesProcesados, diasConPresencia, totalDiasParaMetrica,
                 formatearMinutosAHoras(totalMinutosAFavor), totalMinutosAFavor,
                 formatearMinutosAHoras(totalMinutosEnContra), totalMinutosEnContra,
-                diasConDeficit, diasConHorasExtra, clasesDictadasGral
+                diasConDeficit, diasConHorasExtra, clasesDictadasGral,
+                pendientes, observados, rechazados, totalConMotivoAuditable, topJustificaciones
         );
 
         // Agrupación de meses para Trimestre y Cuatrimestre
@@ -479,6 +532,30 @@ public class FichaComportamientoService {
                 porcentajeCumplimiento, metricasDTO, planificados, presencias,
                 desglose, incidentesList, brutos, diasDesglose, mesesPeriodo
         );
+    }
+
+    private String categorizarTextoJustificacion(String texto) {
+        String textoNormalizado = normalizarTexto(texto);
+
+        for (String comun : MOTIVOS_JUSTIFICACION_COMUNES) {
+            String comunNormalizado = normalizarTexto(comun);
+            if (textoNormalizado.contains(comunNormalizado) ||
+                comunNormalizado.contains(textoNormalizado) ||
+                (textoNormalizado.length() >= 6 && comunNormalizado.startsWith(textoNormalizado.substring(0, 6)))) {
+                return comun;
+            }
+        }
+
+        return texto.length() > 32 ? texto.substring(0, 30).trim() + "..." : texto;
+    }
+
+    private String normalizarTexto(String input) {
+        if (input == null) return "";
+        return Normalizer.normalize(input.toLowerCase(), Normalizer.Form.NFD)
+                .replaceAll("\\p{InCombiningDiacriticalMarks}+", "")
+                .replaceAll("[^a-zA-Z0-9 ]", " ")
+                .replaceAll("\\s+", " ")
+                .trim();
     }
 
     private boolean esTipoSalida(String tipo) {

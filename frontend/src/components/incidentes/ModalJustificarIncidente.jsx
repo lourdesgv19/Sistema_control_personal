@@ -15,11 +15,14 @@ import {
 import { getEmpleadoHorarios } from "../../services/empleadoService";
 
 const MOTIVOS_FRECUENTES = [
-  "Autorización formal de Decanato / Dirección Académica",
-  "Comisión de servicio institucional en otra sede",
-  "Urgencia de salud / consulta médica imprevista",
-  "Falla técnica o corte de energía en el biométrico",
-  "Compensación horaria acordada previamente",
+  "Certificado médico presentado",
+  "Trámites personales autorizados",
+  "Falla técnica en reloj biométrico",
+  "Problemas de transporte o tránsito",
+  "Razones de fuerza mayor / Urgencia",
+  "Cuidado de familiar directo",
+  "Mesa de examen o capacitación",
+  "Cambio de horario / día",
 ];
 
 function formatearFechaVisual(fechaIso) {

@@ -22,7 +22,7 @@ public record FichaComportamientoDTO(
     List<IncidenteFichaDTO> incidentes,
     List<FichajeBrutoDTO> fichajesBrutos,
     List<DiaDesgloseDTO> diasPeriodo,
-    List<MesResumenDTO> mesesPeriodo // Agrupador Trimestral / Cuatrimestral[cite: 37]
+    List<MesResumenDTO> mesesPeriodo // Agrupador Trimestral / Cuatrimestral
 ) {
     public record MetricasFichaDTO(
         String primeraEntrada,
@@ -41,7 +41,17 @@ public record FichaComportamientoDTO(
         long minutosEnContra,
         int diasConDeficit,
         int diasConHorasExtra,
-        String clasesDictadasTexto
+        String clasesDictadasTexto,
+        int incidentesPendientes,
+        int incidentesObservados,
+        int incidentesRechazados,
+        int totalIncidentesJustificadosConMotivo,
+        List<TopJustificacionDTO> topJustificaciones
+    ) {}
+
+    public record TopJustificacionDTO(
+        String texto,
+        long cantidad
     ) {}
 
     public record MesResumenDTO(
