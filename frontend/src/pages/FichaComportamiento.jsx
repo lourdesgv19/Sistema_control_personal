@@ -36,6 +36,7 @@ import {
   FileCheck,
   BarChart3,
   CalendarRange,
+  ShieldCheck,
 } from "lucide-react";
 import ListaEmpleadosSidebar from "../components/comunes/ListaEmpleadosSidebar";
 import ModalJustificarIncidente from "../components/incidentes/ModalJustificarIncidente";
@@ -119,7 +120,6 @@ export default function FichaComportamiento() {
     return calcularOffsetPrimerDia(fichaData.diasPeriodo[0].fecha);
   }, [fichaData]);
 
-  // Texto amigable del período contemplado para mostrar en modales y reportes
   const textoRangoContemplado = useMemo(() => {
     if (modalidad === "DIARIO") {
       return `Jornada del ${formatearFechaVisual(fechaConsulta)} (${obtenerNombreDia(fechaConsulta)})`;
@@ -431,6 +431,9 @@ export default function FichaComportamiento() {
     incidentesRechazados: 0,
     totalIncidentesJustificadosConMotivo: 0,
     topJustificaciones: [],
+    diasLicenciaPeriodo: 0,
+    horasLicenciaTexto: "0h 0m",
+    minutosLicencia: 0,
   };
 
   const esDocente = useMemo(() => {
@@ -444,12 +447,39 @@ export default function FichaComportamiento() {
     );
   }, [fichaData]);
 
+  // Información del día de consulta respecto a licencias registradas
+  const infoLicenciaDiaria = useMemo(() => {
+    if (modalidad !== "DIARIO" || !fichaData?.diasPeriodo) return null;
+    const diaEncontrado = fichaData.diasPeriodo.find(
+      (d) => d.fecha === fechaConsulta,
+    );
+    if (!diaEncontrado) return null;
+
+    const tieneLic =
+      diaEncontrado.tieneLicencia ||
+      diaEncontrado.estadoGeneral === "LICENCIA" ||
+      diaEncontrado.estadoGeneral === "ASUETO";
+
+    return tieneLic ? diaEncontrado : null;
+  }, [modalidad, fichaData, fechaConsulta]);
+
   const estadoJornadaDiaria = useMemo(() => {
     if (modalidad !== "DIARIO") {
       return {
         esSinHorario: false,
         esInasistencia: false,
         esFuturoConHorario: false,
+        esLicencia: false,
+        tieneDatos: true,
+      };
+    }
+
+    if (infoLicenciaDiaria) {
+      return {
+        esSinHorario: false,
+        esInasistencia: false,
+        esFuturoConHorario: false,
+        esLicencia: true,
         tieneDatos: true,
       };
     }
@@ -486,6 +516,7 @@ export default function FichaComportamiento() {
           esSinHorario: false,
           esInasistencia: false,
           esFuturoConHorario: true,
+          esLicencia: false,
           tieneDatos: false,
           planificados: franjasTeoricas,
         };
@@ -494,6 +525,7 @@ export default function FichaComportamiento() {
         esSinHorario: true,
         esInasistencia: false,
         esFuturoConHorario: false,
+        esLicencia: false,
         tieneDatos: false,
       };
     }
@@ -503,6 +535,7 @@ export default function FichaComportamiento() {
         esSinHorario: false,
         esInasistencia: true,
         esFuturoConHorario: false,
+        esLicencia: false,
         tieneDatos: false,
         planificados: franjasTeoricas,
       };
@@ -513,6 +546,7 @@ export default function FichaComportamiento() {
         esSinHorario: true,
         esInasistencia: false,
         esFuturoConHorario: false,
+        esLicencia: false,
         tieneDatos: false,
       };
     }
@@ -521,6 +555,7 @@ export default function FichaComportamiento() {
       esSinHorario: false,
       esInasistencia: false,
       esFuturoConHorario: false,
+      esLicencia: false,
       tieneDatos: true,
     };
   }, [
@@ -530,6 +565,7 @@ export default function FichaComportamiento() {
     fechaConsulta,
     hoyIso,
     obtenerHorariosDeFecha,
+    infoLicenciaDiaria,
   ]);
 
   useEffect(() => {
@@ -750,6 +786,11 @@ export default function FichaComportamiento() {
       (diaInspeccionado.primeraEntrada &&
         diaInspeccionado.primeraEntrada !== "--:--");
 
+    const esLicencia =
+      diaInspeccionado.tieneLicencia ||
+      diaInspeccionado.estadoGeneral === "LICENCIA" ||
+      diaInspeccionado.estadoGeneral === "ASUETO";
+
     const incidentesDelDia = (fichaData?.incidentes || []).filter((inc) => {
       const matchFecha = !inc.fecha
         ? true
@@ -808,6 +849,23 @@ export default function FichaComportamiento() {
           </div>
         </div>
 
+        {esLicencia && (
+          <div className="p-3.5 bg-sky-50 border border-sky-200 rounded-2xl flex items-center justify-between gap-3 text-xs">
+            <div className="flex items-center gap-2.5 text-sky-900 font-bold">
+              <ShieldCheck className="w-5 h-5 text-sky-600 shrink-0" />
+              <div>
+                <span>Jornada cubierta por Licencia / Excepción:</span>
+                <span className="ml-1.5 font-black text-sky-950 uppercase">
+                  {diaInspeccionado.tipoLicenciaEtiqueta || "Licencia Aprobada"}
+                </span>
+              </div>
+            </div>
+            <span className="px-2.5 py-0.5 bg-white border border-sky-300 text-sky-800 rounded-lg font-bold text-[10px]">
+              Eximido por RRHH
+            </span>
+          </div>
+        )}
+
         {horariosDia.length > 0 && (
           <div className="p-3 bg-indigo-50/50 border border-indigo-100 rounded-2xl flex flex-wrap items-center justify-between gap-2 text-xs">
             <div className="flex items-center gap-2 text-indigo-900 font-bold">
@@ -837,7 +895,9 @@ export default function FichaComportamiento() {
             <div className="font-mono font-bold text-slate-800 text-xs sm:text-sm mt-1">
               {diaInspeccionado.primeraEntrada !== "--:--"
                 ? `${diaInspeccionado.primeraEntrada} hs → ${diaInspeccionado.ultimoEgreso} hs`
-                : "--:--"}
+                : esLicencia
+                  ? "Licencia"
+                  : "--:--"}
             </div>
           </div>
           <div className="bg-emerald-50/50 border border-emerald-200/80 p-3 rounded-2xl flex flex-col justify-between">
@@ -888,8 +948,9 @@ export default function FichaComportamiento() {
             <div className="p-3 bg-emerald-50/60 border border-emerald-200 rounded-2xl flex items-center gap-2 text-xs text-emerald-800 font-medium">
               <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
               <span>
-                Jornada regular sin desvíos ni infracciones horarias
-                registradas.
+                {esLicencia
+                  ? "Jornada eximida de marcas de asistencia conforme al dictamen de licencia."
+                  : "Jornada regular sin desvíos ni infracciones horarias registradas."}
               </span>
             </div>
           ) : (
@@ -928,6 +989,11 @@ export default function FichaComportamiento() {
           const esHoy = dia.fecha === hoyIso;
           const estaSeleccionado = diaInspeccionado?.fecha === dia.fecha;
 
+          const esLicencia =
+            dia.tieneLicencia ||
+            dia.estadoGeneral === "LICENCIA" ||
+            dia.estadoGeneral === "ASUETO";
+
           const esFuturo = dia.estadoGeneral === "FUTURO" || dia.fecha > hoyIso;
           const horariosProgramados = obtenerHorariosDeFecha(dia.fecha);
           const tieneHorarioAsignado = horariosProgramados.length > 0;
@@ -961,28 +1027,40 @@ export default function FichaComportamiento() {
 
           const esSinRegistro =
             !esFuturo &&
+            !esLicencia &&
             (dia.estadoGeneral === "SIN_REGISTRO" ||
               (tieneHorarioAsignado && !huboPresencia));
 
           const esCritica =
             !esFuturo &&
+            !esLicencia &&
             (dia.estadoGeneral === "INFRACCION" ||
               esSinRegistro ||
               tieneCritica);
           const esDesvio =
             !esCritica &&
             !esFuturo &&
+            !esLicencia &&
             (incidentesValidos.length > 0 || dia.estadoGeneral === "DESVIO");
           const esSalidaIntermedia =
-            !esCritica && !esDesvio && dia.salidasIntermedias > 0;
+            !esCritica &&
+            !esDesvio &&
+            !esLicencia &&
+            dia.salidasIntermedias > 0;
           const esNormal =
-            !esCritica && !esDesvio && dia.presenciaNetaMinutos > 0;
+            !esCritica &&
+            !esDesvio &&
+            !esLicencia &&
+            dia.presenciaNetaMinutos > 0;
 
           let cardBgClasses =
             "bg-white border-slate-200 hover:border-slate-300";
           if (estaSeleccionado)
             cardBgClasses =
               "bg-indigo-50/50 border-indigo-500 ring-2 ring-indigo-300 shadow-sm";
+          else if (esLicencia)
+            cardBgClasses =
+              "bg-sky-50/80 border-sky-300 hover:border-sky-400 hover:shadow-xs";
           else if (esFuturo && tieneHorarioAsignado)
             cardBgClasses =
               "bg-indigo-50/30 border-indigo-200/80 hover:border-indigo-400";
@@ -1015,7 +1093,13 @@ export default function FichaComportamiento() {
             >
               <div className="flex items-center justify-between text-xs font-bold text-slate-800">
                 <span
-                  className={`text-sm font-black ${esCritica ? "text-rose-900" : ""}`}
+                  className={`text-sm font-black ${
+                    esCritica
+                      ? "text-rose-900"
+                      : esLicencia
+                        ? "text-sky-900"
+                        : ""
+                  }`}
                 >
                   {numDia}
                 </span>
@@ -1024,7 +1108,9 @@ export default function FichaComportamiento() {
                     HOY
                   </span>
                 )}
-                {!esHoy && incidentesValidos.length > 0 ? (
+                {esLicencia ? (
+                  <span className="w-2 h-2 rounded-full bg-sky-500" />
+                ) : !esHoy && incidentesValidos.length > 0 ? (
                   <span className="w-2 h-2 rounded-full bg-rose-500" />
                 ) : !esHoy && dia.presenciaNetaMinutos > 0 ? (
                   <span className="w-2 h-2 rounded-full bg-emerald-500" />
@@ -1048,7 +1134,16 @@ export default function FichaComportamiento() {
                   </div>
                 )}
 
-              {dia.presenciaNetaMinutos > 0 ? (
+              {esLicencia ? (
+                <div className="space-y-0.5 mt-1">
+                  <span className="inline-block px-1.5 py-0.2 bg-sky-100 text-sky-900 border border-sky-200 rounded-md text-[9px] font-black uppercase tracking-wider truncate max-w-full">
+                    {dia.tipoLicenciaEtiqueta || "Licencia / Asueto"}
+                  </span>
+                  <div className="text-[10px] text-sky-700 font-semibold">
+                    Día Justificado
+                  </div>
+                </div>
+              ) : dia.presenciaNetaMinutos > 0 ? (
                 <div className="space-y-0.5 mt-1">
                   <div className="text-[10px] text-slate-500 font-mono">
                     {dia.primeraEntrada} → {dia.ultimoEgreso}
@@ -1518,7 +1613,6 @@ export default function FichaComportamiento() {
             </div>
 
             <div className="flex items-center gap-2.5 self-end md:self-center flex-wrap">
-              {/* Botón para abrir el nuevo Modal de Justificaciones & Motivos */}
               <button
                 type="button"
                 onClick={() => setModalKpiJustificacionesAbierto(true)}
@@ -1534,7 +1628,6 @@ export default function FichaComportamiento() {
                 </span>
               </button>
 
-              {/* Botón para mostrar/ocultar métricas de la pantalla */}
               <button
                 type="button"
                 onClick={() => setMostrarKpis(!mostrarKpis)}
@@ -1570,131 +1663,173 @@ export default function FichaComportamiento() {
           </div>
 
           {/* --- ESCENARIOS DIARIOS --- */}
-          {modalidad === "DIARIO" && estadoJornadaDiaria.esFuturoConHorario && (
-            <div className="bg-indigo-50/60 border-2 border-indigo-200 rounded-3xl p-6 sm:p-8 text-center space-y-4 shadow-sm animate-fadeIn">
-              <div className="w-14 h-14 mx-auto rounded-2xl bg-indigo-100 border border-indigo-200 flex items-center justify-center text-indigo-600 shadow-2xs">
-                <CalendarCheck className="w-7 h-7" />
+
+          {modalidad === "DIARIO" && estadoJornadaDiaria.esLicencia && (
+            <div className="bg-sky-50 border-2 border-sky-300 rounded-3xl p-6 sm:p-7 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-fadeIn">
+              <div className="flex items-center gap-4">
+                <div className="w-13 h-13 rounded-2xl bg-sky-100 border border-sky-200 flex items-center justify-center text-sky-700 shrink-0 shadow-2xs">
+                  <ShieldCheck className="w-7 h-7" />
+                </div>
+                <div className="space-y-1">
+                  <span className="inline-block px-2.5 py-0.5 rounded-full bg-sky-600 text-white font-black text-[9px] uppercase tracking-wider shadow-2xs">
+                    Jornada Justificada por Dictamen
+                  </span>
+                  <h3 className="text-base sm:text-lg font-black text-sky-950">
+                    {infoLicenciaDiaria?.tipoLicenciaEtiqueta ||
+                      "Licencia / Asueto Institucional Vigente"}
+                  </h3>
+                  <p className="text-xs text-sky-800 max-w-2xl leading-relaxed">
+                    Para el día{" "}
+                    <strong>{formatearFechaVisual(fechaConsulta)}</strong> (
+                    {obtenerNombreDia(fechaConsulta)}) consta una excepción o
+                    licencia formal aprobada por Recursos Humanos. La jornada se
+                    computa eximida sin generar déficit, horas en contra ni
+                    marcas de inasistencia.
+                  </p>
+                </div>
               </div>
-              <div className="max-w-xl mx-auto space-y-1.5">
-                <span className="inline-block px-3 py-0.5 rounded-full bg-indigo-600 text-white font-bold text-[10px] uppercase tracking-wider shadow-2xs">
-                  Jornada Futura Programada
+              <div className="flex flex-col sm:items-end gap-1.5 shrink-0">
+                <span className="inline-flex items-center gap-1 px-3 py-1 bg-white border border-sky-300 text-sky-800 rounded-xl text-xs font-bold shadow-2xs">
+                  ✓ Amparado por Reglamentación
                 </span>
-                <h3 className="text-base sm:text-lg font-black text-slate-900">
-                  Horarios pautados para el{" "}
-                  {formatearFechaVisual(fechaConsulta)} (
-                  {obtenerNombreDia(fechaConsulta)})
-                </h3>
-                <p className="text-xs text-slate-600">
-                  Esta fecha es posterior al día de hoy. El colaborador tiene
-                  los siguientes horarios laborales registrados que deberá
-                  cumplir al iniciar la jornada.
-                </p>
-              </div>
-
-              {Array.isArray(estadoJornadaDiaria.planificados) &&
-                estadoJornadaDiaria.planificados.length > 0 && (
-                  <div className="max-w-lg mx-auto bg-white/95 border border-indigo-100 rounded-2xl p-3.5 text-left text-xs shadow-2xs">
-                    <div className="text-[10px] font-bold text-indigo-900 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                      <Clock className="w-3.5 h-3.5 text-indigo-600" />
-                      Horarios a cumplir:
-                    </div>
-                    <div className="space-y-1.5">
-                      {estadoJornadaDiaria.planificados.map((p, idx) => (
-                        <div
-                          key={idx}
-                          className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-200/80 font-medium text-slate-700"
-                        >
-                          <span className="font-semibold text-slate-800">
-                            {p.etiqueta || "Turno Laboral"}
-                          </span>
-                          <span className="font-mono font-bold text-indigo-700">
-                            {p.horaInicio} hs → {p.horaFin} hs
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-            </div>
-          )}
-
-          {modalidad === "DIARIO" && estadoJornadaDiaria.esInasistencia && (
-            <div className="bg-rose-50/80 border-2 border-rose-300 rounded-3xl p-6 sm:p-8 text-center space-y-4 shadow-sm animate-fadeIn">
-              <div className="w-14 h-14 mx-auto rounded-2xl bg-rose-100 border border-rose-200 flex items-center justify-center text-rose-600 shadow-2xs">
-                <UserX className="w-7 h-7" />
-              </div>
-              <div className="max-w-xl mx-auto space-y-1.5">
-                <span className="inline-block px-3 py-0.5 rounded-full bg-rose-600 text-white font-black text-[10px] uppercase tracking-wider shadow-2xs">
-                  Inasistencia detectada
+                <span className="text-[11px] font-mono text-sky-700 font-bold">
+                  Cumplimiento asignado: 100%
                 </span>
-                <h3 className="text-base sm:text-lg font-black text-rose-950">
-                  El empleado tenía jornada laboral asignada pero no registró
-                  asistencia
-                </h3>
-                <p className="text-xs text-rose-800">
-                  Para el día{" "}
-                  <strong>{formatearFechaVisual(fechaConsulta)}</strong> (
-                  {obtenerNombreDia(fechaConsulta)}) constan franjas horarias
-                  obligatorias programadas, pero no se registraron marcaciones
-                  biométricas válidas de ingreso ni egreso.
-                </p>
-              </div>
-
-              {Array.isArray(estadoJornadaDiaria.planificados) &&
-                estadoJornadaDiaria.planificados.length > 0 && (
-                  <div className="max-w-lg mx-auto bg-white/90 border border-rose-200 rounded-2xl p-3.5 text-left text-xs shadow-2xs">
-                    <div className="text-[10px] font-bold text-rose-900 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                      <Clock className="w-3.5 h-3.5 text-rose-600" />
-                      Horarios obligatorios que debía cumplir:
-                    </div>
-                    <div className="space-y-1.5">
-                      {estadoJornadaDiaria.planificados.map((p, idx) => (
-                        <div
-                          key={idx}
-                          className="flex items-center justify-between p-2 rounded-xl bg-rose-50/50 border border-rose-100 font-medium text-slate-700"
-                        >
-                          <span className="font-semibold text-rose-950">
-                            {p.etiqueta || "Turno Programado"}
-                          </span>
-                          <span className="font-mono font-bold text-rose-800">
-                            {p.horaInicio} hs → {p.horaFin} hs
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-            </div>
-          )}
-
-          {modalidad === "DIARIO" && estadoJornadaDiaria.esSinHorario && (
-            <div className="bg-white border border-slate-200 rounded-3xl p-8 sm:p-12 text-center space-y-4 shadow-xs animate-fadeIn">
-              <div className="w-16 h-16 mx-auto rounded-3xl bg-slate-50 border border-slate-200/80 flex items-center justify-center text-slate-400 shadow-2xs">
-                <CalendarOff className="w-8 h-8 text-slate-400" />
-              </div>
-              <div className="max-w-md mx-auto space-y-1.5">
-                <span className="inline-block px-3 py-0.5 rounded-full bg-slate-100 text-slate-600 font-bold text-[10px] uppercase tracking-wider">
-                  Sin registros ni horario
-                </span>
-                <h3 className="text-base sm:text-lg font-black text-slate-900">
-                  No hay datos para esta jornada
-                </h3>
-                <p className="text-xs text-slate-500 leading-relaxed">
-                  No existe registro de un horario laboral asignado ni
-                  marcaciones biométricas para el día{" "}
-                  <strong>{formatearFechaVisual(fechaConsulta)}</strong> (
-                  {obtenerNombreDia(fechaConsulta)}).
-                </p>
               </div>
             </div>
           )}
 
-          {/* TARJETAS KPI DE ACTIVIDAD (EXPANDIBLES / COLAPSABLES) */}
+          {modalidad === "DIARIO" &&
+            !estadoJornadaDiaria.esLicencia &&
+            estadoJornadaDiaria.esFuturoConHorario && (
+              <div className="bg-indigo-50/60 border-2 border-indigo-200 rounded-3xl p-6 sm:p-8 text-center space-y-4 shadow-sm animate-fadeIn">
+                <div className="w-14 h-14 mx-auto rounded-2xl bg-indigo-100 border border-indigo-200 flex items-center justify-center text-indigo-600 shadow-2xs">
+                  <CalendarCheck className="w-7 h-7" />
+                </div>
+                <div className="max-w-xl mx-auto space-y-1.5">
+                  <span className="inline-block px-3 py-0.5 rounded-full bg-indigo-600 text-white font-bold text-[10px] uppercase tracking-wider shadow-2xs">
+                    Jornada Futura Programada
+                  </span>
+                  <h3 className="text-base sm:text-lg font-black text-slate-900">
+                    Horarios pautados para el{" "}
+                    {formatearFechaVisual(fechaConsulta)} (
+                    {obtenerNombreDia(fechaConsulta)})
+                  </h3>
+                  <p className="text-xs text-slate-600">
+                    Esta fecha es posterior al día de hoy. El colaborador tiene
+                    los siguientes horarios laborales registrados que deberá
+                    cumplir al iniciar la jornada.
+                  </p>
+                </div>
+
+                {Array.isArray(estadoJornadaDiaria.planificados) &&
+                  estadoJornadaDiaria.planificados.length > 0 && (
+                    <div className="max-w-lg mx-auto bg-white/95 border border-indigo-100 rounded-2xl p-3.5 text-left text-xs shadow-2xs">
+                      <div className="text-[10px] font-bold text-indigo-900 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                        <Clock className="w-3.5 h-3.5 text-indigo-600" />
+                        Horarios a cumplir:
+                      </div>
+                      <div className="space-y-1.5">
+                        {estadoJornadaDiaria.planificados.map((p, idx) => (
+                          <div
+                            key={idx}
+                            className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-200/80 font-medium text-slate-700"
+                          >
+                            <span className="font-semibold text-slate-800">
+                              {p.etiqueta || "Turno Laboral"}
+                            </span>
+                            <span className="font-mono font-bold text-indigo-700">
+                              {p.horaInicio} hs → {p.horaFin} hs
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+              </div>
+            )}
+
+          {modalidad === "DIARIO" &&
+            !estadoJornadaDiaria.esLicencia &&
+            estadoJornadaDiaria.esInasistencia && (
+              <div className="bg-rose-50/80 border-2 border-rose-300 rounded-3xl p-6 sm:p-8 text-center space-y-4 shadow-sm animate-fadeIn">
+                <div className="w-14 h-14 mx-auto rounded-2xl bg-rose-100 border border-rose-200 flex items-center justify-center text-rose-600 shadow-2xs">
+                  <UserX className="w-7 h-7" />
+                </div>
+                <div className="max-w-xl mx-auto space-y-1.5">
+                  <span className="inline-block px-3 py-0.5 rounded-full bg-rose-600 text-white font-black text-[10px] uppercase tracking-wider shadow-2xs">
+                    Inasistencia detectada
+                  </span>
+                  <h3 className="text-base sm:text-lg font-black text-rose-950">
+                    El empleado tenía jornada laboral asignada pero no registró
+                    asistencia
+                  </h3>
+                  <p className="text-xs text-rose-800">
+                    Para el día{" "}
+                    <strong>{formatearFechaVisual(fechaConsulta)}</strong> (
+                    {obtenerNombreDia(fechaConsulta)}) constan franjas horarias
+                    obligatorias programadas, pero no se registraron marcaciones
+                    biométricas válidas de ingreso ni egreso.
+                  </p>
+                </div>
+
+                {Array.isArray(estadoJornadaDiaria.planificados) &&
+                  estadoJornadaDiaria.planificados.length > 0 && (
+                    <div className="max-w-lg mx-auto bg-white/90 border border-rose-200 rounded-2xl p-3.5 text-left text-xs shadow-2xs">
+                      <div className="text-[10px] font-bold text-rose-900 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                        <Clock className="w-3.5 h-3.5 text-rose-600" />
+                        Horarios obligatorios que debía cumplir:
+                      </div>
+                      <div className="space-y-1.5">
+                        {estadoJornadaDiaria.planificados.map((p, idx) => (
+                          <div
+                            key={idx}
+                            className="flex items-center justify-between p-2 rounded-xl bg-rose-50/50 border border-rose-100 font-medium text-slate-700"
+                          >
+                            <span className="font-semibold text-rose-950">
+                              {p.etiqueta || "Turno Programado"}
+                            </span>
+                            <span className="font-mono font-bold text-rose-800">
+                              {p.horaInicio} hs → {p.horaFin} hs
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+              </div>
+            )}
+
+          {modalidad === "DIARIO" &&
+            !estadoJornadaDiaria.esLicencia &&
+            estadoJornadaDiaria.esSinHorario && (
+              <div className="bg-white border border-slate-200 rounded-3xl p-8 sm:p-12 text-center space-y-4 shadow-xs animate-fadeIn">
+                <div className="w-16 h-16 mx-auto rounded-3xl bg-slate-50 border border-slate-200/80 flex items-center justify-center text-slate-400 shadow-2xs">
+                  <CalendarOff className="w-8 h-8 text-slate-400" />
+                </div>
+                <div className="max-w-md mx-auto space-y-1.5">
+                  <span className="inline-block px-3 py-0.5 rounded-full bg-slate-100 text-slate-600 font-bold text-[10px] uppercase tracking-wider">
+                    Sin registros ni horario
+                  </span>
+                  <h3 className="text-base sm:text-lg font-black text-slate-900">
+                    No hay datos para esta jornada
+                  </h3>
+                  <p className="text-xs text-slate-500 leading-relaxed">
+                    No existe registro de un horario laboral asignado ni
+                    marcaciones biométricas para el día{" "}
+                    <strong>{formatearFechaVisual(fechaConsulta)}</strong> (
+                    {obtenerNombreDia(fechaConsulta)}).
+                  </p>
+                </div>
+              </div>
+            )}
+
+          {/* TARJETAS KPI DE ACTIVIDAD (EXPANDIBLES / COLAPSABLES) CON KPI DE LICENCIAS */}
           {mostrarKpis &&
             (modalidad !== "DIARIO" ||
               (!estadoJornadaDiaria.esSinHorario &&
                 !estadoJornadaDiaria.esFuturoConHorario)) && (
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 animate-fadeIn">
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-3 animate-fadeIn">
                 <div className="bg-white border border-slate-200 p-4 rounded-2xl shadow-xs flex flex-col justify-between">
                   <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
                     {modalidad === "DIARIO"
@@ -1715,6 +1850,24 @@ export default function FichaComportamiento() {
                   <div>
                     <div className="text-xl font-black text-emerald-950 mt-1">
                       {metricas.presenciaNetaTexto}
+                    </div>
+                  </div>
+                </div>
+
+                {/* NUEVO KPI DE LICENCIAS Y ASUETOS */}
+                <div className="bg-sky-50/70 border border-sky-200 p-4 rounded-2xl shadow-xs flex flex-col justify-between">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-sky-800 block">
+                    LICENCIAS Y ASUETOS
+                  </span>
+                  <div>
+                    <div className="text-xl font-black text-sky-950 mt-1">
+                      {metricas.horasLicenciaTexto || "0h 0m"}
+                    </div>
+                    <div className="text-[10px] font-semibold text-sky-700 mt-0.5">
+                      {metricas.diasLicenciaPeriodo || 0}{" "}
+                      {metricas.diasLicenciaPeriodo === 1
+                        ? "día eximido"
+                        : "días eximidos"}
                     </div>
                   </div>
                 </div>
@@ -2044,6 +2197,12 @@ export default function FichaComportamiento() {
                     {(fichaData?.diasPeriodo || []).map((dia) => {
                       const estaInspeccionado =
                         diaInspeccionado?.fecha === dia.fecha;
+
+                      const esLicencia =
+                        dia.tieneLicencia ||
+                        dia.estadoGeneral === "LICENCIA" ||
+                        dia.estadoGeneral === "ASUETO";
+
                       const esFuturo = dia.fecha > hoyIso;
                       const horariosProgramados = obtenerHorariosDeFecha(
                         dia.fecha,
@@ -2052,6 +2211,60 @@ export default function FichaComportamiento() {
                       const huboActividad =
                         dia.presenciaNetaMinutos > 0 ||
                         (dia.primeraEntrada && dia.primeraEntrada !== "--:--");
+
+                      if (esLicencia) {
+                        return (
+                          <tr
+                            key={dia.fecha}
+                            className={`transition ${
+                              estaInspeccionado
+                                ? "bg-sky-100/70 font-semibold"
+                                : "bg-sky-50/50 hover:bg-sky-50/80"
+                            }`}
+                          >
+                            <td className="px-4 py-3 font-mono font-bold text-sky-950">
+                              {formatearFechaVisual(dia.fecha)}
+                            </td>
+                            <td className="px-4 py-3 font-semibold text-sky-900">
+                              {dia.diaSemana}
+                            </td>
+                            <td colSpan={4} className="px-4 py-3">
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white text-sky-800 border border-sky-300 font-bold text-[11px] shadow-2xs">
+                                <ShieldCheck className="w-3.5 h-3.5 text-sky-600" />
+                                {dia.tipoLicenciaEtiqueta ||
+                                  "Licencia / Asueto Institucional"}
+                                • Eximido de asistencia
+                              </span>
+                            </td>
+                            <td className="px-4 py-3">
+                              <span className="inline-block text-[10px] font-bold px-2 py-0.5 rounded-full bg-sky-100 text-sky-800 border border-sky-300">
+                                Justificada
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 font-bold text-sky-900">
+                              100%
+                            </td>
+                            <td className="px-4 py-3 text-right no-print">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (diaInspeccionado?.fecha === dia.fecha)
+                                    setDiaInspeccionado(null);
+                                  else setDiaInspeccionado(dia);
+                                }}
+                                className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold cursor-pointer transition ${
+                                  estaInspeccionado
+                                    ? "bg-sky-700 text-white shadow-xs"
+                                    : "bg-white hover:bg-sky-100 text-sky-800 border border-sky-300"
+                                }`}
+                              >
+                                <Eye className="w-3.5 h-3.5" />
+                                {estaInspeccionado ? "Cerrar" : "Ver Día"}
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      }
 
                       const esFrancoSinActividad =
                         !tieneHorario && !huboActividad;
@@ -2353,10 +2566,14 @@ export default function FichaComportamiento() {
                     justificar desvíos.
                   </p>
                 </div>
-                <div className="flex items-center gap-3 text-[11px] font-bold">
+                <div className="flex items-center gap-3 text-[11px] font-bold flex-wrap">
                   <span className="flex items-center gap-1 text-emerald-700">
                     <span className="w-2 h-2 rounded-full bg-emerald-500" />{" "}
                     Normal
+                  </span>
+                  <span className="flex items-center gap-1 text-sky-700">
+                    <span className="w-2 h-2 rounded-full bg-sky-500" />{" "}
+                    Licencia / Asueto
                   </span>
                   <span className="flex items-center gap-1 text-rose-700">
                     <span className="w-2 h-2 rounded-full bg-rose-500" />{" "}
@@ -2466,11 +2683,10 @@ export default function FichaComportamiento() {
         </div>
       </div>
 
-      {/* 1. MODAL DEDICADO: AUDITORÍA DE JUSTIFICACIONES CON RANGO DE FECHAS CLARO */}
+      {/* 1. MODAL DEDICADO: AUDITORÍA DE JUSTIFICACIONES */}
       {modalKpiJustificacionesAbierto && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl w-full max-w-3xl shadow-2xl overflow-hidden border border-slate-200 animate-in zoom-in-95 max-h-[92vh] flex flex-col">
-            {/* Header del Modal */}
             <div className="bg-[#111827] px-6 py-4 text-white flex items-center justify-between shrink-0">
               <div className="flex items-center gap-3">
                 <div className="w-9 h-9 rounded-xl bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center text-indigo-400">
@@ -2495,7 +2711,6 @@ export default function FichaComportamiento() {
               </button>
             </div>
 
-            {/* Banner superior de alcance temporal dentro del modal */}
             <div className="bg-indigo-50/70 border-b border-indigo-100 px-6 py-2.5 flex items-center justify-between gap-3 text-xs">
               <div className="flex items-center gap-2 text-indigo-950 font-medium">
                 <span className="font-bold uppercase tracking-wider text-[10px] bg-indigo-600 text-white px-2 py-0.5 rounded-md shadow-2xs">
@@ -2512,13 +2727,11 @@ export default function FichaComportamiento() {
             </div>
 
             <div className="p-6 space-y-6 overflow-y-auto flex-1">
-              {/* Tarjetas de Estados de Incidentes */}
               <div className="space-y-2">
                 <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
                   Distribución de Resoluciones en este Período
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  {/* Pendientes */}
                   <div
                     onClick={() => {
                       setModalKpiJustificacionesAbierto(false);
@@ -2540,7 +2753,6 @@ export default function FichaComportamiento() {
                     </div>
                   </div>
 
-                  {/* Justificados */}
                   <div
                     onClick={() => {
                       setModalKpiJustificacionesAbierto(false);
@@ -2562,7 +2774,6 @@ export default function FichaComportamiento() {
                     </div>
                   </div>
 
-                  {/* Observados */}
                   <div
                     onClick={() => {
                       setModalKpiJustificacionesAbierto(false);
@@ -2584,7 +2795,6 @@ export default function FichaComportamiento() {
                     </div>
                   </div>
 
-                  {/* Rechazados */}
                   <div
                     onClick={() => {
                       setModalKpiJustificacionesAbierto(false);
@@ -2608,7 +2818,6 @@ export default function FichaComportamiento() {
                 </div>
               </div>
 
-              {/* Tarjeta de Top Justificaciones / Motivos Ampliada */}
               <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 space-y-4">
                 <div className="flex items-center justify-between pb-3 border-b border-slate-200">
                   <div className="flex items-center gap-2 text-slate-800">
@@ -2665,7 +2874,6 @@ export default function FichaComportamiento() {
                             </div>
                           </div>
 
-                          {/* Barra de proporción visual */}
                           <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
                             <div
                               className="bg-indigo-600 h-full rounded-full transition-all duration-300"

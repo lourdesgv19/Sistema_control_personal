@@ -46,7 +46,10 @@ public record FichaComportamientoDTO(
         int incidentesObservados,
         int incidentesRechazados,
         int totalIncidentesJustificadosConMotivo,
-        List<TopJustificacionDTO> topJustificaciones
+        List<TopJustificacionDTO> topJustificaciones,
+        int diasLicenciaPeriodo,
+        String horasLicenciaTexto,
+        long minutosLicencia
     ) {}
 
     public record TopJustificacionDTO(
@@ -119,6 +122,9 @@ public record FichaComportamientoDTO(
         long minutosDiferencia,
         String clasesDictadasTexto,
         double horasClaseTeoricas,
-        double horasClaseEfectivas
+        double horasClaseEfectivas,
+        boolean tieneLicencia,
+        String tipoLicenciaEtiqueta, // ej: "Licencia Médica", "Vacaciones", "Asueto Académico"
+        String estadoLicencia        // "APROBADA", "PENDIENTE_RRHH"
     ) {}
 }

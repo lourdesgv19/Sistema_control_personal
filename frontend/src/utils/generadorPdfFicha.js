@@ -10,7 +10,6 @@ function formatearFecha(fechaIso) {
     : fechaIso;
 }
 
-// Sanitiza caracteres Unicode conflictivos (evita que '→' se imprima como '!´')
 function sanitizarTextoParaPdf(texto) {
   if (!texto) return "";
   return String(texto)
@@ -22,14 +21,286 @@ function sanitizarTextoParaPdf(texto) {
 }
 
 /**
- * Genera el documento PDF institucional en versión Blanco y Negro o Color.
- * @param {Object} params
- * @param {Object} params.fichaData Datos completos de la ficha provenientes del backend.
- * @param {string} params.modalidad DIARIO | SEMANAL | MENSUAL | RANGO_FECHAS.
- * @param {string} params.fechaConsulta Fecha de inicio o consulta base.
- * @param {string} params.fechaHastaRango Fecha de fin en caso de rango.
- * @param {boolean} [params.esColor=false] true para PDF a color, false para monocromo/B&W.
+ * Compacta las jornadas del período:
+ * 1. OMITIR TOTALMENTE los días en los que NO tenía horario asignado y NO asistió (francos / libres).
+ * 2. Agrupar ausencias consecutivas de días que SÍ tenían horario en un solo rango usando colSpan.
+ * 3. En Ausencias y Licencias se omiten las columnas de ingreso, egreso y horas vacías.
  */
+function compactarDiasPeriodo(dias, esColor) {
+  if (!Array.isArray(dias) || dias.length === 0) return [];
+
+  const resultado = [];
+  let grupoAusencia = null;
+
+  for (let i = 0; i < dias.length; i++) {
+    const dia = dias[i];
+
+    const tienePresencia =
+      (dia.presenciaNetaMinutos && dia.presenciaNetaMinutos > 0) ||
+      (dia.primeraEntrada && dia.primeraEntrada !== "--:--");
+
+    const esLicencia =
+      dia.tieneLicencia ||
+      dia.estadoGeneral === "LICENCIA" ||
+      dia.estadoGeneral === "ASUETO";
+
+    // Si NO tenía horario programado y NO asistió -> SE OMITE POR COMPLETO
+    const esFrancoSinHorarioNiPresencia =
+      !tienePresencia &&
+      !esLicencia &&
+      (dia.estadoGeneral === "FRANCO" || dia.estadoGeneral === "FUTURO");
+
+    if (esFrancoSinHorarioNiPresencia) {
+      if (grupoAusencia) {
+        resultado.push(formatearFilaAusenciaAgrupada(grupoAusencia, esColor));
+        grupoAusencia = null;
+      }
+      continue;
+    }
+
+    // Es ausencia REAL (tenía horario pautado obligatorio pero no asistió)
+    const esAusenciaObligatoria = !tienePresencia && !esLicencia;
+
+    if (esAusenciaObligatoria) {
+      if (!grupoAusencia) {
+        grupoAusencia = {
+          fechaInicio: dia.fecha,
+          fechaFin: dia.fecha,
+          diaInicioSemana: dia.diaSemana,
+          diaFinSemana: dia.diaSemana,
+          cantidad: 1,
+          totalIncidentes: dia.totalIncidentes || 0,
+        };
+      } else {
+        grupoAusencia.fechaFin = dia.fecha;
+        grupoAusencia.diaFinSemana = dia.diaSemana;
+        grupoAusencia.cantidad += 1;
+        grupoAusencia.totalIncidentes += dia.totalIncidentes || 0;
+      }
+    } else {
+      if (grupoAusencia) {
+        resultado.push(formatearFilaAusenciaAgrupada(grupoAusencia, esColor));
+        grupoAusencia = null;
+      }
+
+      if (esLicencia && !tienePresencia) {
+        // Fila de Licencia con colSpan (omite columnas de horas vacías)
+        resultado.push(formatearFilaLicencia(dia, esColor));
+      } else {
+        // Día con presencia normal
+        resultado.push(formatearFilaDiaRegular(dia));
+      }
+    }
+  }
+
+  if (grupoAusencia) {
+    resultado.push(formatearFilaAusenciaAgrupada(grupoAusencia, esColor));
+  }
+
+  return resultado;
+}
+
+/**
+ * Fila de Ausencia agrupada:
+ * Columnas: [Fecha, Día, DETALLE FUSIONADO (colSpan: 5), Incidentes, Cumpl.]
+ */
+function formatearFilaAusenciaAgrupada(grupo, esColor) {
+  const rangoFechas =
+    grupo.cantidad === 1
+      ? formatearFecha(grupo.fechaInicio)
+      : `${formatearFecha(grupo.fechaInicio)} al ${formatearFecha(grupo.fechaFin)}`;
+
+  const rangoDias =
+    grupo.cantidad === 1
+      ? grupo.diaInicioSemana
+      : `${grupo.diaInicioSemana} a ${grupo.diaFinSemana}`;
+
+  const textoAusencia =
+    grupo.cantidad === 1
+      ? "[!] Inasistencia sin registro en jornada obligatoria"
+      : `[!] Inasistencia sin registro (${grupo.cantidad} días hábiles consecutivos)`;
+
+  return [
+    { content: rangoFechas, styles: { fontStyle: "bold" } },
+    rangoDias,
+    {
+      content: textoAusencia,
+      colSpan: 5, // Omite columnas: 1ra Entrada, Último Egreso, Presencia, Saldo, Salidas Int.
+      styles: {
+        halign: "center",
+        fontStyle: "bold",
+        textColor: esColor ? [190, 18, 60] : [71, 85, 105],
+        fillColor: esColor ? [255, 241, 242] : [248, 250, 252],
+      },
+    },
+    grupo.totalIncidentes > 0 ? `[!] ${grupo.totalIncidentes}` : "-",
+    {
+      content: "0%",
+      styles: {
+        fontStyle: "bold",
+        textColor: esColor ? [190, 18, 60] : [30, 41, 59],
+      },
+    },
+  ];
+}
+
+/**
+ * Fila de Licencia:
+ * Columnas: [Fecha, Día, DETALLE FUSIONADO (colSpan: 5), Incidentes, Cumpl.]
+ */
+function formatearFilaLicencia(dia, esColor) {
+  const etiqueta =
+    dia.tipoLicenciaEtiqueta || "Licencia / Asueto Institucional";
+
+  return [
+    { content: formatearFecha(dia.fecha), styles: { fontStyle: "bold" } },
+    dia.diaSemana || "-",
+    {
+      content: `[OK] ${etiqueta} - Jornada eximida de asistencia`,
+      colSpan: 5, // Omite columnas de horas vacías
+      styles: {
+        halign: "center",
+        fontStyle: "bold",
+        textColor: esColor ? [3, 105, 161] : [71, 85, 105],
+        fillColor: esColor ? [240, 249, 255] : [248, 250, 252],
+      },
+    },
+    "-",
+    {
+      content: "Eximido",
+      styles: {
+        fontStyle: "bold",
+        textColor: esColor ? [3, 105, 161] : [30, 41, 59],
+      },
+    },
+  ];
+}
+
+/**
+ * Fila regular con presencia efectiva (muestra todas las columnas completas).
+ */
+function formatearFilaDiaRegular(dia) {
+  const dif = dia.minutosDiferencia || 0;
+  let saldoTexto = "-";
+  if (dif > 0) {
+    saldoTexto = `+${Math.floor(dif / 60)}h ${dif % 60}m`;
+  } else if (dif < 0) {
+    saldoTexto = `-${Math.floor(Math.abs(dif) / 60)}h ${Math.abs(dif) % 60}m`;
+  }
+
+  const presencia =
+    dia.presenciaNetaTexto &&
+    dia.presenciaNetaTexto !== "0h 0m" &&
+    dia.presenciaNetaTexto !== "0h 00m"
+      ? dia.presenciaNetaTexto
+      : "-";
+
+  const salidas =
+    dia.salidasIntermedias > 0
+      ? `${dia.salidasIntermedias} (${dia.minutosFuera}m)`
+      : "-";
+
+  const incidentes =
+    dia.totalIncidentes > 0 ? `[!] ${dia.totalIncidentes}` : "-";
+
+  return [
+    formatearFecha(dia.fecha),
+    dia.diaSemana || "-",
+    dia.primeraEntrada && dia.primeraEntrada !== "--:--"
+      ? dia.primeraEntrada
+      : "-",
+    dia.ultimoEgreso && dia.ultimoEgreso !== "--:--" ? dia.ultimoEgreso : "-",
+    presencia,
+    saldoTexto,
+    salidas,
+    incidentes,
+    `${dia.porcentajeCumplimiento}%`,
+  ];
+}
+
+/**
+ * Agrupa incidentes continuos idénticos en un rango de fechas.
+ */
+function compactarIncidentes(incidentes) {
+  if (!Array.isArray(incidentes) || incidentes.length === 0) return [];
+
+  const agrupados = [];
+  let actual = null;
+
+  for (let i = 0; i < incidentes.length; i++) {
+    const inc = incidentes[i];
+    const fechaInc = inc.fecha ? String(inc.fecha).split("T")[0] : null;
+
+    if (!actual) {
+      actual = {
+        fechaInicio: fechaInc,
+        fechaFin: fechaInc,
+        hora: inc.hora,
+        severidad: inc.severidad,
+        tipo: inc.tipo,
+        detalle: inc.detalle,
+        estado: inc.estado,
+        cantidad: 1,
+      };
+    } else {
+      const mismoTipo =
+        actual.tipo === inc.tipo &&
+        actual.severidad === inc.severidad &&
+        actual.estado === inc.estado &&
+        actual.detalle === inc.detalle;
+
+      if (mismoTipo) {
+        actual.fechaFin = fechaInc;
+        actual.cantidad += 1;
+      } else {
+        agrupados.push(formatearFilaIncidenteAgrupado(actual));
+        actual = {
+          fechaInicio: fechaInc,
+          fechaFin: fechaInc,
+          hora: inc.hora,
+          severidad: inc.severidad,
+          tipo: inc.tipo,
+          detalle: inc.detalle,
+          estado: inc.estado,
+          cantidad: 1,
+        };
+      }
+    }
+  }
+
+  if (actual) {
+    agrupados.push(formatearFilaIncidenteAgrupado(actual));
+  }
+
+  return agrupados;
+}
+
+function formatearFilaIncidenteAgrupado(grupo) {
+  const rangoFecha =
+    grupo.cantidad === 1 || grupo.fechaInicio === grupo.fechaFin
+      ? formatearFecha(grupo.fechaInicio)
+      : `${formatearFecha(grupo.fechaInicio)} al ${formatearFecha(grupo.fechaFin)}`;
+
+  const horaTexto =
+    grupo.hora && grupo.hora !== "00:00" && grupo.hora !== "00:00:00"
+      ? `${grupo.hora.substring(0, 5)} hs`
+      : "-";
+
+  const tipoTexto =
+    grupo.cantidad > 1
+      ? `${sanitizarTextoParaPdf(grupo.tipo)} (x${grupo.cantidad} días)`
+      : sanitizarTextoParaPdf(grupo.tipo);
+
+  return [
+    rangoFecha,
+    horaTexto,
+    `[${(grupo.severidad || "MEDIA").toUpperCase()}]`,
+    tipoTexto,
+    sanitizarTextoParaPdf(grupo.detalle) || "-",
+    grupo.estado || "PENDIENTE",
+  ];
+}
+
 export function generarPdfFichaComportamiento({
   fichaData,
   modalidad,
@@ -47,23 +318,22 @@ export function generarPdfFichaComportamiento({
 
   const hoyIso = new Date().toISOString().split("T")[0];
 
-  // Paleta dinámica según modo seleccionado
   const theme = esColor
     ? {
-        primary: [67, 56, 202], // Índigo #4338ca
-        primaryLight: [238, 242, 255], // Índigo tenue
+        primary: [67, 56, 202],
+        primaryLight: [238, 242, 255],
         secondary: [79, 70, 229],
-        darkText: [30, 41, 59], // Slate 800
+        darkText: [30, 41, 59],
         subText: [100, 116, 139],
         cardBg: [248, 250, 252],
         border: [226, 232, 240],
         headerBg: [241, 245, 249],
-        alertBg: [225, 29, 72], // Rose 600
+        alertBg: [225, 29, 72],
         badgeBorder: [67, 56, 202],
         accentHeader: [67, 56, 202],
       }
     : {
-        primary: [30, 41, 59], // Slate grafito
+        primary: [30, 41, 59],
         primaryLight: [255, 255, 255],
         secondary: [71, 85, 105],
         darkText: [30, 41, 59],
@@ -71,7 +341,7 @@ export function generarPdfFichaComportamiento({
         cardBg: [248, 250, 252],
         border: [203, 213, 225],
         headerBg: [241, 245, 249],
-        alertBg: [71, 85, 105], // Gris intermedio para fotocopia
+        alertBg: [71, 85, 105],
         badgeBorder: [30, 41, 59],
         accentHeader: [30, 41, 59],
       };
@@ -88,11 +358,11 @@ export function generarPdfFichaComportamiento({
     horasEnContraTexto: "0h 0m",
     diasConDeficit: 0,
     diasConHorasExtra: 0,
+    diasLicenciaPeriodo: 0,
+    horasLicenciaTexto: "0h 0m",
   };
 
-  // ==========================================
-  // 1. ENCABEZADO INSTITUCIONAL
-  // ==========================================
+  // 1. Encabezado institucional
   doc.setFillColor(...theme.primary);
   doc.rect(0, 0, 210, 5, "F");
 
@@ -111,9 +381,7 @@ export function generarPdfFichaComportamiento({
   doc.setLineWidth(0.6);
   doc.line(14, 24, 196, 24);
 
-  // ==========================================
-  // 2. FICHA TÉCNICA DEL COLABORADOR
-  // ==========================================
+  // 2. Ficha Técnica
   doc.setDrawColor(...theme.border);
   doc.setLineWidth(0.3);
   doc.setFillColor(...theme.cardBg);
@@ -168,7 +436,7 @@ export function generarPdfFichaComportamiento({
   doc.setTextColor(...theme.darkText);
   doc.text(`${fichaData.etiquetaTurno || "Jornada Regular"}`, 48, 54);
 
-  // Tarjeta de Cumplimiento a la derecha (Topeada y sin flechas rotas)
+  // Cumplimiento
   doc.setDrawColor(...theme.badgeBorder);
   doc.setLineWidth(0.5);
   doc.setFillColor(...theme.primaryLight);
@@ -190,9 +458,7 @@ export function generarPdfFichaComportamiento({
   doc.setTextColor(...theme.subText);
   doc.text("de cronograma útil", 171.5, 52, { align: "center" });
 
-  // ==========================================
-  // 3. RESUMEN DE INDICADORES DEL PERÍODO
-  // ==========================================
+  // 3. Resumen Ejecutivo
   const periodoTextoVisual = sanitizarTextoParaPdf(
     modalidad === "RANGO_FECHAS"
       ? `${formatearFecha(fechaConsulta)} AL ${formatearFecha(fechaHastaRango)}`
@@ -208,7 +474,6 @@ export function generarPdfFichaComportamiento({
   doc.setTextColor(...theme.darkText);
   doc.text(`RESUMEN EJECUTIVO - PERÍODO: ${periodoTextoVisual}`, 14, 66);
 
-  // Tabla con indicadores desglosados (incluye horas a favor y en contra)
   autoTable(doc, {
     startY: 69,
     margin: { left: 14, right: 14 },
@@ -231,28 +496,40 @@ export function generarPdfFichaComportamiento({
     head: [
       [
         "Presencia Neta",
-        "Horas a Favor (Extra)",
-        "Horas en Contra (Deuda)",
-        "Salidas Intermedias",
-        "Incidentes / Desvíos",
+        "Licencias / Asuetos",
+        "Horas a Favor (+)",
+        "Horas Deuda (-)",
+        "Salidas Int.",
+        "Incidentes",
       ],
     ],
     body: [
       [
-        metricas.presenciaNetaTexto || "0h 0m",
-        `+${metricas.horasAFavorTexto || "0h 0m"} (${metricas.diasConHorasExtra || 0} d)`,
-        `-${metricas.horasEnContraTexto || "0h 0m"} (${metricas.diasConDeficit || 0} d)`,
-        `${metricas.salidasIntermediasCantidad || 0} (${metricas.salidasIntermediasMinutos || 0} min)`,
-        `${metricas.totalIncidentes || 0} (${metricas.incidentesJustificados || 0} justif.)`,
+        metricas.presenciaNetaTexto && metricas.presenciaNetaTexto !== "0h 0m"
+          ? metricas.presenciaNetaTexto
+          : "-",
+        metricas.diasLicenciaPeriodo > 0
+          ? `${metricas.horasLicenciaTexto} (${metricas.diasLicenciaPeriodo} d)`
+          : "-",
+        metricas.diasConHorasExtra > 0
+          ? `+${metricas.horasAFavorTexto} (${metricas.diasConHorasExtra} d)`
+          : "-",
+        metricas.diasConDeficit > 0
+          ? `-${metricas.horasEnContraTexto} (${metricas.diasConDeficit} d)`
+          : "-",
+        metricas.salidasIntermediasCantidad > 0
+          ? `${metricas.salidasIntermediasCantidad} (${metricas.salidasIntermediasMinutos} min)`
+          : "-",
+        metricas.totalIncidentes > 0
+          ? `${metricas.totalIncidentes} (${metricas.incidentesJustificados || 0} justif.)`
+          : "-",
       ],
     ],
   });
 
   let posY = doc.lastAutoTable.finalY + 7;
 
-  // ==========================================
-  // 4. DETALLE DE JORNADA O DESGLOSE
-  // ==========================================
+  // 4. Detalle de Jornada o Desglose
   if (modalidad === "DIARIO") {
     doc.setFont("helvetica", "bold");
     doc.setFontSize(9);
@@ -310,38 +587,20 @@ export function generarPdfFichaComportamiento({
 
     posY = doc.lastAutoTable.finalY + 7;
   } else {
+    // Procesa y compacta con colSpan para omitir columnas vacías en ausencias y licencias
+    const filasDiasCompactadas = compactarDiasPeriodo(
+      fichaData.diasPeriodo,
+      esColor,
+    );
+
     doc.setFont("helvetica", "bold");
     doc.setFontSize(9);
     doc.setTextColor(...theme.darkText);
     doc.text(
-      `DESGLOSE DÍA POR DÍA (${fichaData.diasPeriodo?.length || 0} JORNADAS)`,
+      `DESGLOSE DE JORNADAS OBLIGATORIAS Y ACTIVIDAD (${filasDiasCompactadas.length} REGISTROS)`,
       14,
       posY,
     );
-
-    const filasDias = (fichaData.diasPeriodo || []).map((dia) => {
-      const dif = dia.minutosDiferencia || 0;
-      let saldoTexto = "0m";
-      if (dif > 0) {
-        saldoTexto = `+${Math.floor(dif / 60)}h ${dif % 60}m`;
-      } else if (dif < 0) {
-        saldoTexto = `-${Math.floor(Math.abs(dif) / 60)}h ${Math.abs(dif) % 60}m`;
-      }
-
-      return [
-        formatearFecha(dia.fecha),
-        dia.diaSemana || "-",
-        dia.primeraEntrada || "--:--",
-        dia.ultimoEgreso || "--:--",
-        dia.presenciaNetaTexto || "0h 0m",
-        saldoTexto,
-        dia.salidasIntermedias > 0
-          ? `${dia.salidasIntermedias} (${dia.minutosFuera}m)`
-          : "0",
-        dia.totalIncidentes > 0 ? `[!] ${dia.totalIncidentes}` : "0",
-        `${dia.porcentajeCumplimiento}%`,
-      ];
-    });
 
     autoTable(doc, {
       startY: posY + 2.5,
@@ -365,7 +624,7 @@ export function generarPdfFichaComportamiento({
       },
       head: [
         [
-          "Fecha",
+          "Fecha / Período",
           "Día",
           "1ra Entrada",
           "Último Egreso",
@@ -377,40 +636,43 @@ export function generarPdfFichaComportamiento({
         ],
       ],
       body:
-        filasDias.length > 0
-          ? filasDias
-          : [["-", "-", "-", "-", "-", "-", "-", "-", "-"]],
+        filasDiasCompactadas.length > 0
+          ? filasDiasCompactadas
+          : [
+              [
+                "-",
+                "-",
+                "-",
+                "-",
+                "-",
+                "-",
+                "-",
+                "-",
+                "Sin jornadas que reportar",
+              ],
+            ],
     });
 
     posY = doc.lastAutoTable.finalY + 7;
   }
 
-  // ==========================================
-  // 5. LISTADO DE INCIDENTES Y DESVÍOS
-  // ==========================================
+  // 5. Listado de Incidentes Agrupados
   if (fichaData.incidentes && fichaData.incidentes.length > 0) {
     if (posY > 215) {
       doc.addPage();
       posY = 20;
     }
 
+    const filasIncsCompactadas = compactarIncidentes(fichaData.incidentes);
+
     doc.setFont("helvetica", "bold");
     doc.setFontSize(9);
     doc.setTextColor(...(esColor ? [190, 18, 60] : theme.darkText));
     doc.text(
-      `INCIDENCIAS REGISTRADAS (${fichaData.incidentes.length})`,
+      `INCIDENCIAS Y DESVÍOS CONSOLIDADOS (${filasIncsCompactadas.length})`,
       14,
       posY,
     );
-
-    const filasIncs = fichaData.incidentes.map((inc) => [
-      inc.fecha ? formatearFecha(inc.fecha) : "--/--/----",
-      inc.hora ? `${inc.hora} hs` : "--:--",
-      `[${(inc.severidad || "MEDIA").toUpperCase()}]`,
-      sanitizarTextoParaPdf(inc.tipo) || "Desvío Horario",
-      sanitizarTextoParaPdf(inc.detalle) || "-",
-      inc.estado || "PENDIENTE",
-    ]);
 
     autoTable(doc, {
       startY: posY + 2.5,
@@ -434,23 +696,21 @@ export function generarPdfFichaComportamiento({
       },
       head: [
         [
-          "Fecha",
+          "Fecha / Rango",
           "Hora",
           "Severidad",
           "Tipo de Desvío",
-          "Detalle / Infracción",
+          "Detalle / Observación",
           "Auditoría",
         ],
       ],
-      body: filasIncs,
+      body: filasIncsCompactadas,
     });
 
     posY = doc.lastAutoTable.finalY + 10;
   }
 
-  // ==========================================
-  // 6. CASILLEROS DE FIRMAS INSTITUCIONALES
-  // ==========================================
+  // 6. Firmas Institucionales
   if (posY > 245) {
     doc.addPage();
     posY = 25;
@@ -483,9 +743,7 @@ export function generarPdfFichaComportamiento({
   doc.setTextColor(...theme.subText);
   doc.text("Firma y Sello Institucional", 155, posY + 23, { align: "center" });
 
-  // ==========================================
-  // 7. PIE DE PÁGINA Y NUMERACIÓN
-  // ==========================================
+  // 7. Pie de Página y Numeración
   const totalPages = doc.internal.getNumberOfPages();
   for (let i = 1; i <= totalPages; i++) {
     doc.setPage(i);

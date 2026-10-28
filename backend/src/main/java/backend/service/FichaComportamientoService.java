@@ -147,7 +147,7 @@ public class FichaComportamientoService {
                 .sorted(Comparator.comparing(EmpleadoFichaje::getHoraFichaje))
                 .toList();
 
-        // 3. Verificación de ausencias considerando licencias vigentes
+        // 3. Verificación de ausencias considerando licencias vigentes (ejecuta INSERT si detecta faltas)
         try {
             evaluadorService.asegurarAusenciasEmpleadoRango(emp, horarios, fichajesPeriodo, fechaInicio, fechaFin);
         } catch (Exception e) {
@@ -161,12 +161,12 @@ public class FichaComportamientoService {
                 .filter(i -> i.getEmpleado() != null && i.getEmpleado().getId().equals(emp.getId()))
                 .toList();
 
-        // Obtener licencias o asuetos vigentes en el rango
+        // 5. Licencias o asuetos vigentes en el rango
         List<ExcepcionLicencia> excepcionesPeriodo = excepcionRepo.buscarExcepcionesVigentesEnRango(
                 emp.getId(), fechaInicio, fechaFin
         );
 
-        // 5. Línea de tiempo diaria específica
+        // 6. Línea de tiempo diaria específica
         List<FichaComportamientoDTO.IntervaloLineaTiempoDTO> planificados = new ArrayList<>();
         List<FichaComportamientoDTO.IntervaloLineaTiempoDTO> presencias = new ArrayList<>();
         List<FichaComportamientoDTO.DesgloseIntervaloDTO> desglose = new ArrayList<>();
@@ -259,7 +259,7 @@ public class FichaComportamientoService {
                         i.getResolucionMotivo(), i.getResolucionObservaciones()
                 )).toList();
 
-        // 6. Desglose día por día
+        // 7. Desglose día por día y acumuladores de licencias y cumplimiento
         List<FichaComportamientoDTO.DiaDesgloseDTO> diasDesglose = new ArrayList<>();
         LocalDate cur = fechaInicio;
         LocalDate hoy = LocalDate.now();
@@ -276,6 +276,14 @@ public class FichaComportamientoService {
 
         long totalMinClasesTeoricasPeriodo = 0;
         long totalMinClasesEfectivasPeriodo = 0;
+
+        long totalMinutosPresenciaAcumulado = 0;
+        long totalMinutosFueraAcumulado = 0;
+        int totalSalidasIntermediasAcumuladas = 0;
+
+        // Variables para el KPI de Licencias
+        int diasLicenciaAcumulados = 0;
+        long minutosLicenciaAcumulados = 0;
 
         while (!cur.isAfter(fechaFin)) {
             LocalDate d = cur;
@@ -296,6 +304,12 @@ public class FichaComportamientoService {
 
             long minNetosDia = (long) (resDia.horasNetasTrabajadas() * 60);
 
+            if (!esFuturo) {
+                totalMinutosPresenciaAcumulado += minNetosDia;
+                totalMinutosFueraAcumulado += (long) (resDia.horasSalidasIntermedias() * 60);
+                totalSalidasIntermediasAcumuladas += resDia.cantidadSalidasIntermedias();
+            }
+
             int cumplimientoDia = 0;
             long minutosDiferencia = 0;
 
@@ -306,9 +320,26 @@ public class FichaComportamientoService {
                     .count();
 
             // Verificación de Licencia / Asueto institucional para el día
-            boolean tieneLicenciaOAsueto = excepcionesPeriodo.stream().anyMatch(e ->
-                    !d.isBefore(e.getFechaInicio()) && !d.isAfter(e.getFechaFin())
-            );
+            Optional<ExcepcionLicencia> licOpt = excepcionesPeriodo.stream()
+                    .filter(e -> !d.isBefore(e.getFechaInicio()) && !d.isAfter(e.getFechaFin()))
+                    .findFirst();
+
+            boolean tieneLicencia = licOpt.isPresent();
+            String tipoLicenciaEtiqueta = null;
+            String estadoLicencia = null;
+
+            if (tieneLicencia) {
+                ExcepcionLicencia lic = licOpt.get();
+                tipoLicenciaEtiqueta = (lic.getTipoEtiqueta() != null && !lic.getTipoEtiqueta().isBlank())
+                        ? lic.getTipoEtiqueta()
+                        : (lic.getTipo() != null ? lic.getTipo() : "Licencia Reglamentaria");
+                estadoLicencia = (lic.getEstado() != null) ? lic.getEstado() : "APROBADA";
+
+                if (!esFuturo || "DIARIO".equals(mod)) {
+                    diasLicenciaAcumulados++;
+                    minutosLicenciaAcumulados += minutosTeoricosDia;
+                }
+            }
 
             String estadoDia;
 
@@ -316,14 +347,14 @@ public class FichaComportamientoService {
                 cumplimientoDia = 0;
                 minutosDiferencia = 0;
                 estadoDia = (minutosTeoricosDia == 0) ? "FRANCO" : "FUTURO";
-            } else if (tieneLicenciaOAsueto && !huboPresencia) {
+            } else if (tieneLicencia && !huboPresencia) {
                 // Día amparado por licencia médica, vacaciones o asueto
                 diasEvaluadosHastaHoy++;
-                cumplimientoDia = 100;
-                minutosDiferencia = 0;
-                estadoDia = "LICENCIA";
-                totalHorasUtilesPeriodo += horasTeoricasDia;
-                totalHorasTeoricasPeriodo += horasTeoricasDia;
+                cumplimientoDia = 100; // Día justificado sin sanción
+                minutosDiferencia = 0; // Sin deuda ni horas en contra
+                estadoDia = Boolean.TRUE.equals(licOpt.get().getEsInstitucional()) ? "ASUETO" : "LICENCIA";
+
+                // REGLA: No suma horas ficticias al numerador ni al denominador exigible
             } else {
                 diasEvaluadosHastaHoy++;
                 totalHorasTeoricasPeriodo += horasTeoricasDia;
@@ -381,19 +412,18 @@ public class FichaComportamientoService {
 
             if (esDocente && !clasesDelDia.isEmpty()) {
                 minClaseTeoricos = evaluadorService.calcularMinutosClaseTeoricos(clasesDelDia);
-                if (!esFuturo && !tieneLicenciaOAsueto) {
+                if (!esFuturo && !tieneLicencia) {
                     minClaseEfectivos = evaluadorService.calcularMinutosClaseEfectivos(clasesDelDia, fDia, d);
                     totalMinClasesTeoricasPeriodo += minClaseTeoricos;
                     totalMinClasesEfectivasPeriodo += minClaseEfectivos;
-                } else if (tieneLicenciaOAsueto) {
-                    minClaseEfectivos = minClaseTeoricos; // Justificado por licencia
-                    totalMinClasesTeoricasPeriodo += minClaseTeoricos;
-                    totalMinClasesEfectivasPeriodo += minClaseEfectivos;
-                }
 
-                if (minClaseTeoricos > 0) {
-                    int porc = (int) Math.min(100, Math.round(((double) minClaseEfectivos / minClaseTeoricos) * 100.0));
-                    clasesDictadasTexto = formatearMinutosAHoras(minClaseEfectivos) + " / " + formatearMinutosAHoras(minClaseTeoricos) + " (" + porc + "%)";
+                    if (minClaseTeoricos > 0) {
+                        int porc = (int) Math.min(100, Math.round(((double) minClaseEfectivos / minClaseTeoricos) * 100.0));
+                        clasesDictadasTexto = formatearMinutosAHoras(minClaseEfectivos) + " / " + formatearMinutosAHoras(minClaseTeoricos) + " (" + porc + "%)";
+                    }
+                } else if (tieneLicencia) {
+                    minClaseEfectivos = 0;
+                    clasesDictadasTexto = "0h 0m / " + formatearMinutosAHoras(minClaseTeoricos) + " (Licencia)";
                 }
             }
 
@@ -402,7 +432,8 @@ public class FichaComportamientoService {
                     entDia, salDia, formatearMinutosAHoras(minNetosDia), minNetosDia,
                     resDia.cantidadSalidasIntermedias(), (long) (resDia.horasSalidasIntermedias() * 60),
                     incsDia, cumplimientoDia, estadoDia, minutosDiferencia,
-                    clasesDictadasTexto, minClaseTeoricos, minClaseEfectivos
+                    clasesDictadasTexto, minClaseTeoricos, minClaseEfectivos,
+                    tieneLicencia, tipoLicenciaEtiqueta, estadoLicencia
             ));
 
             cur = cur.plusDays(1);
@@ -413,14 +444,21 @@ public class FichaComportamientoService {
                 (diasConPresencia > 0 ? 100 : 0);
 
         int totalDiasParaMetrica = Math.max(1, diasEvaluadosHastaHoy);
-        LocalDate fechaLimiteResumen = fechaFin.isAfter(hoy) ? hoy : fechaFin;
 
-        ResumenPresenciaFichajesDTO resumenPeriodo = ("DIARIO".equals(mod))
-                ? evaluadorService.calcularHorasRealesDia(emp.getId(), fechaBase)
-                : evaluadorService.calcularHorasRealesRango(emp.getId(), fechaInicio, fechaLimiteResumen);
+        long totalMinutosPresencia;
+        long totalMinutosFuera;
+        int totalSalidasIntermedias;
 
-        long totalMinutosPresencia = (long) (resumenPeriodo.horasNetasTrabajadas() * 60);
-        long totalMinutosFuera = (long) (resumenPeriodo.horasSalidasIntermedias() * 60);
+        if ("DIARIO".equals(mod)) {
+            ResumenPresenciaFichajesDTO resDia = evaluadorService.calcularHorasRealesDia(emp.getId(), fechaBase);
+            totalMinutosPresencia = (long) (resDia.horasNetasTrabajadas() * 60);
+            totalMinutosFuera = (long) (resDia.horasSalidasIntermedias() * 60);
+            totalSalidasIntermedias = resDia.cantidadSalidasIntermedias();
+        } else {
+            totalMinutosPresencia = totalMinutosPresenciaAcumulado;
+            totalMinutosFuera = totalMinutosFueraAcumulado;
+            totalSalidasIntermedias = totalSalidasIntermediasAcumuladas;
+        }
 
         String primeraEntradaResultado = primeraEntradaStr;
         String ultimoEgresoResultado = ultimoEgresoStr;
@@ -439,7 +477,7 @@ public class FichaComportamientoService {
                 .map(i -> i.getIdEventoAgrupador() != null ? i.getIdEventoAgrupador() : ("ID_" + i.getId()))
                 .distinct().count();
 
-        // 7. Cálculo de resoluciones y top de justificaciones en backend
+        // 8. Cálculo de resoluciones y top de justificaciones en backend
         int pendientes = 0;
         int justificados = 0;
         int observados = 0;
@@ -495,12 +533,13 @@ public class FichaComportamientoService {
         FichaComportamientoDTO.MetricasFichaDTO metricasDTO = new FichaComportamientoDTO.MetricasFichaDTO(
                 primeraEntradaResultado, ultimoEgresoResultado,
                 formatearMinutosAHoras(totalMinutosPresencia), totalMinutosPresencia,
-                resumenPeriodo.cantidadSalidasIntermedias(), totalMinutosFuera,
+                totalSalidasIntermedias, totalMinutosFuera,
                 totalIncidentesAgrupados, incidentesProcesados, diasConPresencia, totalDiasParaMetrica,
                 formatearMinutosAHoras(totalMinutosAFavor), totalMinutosAFavor,
                 formatearMinutosAHoras(totalMinutosEnContra), totalMinutosEnContra,
                 diasConDeficit, diasConHorasExtra, clasesDictadasGral,
-                pendientes, observados, rechazados, totalConMotivoAuditable, topJustificaciones
+                pendientes, observados, rechazados, totalConMotivoAuditable, topJustificaciones,
+                diasLicenciaAcumulados, formatearMinutosAHoras(minutosLicenciaAcumulados), minutosLicenciaAcumulados
         );
 
         // Agrupación de meses para Trimestre y Cuatrimestre
