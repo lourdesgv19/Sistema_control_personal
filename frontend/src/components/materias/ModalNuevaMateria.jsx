@@ -9,6 +9,7 @@ import {
   UserCheck,
   CalendarCheck,
   Repeat,
+  ShieldCheck,
 } from "lucide-react";
 import { postNuevaMateria } from "../../services/gestionMateriasService";
 import { getEmpleadosActivos } from "../../services/empleadoService";
@@ -52,7 +53,6 @@ export default function ModalNuevaMateria({
     tarifaHora: 5200,
     observaciones: "",
     forzarGuardado: false,
-    // CAMPOS DE FRECUENCIA / PERIODICIDAD:
     tipoFrecuencia: "SEMANAL",
     repeticionesPeriodo: 1,
     semanaAlterna: "PAR",
@@ -120,7 +120,6 @@ export default function ModalNuevaMateria({
     });
   }, [todosLosEmpleados, mostrarTodosLosEmpleados]);
 
-  // Cargar datos en caso de edición
   useEffect(() => {
     if (materiaAEditar) {
       const diasArray = materiaAEditar.diaSemana
@@ -156,7 +155,7 @@ export default function ModalNuevaMateria({
 
       setTarifaClaseInput(Math.round(tarifaBase * duracionHoras));
     }
-  }, [materiaAEditar]);
+  }, [materiaAEditar, duracionHoras]);
 
   useEffect(() => {
     if (tipoIngresoTarifa === "HORA") {
@@ -220,10 +219,11 @@ export default function ModalNuevaMateria({
         idDocenteAuxiliar: form.idDocenteAuxiliar
           ? Number(form.idDocenteAuxiliar)
           : null,
+        rolTitular: "TITULAR",
+        rolAuxiliar: "AUXILIAR",
         tarifaHora: Number(form.tarifaHora || 5200),
         observaciones: form.observaciones,
         forzarGuardado: forzar,
-        // ENVIAR CAMPOS DE FRECUENCIA
         tipoFrecuencia: form.tipoFrecuencia || "SEMANAL",
         repeticionesPeriodo:
           form.tipoFrecuencia === "MENSUAL" || form.tipoFrecuencia === "ANUAL"
@@ -236,10 +236,7 @@ export default function ModalNuevaMateria({
       };
 
       await postNuevaMateria(payload);
-
-      // Disparar sincronización global
       window.dispatchEvent(new CustomEvent("datos:actualizados"));
-
       onCreado();
       onClose();
     } catch (err) {
@@ -302,7 +299,7 @@ export default function ModalNuevaMateria({
               </h3>
               <p className="text-[11px] text-slate-400">
                 {esEdicion
-                  ? "Modifique los parámetros pedagógicos, días, horarios o docentes asignados."
+                  ? "Modifique parámetros pedagógicos, días, horarios o docentes titular y auxiliar."
                   : "Se registrará en el catálogo y se reflejará en el cronograma institucional."}
               </p>
             </div>
@@ -419,7 +416,7 @@ export default function ModalNuevaMateria({
               </div>
             </div>
 
-            {/* SECCIÓN NUEVA: FRECUENCIA Y PERIODICIDAD DE CLASES */}
+            {/* FRECUENCIA DE DICTADO */}
             <div className="space-y-2 pt-2 border-t border-slate-100">
               <div className="flex items-center justify-between">
                 <label className="font-bold text-slate-700 flex items-center gap-1.5">
@@ -484,45 +481,15 @@ export default function ModalNuevaMateria({
                   </label>
                 </div>
               )}
-
-              {(form.tipoFrecuencia === "MENSUAL" ||
-                form.tipoFrecuencia === "ANUAL") && (
-                <div className="flex items-center gap-3 p-3 bg-indigo-50/40 border border-indigo-100 rounded-xl mt-2">
-                  <span className="text-xs text-slate-700 font-medium shrink-0">
-                    Cantidad requerida:
-                  </span>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <input
-                      type="number"
-                      min="1"
-                      max={form.tipoFrecuencia === "MENSUAL" ? 31 : 365}
-                      value={form.repeticionesPeriodo}
-                      onChange={(e) =>
-                        setForm({
-                          ...form,
-                          repeticionesPeriodo:
-                            parseInt(e.target.value, 10) || 1,
-                        })
-                      }
-                      className="w-16 px-2.5 py-1 text-xs border border-indigo-200 rounded-lg text-center font-bold text-indigo-700 bg-white outline-none focus:border-indigo-600"
-                    />
-                    <span className="text-xs text-slate-600 font-semibold">
-                      {form.tipoFrecuencia === "MENSUAL"
-                        ? "clase(s) al mes"
-                        : "clase(s) al año"}
-                    </span>
-                  </div>
-                </div>
-              )}
             </div>
 
-            {/* SELECCIÓN DE DOCENTES CON TOGGLE DE TODOS LOS EMPLEADOS */}
+            {/* ASIGNACIÓN DE DOCENTES (TITULAR Y AUXILIAR/ALTERNO) */}
             <div className="space-y-3 bg-slate-50 p-3.5 rounded-2xl border border-slate-200">
               <div className="flex items-center justify-between">
-                <label className="font-bold text-slate-800 flex items-center gap-1.5">
-                  <UserCheck className="w-4 h-4 text-indigo-600" />
-                  Docente Titular a Cargo
-                </label>
+                <span className="font-bold text-slate-800 flex items-center gap-1.5">
+                  <Users className="w-4 h-4 text-indigo-600" />
+                  Equipo Docente de Cátedra
+                </span>
                 <button
                   type="button"
                   onClick={() =>
@@ -542,31 +509,60 @@ export default function ModalNuevaMateria({
                   nómina...
                 </div>
               ) : (
-                <select
-                  value={form.idDocenteTitular}
-                  onChange={(e) =>
-                    setForm({ ...form, idDocenteTitular: e.target.value })
-                  }
-                  className="w-full px-3 py-2 border border-slate-200 rounded-xl outline-none focus:border-indigo-600 font-medium bg-white"
-                >
-                  <option value="">
-                    -- Sin docente asignado (Materia Vacante) --
-                  </option>
-                  {listaEmpleadosFiltrada.map((doc) => (
-                    <option key={doc.id} value={doc.id}>
-                      {doc.apellido}, {doc.nombre}{" "}
-                      {doc.nroLegajo ? `(Leg: ${doc.nroLegajo})` : ""}
-                    </option>
-                  ))}
-                </select>
-              )}
+                <div className="space-y-3">
+                  {/* Docente Titular */}
+                  <div>
+                    <label className="font-semibold text-slate-700 block mb-1">
+                      Profesor Titular a Cargo
+                    </label>
+                    <select
+                      value={form.idDocenteTitular}
+                      onChange={(e) =>
+                        setForm({ ...form, idDocenteTitular: e.target.value })
+                      }
+                      className="w-full px-3 py-2 border border-slate-200 rounded-xl outline-none focus:border-indigo-600 font-medium bg-white"
+                    >
+                      <option value="">
+                        -- Sin titular (Cátedra Vacante) --
+                      </option>
+                      {listaEmpleadosFiltrada.map((doc) => (
+                        <option key={doc.id} value={doc.id}>
+                          {doc.apellido}, {doc.nombre}{" "}
+                          {doc.nroLegajo ? `(Leg: ${doc.nroLegajo})` : ""}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
 
-              {mostrarTodosLosEmpleados && (
-                <p className="text-[10px] text-amber-700 bg-amber-50 p-2 rounded-lg border border-amber-200">
-                  ℹ Si selecciona un empleado que no tiene categoría docente, el
-                  sistema le asignará automáticamente la categoría docente al
-                  guardar.
-                </p>
+                  {/* Docente Auxiliar / Reemplazante Alterno */}
+                  <div>
+                    <label className="font-semibold text-slate-700 block mb-1">
+                      Docente Auxiliar / Alterno (Reemplazos y Licencias)
+                    </label>
+                    <select
+                      value={form.idDocenteAuxiliar}
+                      onChange={(e) =>
+                        setForm({ ...form, idDocenteAuxiliar: e.target.value })
+                      }
+                      className="w-full px-3 py-2 border border-slate-200 rounded-xl outline-none focus:border-indigo-600 font-medium bg-white"
+                    >
+                      <option value="">
+                        -- Sin auxiliar designado (Opcional) --
+                      </option>
+                      {listaEmpleadosFiltrada
+                        .filter(
+                          (doc) =>
+                            String(doc.id) !== String(form.idDocenteTitular),
+                        )
+                        .map((doc) => (
+                          <option key={doc.id} value={doc.id}>
+                            {doc.apellido}, {doc.nombre}{" "}
+                            {doc.nroLegajo ? `(Leg: ${doc.nroLegajo})` : ""}
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+                </div>
               )}
             </div>
 

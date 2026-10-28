@@ -4,14 +4,8 @@ import backend.dto.CalendarioSemanalDTO.BloqueClaseDTO;
 import backend.dto.CalendarioSemanalDTO.RespuestaCalendarioDTO;
 import backend.dto.GestionMateriasDTO.*;
 import backend.dto.GestionMateriasDTO.ImpactoBajaMateriaDTO.HorarioAfectadoDTO;
-import backend.model.Categoria;
-import backend.model.Empleado;
-import backend.model.EmpleadoHorario;
-import backend.model.Materia;
-import backend.repositories.CategoriaRepository;
-import backend.repositories.EmpleadoHorarioRepository;
-import backend.repositories.EmpleadoRepository;
-import backend.repositories.MateriaRepository;
+import backend.model.*;
+import backend.repositories.*;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -29,6 +23,7 @@ public class MateriaService {
     private final EmpleadoRepository empleadoRepo;
     private final EmpleadoHorarioRepository horarioRepo;
     private final CategoriaRepository categoriaRepo;
+    private final MateriaDocenteRepository materiaDocenteRepo;
     private final CalendarioSemanalService calendarioService;
     private final AuditorHelperService auditor;
 
@@ -37,12 +32,14 @@ public class MateriaService {
             EmpleadoRepository empleadoRepo,
             EmpleadoHorarioRepository horarioRepo,
             CategoriaRepository categoriaRepo,
+            MateriaDocenteRepository materiaDocenteRepo,
             CalendarioSemanalService calendarioService,
             AuditorHelperService auditor) {
         this.materiaRepo = materiaRepo;
         this.empleadoRepo = empleadoRepo;
         this.horarioRepo = horarioRepo;
         this.categoriaRepo = categoriaRepo;
+        this.materiaDocenteRepo = materiaDocenteRepo;
         this.calendarioService = calendarioService;
         this.auditor = auditor;
     }
@@ -172,6 +169,13 @@ public class MateriaService {
         materia.setFechaBaja(ahora);
         materiaRepo.save(materia);
 
+        // Baja lógica en la tabla intermedia de docentes
+        materiaDocenteRepo.findByMateriaActiva(idMateria).ifPresent(md -> {
+            md.setActivo(false);
+            md.setFechaBaja(ahora);
+            materiaDocenteRepo.save(md);
+        });
+
         List<EmpleadoHorario> horariosDeMateria = horarioRepo.findAll().stream()
                 .filter(h -> Boolean.TRUE.equals(h.getActivo()))
                 .filter(h -> h.getMateria() != null && h.getMateria().getId().equals(idMateria))
@@ -211,6 +215,13 @@ public class MateriaService {
             garantizarCategoriaDocente(docTitular);
         }
 
+        Empleado docAuxiliar = null;
+        if (req.idDocenteAuxiliar() != null) {
+            docAuxiliar = empleadoRepo.findById(req.idDocenteAuxiliar())
+                    .orElseThrow(() -> new RuntimeException("Docente auxiliar no encontrado con ID: " + req.idDocenteAuxiliar()));
+            garantizarCategoriaDocente(docAuxiliar);
+        }
+
         String aulaFinal = req.aula() != null ? req.aula().trim() : "";
 
         // 1. Control de solapamientos
@@ -231,7 +242,6 @@ public class MateriaService {
                         if (solapaTiempo) {
                             String nombreDia = diaNumeroANombre(dia);
 
-                            // Control de Docente
                             if (docTitular != null && h.getEmpleado() != null && h.getEmpleado().getId().equals(docTitular.getId())) {
                                 String matDoc = h.getMateria() != null ? h.getMateria().getNombre() : (h.getEtiqueta() != null ? h.getEtiqueta() : "Horario asignado");
                                 throw new IllegalStateException(String.format(
@@ -242,15 +252,14 @@ public class MateriaService {
                                 ));
                             }
 
-                            // Control de Aula
                             if (!aulaFinal.isBlank() && h.getAula() != null && h.getAula().trim().equalsIgnoreCase(aulaFinal)) {
                                 String ocupante = h.getEmpleado() != null ? (h.getEmpleado().getApellido() + " " + h.getEmpleado().getNombre()) : "Otro docente";
                                 String materiaOcupante = h.getMateria() != null ? h.getMateria().getNombre() : (h.getEtiqueta() != null ? h.getEtiqueta() : "Clase");
                                 throw new IllegalStateException(String.format(
                                     "SOLAPAMIENTO_AULA: El aula '%s' ya se encuentra ocupada el día %s de %s a %s hs por %s (%s).",
                                     aulaFinal, nombreDia,
-                                    exInicio.toString().substring(0, 5), exFin.toString().substring(0, 5),
-                                    materiaOcupante, ocupante
+                                    exInicio.toString().substring(0, 5), exFin.toString().substring(0, 5)
+                                    , materiaOcupante, ocupante
                                 ));
                             }
                         }
@@ -276,7 +285,21 @@ public class MateriaService {
         materia.setActivo(true);
         Materia guardada = materiaRepo.saveAndFlush(materia);
 
-        // 3. Crear o actualizar los horarios normalizando los campos de periodicidad
+        // 3. Vincular relación en materia_docentes
+        if (docTitular != null) {
+            MateriaDocente vinculo = materiaDocenteRepo.findByMateriaActiva(guardada.getId())
+                    .orElseGet(MateriaDocente::new);
+
+            vinculo.setMateria(guardada);
+            vinculo.setDocenteTitular(docTitular);
+            vinculo.setDocenteAuxiliar(docAuxiliar);
+            vinculo.setRolTitular(req.rolTitular() != null ? req.rolTitular() : "TITULAR");
+            vinculo.setRolAuxiliar(req.rolAuxiliar() != null ? req.rolAuxiliar() : "AUXILIAR");
+            vinculo.setActivo(true);
+            materiaDocenteRepo.save(vinculo);
+        }
+
+        // 4. Actualizar o crear horarios en empleado_horarios
         if (nuevaInicio != null && nuevaFin != null && req.diasSemana() != null && !req.diasSemana().isEmpty()) {
             String frecFinal = (req.tipoFrecuencia() != null && !req.tipoFrecuencia().isBlank()) 
                     ? req.tipoFrecuencia().toUpperCase() 
@@ -329,16 +352,17 @@ public class MateriaService {
         auditor.registrar(
             "GESTION_MATERIA",
             "MATERIAS",
-            String.format("Cátedra '%s' procesada con éxito (Docente: %s).", 
-                guardada.getNombre(), docTitular != null ? docTitular.getApellido() + " " + docTitular.getNombre() : "Sin Docente")
+            String.format("Cátedra '%s' procesada con éxito (Titular: %s, Auxiliar: %s).", 
+                guardada.getNombre(),
+                docTitular != null ? docTitular.getApellido() + " " + docTitular.getNombre() : "Sin Titular",
+                docAuxiliar != null ? docAuxiliar.getApellido() + " " + docAuxiliar.getNombre() : "Sin Auxiliar")
         );
 
         return guardada;
     }
 
-   @Transactional(readOnly = true)
+    @Transactional(readOnly = true)
     public List<MateriaCatalogoDTO> obtenerCatalogoMateriasAgrupadas() {
-        // Obtenemos todas las materias sin descartar las inactivas para permitir ver las dadas de baja
         List<Materia> materias = materiaRepo.findAll().stream()
                 .sorted(Comparator.comparing(Materia::getNombre, String.CASE_INSENSITIVE_ORDER))
                 .toList();
@@ -361,8 +385,25 @@ public class MateriaService {
             Set<String> diasUnicos = new LinkedHashSet<>();
             List<HorarioDesgloseDTO> desgloses = new ArrayList<>();
 
-            String docenteTitular = "Sin docente asignado";
-            Long docenteId = null;
+            // Buscar en tabla intermedia si hay relación titular/auxiliar
+            Optional<MateriaDocente> vinculoOpt = materiaDocenteRepo.findByMateriaActiva(m.getId());
+
+            Long titularId = null;
+            String titularNombre = "Sin docente asignado";
+            Long auxiliarId = null;
+            String auxiliarNombre = null;
+
+            if (vinculoOpt.isPresent()) {
+                MateriaDocente vinculo = vinculoOpt.get();
+                if (vinculo.getDocenteTitular() != null) {
+                    titularId = vinculo.getDocenteTitular().getId();
+                    titularNombre = vinculo.getDocenteTitular().getApellido() + " " + vinculo.getDocenteTitular().getNombre();
+                }
+                if (vinculo.getDocenteAuxiliar() != null) {
+                    auxiliarId = vinculo.getDocenteAuxiliar().getId();
+                    auxiliarNombre = vinculo.getDocenteAuxiliar().getApellido() + " " + vinculo.getDocenteAuxiliar().getNombre();
+                }
+            }
 
             for (EmpleadoHorario h : horariosDeMateria) {
                 int diaNum = h.getDiaSemana() != null ? h.getDiaSemana() : 1;
@@ -384,9 +425,9 @@ public class MateriaService {
                 if (h.getEmpleado() != null) {
                     docNombre = h.getEmpleado().getApellido() + " " + h.getEmpleado().getNombre();
                     docLegajo = h.getEmpleado().getNroLegajo() != null ? h.getEmpleado().getNroLegajo() : "-";
-                    if (docenteId == null) {
-                        docenteId = h.getEmpleado().getId();
-                        docenteTitular = docNombre;
+                    if (titularId == null) {
+                        titularId = h.getEmpleado().getId();
+                        titularNombre = docNombre;
                     }
                 }
 
@@ -412,7 +453,7 @@ public class MateriaService {
                 ));
             }
 
-            boolean sinDocente = (docenteId == null);
+            boolean sinDocente = (titularId == null);
             boolean esActivo = Boolean.TRUE.equals(m.getActivo());
 
             resultado.add(new MateriaCatalogoDTO(
@@ -425,10 +466,10 @@ public class MateriaService {
                 horariosDeMateria.size(),
                 new ArrayList<>(diasUnicos),
                 Math.round(horasTotales * 10.0) / 10.0,
-                docenteId,
-                docenteTitular,
-                null,
-                null,
+                titularId,
+                titularNombre,
+                auxiliarId,
+                auxiliarNombre,
                 sinDocente,
                 esActivo,
                 desgloses

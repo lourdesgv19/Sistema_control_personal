@@ -6,8 +6,8 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "config_materias")
-@SQLDelete(sql = "UPDATE config_materias SET activo = false, fecha_baja = NOW() WHERE id_materia = ?")
+@Table(name = "materias")
+@SQLDelete(sql = "UPDATE materias SET activo = false, fecha_baja = NOW() WHERE id_materia = ?")
 public class Materia {
 
     @Id

@@ -11,6 +11,7 @@ import {
   RotateCcw,
   Repeat,
   CalendarCheck,
+  UserPlus,
 } from "lucide-react";
 import {
   getCatalogoMateriasAgrupadas,
@@ -36,7 +37,7 @@ export default function CatalogoMateriasABM({
   const [materias, setMaterias] = useState([]);
   const [loading, setLoading] = useState(true);
   const [expandidos, setExpandidos] = useState([]);
-  const [filtroEstado, setFiltroEstado] = useState("ACTIVOS"); // "ACTIVOS", "TODOS", "INACTIVOS"
+  const [filtroEstado, setFiltroEstado] = useState("ACTIVOS");
 
   const [modalAlerta, setModalAlerta] = useState({
     isOpen: false,
@@ -78,17 +79,17 @@ export default function CatalogoMateriasABM({
     cargarDatos();
   }, []);
 
-  // Efecto reactivo para desglosar materias cuando se viene desde el cronograma de un docente
   useEffect(() => {
     if (docenteInicialId && materias.length > 0) {
       const idBuscado = String(docenteInicialId);
       const materiasDelDocente = materias
         .filter((m) => {
           const esTitular = String(m.idDocenteTitular) === idBuscado;
+          const esAuxiliar = String(m.idDocenteAuxiliar) === idBuscado;
           const tieneComision = (m.desgloseHorarios || []).some(
             (h) => String(h.idDocente) === idBuscado,
           );
-          return esTitular || tieneComision;
+          return esTitular || esAuxiliar || tieneComision;
         })
         .map((m) => m.idMateria);
 
@@ -98,7 +99,6 @@ export default function CatalogoMateriasABM({
     }
   }, [docenteInicialId, materias]);
 
-  // Escuchar sincronización en tiempo real
   useEffect(() => {
     const handleActualizar = () => {
       cargarDatos();
@@ -137,13 +137,14 @@ export default function CatalogoMateriasABM({
         m.aulaPredeterminada?.toLowerCase().includes(q);
 
       const matchDocente =
-        !filtroDocente || String(m.idDocenteTitular) === String(filtroDocente);
+        !filtroDocente ||
+        String(m.idDocenteTitular) === String(filtroDocente) ||
+        String(m.idDocenteAuxiliar) === String(filtroDocente);
 
       return matchEstado && matchBusqueda && matchDocente;
     });
   }, [materias, filtroEstado, busqueda, filtroDocente]);
 
-  // Reactivar Materia
   const handleReactivarMateria = (idMateria, nombreMateria) => {
     if (!puedeEditar) return;
 
@@ -173,7 +174,6 @@ export default function CatalogoMateriasABM({
     });
   };
 
-  // Desvincular franja horaria individual
   const handleConfirmarBajaHorario = (horario, nombreMateria) => {
     if (!puedeEliminar) return;
 
@@ -207,7 +207,6 @@ export default function CatalogoMateriasABM({
     });
   };
 
-  // Helper para renderizar la etiqueta: Si no es SEMANAL, muestra la frecuencia configurada
   const renderBadgeTurnoOFrecuencia = (horario) => {
     const frec = (horario.tipoFrecuencia || "SEMANAL").toUpperCase();
     const reps = horario.repeticionesPeriodo || 1;
@@ -245,6 +244,51 @@ export default function CatalogoMateriasABM({
     }
   };
 
+  // Normaliza y formatea la hora para comparar ("HH:mm")
+  const normalizarHora = (h) => {
+    if (!h) return "";
+    return String(h).trim().slice(0, 5);
+  };
+
+  /**
+   * Determina si todos los horarios configurados son exactamente uniformes.
+   * COMPARA:
+   * 1. Hora Inicio
+   * 2. Hora Fin
+   * 3. Tipo de Frecuencia (SEMANAL, SEMANA_POR_MEDIO, etc.)
+   * 4. Semana Alterna (PAR/IMPAR)
+   * 5. Repeticiones del período
+   */
+  const sonHorariosUniforme = (desglose) => {
+    if (!Array.isArray(desglose) || desglose.length === 0) return false;
+    if (desglose.length === 1) return true;
+
+    const base = desglose[0];
+    const baseIni = normalizarHora(base.horaInicio);
+    const baseFin = normalizarHora(base.horaFin);
+    const baseFrec = (base.tipoFrecuencia || "SEMANAL").toUpperCase().trim();
+    const baseSemAlt = (base.semanaAlterna || "").toUpperCase().trim();
+    const baseReps = Number(base.repeticionesPeriodo || 1);
+
+    if (!baseIni || !baseFin) return false;
+
+    return desglose.every((h) => {
+      const hIni = normalizarHora(h.horaInicio);
+      const hFin = normalizarHora(h.horaFin);
+      const hFrec = (h.tipoFrecuencia || "SEMANAL").toUpperCase().trim();
+      const hSemAlt = (h.semanaAlterna || "").toUpperCase().trim();
+      const hReps = Number(h.repeticionesPeriodo || 1);
+
+      return (
+        hIni === baseIni &&
+        hFin === baseFin &&
+        hFrec === baseFrec &&
+        hSemAlt === baseSemAlt &&
+        hReps === baseReps
+      );
+    });
+  };
+
   if (loading) {
     return (
       <div className="bg-white border border-slate-200 rounded-3xl p-16 text-center text-slate-400 text-xs">
@@ -268,19 +312,18 @@ export default function CatalogoMateriasABM({
             </span>
           </div>
           <p className="text-xs text-slate-500 mt-1">
-            Materias agrupadas sin repetición de títulos. Desglose desplegable
-            con los diferentes días, horarios y profesores asignados.
+            Haga clic sobre cualquier fila para desglosar u ocultar los días,
+            horarios y profesores asignados.
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2.5">
-          {/* SELECTOR DE ESTADO: ACTIVOS, TODOS, INACTIVOS */}
           <div className="flex items-center gap-2 text-xs">
             <span className="text-slate-500 font-medium">Estado:</span>
             <select
               value={filtroEstado}
               onChange={(e) => setFiltroEstado(e.target.value)}
-              className="bg-white border border-slate-200 text-slate-700 font-semibold rounded-xl px-3 py-2 text-xs outline-none focus:border-indigo-600 transition shadow-xs"
+              className="bg-white border border-slate-200 text-slate-700 font-semibold rounded-xl px-3 py-2 text-xs outline-none focus:border-indigo-600 transition shadow-xs cursor-pointer"
             >
               <option value="ACTIVOS">Solo Activas</option>
               <option value="TODOS">Todas las Materias</option>
@@ -329,7 +372,7 @@ export default function CatalogoMateriasABM({
               <th className="py-3 px-4">Materia / Comisiones</th>
               <th className="py-3 px-4">Aula(s)</th>
               <th className="py-3 px-4">Días & Carga Semanal</th>
-              <th className="py-3 px-4">Docente(s) a Cargo</th>
+              <th className="py-3 px-4">Cuerpo Docente (Titular & Auxiliar)</th>
               <th className="py-3 px-4 text-right">Tarifa / Hora</th>
               <th className="py-3 px-4 text-center">Acciones</th>
             </tr>
@@ -349,31 +392,35 @@ export default function CatalogoMateriasABM({
               materiasFiltradas.map((materia) => {
                 const estaExpandido = expandidos.includes(materia.idMateria);
                 const esInactiva = materia.activo === false;
+                const horariosIguales = sonHorariosUniforme(
+                  materia.desgloseHorarios,
+                );
 
                 return (
                   <React.Fragment key={materia.idMateria}>
+                    {/* FILA PRINCIPAL: AL CLICKEAR EN CUALQUIER PARTE SE DESGLOSA */}
                     <tr
-                      className={`transition-colors ${
+                      onClick={() => toggleExpandir(materia.idMateria)}
+                      className={`transition-colors cursor-pointer select-none ${
                         esInactiva
-                          ? "bg-slate-50/70 opacity-75"
-                          : "hover:bg-slate-50/70 bg-white"
+                          ? "bg-slate-50/70 opacity-75 hover:bg-slate-100/70"
+                          : estaExpandido
+                            ? "bg-indigo-50/40 hover:bg-indigo-50/60"
+                            : "hover:bg-slate-50/80 bg-white"
                       }`}
+                      title="Haga clic para desglosar u ocultar los horarios de esta cátedra"
                     >
                       <td className="py-4 px-4 text-center">
-                        <button
-                          type="button"
-                          onClick={() => toggleExpandir(materia.idMateria)}
-                          className="text-slate-400 hover:text-indigo-600 transition cursor-pointer p-1"
-                        >
+                        <span className="text-slate-400 hover:text-indigo-600 transition p-1 inline-block">
                           <ChevronRight
                             className={`w-4 h-4 transition-transform duration-200 ${
                               estaExpandido ? "rotate-90 text-indigo-600" : ""
                             }`}
                           />
-                        </button>
+                        </span>
                       </td>
 
-                      {/* MATERIA: Reemplazo del icono del libro por el número de clases manteniendo el contenedor original */}
+                      {/* MATERIA */}
                       <td className="py-4 px-4">
                         <div className="flex items-center gap-3">
                           <div
@@ -444,7 +491,7 @@ export default function CatalogoMateriasABM({
                         </span>
                       </td>
 
-                      {/* ALERTA DE SIN DOCENTE ASIGNADO */}
+                      {/* DOCENTES EN FILA PRINCIPAL */}
                       <td className="py-4 px-4">
                         {materia.sinDocente ? (
                           <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-amber-50 text-amber-800 border border-amber-200 text-[11px] font-bold">
@@ -452,13 +499,42 @@ export default function CatalogoMateriasABM({
                             <span>Sin Docente Asignado</span>
                           </div>
                         ) : (
-                          <div className="flex items-center gap-2">
-                            <div className="w-6 h-6 rounded-full bg-indigo-100 text-indigo-700 font-bold text-[10px] flex items-center justify-center shrink-0">
-                              {materia.docenteTitularNombre.charAt(0)}
+                          <div className="space-y-1.5">
+                            {/* Titular */}
+                            <div className="flex items-center gap-2">
+                              <div className="w-6 h-6 rounded-full bg-indigo-100 text-indigo-700 font-bold text-[10px] flex items-center justify-center shrink-0">
+                                {materia.docenteTitularNombre.charAt(0)}
+                              </div>
+                              <div className="leading-tight">
+                                <span className="font-semibold text-slate-800 text-xs block truncate max-w-[170px]">
+                                  {materia.docenteTitularNombre}
+                                </span>
+                                <span className="text-[9px] font-bold uppercase tracking-wider text-indigo-600 block">
+                                  Prof. Titular
+                                </span>
+                              </div>
                             </div>
-                            <span className="font-semibold text-slate-800 text-xs truncate max-w-[150px]">
-                              {materia.docenteTitularNombre}
-                            </span>
+
+                            {/* Auxiliar */}
+                            {materia.docenteAuxiliarNombre ? (
+                              <div className="flex items-center gap-2 pl-1 border-l-2 border-indigo-200">
+                                <div className="w-5 h-5 rounded-full bg-purple-100 text-purple-700 font-bold text-[9px] flex items-center justify-center shrink-0">
+                                  {materia.docenteAuxiliarNombre.charAt(0)}
+                                </div>
+                                <div className="leading-tight">
+                                  <span className="font-medium text-slate-700 text-[11px] block truncate max-w-[160px]">
+                                    {materia.docenteAuxiliarNombre}
+                                  </span>
+                                  <span className="text-[9px] font-bold uppercase tracking-wider text-purple-600 block">
+                                    Auxiliar / Alterno
+                                  </span>
+                                </div>
+                              </div>
+                            ) : (
+                              <span className="text-[10px] text-slate-400 italic block pl-1">
+                                Sin auxiliar asignado
+                              </span>
+                            )}
                           </div>
                         )}
                       </td>
@@ -472,42 +548,49 @@ export default function CatalogoMateriasABM({
                         </span>
                       </td>
 
-                      <td className="py-4 px-4 text-center">
+                      {/* ACCIONES (STOP PROPAGATION PARA NO ABRIR/CERRAR LA FILA ACCIDENTALMENTE) */}
+                      <td
+                        className="py-4 px-4 text-center"
+                        onClick={(e) => e.stopPropagation()}
+                      >
                         <div className="flex items-center justify-center gap-1.5">
-                          <button
-                            type="button"
-                            onClick={() => toggleExpandir(materia.idMateria)}
-                            className="px-2.5 py-1 rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50 text-xs font-semibold transition cursor-pointer"
-                          >
-                            {estaExpandido ? "Ocultar" : "Desglosar"}
-                          </button>
-
                           {!esInactiva ? (
                             <>
-                              {puedeCrear && (
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    onEditarMateria && onEditarMateria(materia)
-                                  }
-                                  className="p-1 text-slate-400 hover:text-indigo-600 transition cursor-pointer"
-                                  title="Editar cátedra o agregar comisión"
-                                >
-                                  <Plus className="w-4 h-4" />
-                                </button>
-                              )}
+                              {puedeEditar &&
+                                (horariosIguales ? (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      if (onEditarMateria)
+                                        onEditarMateria(materia);
+                                    }}
+                                    className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition cursor-pointer"
+                                    title="Editar cátedra y horarios unificados"
+                                  >
+                                    <Pencil className="w-4 h-4" />
+                                  </button>
+                                ) : (
+                                  <span
+                                    className="text-[10px] text-slate-500 font-semibold bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-md cursor-help"
+                                    title="Esta materia tiene horarios o frecuencias diferentes. Haga clic en la fila para desplegar y editar cada comisión individualmente."
+                                  >
+                                    Horarios diversos
+                                  </span>
+                                ))}
 
                               {puedeEliminar && (
                                 <button
                                   type="button"
-                                  onClick={() =>
-                                    onEliminarMateria &&
-                                    onEliminarMateria(
-                                      materia.idMateria,
-                                      materia.nombre,
-                                    )
-                                  }
-                                  className="p-1 text-slate-400 hover:text-rose-600 transition cursor-pointer"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (onEliminarMateria)
+                                      onEliminarMateria(
+                                        materia.idMateria,
+                                        materia.nombre,
+                                      );
+                                  }}
+                                  className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer"
                                   title="Dar de baja materia"
                                 >
                                   <Trash2 className="w-4 h-4" />
@@ -515,17 +598,17 @@ export default function CatalogoMateriasABM({
                               )}
                             </>
                           ) : (
-                            /* BOTÓN DE REACTIVAR PARA MATERIAS DADAS DE BAJA */
                             puedeEditar && (
                               <button
                                 type="button"
-                                onClick={() =>
+                                onClick={(e) => {
+                                  e.stopPropagation();
                                   handleReactivarMateria(
                                     materia.idMateria,
                                     materia.nombre,
-                                  )
-                                }
-                                className="p-1 text-emerald-600 hover:text-emerald-700 transition cursor-pointer"
+                                  );
+                                }}
+                                className="p-1.5 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition cursor-pointer"
                                 title="Reactivar cátedra en el catálogo"
                               >
                                 <RotateCcw className="w-4 h-4" />
@@ -536,7 +619,7 @@ export default function CatalogoMateriasABM({
                       </td>
                     </tr>
 
-                    {/* DESGLOSE DESPLEGABLE DE COMISIONES */}
+                    {/* SUBFILAS DE COMISIONES: EDICIÓN INDIVIDUAL EN CADA HORARIO */}
                     {estaExpandido &&
                       materia.desgloseHorarios.map((horario) => (
                         <tr
@@ -566,31 +649,54 @@ export default function CatalogoMateriasABM({
                             </div>
                           </td>
 
-                          {/* REEMPLAZO DEL BADGE DE TURNO POR FRECUENCIA */}
                           <td className="py-3 px-4">
                             {renderBadgeTurnoOFrecuencia(horario)}
                           </td>
 
+                          {/* CUERPO DOCENTE DETALLADO */}
                           <td className="py-3 px-4">
-                            {!horario.idDocente ? (
-                              <span className="text-amber-700 font-bold text-[10px]">
-                                Sin asignar
-                              </span>
-                            ) : (
-                              <div className="flex items-center gap-2">
-                                <div className="w-6 h-6 rounded-full bg-indigo-100 text-indigo-700 font-bold text-[10px] flex items-center justify-center shrink-0">
-                                  {horario.nombreDocente.charAt(0)}
-                                </div>
-                                <div>
-                                  <div className="font-bold text-slate-900 text-xs">
-                                    {horario.nombreDocente}
+                            <div className="space-y-1.5">
+                              {!horario.idDocente ? (
+                                <span className="text-amber-700 font-bold text-[10px] inline-flex items-center gap-1">
+                                  <AlertCircle className="w-3.5 h-3.5" /> Sin
+                                  titular asignado
+                                </span>
+                              ) : (
+                                <div className="flex items-center gap-2">
+                                  <div className="w-6 h-6 rounded-full bg-indigo-100 text-indigo-700 font-bold text-[10px] flex items-center justify-center shrink-0">
+                                    {horario.nombreDocente.charAt(0)}
                                   </div>
-                                  <span className="text-[10px] text-slate-400 font-mono">
-                                    Leg. {horario.legajoDocente}
-                                  </span>
+                                  <div>
+                                    <div className="font-bold text-slate-900 text-xs">
+                                      {horario.nombreDocente}
+                                    </div>
+                                    <span className="text-[10px] text-indigo-600 font-semibold font-mono block">
+                                      Titular • Leg. {horario.legajoDocente}
+                                    </span>
+                                  </div>
                                 </div>
-                              </div>
-                            )}
+                              )}
+
+                              {materia.docenteAuxiliarNombre ? (
+                                <div className="flex items-center gap-2 pt-1 border-t border-indigo-100/60">
+                                  <div className="w-5 h-5 rounded-full bg-purple-100 text-purple-700 font-bold text-[9px] flex items-center justify-center shrink-0">
+                                    <UserPlus className="w-3 h-3" />
+                                  </div>
+                                  <div>
+                                    <span className="font-semibold text-slate-700 text-[11px] block">
+                                      {materia.docenteAuxiliarNombre}
+                                    </span>
+                                    <span className="text-[9px] font-bold uppercase text-purple-600 font-mono block">
+                                      Auxiliar de Respaldo
+                                    </span>
+                                  </div>
+                                </div>
+                              ) : (
+                                <span className="text-[10px] text-slate-400 italic block">
+                                  Sin suplente pautado
+                                </span>
+                              )}
+                            </div>
                           </td>
 
                           <td className="py-3 px-4 text-right">
@@ -603,6 +709,7 @@ export default function CatalogoMateriasABM({
                             </span>
                           </td>
 
+                          {/* ACCIONES DEL DESGLOSE INDIVIDUAL */}
                           <td className="py-3 px-4 text-center">
                             <div className="flex items-center justify-center gap-2 text-slate-400">
                               {puedeEditar && !esInactiva && (
@@ -612,8 +719,8 @@ export default function CatalogoMateriasABM({
                                     onEditarHorario &&
                                     onEditarHorario(horario, materia)
                                   }
-                                  className="p-1 hover:text-indigo-600 transition cursor-pointer"
-                                  title="Editar horario y docente de la clase"
+                                  className="p-1.5 hover:text-indigo-600 hover:bg-white rounded-lg transition cursor-pointer"
+                                  title="Editar este horario y docentes"
                                 >
                                   <Pencil className="w-3.5 h-3.5" />
                                 </button>
@@ -628,7 +735,7 @@ export default function CatalogoMateriasABM({
                                       materia.nombre,
                                     )
                                   }
-                                  className="p-1 hover:text-rose-600 transition cursor-pointer"
+                                  className="p-1.5 hover:text-rose-600 hover:bg-white rounded-lg transition cursor-pointer"
                                   title="Eliminar este horario"
                                 >
                                   <Trash2 className="w-3.5 h-3.5" />

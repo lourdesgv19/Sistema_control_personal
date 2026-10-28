@@ -16,6 +16,47 @@ public class GestionMateriasDTO {
         double totalDeduccion
     ) {}
 
+    public record NuevaMateriaRequest(
+        Long idMateria,
+        Long idHorario,
+        String nombre,
+        String codigo,
+        String departamento,
+        String aula,
+        List<Integer> diasSemana,
+        String horaInicio,
+        String horaFin,
+        Long idDocenteTitular,
+        Long idDocenteAuxiliar,
+        String rolTitular,
+        String rolAuxiliar,
+        Double tarifaHora,
+        String observaciones,
+        Boolean forzarGuardado,
+        String tipoFrecuencia,
+        Integer repeticionesPeriodo,
+        String semanaAlterna
+    ) {}
+
+    public record MateriaCatalogoDTO(
+        Long idMateria,
+        String nombre,
+        String codigo,
+        String departamento,
+        String aulaPredeterminada,
+        double tarifaHora,
+        int totalHorarios,
+        List<String> diasResumen,
+        double totalHorasSemanales,
+        Long idDocenteTitular,
+        String docenteTitularNombre,
+        Long idDocenteAuxiliar,
+        String docenteAuxiliarNombre,
+        boolean sinDocente,
+        boolean activo,
+        List<HorarioDesgloseDTO> desgloseHorarios
+    ) {}
+
     public record HorarioDesgloseDTO(
         Long idHorario,
         int diaSemana,
@@ -34,45 +75,6 @@ public class GestionMateriasDTO {
         Integer repeticionesPeriodo,
         String semanaAlterna
     ) {}
-
-public record MateriaCatalogoDTO(
-        Long idMateria,
-        String nombre,
-        String codigo,
-        String departamento,
-        String aulaPredeterminada,
-        double tarifaHora,
-        int totalHorarios,
-        List<String> diasResumen,
-        double totalHorasSemanales,
-        Long idDocenteTitular,
-        String docenteTitularNombre,
-        Long idDocenteAuxiliar,
-        String docenteAuxiliarNombre,
-        boolean sinDocente,
-        boolean activo, // <-- AGREGADO
-        List<HorarioDesgloseDTO> desgloseHorarios
-    ) {}
-
-public record NuevaMateriaRequest(
-    Long idMateria,
-    Long idHorario,
-    String nombre,
-    String codigo,
-    String departamento,
-    String aula,
-    List<Integer> diasSemana,
-    String horaInicio,
-    String horaFin,
-    Long idDocenteTitular,
-    Long idDocenteAuxiliar,
-    Double tarifaHora,
-    String observaciones,
-    Boolean forzarGuardado,
-    String tipoFrecuencia,
-    Integer repeticionesPeriodo,
-    String semanaAlterna
-) {}
 
     public record ImpactoBajaMateriaDTO(
         Long idMateria,
