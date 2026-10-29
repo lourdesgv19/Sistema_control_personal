@@ -9,6 +9,8 @@ import {
   Clock,
   LogOut,
   ArrowRight,
+  Sparkles,
+  CheckCircle2,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 
@@ -46,6 +48,29 @@ export default function ModalDetalleCronograma({
       (c.codigoTag || c.nombre || "").toLowerCase().includes("docente"),
     ) ||
     (empleado.categoria?.codigoTag || "").toLowerCase().includes("docente");
+
+  // Identificar si existen franjas con esquema flexible (sin día fijo o con horas objetivo)
+  const franjasFlexibles = clases.filter(
+    (c) =>
+      c.diaSemana == null || (c.horasObjetivo != null && c.horasObjetivo > 0),
+  );
+  const tieneEsquemaFlexible = franjasFlexibles.length > 0;
+
+  // Identificar si existen franjas con DÍA FIJO asignado
+  const franjasFijas = clases.filter(
+    (c) => c.diaSemana != null && c.horaEntrada != null && c.horaSalida != null,
+  );
+  const tieneDiasFijos = franjasFijas.length > 0;
+
+  // Obtener los nombres de los días fijos para la aclaración visual
+  const diasFijosNombres = Array.from(
+    new Set(
+      franjasFijas.map((f) => {
+        const diaObj = diasMap.find((d) => d.diaNumero === f.diaSemana);
+        return diaObj ? diaObj.nombre : `Día ${f.diaSemana}`;
+      }),
+    ),
+  );
 
   const renderDetalleFrecuencia = (f) => {
     const frec = (f.tipoFrecuencia || "SEMANAL").toUpperCase();
@@ -112,6 +137,12 @@ export default function ModalDetalleCronograma({
                 >
                   {isActivo ? "ACTIVO" : "INACTIVO / BAJA"}
                 </span>
+                {tieneEsquemaFlexible && (
+                  <span className="text-[9px] font-bold px-2 py-0.5 rounded-full uppercase bg-emerald-500/20 text-emerald-300 border border-emerald-400/40 flex items-center gap-1">
+                    <Sparkles className="w-2.5 h-2.5" />
+                    Bolsa Flexible
+                  </span>
+                )}
                 <span className="text-slate-400 text-xs font-mono">
                   Legajo: {empleado.nroLegajo || "Sin legajo"}
                 </span>
@@ -144,8 +175,89 @@ export default function ModalDetalleCronograma({
         )}
 
         <div className="p-6 overflow-y-auto space-y-6">
+          {/* BANNER ESPECÍFICO DE HORARIO FLEXIBLE / BOLSA DE HORAS */}
+          {tieneEsquemaFlexible && (
+            <div className="bg-gradient-to-r from-emerald-50 to-teal-50/70 border border-emerald-200 rounded-2xl p-4 shadow-xs">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-start gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                    <CheckCircle2 className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-emerald-950 uppercase tracking-wide">
+                        Régimen de Horario Flexible Activo
+                      </span>
+                      <span className="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2 py-0.5 rounded-full border border-emerald-200">
+                        {tieneDiasFijos ? "Esquema Híbrido" : "Sin Días Fijos"}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-emerald-800 mt-0.5 leading-relaxed">
+                      El colaborador cumple horas por bolsa flexible.{" "}
+                      {tieneDiasFijos ? (
+                        <>
+                          Las tolerancias y el control de asistencia diaria{" "}
+                          <strong>
+                            aplican exclusivamente a sus días fijos asignados (
+                            {diasFijosNombres.join(", ")})
+                          </strong>
+                          . En los días libres no se computan tardanzas ni
+                          inasistencias.
+                        </>
+                      ) : (
+                        <>
+                          <strong>
+                            No se generan incidentes por inasistencias ni
+                            tardanzas diarias
+                          </strong>{" "}
+                          en días no concurridos.
+                        </>
+                      )}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Tarjetas de las franjas flexibles asignadas */}
+                <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+                  {franjasFlexibles.map((flx) => (
+                    <div
+                      key={flx.id || flx.idEmpleadoHorario}
+                      className="bg-white/90 border border-emerald-300 rounded-xl px-3 py-1.5 shadow-2xs flex items-center gap-2 text-xs"
+                    >
+                      <div>
+                        <div className="font-bold text-slate-800 text-[11px]">
+                          {flx.etiqueta || "Bolsa Flexible"}:{" "}
+                          <span className="text-emerald-700 font-extrabold">
+                            {flx.horasObjetivo} hs
+                          </span>
+                        </div>
+                        <div className="text-[10px] text-slate-500 font-medium capitalize">
+                          {flx.tipoFrecuencia
+                            ? flx.tipoFrecuencia.toLowerCase()
+                            : "mensual"}
+                        </div>
+                      </div>
+
+                      {isActivo && puedeEliminar && (
+                        <button
+                          type="button"
+                          onClick={() => onEliminarClase(flx)}
+                          className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer"
+                          title="Dar de baja este esquema flexible"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Métricas calculadas */}
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3.5 text-xs">
+            {/* 1. Carga Semanal */}
             <div className="bg-slate-50 border border-slate-200 p-3.5 rounded-2xl flex flex-col justify-between">
               <div className="text-[10px] font-bold uppercase text-slate-400">
                 Carga Semanal
@@ -154,57 +266,112 @@ export default function ModalDetalleCronograma({
                 {metricas ? metricas.cargaSemanalHoras : 0} horas
               </div>
               <div className="text-[10px] text-slate-500 mt-0.5">
-                Ponderada por periodicidad
+                {tieneEsquemaFlexible
+                  ? "Equivalente prorrateado"
+                  : "Ponderada por periodicidad"}
               </div>
             </div>
 
-            <div className="bg-purple-50/60 border border-purple-100 p-3.5 rounded-2xl flex flex-col justify-between">
-              <div className="text-[10px] font-bold uppercase text-purple-700">
+            {/* 2. Régimen Horario */}
+            <div
+              className={`border p-3.5 rounded-2xl flex flex-col justify-between ${
+                tieneEsquemaFlexible
+                  ? "bg-emerald-50/70 border-emerald-200"
+                  : "bg-purple-50/60 border-purple-100"
+              }`}
+            >
+              <div
+                className={`text-[10px] font-bold uppercase ${
+                  tieneEsquemaFlexible ? "text-emerald-800" : "text-purple-700"
+                }`}
+              >
                 Régimen Horario
               </div>
               <div
-                className="text-sm font-bold text-purple-900 mt-1 truncate"
+                className={`text-sm font-bold mt-1 truncate ${
+                  tieneEsquemaFlexible
+                    ? "text-emerald-950 font-extrabold"
+                    : "text-purple-900"
+                }`}
                 title={metricas?.regimenHorarioDescripcion}
               >
                 {metricas ? metricas.regimenHorarioDescripcion : "Sin Asignar"}
               </div>
               <div
-                className="text-[10px] text-purple-700 truncate mt-0.5"
+                className={`text-[10px] truncate mt-0.5 ${
+                  tieneEsquemaFlexible
+                    ? "text-emerald-700 font-semibold"
+                    : "text-purple-700"
+                }`}
                 title={metricas?.regimenHorarioSubtitulo}
               >
                 {metricas ? metricas.regimenHorarioSubtitulo : ""}
               </div>
             </div>
 
+            {/* 3. Días con Asistencia */}
             <div className="bg-blue-50/60 border border-blue-100 p-3.5 rounded-2xl flex flex-col justify-between">
               <div className="text-[10px] font-bold uppercase text-blue-700">
                 Días con Asistencia
               </div>
               <div className="text-xl font-bold text-blue-900 mt-1">
-                {metricas ? metricas.diasConAsistencia : 0} días
+                {tieneDiasFijos
+                  ? `${diasFijosNombres.length} ${diasFijosNombres.length === 1 ? "día fijo" : "días fijos"}`
+                  : "Libre"}
               </div>
               <div
                 className="text-[10px] text-blue-700 font-medium truncate mt-0.5"
-                title={metricas?.textoRangoDias}
+                title={
+                  tieneDiasFijos
+                    ? diasFijosNombres.join(", ")
+                    : "Cumplimiento libre por horas"
+                }
               >
-                {metricas ? metricas.textoRangoDias : "Sin días asignados"}
+                {tieneDiasFijos
+                  ? diasFijosNombres.join(", ")
+                  : "Sin días fijos asignados"}
               </div>
             </div>
 
+            {/* 4. TOLERANCIAS FICHAJE (DETALLADO DINÁMICO DÍAS FIJOS VS LIBRES) */}
             <div className="bg-emerald-50/60 border border-emerald-100 p-3.5 rounded-2xl flex flex-col justify-between">
               <div className="flex items-center justify-between text-[10px] font-bold uppercase text-emerald-700">
                 <span>Tolerancias Fichaje</span>
                 <Clock className="w-3 h-3 text-emerald-600" />
               </div>
-              <div className="text-sm font-bold text-emerald-900 mt-1">
-                +{metricas ? metricas.toleranciaIngresoMin : 15}m / -
-                {metricas ? metricas.toleranciaEgresoMin : 10}m
-              </div>
-              <div className="text-[10px] text-emerald-700 mt-0.5">
-                Ingreso y Egreso permitidos
-              </div>
+
+              {tieneDiasFijos ? (
+                <>
+                  <div className="text-sm font-bold text-emerald-900 mt-1">
+                    +
+                    {metricas
+                      ? metricas.toleranciaIngresoMin
+                      : (empleado.toleranciaIngresoMin ?? 15)}
+                    m / -
+                    {metricas
+                      ? metricas.toleranciaEgresoMin
+                      : (empleado.toleranciaEgresoMin ?? 10)}
+                    m
+                  </div>
+                  <div className="text-[10px] text-emerald-800 font-semibold mt-0.5 leading-tight">
+                    {tieneEsquemaFlexible
+                      ? `Solo aplica en días fijos (${diasFijosNombres.join(", ")})`
+                      : "Ingreso y egreso permitidos"}
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="text-sm font-bold text-emerald-900 mt-1">
+                    No aplican
+                  </div>
+                  <div className="text-[10px] text-emerald-700 mt-0.5 leading-tight">
+                    Asistencia y horarios libres
+                  </div>
+                </>
+              )}
             </div>
 
+            {/* 5. Pausas Intermedias */}
             <div className="bg-amber-50/70 border border-amber-200/80 p-3.5 rounded-2xl flex flex-col justify-between col-span-2 md:col-span-1">
               <div className="flex items-center justify-between text-[10px] font-bold uppercase text-amber-800">
                 <span>Pausas Intermedias</span>
@@ -265,8 +432,10 @@ export default function ModalDetalleCronograma({
                     key={nombre}
                     className={`border rounded-2xl p-2.5 flex flex-col justify-between min-h-[220px] ${
                       tieneActividad
-                        ? "bg-white border-slate-200"
-                        : "bg-slate-50/60 border-slate-200/60"
+                        ? "bg-white border-slate-200 shadow-2xs"
+                        : tieneEsquemaFlexible
+                          ? "bg-emerald-50/20 border-emerald-100/60"
+                          : "bg-slate-50/60 border-slate-200/60"
                     }`}
                   >
                     <div>
@@ -275,10 +444,13 @@ export default function ModalDetalleCronograma({
                           {nombre}
                         </span>
                         {tieneActividad ? (
-                          <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                          <span
+                            className="w-2 h-2 rounded-full bg-emerald-500"
+                            title="Jornada fija programada"
+                          ></span>
                         ) : (
                           <span className="text-[9px] text-slate-400 font-medium">
-                            Franco
+                            {tieneEsquemaFlexible ? "Optativo" : "Franco"}
                           </span>
                         )}
                       </div>
@@ -346,7 +518,9 @@ export default function ModalDetalleCronograma({
 
                         {!tieneActividad && (
                           <div className="text-center py-10 text-[11px] text-slate-400 italic">
-                            Sin actividad
+                            {tieneEsquemaFlexible
+                              ? "Asistencia libre"
+                              : "Sin actividad"}
                           </div>
                         )}
                       </div>

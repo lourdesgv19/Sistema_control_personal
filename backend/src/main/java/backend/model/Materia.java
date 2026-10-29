@@ -21,9 +21,6 @@ public class Materia {
     @Column(length = 50)
     private String codigo;
 
-    @Column(length = 120)
-    private String departamento;
-
     @Column(name = "aula_predeterminada", length = 80)
     private String aulaPredeterminada;
 
@@ -50,9 +47,6 @@ public class Materia {
 
     public String getCodigo() { return codigo; }
     public void setCodigo(String codigo) { this.codigo = codigo; }
-
-    public String getDepartamento() { return departamento; }
-    public void setDepartamento(String departamento) { this.departamento = departamento; }
 
     public String getAulaPredeterminada() { return aulaPredeterminada; }
     public void setAulaPredeterminada(String aulaPredeterminada) { this.aulaPredeterminada = aulaPredeterminada; }

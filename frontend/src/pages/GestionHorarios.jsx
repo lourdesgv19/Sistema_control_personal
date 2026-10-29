@@ -31,8 +31,6 @@ import {
   DIAS_MAP,
   MAPA_DIAS_NUMERO,
   getPestanaBgClass,
-  getDotColorClass,
-  getBadgeColorClasses,
 } from "../utils/categoriasHorariosUtils";
 
 const ITEMS_POR_PAGINA = 12;
@@ -62,6 +60,7 @@ export default function GestionHorarios() {
   const [horariosEmpleadoModal, setHorariosEmpleadoModal] = useState([]);
   const [metricasEmpleadoModal, setMetricasEmpleadoModal] = useState(null);
 
+  // Estados del modal de asignación
   const [modalAsignarTurno, setModalAsignarTurno] = useState(false);
   const [tipoAsignacionTurno, setTipoAsignacionTurno] =
     useState("PREESTABLECIDO");
@@ -82,6 +81,12 @@ export default function GestionHorarios() {
   const [tipoFrecuenciaTurno, setTipoFrecuenciaTurno] = useState("SEMANAL");
   const [repeticionesPeriodoTurno, setRepeticionesPeriodoTurno] = useState(1);
   const [semanaAlternaTurno, setSemanaAlternaTurno] = useState("PAR");
+
+  // Nuevos estados para bolsa de horas flexibles
+  const [horasObjetivoTurno, setHorasObjetivoTurno] = useState(4);
+  const [etiquetaFlexibleTurno, setEtiquetaFlexibleTurno] = useState(
+    "Bolsa de Horas Flexible",
+  );
 
   const [modalAlerta, setModalAlerta] = useState({
     isOpen: false,
@@ -172,12 +177,6 @@ export default function GestionHorarios() {
     return categoriaActiva.toLowerCase().includes("docente");
   }, [categoriaActiva]);
 
-  const categoriaObjetoActiva = useMemo(() => {
-    return categorias.find(
-      (c) => c.nombre?.toLowerCase() === categoriaActiva.toLowerCase(),
-    );
-  }, [categorias, categoriaActiva]);
-
   const empleadosFiltrados = useMemo(() => {
     return empleados.filter((emp) => {
       const perteneceCat =
@@ -229,6 +228,8 @@ export default function GestionHorarios() {
     setTipoFrecuenciaTurno("SEMANAL");
     setRepeticionesPeriodoTurno(1);
     setSemanaAlternaTurno("PAR");
+    setHorasObjetivoTurno(4);
+    setEtiquetaFlexibleTurno("Bolsa de Horas Flexible");
     setModalAsignarTurno(true);
   };
 
@@ -237,7 +238,37 @@ export default function GestionHorarios() {
     if (!empleadoEnModal) return;
 
     try {
-      if (tipoAsignacionTurno === "PREESTABLECIDO") {
+      if (tipoAsignacionTurno === "FLEXIBLE") {
+        // Asignación de Horas Flexibles (Bolsa de Horas sin días fijos)
+        if (!horasObjetivoTurno || horasObjetivoTurno <= 0) {
+          mostrarAviso(
+            "warning",
+            "Atención",
+            "Debe ingresar una cantidad válida de horas.",
+          );
+          return;
+        }
+
+        await addEmpleadoHorario(empleadoEnModal.id, {
+          diasSemana: [], // Vacío -> día de la semana nulo en base de datos
+          horaEntrada: null,
+          horaSalida: null,
+          horasObjetivo: Number(horasObjetivoTurno),
+          etiqueta: etiquetaFlexibleTurno || "Bolsa de Horas Flexible",
+          materiaId: null,
+          aula: null,
+          forzarGuardado: true,
+          tipoFrecuencia: tipoFrecuenciaTurno,
+          repeticionesPeriodo:
+            tipoFrecuenciaTurno === "MENSUAL" || tipoFrecuenciaTurno === "ANUAL"
+              ? repeticionesPeriodoTurno
+              : 1,
+          semanaAlterna:
+            tipoFrecuenciaTurno === "SEMANA_POR_MEDIO"
+              ? semanaAlternaTurno
+              : null,
+        });
+      } else if (tipoAsignacionTurno === "PREESTABLECIDO") {
         const plantilla = horariosPreestablecidos.find(
           (h) => h.id === parseInt(horarioGeneralSeleccionado, 10),
         );
@@ -260,6 +291,7 @@ export default function GestionHorarios() {
           diasSemana: diasArray,
           horaEntrada: plantilla.horaEntrada,
           horaSalida: plantilla.horaEgreso,
+          horasObjetivo: null,
           materiaId: null,
           etiqueta: plantilla.nombre,
           aula: null,
@@ -285,6 +317,7 @@ export default function GestionHorarios() {
               r.horaDesde.length === 5 ? `${r.horaDesde}:00` : r.horaDesde,
             horaSalida:
               r.horaHasta.length === 5 ? `${r.horaHasta}:00` : r.horaHasta,
+            horasObjetivo: null,
             materiaId: null,
             etiqueta: r.etiqueta || "Personalizado",
             aula: null,
@@ -305,6 +338,7 @@ export default function GestionHorarios() {
 
       setModalAsignarTurno(false);
       await cargarCatalogos();
+      window.dispatchEvent(new CustomEvent("datos:actualizados"));
       mostrarAviso("success", "Éxito", "Horario registrado correctamente.");
     } catch (err) {
       const msg = err.response?.data?.message || "";
@@ -362,6 +396,7 @@ export default function GestionHorarios() {
           setHorariosEmpleadoModal(hRes || []);
           setMetricasEmpleadoModal(mRes);
           await cargarCatalogos();
+          window.dispatchEvent(new CustomEvent("datos:actualizados"));
           mostrarAviso(
             "success",
             "Éxito",
@@ -703,6 +738,10 @@ export default function GestionHorarios() {
         setRepeticionesPeriodo={setRepeticionesPeriodoTurno}
         semanaAlterna={semanaAlternaTurno}
         setSemanaAlterna={setSemanaAlternaTurno}
+        horasObjetivo={horasObjetivoTurno}
+        setHorasObjetivo={setHorasObjetivoTurno}
+        etiquetaFlexible={etiquetaFlexibleTurno}
+        setEtiquetaFlexible={setEtiquetaFlexibleTurno}
       />
 
       <ModalAlerta

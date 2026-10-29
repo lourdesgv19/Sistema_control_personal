@@ -42,7 +42,6 @@ public class GestionMateriasDTO {
         Long idMateria,
         String nombre,
         String codigo,
-        String departamento,
         String aulaPredeterminada,
         double tarifaHora,
         int totalHorarios,

@@ -23,7 +23,6 @@ public class HorarioController {
         this.horarioService = horarioService;
     }
 
-    // Listado paginado de horarios con filtros (padrón general institucional)
     @GetMapping("/paginados")
     public ResponseEntity<Page<EmpleadoHorarioResumenDTO>> listarHorariosPaginados(
             @RequestParam(value = "q", required = false, defaultValue = "") String q,
@@ -36,7 +35,6 @@ public class HorarioController {
         return ResponseEntity.ok(horarioService.listarHorariosPaginados(q, categoriaId, empleadoId, pageable));
     }
 
-    // Listado completo de franjas de un empleado para su cronograma semanal
     @GetMapping("/empleado/{empleadoId}")
     public ResponseEntity<List<EmpleadoHorario>> listarHorariosPorEmpleado(@PathVariable Long empleadoId) {
         return ResponseEntity.ok(horarioService.listarHorariosEmpleado(empleadoId));
@@ -49,30 +47,36 @@ public class HorarioController {
         Long materiaId,
         String etiqueta,
         String aula,
-        String tipoFrecuencia,         // "SEMANAL", "SEMANA_POR_MEDIO", "MENSUAL", "ANUAL"
+        String tipoFrecuencia,
         Integer repeticionesPeriodo,
         String semanaAlterna,
+        Double horasObjetivo,
         Boolean forzarGuardado
     ) {}
 
-    // Asignación de franjas horarias o cátedras a un empleado
     @PostMapping("/empleado/{empleadoId}")
     public ResponseEntity<?> agregarHorarios(
             @PathVariable Long empleadoId,
             @RequestBody AsignarHorarioRequest req) {
         try {
+            String entrada = (req.horaEntrada() != null && req.horaEntrada().length() == 5)
+                    ? req.horaEntrada() + ":00" : req.horaEntrada();
+            String salida = (req.horaSalida() != null && req.horaSalida().length() == 5)
+                    ? req.horaSalida() + ":00" : req.horaSalida();
+
             List<EmpleadoHorario> creados = horarioService.agregarHorariosMultiples(
                     empleadoId,
                     req.diasSemana(),
-                    req.horaEntrada().length() == 5 ? req.horaEntrada() + ":00" : req.horaEntrada(),
-                    req.horaSalida().length() == 5 ? req.horaSalida() + ":00" : req.horaSalida(),
+                    entrada,
+                    salida,
                     req.materiaId(),
                     req.etiqueta(),
                     req.aula(),
                     req.tipoFrecuencia(),
                     req.repeticionesPeriodo(),
                     req.semanaAlterna(),
-                    req.forzarGuardado() != null && req.forzarGuardado()
+                    req.horasObjetivo(),
+                    Boolean.TRUE.equals(req.forzarGuardado())
             );
             return ResponseEntity.status(HttpStatus.CREATED).body(creados);
         } catch (IllegalArgumentException | IllegalStateException e) {
@@ -80,7 +84,6 @@ public class HorarioController {
         }
     }
 
-    // Baja lógica de un bloque horario específico
     @DeleteMapping("/{horarioId}")
     public ResponseEntity<Void> eliminarHorario(@PathVariable Long horarioId) {
         horarioService.eliminarHorario(horarioId);

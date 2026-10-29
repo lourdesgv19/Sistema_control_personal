@@ -43,7 +43,6 @@ export default function ModalNuevaMateria({
   const [form, setForm] = useState({
     nombre: "",
     codigo: "",
-    departamento: "Ciencias Básicas",
     aula: "",
     diasSemana: [1],
     horaInicio: "08:30",
@@ -133,7 +132,6 @@ export default function ModalNuevaMateria({
       setForm({
         nombre: materiaAEditar.nombre || materiaAEditar.nombreMateria || "",
         codigo: materiaAEditar.codigo || "",
-        departamento: materiaAEditar.departamento || "Ciencias Básicas",
         aula: materiaAEditar.aula || materiaAEditar.aulaPredeterminada || "",
         diasSemana: diasArray,
         horaInicio: materiaAEditar.horaInicio
@@ -208,7 +206,6 @@ export default function ModalNuevaMateria({
         idHorario: materiaAEditar ? materiaAEditar.idHorario : null,
         nombre: form.nombre.trim(),
         codigo: form.codigo ? form.codigo.trim() : null,
-        departamento: form.departamento,
         aula: form.aula ? form.aula.trim() : "",
         diasSemana: form.diasSemana || [],
         horaInicio: form.horaInicio,

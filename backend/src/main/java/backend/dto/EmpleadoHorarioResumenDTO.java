@@ -21,5 +21,6 @@ public record EmpleadoHorarioResumenDTO(
     String tipoFrecuencia,
     Integer repeticionesPeriodo,
     String semanaAlterna,
+    Double horasObjetivo,
     Boolean activo
 ) {}

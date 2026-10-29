@@ -7,6 +7,7 @@ import {
   Trash2,
   CalendarCheck,
   UserCheck,
+  CheckCircle2,
 } from "lucide-react";
 
 export default function ModalAsignarTurno({
@@ -39,6 +40,10 @@ export default function ModalAsignarTurno({
   setRepeticionesPeriodo,
   semanaAlterna = "PAR",
   setSemanaAlterna,
+  horasObjetivo = 4,
+  setHorasObjetivo,
+  etiquetaFlexible = "Bolsa de Horas Flexible",
+  setEtiquetaFlexible,
 }) {
   if (!isOpen) return null;
 
@@ -68,7 +73,7 @@ export default function ModalAsignarTurno({
         </div>
 
         <div className="p-6 space-y-5 text-xs overflow-y-auto">
-          {/* SELECTOR DE EMPLEADO: Visible si no viene prefijado desde la lista lateral */}
+          {/* SELECTOR DE EMPLEADO (si no viene prefijado) */}
           {!esFijado && (
             <div className="bg-indigo-50/60 border border-indigo-100 rounded-2xl p-3.5 space-y-2">
               <label className="font-bold text-indigo-950 flex items-center gap-1.5">
@@ -99,25 +104,25 @@ export default function ModalAsignarTurno({
           <div className="text-[10px] font-bold uppercase text-slate-400">
             Modalidad de Carga de Horario
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
             <button
               type="button"
               onClick={() => setTipoAsignacionTurno("PREESTABLECIDO")}
-              className={`p-3.5 rounded-2xl border text-left flex items-start gap-3 transition cursor-pointer ${
+              className={`p-3 rounded-2xl border text-left flex flex-col gap-2 transition cursor-pointer ${
                 tipoAsignacionTurno === "PREESTABLECIDO"
                   ? "border-indigo-600 bg-indigo-50/50 ring-2 ring-indigo-600"
                   : "border-slate-200 hover:bg-slate-50"
               }`}
             >
-              <div className="w-8 h-8 rounded-xl bg-indigo-600 text-white flex items-center justify-center shrink-0">
-                <Clock className="w-4 h-4" />
+              <div className="w-7 h-7 rounded-lg bg-indigo-600 text-white flex items-center justify-center shrink-0">
+                <Clock className="w-3.5 h-3.5" />
               </div>
               <div>
-                <div className="font-bold text-slate-900">
-                  Turno Plantilla General
+                <div className="font-bold text-slate-900 text-xs">
+                  Plantilla General
                 </div>
-                <div className="text-[10px] text-slate-500 mt-0.5">
-                  Copiar franja horaria desde un turno preestablecido
+                <div className="text-[10px] text-slate-500 mt-0.5 leading-tight">
+                  Turno corporativo fijo
                 </div>
               </div>
             </button>
@@ -125,28 +130,51 @@ export default function ModalAsignarTurno({
             <button
               type="button"
               onClick={() => setTipoAsignacionTurno("ESPECIFICO")}
-              className={`p-3.5 rounded-2xl border text-left flex items-start gap-3 transition cursor-pointer ${
+              className={`p-3 rounded-2xl border text-left flex flex-col gap-2 transition cursor-pointer ${
                 tipoAsignacionTurno === "ESPECIFICO"
                   ? "border-indigo-600 bg-indigo-50/50 ring-2 ring-indigo-600"
                   : "border-slate-200 hover:bg-slate-50"
               }`}
             >
-              <div className="w-8 h-8 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0">
-                <Sliders className="w-4 h-4" />
+              <div className="w-7 h-7 rounded-lg bg-blue-600 text-white flex items-center justify-center shrink-0">
+                <Sliders className="w-3.5 h-3.5" />
               </div>
               <div>
-                <div className="font-bold text-slate-900">
-                  Franja Personalizada / Turno Cortado
+                <div className="font-bold text-slate-900 text-xs">
+                  Franja Personalizada
                 </div>
-                <div className="text-[10px] text-slate-500 mt-0.5">
-                  Para turnos mañana/tarde o esquemas a medida.
+                <div className="text-[10px] text-slate-500 mt-0.5 leading-tight">
+                  Turno partido o por días
+                </div>
+              </div>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setTipoAsignacionTurno("FLEXIBLE")}
+              className={`p-3 rounded-2xl border text-left flex flex-col gap-2 transition cursor-pointer ${
+                tipoAsignacionTurno === "FLEXIBLE"
+                  ? "border-emerald-600 bg-emerald-50/60 ring-2 ring-emerald-600"
+                  : "border-slate-200 hover:bg-slate-50"
+              }`}
+            >
+              <div className="w-7 h-7 rounded-lg bg-emerald-600 text-white flex items-center justify-center shrink-0">
+                <CheckCircle2 className="w-3.5 h-3.5" />
+              </div>
+              <div>
+                <div className="font-bold text-slate-900 text-xs">
+                  Bolsa de Horas
+                </div>
+                <div className="text-[10px] text-slate-500 mt-0.5 leading-tight">
+                  Horas libres sin día fijo
                 </div>
               </div>
             </button>
           </div>
 
+          {/* OPCIÓN 1: PLANTILLA */}
           {tipoAsignacionTurno === "PREESTABLECIDO" && (
-            <div className="space-y-3 pt-2">
+            <div className="space-y-3 pt-1">
               <label className="block font-semibold text-slate-700">
                 Seleccionar Plantilla Preestablecida:
               </label>
@@ -172,12 +200,13 @@ export default function ModalAsignarTurno({
             </div>
           )}
 
+          {/* OPCIÓN 2: ESPECÍFICO / BLOQUES */}
           {tipoAsignacionTurno === "ESPECIFICO" && (
             <div className="space-y-4 pt-1">
               <div className="flex items-center justify-between">
                 <div>
                   <div className="font-bold text-slate-900">
-                    Bloques de Horario (Ej: Turno Mañana y Tarde)
+                    Bloques de Horario (Ej: Mañana y Tarde)
                   </div>
                   <div className="text-[10px] text-slate-400">
                     Defina 1, 2 o más bloques por jornada.
@@ -249,6 +278,62 @@ export default function ModalAsignarTurno({
             </div>
           )}
 
+          {/* OPCIÓN 3: BOLSA DE HORAS FLEXIBLES */}
+          {tipoAsignacionTurno === "FLEXIBLE" && (
+            <div className="space-y-3.5 p-4 bg-emerald-50/60 border border-emerald-200 rounded-2xl">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="font-bold text-emerald-950 text-xs">
+                    Configuración de Carga Horaria sin Día Fijo
+                  </div>
+                  <div className="text-[11px] text-emerald-800/80 mt-0.5">
+                    El colaborador podrá distribuir libremente sus horas en el
+                    período sin incurrir en incidentes de tardanzas ni ausencias
+                    injustificadas.
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                    Cantidad de Horas a Cumplir *
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      step="0.5"
+                      min="0.5"
+                      max="400"
+                      value={horasObjetivo}
+                      onChange={(e) =>
+                        setHorasObjetivo(parseFloat(e.target.value) || 0)
+                      }
+                      className="w-24 px-3 py-2 text-xs border border-emerald-300 rounded-xl text-center font-bold text-emerald-800 bg-white outline-none focus:border-emerald-600"
+                      placeholder="ej: 4"
+                    />
+                    <span className="text-xs text-slate-600 font-semibold">
+                      horas totales
+                    </span>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                    Nombre / Etiqueta del Esquema
+                  </label>
+                  <input
+                    type="text"
+                    value={etiquetaFlexible}
+                    onChange={(e) => setEtiquetaFlexible(e.target.value)}
+                    placeholder="ej: Asesoría Contable / Bolsa Libre"
+                    className="w-full px-3 py-2 text-xs border border-emerald-300 rounded-xl bg-white outline-none focus:border-emerald-600 text-slate-800"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Periodicidad / Frecuencia */}
           <div className="space-y-2.5 pt-2 border-t border-slate-100">
             <div className="flex items-center justify-between">
@@ -257,7 +342,7 @@ export default function ModalAsignarTurno({
                 Frecuencia de Cumplimiento
               </label>
               <span className="text-[10px] text-slate-400">
-                Pauta de asistencia
+                Pauta de liquidación y asistencia
               </span>
             </div>
 
@@ -283,61 +368,65 @@ export default function ModalAsignarTurno({
               ))}
             </div>
 
-            {tipoFrecuencia === "SEMANA_POR_MEDIO" && (
-              <div className="flex items-center gap-4 p-3 bg-indigo-50/50 border border-indigo-100 rounded-xl mt-2 text-xs">
-                <span className="text-slate-700 font-medium">Rotación:</span>
-                <label className="flex items-center gap-1.5 cursor-pointer text-slate-700 font-medium">
-                  <input
-                    type="radio"
-                    name="modalSemanaAlterna"
-                    value="PAR"
-                    checked={semanaAlterna === "PAR"}
-                    onChange={(e) => setSemanaAlterna(e.target.value)}
-                    className="text-indigo-600 focus:ring-indigo-500"
-                  />
-                  Semanas Pares
-                </label>
-                <label className="flex items-center gap-1.5 cursor-pointer text-slate-700 font-medium">
-                  <input
-                    type="radio"
-                    name="modalSemanaAlterna"
-                    value="IMPAR"
-                    checked={semanaAlterna === "IMPAR"}
-                    onChange={(e) => setSemanaAlterna(e.target.value)}
-                    className="text-indigo-600 focus:ring-indigo-500"
-                  />
-                  Semanas Impares
-                </label>
-              </div>
-            )}
-
-            {(tipoFrecuencia === "MENSUAL" || tipoFrecuencia === "ANUAL") && (
-              <div className="flex items-center gap-3 p-3 bg-indigo-50/40 border border-indigo-100 rounded-xl mt-2">
-                <span className="text-xs text-slate-700 font-medium shrink-0">
-                  Cantidad requerida:
-                </span>
-                <div className="flex items-center gap-2 shrink-0">
-                  <input
-                    type="number"
-                    min="1"
-                    max={tipoFrecuencia === "MENSUAL" ? 31 : 365}
-                    value={repeticionesPeriodo}
-                    onChange={(e) =>
-                      setRepeticionesPeriodo(parseInt(e.target.value, 10) || 1)
-                    }
-                    className="w-16 px-2.5 py-1 text-xs border border-indigo-200 rounded-lg text-center font-bold text-indigo-700 bg-white outline-none focus:border-indigo-600"
-                  />
-                  <span className="text-xs text-slate-600 font-semibold">
-                    {tipoFrecuencia === "MENSUAL"
-                      ? "jornada(s) al mes"
-                      : "jornada(s) al año"}
-                  </span>
+            {tipoFrecuencia === "SEMANA_POR_MEDIO" &&
+              tipoAsignacionTurno !== "FLEXIBLE" && (
+                <div className="flex items-center gap-4 p-3 bg-indigo-50/50 border border-indigo-100 rounded-xl mt-2 text-xs">
+                  <span className="text-slate-700 font-medium">Rotación:</span>
+                  <label className="flex items-center gap-1.5 cursor-pointer text-slate-700 font-medium">
+                    <input
+                      type="radio"
+                      name="modalSemanaAlterna"
+                      value="PAR"
+                      checked={semanaAlterna === "PAR"}
+                      onChange={(e) => setSemanaAlterna(e.target.value)}
+                      className="text-indigo-600 focus:ring-indigo-500"
+                    />
+                    Semanas Pares
+                  </label>
+                  <label className="flex items-center gap-1.5 cursor-pointer text-slate-700 font-medium">
+                    <input
+                      type="radio"
+                      name="modalSemanaAlterna"
+                      value="IMPAR"
+                      checked={semanaAlterna === "IMPAR"}
+                      onChange={(e) => setSemanaAlterna(e.target.value)}
+                      className="text-indigo-600 focus:ring-indigo-500"
+                    />
+                    Semanas Impares
+                  </label>
                 </div>
-              </div>
-            )}
+              )}
+
+            {(tipoFrecuencia === "MENSUAL" || tipoFrecuencia === "ANUAL") &&
+              tipoAsignacionTurno !== "FLEXIBLE" && (
+                <div className="flex items-center gap-3 p-3 bg-indigo-50/40 border border-indigo-100 rounded-xl mt-2">
+                  <span className="text-xs text-slate-700 font-medium shrink-0">
+                    Cantidad requerida:
+                  </span>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <input
+                      type="number"
+                      min="1"
+                      max={tipoFrecuencia === "MENSUAL" ? 31 : 365}
+                      value={repeticionesPeriodo}
+                      onChange={(e) =>
+                        setRepeticionesPeriodo(
+                          parseInt(e.target.value, 10) || 1,
+                        )
+                      }
+                      className="w-16 px-2.5 py-1 text-xs border border-indigo-200 rounded-lg text-center font-bold text-indigo-700 bg-white outline-none focus:border-indigo-600"
+                    />
+                    <span className="text-xs text-slate-600 font-semibold">
+                      {tipoFrecuencia === "MENSUAL"
+                        ? "jornada(s) al mes"
+                        : "jornada(s) al año"}
+                    </span>
+                  </div>
+                </div>
+              )}
           </div>
 
-          {/* Días en que Aplica */}
+          {/* DÍAS EN QUE APLICA: Oculto en modo FLEXIBLE */}
           {tipoAsignacionTurno === "ESPECIFICO" && (
             <div className="pt-2">
               <div className="font-bold text-slate-700 mb-2">

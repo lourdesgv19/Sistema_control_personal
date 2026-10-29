@@ -67,7 +67,6 @@ public class MateriaService {
         Materia existente = obtenerPorId(id);
         existente.setNombre(m.getNombre());
         existente.setCodigo(m.getCodigo());
-        existente.setDepartamento(m.getDepartamento());
         existente.setAulaPredeterminada(m.getAulaPredeterminada());
         existente.setActivo(m.getActivo());
         if (Boolean.TRUE.equals(m.getActivo())) {
@@ -278,7 +277,6 @@ public class MateriaService {
 
         materia.setNombre(req.nombre().trim());
         if (req.codigo() != null) materia.setCodigo(req.codigo().trim());
-        if (req.departamento() != null) materia.setDepartamento(req.departamento().trim());
         materia.setAulaPredeterminada(!aulaFinal.isBlank() ? aulaFinal : null);
         materia.setTarifaHoraCatedra(req.tarifaHora() != null ? BigDecimal.valueOf(req.tarifaHora()) : BigDecimal.ZERO);
         if (req.observaciones() != null) materia.setObservaciones(req.observaciones());
@@ -460,7 +458,6 @@ public class MateriaService {
                 m.getId(),
                 m.getNombre(),
                 m.getCodigo(),
-                m.getDepartamento(),
                 m.getAulaPredeterminada() != null ? m.getAulaPredeterminada() : "Aula sin asignar",
                 tarifa,
                 horariosDeMateria.size(),

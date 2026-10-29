@@ -10,7 +10,6 @@ import java.time.LocalTime;
 @Entity
 @Table(name = "empleado_horarios")
 @SQLDelete(sql = "UPDATE empleado_horarios SET activo = false, fecha_baja = NOW() WHERE id_empleado_horario = ?")
-@SQLRestriction("activo = true")
 public class EmpleadoHorario {
 
     @Id
@@ -24,14 +23,17 @@ public class EmpleadoHorario {
     private Empleado empleado;
 
     // 1: Lunes, 2: Martes, ..., 7: Domingo
-    @Column(name = "dia_semana", nullable = false)
+    @Column(name = "dia_semana")
     private Integer diaSemana;
 
-    @Column(name = "hora_entrada", nullable = false)
+    @Column(name = "hora_entrada")
     private LocalTime horaEntrada;
 
-    @Column(name = "hora_salida", nullable = false)
+    @Column(name = "hora_salida")
     private LocalTime horaSalida;
+
+    @Column(name = "horas_objetivo")
+    private Double horasObjetivo;
 
     @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "id_materia")
@@ -54,6 +56,9 @@ public class EmpleadoHorario {
 
     @Column(name = "fecha_baja")
     private LocalDateTime fechaBaja;
+
+    @Column(name = "fecha_alta", nullable = false)
+    private LocalDateTime fechaAlta = LocalDateTime.now();
 
     @Column(name = "tipo_frecuencia", nullable = false, length = 30)
     private String tipoFrecuencia = "SEMANAL";
@@ -82,6 +87,9 @@ public class EmpleadoHorario {
     public LocalTime getHoraSalida() { return horaSalida; }
     public void setHoraSalida(LocalTime horaSalida) { this.horaSalida = horaSalida; }
 
+    public Double getHorasObjetivo() { return horasObjetivo; }
+    public void setHorasObjetivo(Double horasObjetivo) { this.horasObjetivo = horasObjetivo; }
+
     public Materia getMateria() { return materia; }
     public void setMateria(Materia materia) { this.materia = materia; }
 
@@ -102,6 +110,9 @@ public class EmpleadoHorario {
 
     public LocalDateTime getFechaBaja() { return fechaBaja; }
     public void setFechaBaja(LocalDateTime fechaBaja) { this.fechaBaja = fechaBaja; }
+
+    public LocalDateTime getFechaAlta() { return fechaAlta; }
+    public void setFechaAlta(LocalDateTime fechaAlta) { this.fechaAlta = fechaAlta; }
 
     public String getTipoFrecuencia() { return tipoFrecuencia; }
     public void setTipoFrecuencia(String tipoFrecuencia) { this.tipoFrecuencia = tipoFrecuencia; }
