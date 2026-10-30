@@ -124,7 +124,7 @@ export default function GestionPersonal() {
   const [cargos, setCargos] = useState([]);
   const [horarios, setHorarios] = useState([]);
 
-  // Referencia para acceder a categorías dentro de callbacks sin provocar renders en bucle
+  // Referencia para acceder a categorías dentro de callbacks sin bucles
   const categoriasRef = useRef([]);
   useEffect(() => {
     categoriasRef.current = categorias;
@@ -241,7 +241,6 @@ export default function GestionPersonal() {
     }
   }, []);
 
-  // Consulta paginada y filtrada blindada contra bucles y valores NaN
   const cargarEmpleadosServidor = useCallback(
     async (
       page = 0,
@@ -279,7 +278,6 @@ export default function GestionPersonal() {
           const lista = Array.isArray(res.content) ? res.content : [];
           setEmpleados(lista);
 
-          // Si totalElements no viene o es 0 pero hay elementos en la lista, usamos lista.length como respaldo
           const totalReal =
             res.totalElements !== undefined &&
             res.totalElements !== null &&
@@ -331,7 +329,6 @@ export default function GestionPersonal() {
     cargarResumenGlobal();
   }, [cargarCatalogos, cargarResumenGlobal]);
 
-  // Recarga controlada de búsqueda y filtros con Debounce
   useEffect(() => {
     const timer = setTimeout(() => {
       const pageIndex = Math.max(0, (Number(paginaActual) || 1) - 1);
@@ -351,7 +348,6 @@ export default function GestionPersonal() {
     cargarEmpleadosServidor,
   ]);
 
-  // Sincronización en tiempo real protegida con Debounce
   useEffect(() => {
     let timerSync = null;
 
@@ -763,41 +759,41 @@ export default function GestionPersonal() {
   };
 
   return (
-    <div className="p-6 lg:p-8 max-w-7xl mx-auto space-y-6 font-sans">
-      <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <div className="w-12 h-12 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 shadow-xs">
-            <Users className="w-6 h-6 stroke-[1.8]" />
+    <div className="p-3 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-4 sm:space-y-6 font-sans">
+      {/* Encabezado Superior */}
+      <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex items-center gap-3 sm:gap-4">
+          <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 shadow-xs shrink-0">
+            <Users className="w-5 h-5 sm:w-6 sm:h-6 stroke-[1.8]" />
           </div>
-          <div>
-            <h1 className="text-xl font-bold text-slate-900 tracking-tight">
+          <div className="min-w-0">
+            <h1 className="text-lg sm:text-xl font-bold text-slate-900 tracking-tight truncate">
               Gestión de Personal & Carga Horaria
             </h1>
-            <p className="text-xs text-slate-500">
-              Padrón de empleados, asignación de regímenes y cronograma de
-              horarios.
+            <p className="text-[11px] sm:text-xs text-slate-500 truncate">
+              Padrón de empleados, regímenes y cronograma de horarios.
             </p>
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2.5">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
           {totalIncompletos > 0 && (
             <button
               onClick={() => {
                 setSoloIncompletos(!soloIncompletos);
                 setPaginaActual(1);
               }}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition shadow-xs cursor-pointer border ${
+              className={`flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl text-xs font-bold transition shadow-xs cursor-pointer border ${
                 soloIncompletos
                   ? "bg-amber-600 text-white border-amber-600 ring-2 ring-amber-300"
                   : "bg-amber-50 hover:bg-amber-100 text-amber-800 border-amber-200 animate-pulse"
               }`}
             >
               <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
-              <span>
+              <span className="truncate">
                 {soloIncompletos
-                  ? "Ver Todos los Empleados"
-                  : `Faltan completar datos (${totalIncompletos})`}
+                  ? "Ver Todos"
+                  : `Incompletos (${totalIncompletos})`}
               </span>
             </button>
           )}
@@ -805,14 +801,14 @@ export default function GestionPersonal() {
           {puedePersonalCrear ? (
             <button
               onClick={abrirModalCrear}
-              className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#4b35e6] hover:bg-[#3f2bc9] text-white text-xs font-semibold shadow-md shadow-indigo-100 transition cursor-pointer"
+              className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-4 py-2 sm:px-5 sm:py-2.5 rounded-xl bg-[#4b35e6] hover:bg-[#3f2bc9] text-white text-xs font-semibold shadow-md shadow-indigo-100 transition cursor-pointer"
             >
               <Plus className="w-4 h-4 stroke-[2.5]" />
-              Registrar Empleado
+              <span className="truncate">Registrar Empleado</span>
             </button>
           ) : (
             <span
-              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-100 text-slate-400 text-xs font-semibold border border-slate-200 cursor-not-allowed select-none"
+              className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 text-slate-400 text-xs font-semibold border border-slate-200 cursor-not-allowed select-none"
               title="Requiere permiso PERSONAL_CREAR"
             >
               <Lock className="w-3.5 h-3.5" />
@@ -822,7 +818,8 @@ export default function GestionPersonal() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      {/* Tarjetas KPI de Resumen */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 sm:gap-4">
         <button
           type="button"
           onClick={() => {
@@ -831,26 +828,26 @@ export default function GestionPersonal() {
             setSoloIncompletos(false);
             setPaginaActual(1);
           }}
-          className={`p-5 rounded-2xl flex flex-col justify-between text-left transition-all border cursor-pointer ${
+          className={`p-3.5 sm:p-5 rounded-2xl flex flex-col justify-between text-left transition-all border cursor-pointer ${
             filterEstado === "TODOS" &&
             filterCategoria === "TODAS" &&
             !soloIncompletos
-              ? "bg-slate-50/90 border-slate-700 ring-4 ring-slate-400/20 shadow-md scale-[1.02]"
+              ? "bg-slate-50/90 border-slate-700 ring-2 sm:ring-4 ring-slate-400/20 shadow-md scale-[1.01]"
               : "bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50/50"
           }`}
         >
           <div className="flex items-center justify-between w-full text-slate-700">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-700">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-700 truncate">
               Total Personal
             </span>
-            <Users className="w-4 h-4 text-slate-500" />
+            <Users className="w-4 h-4 text-slate-500 shrink-0" />
           </div>
-          <div className="mt-3">
-            <div className="text-2xl font-bold text-slate-900">
+          <div className="mt-2 sm:mt-3">
+            <div className="text-xl sm:text-2xl font-bold text-slate-900">
               {resumenGlobal.totalPersonal}
             </div>
-            <div className="text-[10px] text-slate-500 font-medium mt-0.5">
-              Todos los registrados
+            <div className="text-[10px] text-slate-500 font-medium mt-0.5 truncate">
+              Registrados
             </div>
           </div>
         </button>
@@ -863,25 +860,25 @@ export default function GestionPersonal() {
             setSoloIncompletos(false);
             setPaginaActual(1);
           }}
-          className={`p-5 rounded-2xl flex flex-col justify-between text-left transition-all border cursor-pointer ${
+          className={`p-3.5 sm:p-5 rounded-2xl flex flex-col justify-between text-left transition-all border cursor-pointer ${
             filterCategoria.toLowerCase().includes("docente") &&
             !soloIncompletos
-              ? "bg-purple-50/80 border-purple-500 ring-4 ring-purple-500/20 shadow-md scale-[1.02]"
+              ? "bg-purple-50/80 border-purple-500 ring-2 sm:ring-4 ring-purple-500/20 shadow-md scale-[1.01]"
               : "bg-white border-slate-200 hover:border-purple-300 hover:bg-purple-50/30"
           }`}
         >
           <div className="flex items-center justify-between w-full text-purple-600">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-purple-700">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-purple-700 truncate">
               Docentes
             </span>
-            <BookOpen className="w-4 h-4" />
+            <BookOpen className="w-4 h-4 shrink-0" />
           </div>
-          <div className="mt-3">
-            <div className="text-2xl font-bold text-slate-900">
+          <div className="mt-2 sm:mt-3">
+            <div className="text-xl sm:text-2xl font-bold text-slate-900">
               {resumenGlobal.totalDocentes}
             </div>
-            <div className="text-[10px] text-purple-600 font-medium mt-0.5">
-              Con perfil docente
+            <div className="text-[10px] text-purple-600 font-medium mt-0.5 truncate">
+              Perfil docente
             </div>
           </div>
         </button>
@@ -897,26 +894,26 @@ export default function GestionPersonal() {
             setSoloIncompletos(false);
             setPaginaActual(1);
           }}
-          className={`p-5 rounded-2xl flex flex-col justify-between text-left transition-all border cursor-pointer ${
+          className={`p-3.5 sm:p-5 rounded-2xl flex flex-col justify-between text-left transition-all border cursor-pointer ${
             filterEstado === "ACTIVOS" &&
             filterCategoria.toLowerCase().includes("administrativ") &&
             !soloIncompletos
-              ? "bg-indigo-50/80 border-indigo-500 ring-4 ring-indigo-500/20 shadow-md scale-[1.02]"
+              ? "bg-indigo-50/80 border-indigo-500 ring-2 sm:ring-4 ring-indigo-500/20 shadow-md scale-[1.01]"
               : "bg-white border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/30"
           }`}
         >
           <div className="flex items-center justify-between w-full text-indigo-600">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-700">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-700 truncate">
               Administrativos
             </span>
-            <Clock className="w-4 h-4" />
+            <Clock className="w-4 h-4 shrink-0" />
           </div>
-          <div className="mt-3">
-            <div className="text-2xl font-bold text-slate-900">
+          <div className="mt-2 sm:mt-3">
+            <div className="text-xl sm:text-2xl font-bold text-slate-900">
               {resumenGlobal.totalAdministrativos}
             </div>
-            <div className="text-[10px] text-indigo-600 font-medium mt-0.5">
-              Personal no docente
+            <div className="text-[10px] text-indigo-600 font-medium mt-0.5 truncate">
+              No docente
             </div>
           </div>
         </button>
@@ -929,30 +926,31 @@ export default function GestionPersonal() {
             setSoloIncompletos(false);
             setPaginaActual(1);
           }}
-          className={`p-5 rounded-2xl flex flex-col justify-between text-left transition-all border cursor-pointer ${
+          className={`p-3.5 sm:p-5 rounded-2xl flex flex-col justify-between text-left transition-all border cursor-pointer ${
             filterEstado === "INACTIVOS" && !soloIncompletos
-              ? "bg-rose-50/80 border-rose-500 ring-4 ring-rose-500/20 shadow-md scale-[1.02]"
+              ? "bg-rose-50/80 border-rose-500 ring-2 sm:ring-4 ring-rose-500/20 shadow-md scale-[1.01]"
               : "bg-white border-slate-200 hover:border-rose-300 hover:bg-rose-50/30"
           }`}
         >
           <div className="flex items-center justify-between w-full text-rose-500">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-rose-600">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-rose-600 truncate">
               Bajas Lógicas
             </span>
-            <AlertTriangle className="w-4 h-4" />
+            <AlertTriangle className="w-4 h-4 shrink-0" />
           </div>
-          <div className="mt-3">
-            <div className="text-2xl font-bold text-slate-900">
+          <div className="mt-2 sm:mt-3">
+            <div className="text-xl sm:text-2xl font-bold text-slate-900">
               {resumenGlobal.totalInactivos}
             </div>
-            <div className="text-[10px] text-rose-600 font-medium mt-0.5">
+            <div className="text-[10px] text-rose-600 font-medium mt-0.5 truncate">
               Inactivos
             </div>
           </div>
         </button>
       </div>
 
-      <div className="bg-white p-3 border border-slate-200 rounded-2xl shadow-xs flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+      {/* Barra de Filtros y Búsqueda */}
+      <div className="bg-white p-3 border border-slate-200 rounded-2xl shadow-xs flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
         <div className="relative flex-1">
           <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
@@ -964,14 +962,14 @@ export default function GestionPersonal() {
           />
         </div>
 
-        <div className="flex flex-wrap items-center gap-2.5 text-xs">
+        <div className="grid grid-cols-2 sm:flex sm:items-center gap-2 text-xs">
           <select
             value={filterCategoria}
             onChange={(e) => {
               setFilterCategoria(e.target.value);
               setPaginaActual(1);
             }}
-            className="border border-slate-200 rounded-xl px-3 py-2 bg-white text-slate-700 outline-none focus:border-indigo-500 font-medium"
+            className="border border-slate-200 rounded-xl px-2.5 py-2 bg-white text-slate-700 outline-none focus:border-indigo-500 font-medium truncate"
           >
             <option value="TODAS">Todas Las Categorías</option>
             {categoriasActivas.map((c) => (
@@ -987,7 +985,7 @@ export default function GestionPersonal() {
               setFilterEstado(e.target.value);
               setPaginaActual(1);
             }}
-            className="border border-slate-200 rounded-xl px-3 py-2 bg-white font-semibold text-slate-700 outline-none focus:border-indigo-500"
+            className="border border-slate-200 rounded-xl px-2.5 py-2 bg-white font-semibold text-slate-700 outline-none focus:border-indigo-500 truncate"
           >
             <option value="TODOS">Todos los estados</option>
             <option value="ACTIVOS">Solo Activos</option>
@@ -996,83 +994,63 @@ export default function GestionPersonal() {
         </div>
       </div>
 
+      {/* Contenedor de Nómina: Tabla en Desktop / Cards en Móvil */}
       <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-xs">
-        <table className="w-full text-left text-xs">
-          <thead className="bg-[#f8fafc] text-slate-500 font-bold uppercase text-[10px] border-b border-slate-100">
-            <tr>
-              <th className="px-6 py-3.5 tracking-wider">Empleado</th>
-              <th className="px-6 py-3.5 tracking-wider">Categoría & Cargo</th>
-              <th className="px-6 py-3.5 tracking-wider">
-                Cronograma & Horarios
-              </th>
-              <th className="px-6 py-3.5 tracking-wider">Estado</th>
-              <th className="px-6 py-3.5 tracking-wider text-right">
-                Acciones
-              </th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100 text-slate-800">
-            {loading ? (
-              <tr>
-                <td colSpan={5} className="text-center py-12 text-slate-400">
-                  <Loader2 className="w-5 h-5 animate-spin mx-auto text-indigo-600 mb-2" />
-                  Cargando nómina de empleados...
-                </td>
-              </tr>
-            ) : empleadosRenderizados.length === 0 ? (
-              <tr>
-                <td
-                  colSpan={5}
-                  className="text-center py-12 text-slate-400 text-xs italic"
-                >
-                  {soloIncompletos
-                    ? "¡Excelente! No hay empleados con datos pendientes."
-                    : "No se encontraron empleados con los filtros seleccionados."}
-                </td>
-              </tr>
-            ) : (
-              empleadosRenderizados.map((emp) => {
-                const esDocente =
-                  (emp.categorias || []).some((c) =>
-                    (c.codigoTag || c.nombre || "")
-                      .toLowerCase()
-                      .includes("docente"),
-                  ) ||
-                  (emp.categoria?.codigoTag || "")
+        {/* VISTA MÓVIL Y TABLET (Cards apiladas) */}
+        <div className="block lg:hidden divide-y divide-slate-100">
+          {loading ? (
+            <div className="text-center py-12 text-slate-400 text-xs">
+              <Loader2 className="w-5 h-5 animate-spin mx-auto text-indigo-600 mb-2" />
+              Cargando nómina de empleados...
+            </div>
+          ) : empleadosRenderizados.length === 0 ? (
+            <div className="text-center py-10 px-4 text-slate-400 text-xs italic">
+              {soloIncompletos
+                ? "¡Excelente! No hay empleados con datos pendientes."
+                : "No se encontraron empleados con los filtros seleccionados."}
+            </div>
+          ) : (
+            empleadosRenderizados.map((emp) => {
+              const esDocente =
+                (emp.categorias || []).some((c) =>
+                  (c.codigoTag || c.nombre || "")
                     .toLowerCase()
-                    .includes("docente");
+                    .includes("docente"),
+                ) ||
+                (emp.categoria?.codigoTag || "")
+                  .toLowerCase()
+                  .includes("docente");
 
-                const categoriasList =
-                  emp.categorias && emp.categorias.length > 0
-                    ? emp.categorias
-                    : emp.categoria
-                      ? [emp.categoria]
-                      : [];
+              const categoriasList =
+                emp.categorias && emp.categorias.length > 0
+                  ? emp.categorias
+                  : emp.categoria
+                    ? [emp.categoria]
+                    : [];
 
-                const incompleto = esEmpleadoIncompleto(emp);
+              const incompleto = esEmpleadoIncompleto(emp);
 
-                return (
-                  <tr
-                    key={emp.id}
-                    className={`transition-colors ${
-                      emp.activo === false
-                        ? "bg-slate-50/60 opacity-80"
-                        : incompleto
-                          ? "bg-amber-50/30 hover:bg-amber-50/60"
-                          : "hover:bg-slate-50/70"
-                    }`}
-                  >
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-2">
+              return (
+                <div
+                  key={emp.id}
+                  className={`p-3.5 space-y-3 transition-colors ${
+                    emp.activo === false
+                      ? "bg-slate-50/60 opacity-80"
+                      : incompleto
+                        ? "bg-amber-50/30"
+                        : "bg-white"
+                  }`}
+                >
+                  {/* Encabezado de la Card Móvil */}
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <div className="flex flex-wrap items-center gap-1.5">
                         <span className="font-bold text-slate-900 text-sm">
                           {emp.apellido}, {emp.nombre}
                         </span>
                         {incompleto && (
-                          <span
-                            title="Faltan datos obligatorios (DNI, Legajo o Categoría)"
-                            className="bg-amber-100 text-amber-800 border border-amber-300 text-[10px] font-bold px-2 py-0.5 rounded-full inline-flex items-center gap-1"
-                          >
-                            <AlertCircle className="w-3 h-3 text-amber-600" />
+                          <span className="bg-amber-100 text-amber-800 border border-amber-300 text-[9px] font-bold px-1.5 py-0.5 rounded-full inline-flex items-center gap-0.5">
+                            <AlertCircle className="w-2.5 h-2.5 text-amber-600" />
                             Incompleto
                           </span>
                         )}
@@ -1084,7 +1062,7 @@ export default function GestionPersonal() {
                             Sin DNI
                           </span>
                         )}{" "}
-                        •{" "}
+                        • Legajo:{" "}
                         <span className="font-mono text-slate-700">
                           {emp.nroLegajo || (
                             <span className="text-amber-600 font-bold">
@@ -1093,207 +1071,485 @@ export default function GestionPersonal() {
                           )}
                         </span>
                       </div>
-                    </td>
+                    </div>
 
-                    <td className="px-6 py-4">
-                      <div className="flex flex-wrap gap-1 mb-1.5">
-                        {categoriasList.length > 0 ? (
-                          categoriasList.map((cat) => (
-                            <span
-                              key={cat.id}
-                              className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-wider uppercase border ${getBadgeColorClasses(
-                                cat.colorIdentificacion,
-                              )}`}
-                            >
-                              {cat.nombre}
-                            </span>
-                          ))
-                        ) : (
-                          <span className="inline-block px-2 py-0.5 rounded-md text-[10px] font-bold tracking-wider uppercase bg-amber-50 border border-amber-200 text-amber-700">
-                            Sin Categoría
+                    <span
+                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border shrink-0 ${
+                        emp.activo !== false
+                          ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                          : "bg-rose-50 text-rose-700 border-rose-200"
+                      }`}
+                    >
+                      <span
+                        className={`w-1.5 h-1.5 rounded-full ${
+                          emp.activo !== false
+                            ? "bg-emerald-500"
+                            : "bg-rose-500"
+                        }`}
+                      ></span>
+                      {emp.activo !== false ? "ACTIVO" : "INACTIVO"}
+                    </span>
+                  </div>
+
+                  {/* Categorías y Cargos */}
+                  <div className="space-y-1">
+                    <div className="flex flex-wrap gap-1">
+                      {categoriasList.length > 0 ? (
+                        categoriasList.map((cat) => (
+                          <span
+                            key={cat.id}
+                            className={`inline-block px-2 py-0.5 rounded-full text-[9px] font-bold uppercase border ${getBadgeColorClasses(
+                              cat.colorIdentificacion,
+                            )}`}
+                          >
+                            {cat.nombre}
                           </span>
-                        )}
-                      </div>
+                        ))
+                      ) : (
+                        <span className="inline-block px-1.5 py-0.5 rounded-md text-[9px] font-bold uppercase bg-amber-50 border border-amber-200 text-amber-700">
+                          Sin Categoría
+                        </span>
+                      )}
+                    </div>
 
-                      <div className="flex flex-wrap gap-1 mt-0.5">
-                        {emp.cargos && emp.cargos.length > 0 ? (
-                          emp.cargos.map((cg) => (
-                            <span
-                              key={cg.id}
-                              className="bg-slate-100 border border-slate-200 text-slate-800 text-[11px] font-medium px-2 py-0.5 rounded-md"
-                            >
-                              {cg.nombre}
-                            </span>
-                          ))
-                        ) : (
-                          <span className="text-slate-400 text-xs italic">
-                            Sin cargos asignados
+                    <div className="flex flex-wrap gap-1 text-[11px] text-slate-600">
+                      {emp.cargos && emp.cargos.length > 0 ? (
+                        emp.cargos.map((cg) => (
+                          <span
+                            key={cg.id}
+                            className="bg-slate-100 border border-slate-200 text-slate-800 text-[10px] font-medium px-2 py-0.5 rounded-md"
+                          >
+                            {cg.nombre}
                           </span>
-                        )}
-                      </div>
-                    </td>
+                        ))
+                      ) : (
+                        <span className="text-slate-400 text-[11px] italic">
+                          Sin cargos asignados
+                        </span>
+                      )}
+                    </div>
+                  </div>
 
-                    <td className="px-6 py-4">
+                  {/* Barra de Acciones Móvil */}
+                  <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-1.5">
+                    <div>
                       {puedeHorariosVer ? (
                         <button
                           onClick={() => handleVerDetalle(emp)}
-                          className="inline-flex items-center gap-1.5 px-3 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg text-xs font-semibold transition cursor-pointer"
+                          className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-xs font-semibold transition cursor-pointer"
                         >
                           <Calendar className="w-3.5 h-3.5" />
-                          Ver cronograma
+                          <span>Cronograma</span>
                         </button>
                       ) : (
-                        <span
-                          className="inline-flex items-center gap-1.5 px-3 py-1 bg-slate-100 text-slate-400 rounded-lg text-xs font-semibold cursor-not-allowed select-none"
-                          title="Requiere permiso HORARIOS_VER"
-                        >
-                          <Lock className="w-3.5 h-3.5" />
-                          Cronograma Restringido
+                        <span className="inline-flex items-center gap-1 px-2 py-1 bg-slate-100 text-slate-400 rounded-xl text-xs font-semibold select-none">
+                          <Lock className="w-3 h-3" />
+                          Restringido
                         </span>
                       )}
-                    </td>
+                    </div>
 
-                    <td className="px-6 py-4">
-                      <span
-                        className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border ${
-                          emp.activo !== false
-                            ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                            : "bg-rose-50 text-rose-700 border-rose-200"
-                        }`}
-                      >
-                        <span
-                          className={`w-1.5 h-1.5 rounded-full ${
-                            emp.activo !== false
-                              ? "bg-emerald-500"
-                              : "bg-rose-500"
+                    <div className="flex items-center gap-1 text-slate-400">
+                      {incompleto && puedePersonalEditar && (
+                        <button
+                          onClick={() => abrirModalEditar(emp)}
+                          className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl text-xs shadow-xs cursor-pointer"
+                          title="Completar datos pendientes"
+                        >
+                          <Pencil className="w-3 h-3" />
+                          <span>Completar</span>
+                        </button>
+                      )}
+
+                      {!esDocente && puedeHorariosGestionar && (
+                        <button
+                          onClick={() =>
+                            verificarEmpleadoActivo(emp, () =>
+                              abrirModalTurno(emp),
+                            )
+                          }
+                          className={`p-1.5 rounded-lg border border-slate-200 transition ${
+                            emp.activo === false
+                              ? "opacity-30 cursor-not-allowed text-slate-300"
+                              : "hover:text-indigo-600 hover:bg-indigo-50 text-slate-600 cursor-pointer"
                           }`}
-                        ></span>
-                        {emp.activo !== false ? "ACTIVO" : "INACTIVO"}
-                      </span>
-                    </td>
+                          title="Asignar Turno"
+                        >
+                          <Clock className="w-4 h-4" />
+                        </button>
+                      )}
 
-                    <td className="px-6 py-4 text-right">
-                      <div className="flex items-center justify-end gap-2 text-slate-400">
-                        {incompleto && puedePersonalEditar && (
+                      {esDocente && puedeHorariosGestionar && (
+                        <button
+                          onClick={() =>
+                            navigate("/materias", {
+                              state: { tab: "catalogo", docenteId: emp.id },
+                            })
+                          }
+                          className="inline-flex items-center gap-1 px-2.5 py-1 bg-purple-50 hover:bg-purple-100 text-purple-700 font-bold rounded-xl text-xs border border-purple-200 cursor-pointer"
+                          title="Materias"
+                        >
+                          <span>Materias</span>
+                          <ArrowRight className="w-3 h-3" />
+                        </button>
+                      )}
+
+                      {puedePersonalEditar && (
+                        <button
+                          onClick={() =>
+                            verificarEmpleadoActivo(emp, () =>
+                              abrirModalEditar(emp),
+                            )
+                          }
+                          className={`p-1.5 rounded-lg border border-slate-200 transition ${
+                            emp.activo === false
+                              ? "opacity-30 cursor-not-allowed text-slate-300"
+                              : "hover:text-indigo-600 hover:bg-indigo-50 text-slate-600 cursor-pointer"
+                          }`}
+                          title="Editar"
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </button>
+                      )}
+
+                      {puedePersonalBajaReactivar &&
+                        (emp.activo !== false ? (
                           <button
-                            onClick={() => abrirModalEditar(emp)}
-                            className="inline-flex items-center gap-1 px-2.5 py-1 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-lg text-[11px] shadow-xs cursor-pointer transition mr-1"
-                            title="Completar datos pendientes"
+                            onClick={() =>
+                              handleEliminarEmpleado(
+                                emp.id,
+                                `${emp.nombre} ${emp.apellido}`,
+                              )
+                            }
+                            className="p-1.5 rounded-lg border border-slate-200 hover:text-rose-600 hover:bg-rose-50 text-slate-600 transition cursor-pointer"
+                            title="Dar de baja"
                           >
-                            <Pencil className="w-3 h-3" />
-                            Completar
+                            <Trash2 className="w-4 h-4" />
                           </button>
-                        )}
+                        ) : (
+                          <button
+                            onClick={() =>
+                              handleReactivarEmpleado(
+                                emp.id,
+                                `${emp.nombre} ${emp.apellido}`,
+                              )
+                            }
+                            className="p-1.5 rounded-lg border border-slate-200 hover:text-emerald-600 hover:bg-emerald-50 text-emerald-600 transition cursor-pointer"
+                            title="Reactivar"
+                          >
+                            <RotateCcw className="w-4 h-4" />
+                          </button>
+                        ))}
+                    </div>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
 
-                        {puedeHorariosVer && (
+        {/* VISTA ESCRITORIO (Tabla Tradicional en pantallas lg+) */}
+        <div className="hidden lg:block overflow-x-auto">
+          <table className="w-full text-left text-xs">
+            <thead className="bg-[#f8fafc] text-slate-500 font-bold uppercase text-[10px] border-b border-slate-100">
+              <tr>
+                <th className="px-6 py-3.5 tracking-wider">Empleado</th>
+                <th className="px-6 py-3.5 tracking-wider">
+                  Categoría & Cargo
+                </th>
+                <th className="px-6 py-3.5 tracking-wider">
+                  Cronograma & Horarios
+                </th>
+                <th className="px-6 py-3.5 tracking-wider">Estado</th>
+                <th className="px-6 py-3.5 tracking-wider text-right">
+                  Acciones
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 text-slate-800">
+              {loading ? (
+                <tr>
+                  <td colSpan={5} className="text-center py-12 text-slate-400">
+                    <Loader2 className="w-5 h-5 animate-spin mx-auto text-indigo-600 mb-2" />
+                    Cargando nómina de empleados...
+                  </td>
+                </tr>
+              ) : empleadosRenderizados.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={5}
+                    className="text-center py-12 text-slate-400 text-xs italic"
+                  >
+                    {soloIncompletos
+                      ? "¡Excelente! No hay empleados con datos pendientes."
+                      : "No se encontraron empleados con los filtros seleccionados."}
+                  </td>
+                </tr>
+              ) : (
+                empleadosRenderizados.map((emp) => {
+                  const esDocente =
+                    (emp.categorias || []).some((c) =>
+                      (c.codigoTag || c.nombre || "")
+                        .toLowerCase()
+                        .includes("docente"),
+                    ) ||
+                    (emp.categoria?.codigoTag || "")
+                      .toLowerCase()
+                      .includes("docente");
+
+                  const categoriasList =
+                    emp.categorias && emp.categorias.length > 0
+                      ? emp.categorias
+                      : emp.categoria
+                        ? [emp.categoria]
+                        : [];
+
+                  const incompleto = esEmpleadoIncompleto(emp);
+
+                  return (
+                    <tr
+                      key={emp.id}
+                      className={`transition-colors ${
+                        emp.activo === false
+                          ? "bg-slate-50/60 opacity-80"
+                          : incompleto
+                            ? "bg-amber-50/30 hover:bg-amber-50/60"
+                            : "hover:bg-slate-50/70"
+                      }`}
+                    >
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-slate-900 text-sm">
+                            {emp.apellido}, {emp.nombre}
+                          </span>
+                          {incompleto && (
+                            <span
+                              title="Faltan datos obligatorios (DNI, Legajo o Categoría)"
+                              className="bg-amber-100 text-amber-800 border border-amber-300 text-[10px] font-bold px-2 py-0.5 rounded-full inline-flex items-center gap-1"
+                            >
+                              <AlertCircle className="w-3 h-3 text-amber-600" />
+                              Incompleto
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-[11px] text-slate-500 mt-0.5">
+                          DNI:{" "}
+                          {emp.dni || (
+                            <span className="text-amber-600 font-bold">
+                              Sin DNI
+                            </span>
+                          )}{" "}
+                          •{" "}
+                          <span className="font-mono text-slate-700">
+                            {emp.nroLegajo || (
+                              <span className="text-amber-600 font-bold">
+                                Sin Legajo
+                              </span>
+                            )}
+                          </span>
+                        </div>
+                      </td>
+
+                      <td className="px-6 py-4">
+                        <div className="flex flex-wrap gap-1 mb-1.5">
+                          {categoriasList.length > 0 ? (
+                            categoriasList.map((cat) => (
+                              <span
+                                key={cat.id}
+                                className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-wider uppercase border ${getBadgeColorClasses(
+                                  cat.colorIdentificacion,
+                                )}`}
+                              >
+                                {cat.nombre}
+                              </span>
+                            ))
+                          ) : (
+                            <span className="inline-block px-2 py-0.5 rounded-md text-[10px] font-bold tracking-wider uppercase bg-amber-50 border border-amber-200 text-amber-700">
+                              Sin Categoría
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="flex flex-wrap gap-1 mt-0.5">
+                          {emp.cargos && emp.cargos.length > 0 ? (
+                            emp.cargos.map((cg) => (
+                              <span
+                                key={cg.id}
+                                className="bg-slate-100 border border-slate-200 text-slate-800 text-[11px] font-medium px-2 py-0.5 rounded-md"
+                              >
+                                {cg.nombre}
+                              </span>
+                            ))
+                          ) : (
+                            <span className="text-slate-400 text-xs italic">
+                              Sin cargos asignados
+                            </span>
+                          )}
+                        </div>
+                      </td>
+
+                      <td className="px-6 py-4">
+                        {puedeHorariosVer ? (
                           <button
                             onClick={() => handleVerDetalle(emp)}
-                            className="p-1 hover:text-indigo-600 transition cursor-pointer"
-                            title="Ver Cronograma y Ficha"
+                            className="inline-flex items-center gap-1.5 px-3 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg text-xs font-semibold transition cursor-pointer"
                           >
-                            <Eye className="w-4 h-4" />
+                            <Calendar className="w-3.5 h-3.5" />
+                            Ver cronograma
                           </button>
+                        ) : (
+                          <span
+                            className="inline-flex items-center gap-1.5 px-3 py-1 bg-slate-100 text-slate-400 rounded-lg text-xs font-semibold cursor-not-allowed select-none"
+                            title="Requiere permiso HORARIOS_VER"
+                          >
+                            <Lock className="w-3.5 h-3.5" />
+                            Cronograma Restringido
+                          </span>
                         )}
+                      </td>
 
-                        {!esDocente && puedeHorariosGestionar && (
-                          <button
-                            onClick={() =>
-                              verificarEmpleadoActivo(emp, () =>
-                                abrirModalTurno(emp),
-                              )
-                            }
-                            className={`p-1 transition ${
-                              emp.activo === false
-                                ? "opacity-30 cursor-not-allowed hover:text-slate-400"
-                                : "hover:text-indigo-600 cursor-pointer"
+                      <td className="px-6 py-4">
+                        <span
+                          className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border ${
+                            emp.activo !== false
+                              ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                              : "bg-rose-50 text-rose-700 border-rose-200"
+                          }`}
+                        >
+                          <span
+                            className={`w-1.5 h-1.5 rounded-full ${
+                              emp.activo !== false
+                                ? "bg-emerald-500"
+                                : "bg-rose-500"
                             }`}
-                            title={
-                              emp.activo === false
-                                ? "Empleado inactivo"
-                                : "Asignar Horario / Turno"
-                            }
-                          >
-                            <Clock className="w-4 h-4" />
-                          </button>
-                        )}
+                          ></span>
+                          {emp.activo !== false ? "ACTIVO" : "INACTIVO"}
+                        </span>
+                      </td>
 
-                        {esDocente && puedeHorariosGestionar && (
-                          <button
-                            onClick={() =>
-                              navigate("/materias", {
-                                state: { tab: "catalogo", docenteId: emp.id },
-                              })
-                            }
-                            className="inline-flex items-center gap-1 px-2.5 py-1 bg-purple-50 hover:bg-purple-100 text-purple-700 font-bold rounded-lg text-[11px] transition cursor-pointer border border-purple-200"
-                            title="Gestionar asignaciones en el catálogo institucional"
-                          >
-                            <span>Materias</span>
-                            <ArrowRight className="w-3 h-3" />
-                          </button>
-                        )}
+                      <td className="px-6 py-4 text-right">
+                        <div className="flex items-center justify-end gap-2 text-slate-400">
+                          {incompleto && puedePersonalEditar && (
+                            <button
+                              onClick={() => abrirModalEditar(emp)}
+                              className="inline-flex items-center gap-1 px-2.5 py-1 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-lg text-[11px] shadow-xs cursor-pointer transition mr-1"
+                              title="Completar datos pendientes"
+                            >
+                              <Pencil className="w-3 h-3" />
+                              Completar
+                            </button>
+                          )}
 
-                        {puedePersonalEditar && (
-                          <button
-                            onClick={() =>
-                              verificarEmpleadoActivo(emp, () =>
-                                abrirModalEditar(emp),
-                              )
-                            }
-                            className={`p-1 transition ${
-                              emp.activo === false
-                                ? "opacity-30 cursor-not-allowed hover:text-slate-400"
-                                : "hover:text-indigo-600 cursor-pointer"
-                            }`}
-                            title={
-                              emp.activo === false
-                                ? "Empleado inactivo"
-                                : "Editar Empleado"
-                            }
-                          >
-                            <Pencil className="w-4 h-4" />
-                          </button>
-                        )}
+                          {puedeHorariosVer && (
+                            <button
+                              onClick={() => handleVerDetalle(emp)}
+                              className="p-1 hover:text-indigo-600 transition cursor-pointer"
+                              title="Ver Cronograma y Ficha"
+                            >
+                              <Eye className="w-4 h-4" />
+                            </button>
+                          )}
 
-                        {puedePersonalBajaReactivar &&
-                          (emp.activo !== false ? (
+                          {!esDocente && puedeHorariosGestionar && (
                             <button
                               onClick={() =>
-                                handleEliminarEmpleado(
-                                  emp.id,
-                                  `${emp.nombre} ${emp.apellido}`,
+                                verificarEmpleadoActivo(emp, () =>
+                                  abrirModalTurno(emp),
                                 )
                               }
-                              className="p-1 hover:text-rose-600 transition cursor-pointer"
-                              title="Dar de baja empleado"
+                              className={`p-1 transition ${
+                                emp.activo === false
+                                  ? "opacity-30 cursor-not-allowed hover:text-slate-400"
+                                  : "hover:text-indigo-600 cursor-pointer"
+                              }`}
+                              title={
+                                emp.activo === false
+                                  ? "Empleado inactivo"
+                                  : "Asignar Horario / Turno"
+                              }
                             >
-                              <Trash2 className="w-4 h-4" />
+                              <Clock className="w-4 h-4" />
                             </button>
-                          ) : (
+                          )}
+
+                          {esDocente && puedeHorariosGestionar && (
                             <button
                               onClick={() =>
-                                handleReactivarEmpleado(
-                                  emp.id,
-                                  `${emp.nombre} ${emp.apellido}`,
+                                navigate("/materias", {
+                                  state: { tab: "catalogo", docenteId: emp.id },
+                                })
+                              }
+                              className="inline-flex items-center gap-1 px-2.5 py-1 bg-purple-50 hover:bg-purple-100 text-purple-700 font-bold rounded-lg text-[11px] transition cursor-pointer border border-purple-200"
+                              title="Gestionar asignaciones en el catálogo institucional"
+                            >
+                              <span>Materias</span>
+                              <ArrowRight className="w-3 h-3" />
+                            </button>
+                          )}
+
+                          {puedePersonalEditar && (
+                            <button
+                              onClick={() =>
+                                verificarEmpleadoActivo(emp, () =>
+                                  abrirModalEditar(emp),
                                 )
                               }
-                              className="p-1 hover:text-emerald-600 transition cursor-pointer"
-                              title="Reactivar Empleado"
+                              className={`p-1 transition ${
+                                emp.activo === false
+                                  ? "opacity-30 cursor-not-allowed hover:text-slate-400"
+                                  : "hover:text-indigo-600 cursor-pointer"
+                              }`}
+                              title={
+                                emp.activo === false
+                                  ? "Empleado inactivo"
+                                  : "Editar Empleado"
+                              }
                             >
-                              <RotateCcw className="w-4 h-4 text-emerald-600" />
+                              <Pencil className="w-4 h-4" />
                             </button>
-                          ))}
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
+                          )}
 
-        {/* Paginador blindado contra 0 y NaN */}
-        <div className="bg-white px-6 py-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
-          <div className="text-slate-500">
+                          {puedePersonalBajaReactivar &&
+                            (emp.activo !== false ? (
+                              <button
+                                onClick={() =>
+                                  handleEliminarEmpleado(
+                                    emp.id,
+                                    `${emp.nombre} ${emp.apellido}`,
+                                  )
+                                }
+                                className="p-1 hover:text-rose-600 transition cursor-pointer"
+                                title="Dar de baja empleado"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() =>
+                                  handleReactivarEmpleado(
+                                    emp.id,
+                                    `${emp.nombre} ${emp.apellido}`,
+                                  )
+                                }
+                                className="p-1 hover:text-emerald-600 transition cursor-pointer"
+                                title="Reactivar Empleado"
+                              >
+                                <RotateCcw className="w-4 h-4 text-emerald-600" />
+                              </button>
+                            ))}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Paginador Adaptable */}
+        <div className="bg-white px-4 sm:px-6 py-3.5 sm:py-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+          <div className="text-slate-500 text-center sm:text-left">
             {Math.max(Number(totalElementos) || 0, empleados.length) === 0 ? (
               <span>
                 Mostrando <span className="font-bold text-slate-800">0</span> de{" "}
@@ -1323,13 +1579,13 @@ export default function GestionPersonal() {
             )}
           </div>
 
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1 sm:gap-1.5 flex-wrap justify-center">
             <button
               onClick={() =>
                 setPaginaActual((prev) => Math.max((Number(prev) || 1) - 1, 1))
               }
               disabled={Number(paginaActual) <= 1 || loading}
-              className="p-2 border border-slate-200 rounded-xl hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer"
+              className="p-1.5 sm:p-2 border border-slate-200 rounded-xl hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer"
               title="Página Anterior"
             >
               <ChevronLeft className="w-4 h-4" />
@@ -1343,7 +1599,7 @@ export default function GestionPersonal() {
                 key={num}
                 onClick={() => setPaginaActual(num)}
                 disabled={loading}
-                className={`w-8 h-8 rounded-xl font-bold transition cursor-pointer ${
+                className={`w-7 h-7 sm:w-8 sm:h-8 rounded-xl font-bold text-xs transition cursor-pointer ${
                   (Number(paginaActual) || 1) === num
                     ? "bg-[#4b35e6] text-white shadow-xs"
                     : "border border-slate-200 text-slate-600 hover:bg-slate-50"
@@ -1363,7 +1619,7 @@ export default function GestionPersonal() {
                 )
               }
               disabled={Number(paginaActual) >= Number(totalPaginas) || loading}
-              className="p-2 border border-slate-200 rounded-xl hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer"
+              className="p-1.5 sm:p-2 border border-slate-200 rounded-xl hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer"
               title="Página Siguiente"
             >
               <ChevronRight className="w-4 h-4" />
@@ -1372,6 +1628,7 @@ export default function GestionPersonal() {
         </div>
       </div>
 
+      {/* MODALES ADAPTADOS */}
       <ModalRegistroEmpleado
         isOpen={modalRegistro}
         onClose={() => setModalRegistro(false)}

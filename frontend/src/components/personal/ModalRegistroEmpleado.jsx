@@ -87,29 +87,33 @@ export default function ModalRegistroEmpleado({
   }, [textoDebounced, empleadosExistentes, editandoEmpleadoId]);
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-      <div className="bg-white rounded-3xl w-full max-w-2xl overflow-hidden shadow-2xl animate-in zoom-in-95 font-sans">
-        <div className="bg-[#111827] px-6 py-4 text-white flex items-center justify-between">
-          <div>
-            <h3 className="font-bold text-sm">
+    <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4">
+      <div className="bg-white rounded-2xl sm:rounded-3xl w-full max-w-2xl overflow-hidden shadow-2xl animate-in zoom-in-95 font-sans flex flex-col max-h-[95vh] sm:max-h-[92vh]">
+        {/* Cabecera Adaptable */}
+        <div className="bg-[#111827] px-4 sm:px-6 py-3.5 sm:py-4 text-white flex items-center justify-between gap-3 shrink-0">
+          <div className="min-w-0">
+            <h3 className="font-bold text-sm truncate">
               {editandoEmpleadoId
                 ? "Editar Empleado"
                 : "Registrar Nuevo Empleado"}
             </h3>
-            <p className="text-[11px] text-slate-400">
-              Nombre y apellido son obligatorios. El resto de datos puede
-              completarse posteriormente.
+            <p className="text-[11px] text-slate-400 truncate">
+              Nombre y apellido obligatorios. Resto de campos opcionales.
             </p>
           </div>
           <button
             onClick={onClose}
-            className="text-slate-400 hover:text-white cursor-pointer"
+            className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition cursor-pointer shrink-0"
+            aria-label="Cerrar modal"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        <form onSubmit={onSubmit} className="p-6 space-y-4 text-xs">
+        <form
+          onSubmit={onSubmit}
+          className="p-4 sm:p-6 space-y-4 text-xs overflow-y-auto"
+        >
           {coincidenciasSimilares.length > 0 && (
             <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl space-y-1.5 animate-in fade-in">
               <div className="flex items-center gap-2 text-amber-800 font-bold text-xs">
@@ -137,7 +141,8 @@ export default function ModalRegistroEmpleado({
             </div>
           )}
 
-          <div className="grid grid-cols-2 gap-4">
+          {/* Nombre y Apellido */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
             <div>
               <label className="block font-semibold text-slate-700 mb-1">
                 Nombre *
@@ -170,7 +175,8 @@ export default function ModalRegistroEmpleado({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          {/* DNI y Email */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
             <div>
               <label className="block font-semibold text-slate-700 mb-1">
                 DNI / Documento
@@ -201,7 +207,8 @@ export default function ModalRegistroEmpleado({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          {/* Teléfono y Legajo */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
             <div>
               <label className="block font-semibold text-slate-700 mb-1">
                 Teléfono
@@ -235,7 +242,8 @@ export default function ModalRegistroEmpleado({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          {/* ID Biométrico y Categorías */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
             <div>
               <label className="block font-semibold text-slate-700 mb-1">
                 ID Biométrico (Reloj)
@@ -265,6 +273,7 @@ export default function ModalRegistroEmpleado({
             />
           </div>
 
+          {/* Cargos Asignados */}
           <MultiSelectDropdown
             label="Cargos / Puestos Asignados"
             placeholder="Seleccionar cargos asignados..."
@@ -275,14 +284,14 @@ export default function ModalRegistroEmpleado({
             }
           />
 
-          {/* TOLERANCIAS Y SALIDAS INTERMEDIAS */}
+          {/* Parámetros de Auditoría y Tolerancias (Rejilla de 2 en móvil, 4 en PC) */}
           <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-3.5 space-y-3">
             <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-500">
               Parámetros de Auditoría y Tolerancias
             </span>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3">
               <div>
-                <label className="block font-semibold text-slate-700 mb-1 text-[11px]">
+                <label className="block font-semibold text-slate-700 mb-1 text-[11px] truncate">
                   Tol. Ingreso (min)
                 </label>
                 <input
@@ -295,12 +304,12 @@ export default function ModalRegistroEmpleado({
                       toleranciaIngresoMin: e.target.value,
                     })
                   }
-                  className="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 outline-none focus:border-indigo-600"
+                  className="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 outline-none focus:border-indigo-600 text-center sm:text-left"
                 />
               </div>
 
               <div>
-                <label className="block font-semibold text-slate-700 mb-1 text-[11px]">
+                <label className="block font-semibold text-slate-700 mb-1 text-[11px] truncate">
                   Tol. Salida (min)
                 </label>
                 <input
@@ -313,13 +322,13 @@ export default function ModalRegistroEmpleado({
                       toleranciaEgresoMin: e.target.value,
                     })
                   }
-                  className="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 outline-none focus:border-indigo-600"
+                  className="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 outline-none focus:border-indigo-600 text-center sm:text-left"
                 />
               </div>
 
               <div>
-                <label className="block font-semibold text-slate-700 mb-1 text-[11px]">
-                  Máx. Tiempo Fuera (min)
+                <label className="block font-semibold text-slate-700 mb-1 text-[11px] truncate">
+                  Máx. Fuera (min)
                 </label>
                 <input
                   type="number"
@@ -332,13 +341,13 @@ export default function ModalRegistroEmpleado({
                       tiempoMaxFueraMin: e.target.value,
                     })
                   }
-                  className="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 outline-none focus:border-indigo-600 font-semibold text-indigo-700"
+                  className="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 outline-none focus:border-indigo-600 font-semibold text-indigo-700 text-center sm:text-left"
                 />
               </div>
 
               <div>
-                <label className="block font-semibold text-slate-700 mb-1 text-[11px]">
-                  Máx. Salidas Interm.
+                <label className="block font-semibold text-slate-700 mb-1 text-[11px] truncate">
+                  Máx. Salidas
                 </label>
                 <input
                   type="number"
@@ -351,23 +360,24 @@ export default function ModalRegistroEmpleado({
                       maxSalidasIntermedias: e.target.value,
                     })
                   }
-                  className="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 outline-none focus:border-indigo-600 font-semibold text-indigo-700"
+                  className="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 outline-none focus:border-indigo-600 font-semibold text-indigo-700 text-center sm:text-left"
                 />
               </div>
             </div>
           </div>
 
-          <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
+          {/* Footer Adaptable */}
+          <div className="flex flex-col-reverse sm:flex-row items-center justify-end gap-2.5 pt-3 border-t border-slate-100">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 font-medium text-slate-600 hover:bg-slate-100 rounded-xl cursor-pointer"
+              className="w-full sm:w-auto px-4 py-2 font-medium text-slate-600 hover:bg-slate-100 rounded-xl cursor-pointer text-center"
             >
               Cancelar
             </button>
             <button
               type="submit"
-              className="px-5 py-2 font-semibold text-white bg-[#4b35e6] hover:bg-[#3e2bc0] rounded-xl shadow-md cursor-pointer"
+              className="w-full sm:w-auto px-5 py-2.5 sm:py-2 font-semibold text-white bg-[#4b35e6] hover:bg-[#3e2bc0] rounded-xl shadow-md cursor-pointer text-center"
             >
               {editandoEmpleadoId ? "Guardar Cambios" : "Registrar Empleado"}
             </button>

@@ -81,21 +81,21 @@ export default function ModalDetalleCronograma({
       case "SEMANA_POR_MEDIO":
         return (
           <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-amber-50 text-amber-700 font-semibold border border-amber-200/60 text-[9px] mt-1">
-            <Repeat className="w-2.5 h-2.5" />
+            <Repeat className="w-2.5 h-2.5 shrink-0" />
             Quincenal (Sem. {alterna})
           </span>
         );
       case "MENSUAL":
         return (
           <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-blue-50 text-blue-700 font-semibold border border-blue-200/60 text-[9px] mt-1">
-            <Repeat className="w-2.5 h-2.5" />
+            <Repeat className="w-2.5 h-2.5 shrink-0" />
             {reps} {reps === 1 ? "vez" : "veces"} al mes
           </span>
         );
       case "ANUAL":
         return (
           <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-purple-50 text-purple-700 font-semibold border border-purple-200/60 text-[9px] mt-1">
-            <Repeat className="w-2.5 h-2.5" />
+            <Repeat className="w-2.5 h-2.5 shrink-0" />
             {reps} {reps === 1 ? "vez" : "veces"} al año
           </span>
         );
@@ -115,21 +115,21 @@ export default function ModalDetalleCronograma({
     metricas?.tiempoMaxFueraMin ?? empleado.tiempoMaxFueraMin ?? 45;
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-      <div className="bg-white rounded-3xl w-full max-w-6xl overflow-hidden shadow-2xl animate-in zoom-in-95 flex flex-col max-h-[92vh]">
-        {/* Cabecera */}
-        <div className="bg-[#111827] px-6 py-4 text-white flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-indigo-950 flex items-center justify-center text-indigo-400">
+    <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4">
+      <div className="bg-white rounded-2xl sm:rounded-3xl w-full max-w-6xl overflow-hidden shadow-2xl animate-in zoom-in-95 flex flex-col max-h-[95vh] sm:max-h-[92vh]">
+        {/* Cabecera Adaptable */}
+        <div className="bg-[#111827] px-4 sm:px-6 py-3.5 sm:py-4 text-white flex items-start sm:items-center justify-between gap-3">
+          <div className="flex items-start sm:items-center gap-3 min-w-0">
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-indigo-950 flex items-center justify-center text-indigo-400 shrink-0 mt-0.5 sm:mt-0">
               <Calendar className="w-5 h-5" />
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h3 className="font-bold text-sm">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+                <h3 className="font-bold text-sm sm:text-base truncate max-w-[200px] sm:max-w-none">
                   {empleado.apellido}, {empleado.nombre}
                 </h3>
                 <span
-                  className={`text-[9px] font-bold px-2 py-0.5 rounded-full uppercase border ${
+                  className={`text-[9px] font-bold px-2 py-0.5 rounded-full uppercase border shrink-0 ${
                     isActivo
                       ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/30"
                       : "bg-rose-500/20 text-rose-300 border-rose-500/30"
@@ -138,16 +138,16 @@ export default function ModalDetalleCronograma({
                   {isActivo ? "ACTIVO" : "INACTIVO / BAJA"}
                 </span>
                 {tieneEsquemaFlexible && (
-                  <span className="text-[9px] font-bold px-2 py-0.5 rounded-full uppercase bg-emerald-500/20 text-emerald-300 border border-emerald-400/40 flex items-center gap-1">
+                  <span className="text-[9px] font-bold px-2 py-0.5 rounded-full uppercase bg-emerald-500/20 text-emerald-300 border border-emerald-400/40 flex items-center gap-1 shrink-0">
                     <Sparkles className="w-2.5 h-2.5" />
                     Bolsa Flexible
                   </span>
                 )}
-                <span className="text-slate-400 text-xs font-mono">
+                <span className="text-slate-400 text-xs font-mono shrink-0">
                   Legajo: {empleado.nroLegajo || "Sin legajo"}
                 </span>
               </div>
-              <div className="text-[11px] text-slate-400 mt-0.5">
+              <div className="text-[11px] text-slate-400 mt-0.5 truncate">
                 {(empleado.cargos || []).map((c) => c.nombre).join(", ") ||
                   "Sin cargo"}{" "}
                 • DNI: {empleado.dni || "Sin DNI"}
@@ -156,7 +156,8 @@ export default function ModalDetalleCronograma({
           </div>
           <button
             onClick={onClose}
-            className="text-slate-400 hover:text-white cursor-pointer"
+            className="text-slate-400 hover:text-white cursor-pointer p-1 rounded-lg hover:bg-slate-800 transition shrink-0"
+            aria-label="Cerrar modal"
           >
             <X className="w-5 h-5" />
           </button>
@@ -164,8 +165,8 @@ export default function ModalDetalleCronograma({
 
         {/* Alerta de baja lógica */}
         {!isActivo && (
-          <div className="bg-amber-50 border-b border-amber-200 px-6 py-2.5 flex items-center gap-2 text-amber-800 text-xs font-medium">
-            <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+          <div className="bg-amber-50 border-b border-amber-200 px-4 sm:px-6 py-2.5 flex items-start sm:items-center gap-2 text-amber-800 text-xs font-medium">
+            <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5 sm:mt-0" />
             <span>
               <strong>Empleado Inactivo:</strong> Las opciones de asignación de
               turnos, alta y eliminación de horarios están deshabilitadas hasta
@@ -174,17 +175,17 @@ export default function ModalDetalleCronograma({
           </div>
         )}
 
-        <div className="p-6 overflow-y-auto space-y-6">
+        <div className="p-4 sm:p-6 overflow-y-auto space-y-5 sm:space-y-6">
           {/* BANNER ESPECÍFICO DE HORARIO FLEXIBLE / BOLSA DE HORAS */}
           {tieneEsquemaFlexible && (
-            <div className="bg-gradient-to-r from-emerald-50 to-teal-50/70 border border-emerald-200 rounded-2xl p-4 shadow-xs">
+            <div className="bg-gradient-to-r from-emerald-50 to-teal-50/70 border border-emerald-200 rounded-2xl p-3.5 sm:p-4 shadow-xs">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div className="flex items-start gap-3">
                   <div className="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-xs">
                     <CheckCircle2 className="w-5 h-5" />
                   </div>
                   <div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
                       <span className="text-xs font-bold text-emerald-950 uppercase tracking-wide">
                         Régimen de Horario Flexible Activo
                       </span>
@@ -218,11 +219,11 @@ export default function ModalDetalleCronograma({
                 </div>
 
                 {/* Tarjetas de las franjas flexibles asignadas */}
-                <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+                <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto w-full sm:w-auto">
                   {franjasFlexibles.map((flx) => (
                     <div
                       key={flx.id || flx.idEmpleadoHorario}
-                      className="bg-white/90 border border-emerald-300 rounded-xl px-3 py-1.5 shadow-2xs flex items-center gap-2 text-xs"
+                      className="bg-white/90 border border-emerald-300 rounded-xl px-3 py-1.5 shadow-2xs flex items-center justify-between sm:justify-start gap-2 text-xs flex-1 sm:flex-initial"
                     >
                       <div>
                         <div className="font-bold text-slate-800 text-[11px]">
@@ -255,10 +256,10 @@ export default function ModalDetalleCronograma({
             </div>
           )}
 
-          {/* Métricas calculadas */}
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3.5 text-xs">
+          {/* Métricas calculadas adaptables a rejilla móvil */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 text-xs">
             {/* 1. Carga Semanal */}
-            <div className="bg-slate-50 border border-slate-200 p-3.5 rounded-2xl flex flex-col justify-between">
+            <div className="bg-slate-50 border border-slate-200 p-3 sm:p-3.5 rounded-2xl flex flex-col justify-between">
               <div className="text-[10px] font-bold uppercase text-slate-400">
                 Carga Semanal
               </div>
@@ -274,7 +275,7 @@ export default function ModalDetalleCronograma({
 
             {/* 2. Régimen Horario */}
             <div
-              className={`border p-3.5 rounded-2xl flex flex-col justify-between ${
+              className={`border p-3 sm:p-3.5 rounded-2xl flex flex-col justify-between ${
                 tieneEsquemaFlexible
                   ? "bg-emerald-50/70 border-emerald-200"
                   : "bg-purple-50/60 border-purple-100"
@@ -310,13 +311,15 @@ export default function ModalDetalleCronograma({
             </div>
 
             {/* 3. Días con Asistencia */}
-            <div className="bg-blue-50/60 border border-blue-100 p-3.5 rounded-2xl flex flex-col justify-between">
+            <div className="bg-blue-50/60 border border-blue-100 p-3 sm:p-3.5 rounded-2xl flex flex-col justify-between">
               <div className="text-[10px] font-bold uppercase text-blue-700">
                 Días con Asistencia
               </div>
               <div className="text-xl font-bold text-blue-900 mt-1">
                 {tieneDiasFijos
-                  ? `${diasFijosNombres.length} ${diasFijosNombres.length === 1 ? "día fijo" : "días fijos"}`
+                  ? `${diasFijosNombres.length} ${
+                      diasFijosNombres.length === 1 ? "día fijo" : "días fijos"
+                    }`
                   : "Libre"}
               </div>
               <div
@@ -333,8 +336,8 @@ export default function ModalDetalleCronograma({
               </div>
             </div>
 
-            {/* 4. TOLERANCIAS FICHAJE (DETALLADO DINÁMICO DÍAS FIJOS VS LIBRES) */}
-            <div className="bg-emerald-50/60 border border-emerald-100 p-3.5 rounded-2xl flex flex-col justify-between">
+            {/* 4. Tolerancias Fichaje */}
+            <div className="bg-emerald-50/60 border border-emerald-100 p-3 sm:p-3.5 rounded-2xl flex flex-col justify-between">
               <div className="flex items-center justify-between text-[10px] font-bold uppercase text-emerald-700">
                 <span>Tolerancias Fichaje</span>
                 <Clock className="w-3 h-3 text-emerald-600" />
@@ -355,7 +358,7 @@ export default function ModalDetalleCronograma({
                   </div>
                   <div className="text-[10px] text-emerald-800 font-semibold mt-0.5 leading-tight">
                     {tieneEsquemaFlexible
-                      ? `Solo aplica en días fijos (${diasFijosNombres.join(", ")})`
+                      ? `Solo en días fijos (${diasFijosNombres.join(", ")})`
                       : "Ingreso y egreso permitidos"}
                   </div>
                 </>
@@ -372,7 +375,7 @@ export default function ModalDetalleCronograma({
             </div>
 
             {/* 5. Pausas Intermedias */}
-            <div className="bg-amber-50/70 border border-amber-200/80 p-3.5 rounded-2xl flex flex-col justify-between col-span-2 md:col-span-1">
+            <div className="bg-amber-50/70 border border-amber-200/80 p-3 sm:p-3.5 rounded-2xl flex flex-col justify-between sm:col-span-2 md:col-span-3 lg:col-span-1">
               <div className="flex items-center justify-between text-[10px] font-bold uppercase text-amber-800">
                 <span>Pausas Intermedias</span>
                 <LogOut className="w-3 h-3 text-amber-700" />
@@ -387,9 +390,9 @@ export default function ModalDetalleCronograma({
             </div>
           </div>
 
-          {/* Grilla Semanal */}
+          {/* Grilla Semanal Adaptativa */}
           <div>
-            <div className="flex items-center justify-between mb-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 mb-3">
               <div className="flex items-center gap-2 text-xs font-bold text-slate-900">
                 <Calendar className="w-4 h-4 text-indigo-600" />
                 <span>Cronograma de Jornadas por Día:</span>
@@ -403,7 +406,7 @@ export default function ModalDetalleCronograma({
                       onClose();
                       onOpenAsignarClase();
                     }}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold shadow-xs transition bg-purple-600 hover:bg-purple-700 text-white cursor-pointer"
+                    className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold shadow-xs transition bg-purple-600 hover:bg-purple-700 text-white cursor-pointer w-full sm:w-auto"
                     title="Ir al módulo Gestión de Materias para asignar o crear cátedras"
                   >
                     <span>Ir a Gestión de Materias</span>
@@ -411,7 +414,7 @@ export default function ModalDetalleCronograma({
                   </button>
                 ) : (
                   <span
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 border border-slate-200 text-slate-400 text-xs font-semibold select-none cursor-not-allowed"
+                    className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 border border-slate-200 text-slate-400 text-xs font-semibold select-none cursor-not-allowed w-full sm:w-auto"
                     title="Requiere permiso HORARIOS_GESTIONAR"
                   >
                     <Lock className="w-3.5 h-3.5" />
@@ -420,7 +423,8 @@ export default function ModalDetalleCronograma({
                 ))}
             </div>
 
-            <div className="grid grid-cols-7 gap-2.5">
+            {/* Rejilla: 1 columna en móvil, 2 en intermedio, 4 en tablet y 7 en escritorio */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-2.5">
               {diasMap.map(({ nombre, diaNumero }) => {
                 const franjasDia = clases.filter(
                   (c) => c.diaSemana === diaNumero,
@@ -430,7 +434,7 @@ export default function ModalDetalleCronograma({
                 return (
                   <div
                     key={nombre}
-                    className={`border rounded-2xl p-2.5 flex flex-col justify-between min-h-[220px] ${
+                    className={`border rounded-2xl p-3 sm:p-2.5 flex flex-col justify-between min-h-[120px] sm:min-h-[200px] ${
                       tieneActividad
                         ? "bg-white border-slate-200 shadow-2xs"
                         : tieneEsquemaFlexible
@@ -461,13 +465,13 @@ export default function ModalDetalleCronograma({
                           return (
                             <div
                               key={f.id || f.idEmpleadoHorario}
-                              className={`border rounded-xl p-2 text-[10px] relative group ${
+                              className={`border rounded-xl p-2.5 sm:p-2 text-[10px] relative group ${
                                 esMateria
                                   ? "bg-purple-50/70 border-purple-100"
                                   : "bg-indigo-50/70 border-indigo-100"
                               }`}
                             >
-                              {/* Botón de baja de franja con confirmación */}
+                              {/* Botón de baja visible siempre en táctil, hover en pantallas sm+ */}
                               {isActivo && puedeEliminar && (
                                 <button
                                   type="button"
@@ -475,7 +479,7 @@ export default function ModalDetalleCronograma({
                                     e.stopPropagation();
                                     onEliminarClase(f);
                                   }}
-                                  className="absolute top-1 right-1 p-0.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-md opacity-0 group-hover:opacity-100 transition cursor-pointer z-10"
+                                  className="absolute top-1 right-1 p-1 sm:p-0.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-md opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition cursor-pointer z-10"
                                   title="Quitar franja del cronograma"
                                 >
                                   <X className="w-3.5 h-3.5" />
@@ -483,7 +487,7 @@ export default function ModalDetalleCronograma({
                               )}
 
                               <div
-                                className={`font-bold leading-tight ${
+                                className={`font-bold leading-tight pr-5 ${
                                   esMateria
                                     ? "text-purple-900"
                                     : "text-indigo-900"
@@ -517,7 +521,7 @@ export default function ModalDetalleCronograma({
                         })}
 
                         {!tieneActividad && (
-                          <div className="text-center py-10 text-[11px] text-slate-400 italic">
+                          <div className="text-center py-4 sm:py-10 text-[11px] text-slate-400 italic">
                             {tieneEsquemaFlexible
                               ? "Asistencia libre"
                               : "Sin actividad"}
@@ -532,11 +536,11 @@ export default function ModalDetalleCronograma({
           </div>
         </div>
 
-        {/* Footer */}
-        <div className="bg-slate-50 px-6 py-4 border-t border-slate-200 flex items-center justify-between">
+        {/* Footer Adaptable */}
+        <div className="bg-slate-50 px-4 sm:px-6 py-3 sm:py-4 border-t border-slate-200 flex flex-col-reverse sm:flex-row items-center justify-between gap-2.5">
           <button
             onClick={onClose}
-            className="text-xs font-semibold text-slate-600 hover:text-slate-900 cursor-pointer"
+            className="w-full sm:w-auto py-2 sm:py-0 text-center text-xs font-semibold text-slate-600 hover:text-slate-900 cursor-pointer"
           >
             Cerrar
           </button>
@@ -549,7 +553,7 @@ export default function ModalDetalleCronograma({
                 onClose();
                 onOpenAsignarTurno(empleado);
               }}
-              className={`flex items-center gap-2 px-5 py-2 rounded-xl text-xs font-semibold shadow-md transition ${
+              className={`w-full sm:w-auto flex items-center justify-center gap-2 px-5 py-2.5 sm:py-2 rounded-xl text-xs font-semibold shadow-md transition ${
                 !isActivo
                   ? "bg-slate-200 text-slate-400 cursor-not-allowed shadow-none"
                   : "bg-[#4b35e6] hover:bg-[#3e2bc0] text-white cursor-pointer"
