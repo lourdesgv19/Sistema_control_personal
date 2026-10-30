@@ -16,13 +16,13 @@ import {
   User,
   AlertCircle,
   DollarSign,
-  TextCursor,
+  X,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import ModalAlerta from "../comunes/ModalAlerta";
 import { getEmpleados } from "../../services/empleadoService";
 
-export default function Sidebar() {
+export default function Sidebar({ isOpen, onClose }) {
   const { user, logout, tienePermiso } = useAuth();
   const [modalLogout, setModalLogout] = useState(false);
   const [incompletosCount, setIncompletosCount] = useState(0);
@@ -56,7 +56,7 @@ export default function Sidebar() {
 
     const interval = setInterval(() => {
       if (tienePermiso("PERSONAL_VER")) verificarIncompletos();
-    }, 45000); // Chequeo periódico cada 45s
+    }, 45000);
 
     return () => {
       montado = false;
@@ -88,7 +88,6 @@ export default function Sidebar() {
       label: "Calendario semanal de Materias",
       icon: LayoutDashboard,
       permiso: "MATERIAS_VER",
-      TextCursor: "Calendario semanal y Materias",
     },
     {
       to: "/excepciones-licencias",
@@ -141,12 +140,36 @@ export default function Sidebar() {
 
   return (
     <>
-      <aside className="w-64 bg-white border-r border-slate-200 flex flex-col justify-between h-full font-sans shrink-0 select-none">
-        <div>
-          <div className="px-6 pt-6 pb-4">
+      {/* Fondo oscuro traslúcido para móviles */}
+      {isOpen && (
+        <div
+          onClick={onClose}
+          className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-40 md:hidden transition-opacity"
+        />
+      )}
+
+      {/* Contenedor Aside con transición de apertura y cierre */}
+      <aside
+        className={`fixed md:static inset-y-0 left-0 z-50 bg-white border-r border-slate-200 flex flex-col justify-between h-full font-sans shrink-0 select-none transition-all duration-300 ease-in-out ${
+          isOpen
+            ? "w-64 translate-x-0 shadow-2xl md:shadow-none"
+            : "-translate-x-full md:translate-x-0 md:w-0 md:border-r-0 md:overflow-hidden md:opacity-0 md:pointer-events-none"
+        }`}
+      >
+        <div className="overflow-y-auto flex-1 min-w-[16rem]">
+          {/* Cabecera del Sidebar con botón de cerrar para móviles */}
+          <div className="px-6 pt-6 pb-4 flex items-center justify-between">
             <span className="text-[11px] font-bold text-slate-400 tracking-wider uppercase block">
               Control de Asistencia
             </span>
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-1 text-slate-400 hover:text-slate-700 rounded-lg md:hidden cursor-pointer"
+              title="Cerrar menú"
+            >
+              <X className="w-5 h-5" />
+            </button>
           </div>
 
           <nav className="px-3 space-y-1">
@@ -156,6 +179,12 @@ export default function Sidebar() {
                 <NavLink
                   key={item.to}
                   to={item.to}
+                  onClick={() => {
+                    // Cierra el drawer automáticamente en móvil al hacer clic
+                    if (window.innerWidth < 768 && onClose) {
+                      onClose();
+                    }
+                  }}
                   className={({ isActive }) =>
                     `flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
                       isActive
@@ -169,7 +198,6 @@ export default function Sidebar() {
                     <span className="truncate">{item.label}</span>
                   </div>
 
-                  {/* CÍRCULO ROJO / BADGE DE ALERTA DE DATOS PENDIENTES */}
                   {item.badgeCount > 0 && (
                     <span
                       title={`${item.badgeCount} empleado(s) con datos incompletos`}
@@ -185,9 +213,12 @@ export default function Sidebar() {
         </div>
 
         {/* Perfil Dinámico + Cerrar Sesión */}
-        <div className="p-4 border-t border-slate-100 space-y-2">
+        <div className="p-4 border-t border-slate-100 space-y-2 min-w-[16rem]">
           <div
-            onClick={() => navigate("/perfil")}
+            onClick={() => {
+              navigate("/perfil");
+              if (window.innerWidth < 768 && onClose) onClose();
+            }}
             title="Ir a mi perfil"
             className="flex items-center justify-between p-2 rounded-xl border border-slate-200/70 hover:bg-slate-50 cursor-pointer transition"
           >

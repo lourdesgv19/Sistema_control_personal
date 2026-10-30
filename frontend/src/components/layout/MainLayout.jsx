@@ -8,7 +8,9 @@ import { useAuth } from "../../context/AuthContext";
 
 export default function MainLayout() {
   const { user, logout } = useAuth();
-  const [menuAbierto, setMenuAbierto] = useState(false);
+  const [menuAbierto, setMenuAbierto] = useState(
+    () => window.innerWidth >= 768,
+  );
 
   return (
     <div className="flex flex-col h-screen w-screen bg-[#f8fafc] overflow-hidden font-sans">
@@ -23,7 +25,6 @@ export default function MainLayout() {
         </main>
       </div>
 
-      {/* Modal obligatorio si la bandera debeCambiarPassword está activa */}
       {user?.debeCambiarPassword && (
         <ModalPrimerCambioPassword
           isOpen={true}

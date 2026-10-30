@@ -1,5 +1,5 @@
-import { Fingerprint, Menu } from "lucide-react";
 import React, { useState, useEffect } from "react";
+import { Fingerprint, Menu } from "lucide-react";
 
 export default function Header({ onMenuClick }) {
   const [online, setOnline] = useState(navigator.onLine);
@@ -34,20 +34,20 @@ export default function Header({ onMenuClick }) {
   }, []);
 
   return (
-    <header className="w-full shrink-0 z-20 font-sans bg-white border-b border-slate-200 px-4 md:px-8 py-3.5 md:py-4.5 flex items-center justify-between shadow-2xs">
-      {/* Botón hamburguesa (solo móvil) + Logo e Identidad */}
+    <header className="w-full shrink-0 z-20 font-sans bg-white border-b border-slate-200 px-4 md:px-8 py-3.5 md:py-4 flex items-center justify-between shadow-2xs">
       <div className="flex items-center gap-3">
-        {/* Botón Menú Hamburguesa */}
+        {/* Botón de alternancia de menú (Activo en móvil y escritorio) */}
         <button
           type="button"
           onClick={onMenuClick}
-          className="p-2 -ml-1 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-xl md:hidden transition cursor-pointer"
-          aria-label="Abrir menú"
+          className="p-2 -ml-1 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-xl transition cursor-pointer"
+          aria-label="Alternar menú lateral"
+          title="Alternar menú lateral"
         >
           <Menu className="w-6 h-6 stroke-[2]" />
         </button>
 
-        {/* Ícono de huella */}
+        {/* Ícono institucional */}
         <div className="p-2 md:p-2.5 bg-indigo-600 text-white rounded-xl shadow-sm shadow-indigo-200 shrink-0">
           <Fingerprint
             size={20}
@@ -55,7 +55,7 @@ export default function Header({ onMenuClick }) {
           />
         </div>
 
-        {/* Título principal */}
+        {/* Identidad del Sistema */}
         <div className="flex flex-col">
           <span className="text-base md:text-lg font-bold text-slate-900 tracking-tight leading-none">
             Sistema de <span className="text-indigo-600">Control</span>
