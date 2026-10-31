@@ -242,7 +242,6 @@ export default function ExcepcionesLicencias() {
       }
       if (!nombreOArea) return "indigo";
 
-      // Búsqueda directa en la tabla de categorías activas por coincidencia exacta de nombre o tag
       const categoriaConfigurada = categorias.find(
         (c) =>
           c.nombre?.trim().toLowerCase() === nombreOArea.trim().toLowerCase() ||
@@ -491,17 +490,17 @@ export default function ExcepcionesLicencias() {
   const getIconoTipo = (tipo) => {
     switch (tipo) {
       case "LICENCIA_MEDICA":
-        return <Stethoscope className="w-3.5 h-3.5 text-rose-500" />;
+        return <Stethoscope className="w-3.5 h-3.5 text-rose-500 shrink-0" />;
       case "VACACIONES":
-        return <Palmtree className="w-3.5 h-3.5 text-sky-600" />;
+        return <Palmtree className="w-3.5 h-3.5 text-sky-600 shrink-0" />;
       case "CAMBIO_HORARIO":
-        return <Clock className="w-3.5 h-3.5 text-amber-600" />;
+        return <Clock className="w-3.5 h-3.5 text-amber-600 shrink-0" />;
       case "COMISION_SERVICIO":
-        return <Briefcase className="w-3.5 h-3.5 text-indigo-600" />;
+        return <Briefcase className="w-3.5 h-3.5 text-indigo-600 shrink-0" />;
       case "FERIADO_ASUETO":
-        return <Building className="w-3.5 h-3.5 text-purple-600" />;
+        return <Building className="w-3.5 h-3.5 text-purple-600 shrink-0" />;
       default:
-        return <Sparkles className="w-3.5 h-3.5 text-emerald-600" />;
+        return <Sparkles className="w-3.5 h-3.5 text-emerald-600 shrink-0" />;
     }
   };
 
@@ -530,54 +529,54 @@ export default function ExcepcionesLicencias() {
   };
 
   return (
-    <div className="p-6 lg:p-8 max-w-7xl mx-auto space-y-6 font-sans">
+    <div className="p-3 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-4 sm:space-y-6 font-sans">
       {/* 1. HEADER LIMPIO */}
-      <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="bg-white border border-slate-200 rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2.5">
-            <Calendar className="w-6 h-6 text-indigo-600" />
-            Excepciones y Licencias
+            <Calendar className="w-5 h-5 sm:w-6 sm:h-6 text-indigo-600 shrink-0" />
+            <span>Excepciones y Licencias</span>
           </h1>
           <p className="text-xs text-slate-500 mt-1 max-w-2xl">
             Control de licencias médicas, vacaciones, feriados y asuetos.
           </p>
         </div>
 
-        <div className="flex items-center gap-2.5 flex-wrap">
+        <div className="flex items-center gap-2.5 flex-wrap w-full md:w-auto">
           {puedeCrear && (
             <button
               type="button"
               onClick={() => abrirModalNuevo()}
-              className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-xs transition cursor-pointer"
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-xs transition cursor-pointer"
             >
               <Plus className="w-4 h-4 stroke-[2.5]" />
-              Registrar Licencia / Excepción
+              <span>Registrar Licencia / Excepción</span>
             </button>
           )}
         </div>
       </div>
 
       {/* 2. TARJETAS KPI */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-3">
         <button
           type="button"
           onClick={() => handleSeleccionarKpi("EN_CURSO")}
-          className={`p-4 rounded-2xl transition cursor-pointer text-left border ${
+          className={`p-3 sm:p-4 rounded-2xl transition cursor-pointer text-left border ${
             filtroKpi === "EN_CURSO"
               ? "bg-emerald-50/70 border-emerald-500 ring-2 ring-emerald-500/20 shadow-sm"
               : "bg-white border-slate-200 hover:border-emerald-300"
           }`}
         >
           <div className="flex items-center justify-between">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 truncate">
               EN CURSO HOY
             </span>
-            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0" />
           </div>
-          <div className="text-2xl font-black text-slate-900 mt-2 font-mono">
+          <div className="text-xl sm:text-2xl font-black text-slate-900 mt-1 sm:mt-2 font-mono">
             {metricas.enCursoHoy}
           </div>
-          <span className="text-[10px] text-emerald-700 font-medium">
+          <span className="text-[10px] sm:text-xs text-emerald-700 font-medium truncate block">
             Vigentes en la fecha actual
           </span>
         </button>
@@ -585,22 +584,22 @@ export default function ExcepcionesLicencias() {
         <button
           type="button"
           onClick={() => handleSeleccionarKpi("PROXIMA")}
-          className={`p-4 rounded-2xl transition cursor-pointer text-left border ${
+          className={`p-3 sm:p-4 rounded-2xl transition cursor-pointer text-left border ${
             filtroKpi === "PROXIMA"
               ? "bg-sky-50/70 border-sky-500 ring-2 ring-sky-500/20 shadow-sm"
               : "bg-white border-slate-200 hover:border-sky-300"
           }`}
         >
           <div className="flex items-center justify-between">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 truncate">
               PRÓXIMAS
             </span>
-            <Clock className="w-3.5 h-3.5 text-sky-500" />
+            <Clock className="w-3.5 h-3.5 text-sky-500 shrink-0" />
           </div>
-          <div className="text-2xl font-black text-slate-900 mt-2 font-mono">
+          <div className="text-xl sm:text-2xl font-black text-slate-900 mt-1 sm:mt-2 font-mono">
             {metricas.proximas}
           </div>
-          <span className="text-[10px] text-sky-700 font-medium">
+          <span className="text-[10px] sm:text-xs text-sky-700 font-medium truncate block">
             Programadas por iniciar
           </span>
         </button>
@@ -608,22 +607,22 @@ export default function ExcepcionesLicencias() {
         <button
           type="button"
           onClick={() => handleSeleccionarKpi("FINALIZADA")}
-          className={`p-4 rounded-2xl transition cursor-pointer text-left border ${
+          className={`p-3 sm:p-4 rounded-2xl transition cursor-pointer text-left border ${
             filtroKpi === "FINALIZADA"
               ? "bg-slate-100 border-slate-400 ring-2 ring-slate-400/20 shadow-sm"
               : "bg-white border-slate-200 hover:border-slate-400"
           }`}
         >
           <div className="flex items-center justify-between">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 truncate">
               FINALIZADAS
             </span>
-            <CheckCircle2 className="w-3.5 h-3.5 text-slate-400" />
+            <CheckCircle2 className="w-3.5 h-3.5 text-slate-400 shrink-0" />
           </div>
-          <div className="text-2xl font-black text-slate-900 mt-2 font-mono">
+          <div className="text-xl sm:text-2xl font-black text-slate-900 mt-1 sm:mt-2 font-mono">
             {metricas.finalizadas}
           </div>
-          <span className="text-[10px] text-slate-400 font-medium">
+          <span className="text-[10px] sm:text-xs text-slate-400 font-medium truncate block">
             Historial concluido
           </span>
         </button>
@@ -631,24 +630,24 @@ export default function ExcepcionesLicencias() {
         <button
           type="button"
           onClick={() => handleSeleccionarKpi("PENDIENTES_RRHH")}
-          className={`p-4 rounded-2xl transition cursor-pointer text-left border ${
+          className={`p-3 sm:p-4 rounded-2xl transition cursor-pointer text-left border ${
             filtroKpi === "PENDIENTES_RRHH"
               ? "bg-amber-50/80 border-amber-500 ring-2 ring-amber-500/20 shadow-sm"
               : "bg-white border-slate-200 hover:border-amber-400"
           }`}
         >
           <div className="flex items-center justify-between">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-amber-700">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-amber-700 truncate">
               PENDIENTES RRHH
             </span>
-            <span className="w-3.5 h-3.5 rounded-full border border-amber-500 text-amber-600 flex items-center justify-center text-[9px] font-bold">
+            <span className="w-3.5 h-3.5 rounded-full border border-amber-500 text-amber-600 flex items-center justify-center text-[9px] font-bold shrink-0">
               !
             </span>
           </div>
-          <div className="text-2xl font-black text-amber-950 mt-2 font-mono">
+          <div className="text-xl sm:text-2xl font-black text-amber-950 mt-1 sm:mt-2 font-mono">
             {metricas.pendientesRrhh}
           </div>
-          <span className="text-[10px] text-amber-700 font-medium">
+          <span className="text-[10px] sm:text-xs text-amber-700 font-medium truncate block">
             Requieren dictamen
           </span>
         </button>
@@ -656,22 +655,22 @@ export default function ExcepcionesLicencias() {
         <button
           type="button"
           onClick={() => handleSeleccionarKpi("TODOS")}
-          className={`p-4 rounded-2xl transition cursor-pointer text-left border ${
+          className={`p-3 sm:p-4 rounded-2xl transition cursor-pointer text-left border col-span-2 sm:col-span-1 ${
             filtroKpi === "TODOS"
               ? "bg-indigo-50/80 border-indigo-600 ring-2 ring-indigo-500/20 shadow-sm"
               : "bg-white border-indigo-200 hover:border-indigo-400"
           }`}
         >
           <div className="flex items-center justify-between">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-700">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-700 truncate">
               TOTAL REGISTROS
             </span>
-            <span className="w-2.5 h-2.5 rounded-full bg-indigo-500" />
+            <span className="w-2.5 h-2.5 rounded-full bg-indigo-500 shrink-0" />
           </div>
-          <div className="text-2xl font-black text-indigo-950 mt-2 font-mono">
+          <div className="text-xl sm:text-2xl font-black text-indigo-950 mt-1 sm:mt-2 font-mono">
             {metricas.totalRegistros}
           </div>
-          <span className="text-[10px] text-indigo-600 font-medium">
+          <span className="text-[10px] sm:text-xs text-indigo-600 font-medium truncate block">
             Ver todos los casos
           </span>
         </button>
@@ -679,7 +678,7 @@ export default function ExcepcionesLicencias() {
 
       {/* 3. PESTAÑAS Y ACCIÓN COLAPSAR / DESGLOSAR */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div className="flex bg-slate-100 p-1 rounded-2xl border border-slate-200 text-xs font-semibold overflow-x-auto w-fit">
+        <div className="flex bg-slate-100 p-1 rounded-2xl border border-slate-200 text-xs font-semibold overflow-x-auto w-full sm:w-fit scrollbar-none">
           {[
             {
               key: "DESGLOSE",
@@ -692,7 +691,7 @@ export default function ExcepcionesLicencias() {
               key={t.key}
               type="button"
               onClick={() => setTabPrincipal(t.key)}
-              className={`px-3.5 py-1.5 rounded-xl transition cursor-pointer whitespace-nowrap ${
+              className={`px-3 sm:px-3.5 py-1.5 rounded-xl transition cursor-pointer whitespace-nowrap flex-1 sm:flex-initial text-center ${
                 tabPrincipal === t.key
                   ? "bg-white text-indigo-700 shadow-xs border border-slate-200 font-bold"
                   : "text-slate-600 hover:text-slate-900"
@@ -707,7 +706,7 @@ export default function ExcepcionesLicencias() {
           <button
             type="button"
             onClick={alternarTodosDesgloses}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 text-slate-700 rounded-xl text-xs font-semibold hover:bg-slate-50 transition cursor-pointer w-fit shadow-2xs"
+            className="flex items-center justify-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 text-slate-700 rounded-xl text-xs font-semibold hover:bg-slate-50 transition cursor-pointer w-full sm:w-fit shadow-2xs"
           >
             {estanTodosAbiertos ? (
               <>
@@ -725,8 +724,8 @@ export default function ExcepcionesLicencias() {
       </div>
 
       {/* 4. FILTROS DE BÚSQUEDA */}
-      <div className="bg-white p-4 border border-slate-200 rounded-2xl shadow-xs grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 text-xs">
-        <div className="relative">
+      <div className="bg-white p-3.5 sm:p-4 border border-slate-200 rounded-2xl shadow-xs grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5 sm:gap-3 text-xs">
+        <div className="relative sm:col-span-2 lg:col-span-1">
           <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
             type="text"
@@ -740,7 +739,7 @@ export default function ExcepcionesLicencias() {
         <select
           value={filtroEstadoActivo}
           onChange={(e) => setFiltroEstadoActivo(e.target.value)}
-          className="w-full px-3 py-2 border border-slate-200 rounded-xl outline-none focus:border-indigo-500 text-slate-700 font-semibold bg-white"
+          className="w-full px-3 py-2 border border-slate-200 rounded-xl outline-none focus:border-indigo-500 text-slate-700 font-semibold bg-white cursor-pointer"
         >
           <option value="ACTIVOS">Estado: Solo Activos</option>
           <option value="INACTIVOS">Estado: Solo Bajas (Inactivos)</option>
@@ -750,7 +749,7 @@ export default function ExcepcionesLicencias() {
         <select
           value={filtroRegimen}
           onChange={(e) => setFiltroRegimen(e.target.value)}
-          className="w-full px-3 py-2 border border-slate-200 rounded-xl outline-none focus:border-indigo-500 text-slate-700 bg-white"
+          className="w-full px-3 py-2 border border-slate-200 rounded-xl outline-none focus:border-indigo-500 text-slate-700 bg-white cursor-pointer"
         >
           <option value="TODOS">Dictamen: Todos</option>
           <option value="APROBADA">Aprobadas</option>
@@ -761,7 +760,7 @@ export default function ExcepcionesLicencias() {
         <select
           value={filtroTipo}
           onChange={(e) => setFiltroTipo(e.target.value)}
-          className="w-full px-3 py-2 border border-slate-200 rounded-xl outline-none focus:border-indigo-500 text-slate-700 bg-white"
+          className="w-full px-3 py-2 border border-slate-200 rounded-xl outline-none focus:border-indigo-500 text-slate-700 bg-white cursor-pointer"
         >
           <option value="TODOS">Tipo: Todos</option>
           <option value="LICENCIA_MEDICA">Licencias Médicas</option>
@@ -775,7 +774,7 @@ export default function ExcepcionesLicencias() {
         <select
           value={filtroCategoria}
           onChange={(e) => setFiltroCategoria(e.target.value)}
-          className="w-full px-3 py-2 border border-slate-200 rounded-xl outline-none focus:border-indigo-500 text-slate-700 bg-white"
+          className="w-full px-3 py-2 border border-slate-200 rounded-xl outline-none focus:border-indigo-500 text-slate-700 bg-white cursor-pointer"
         >
           <option value="TODAS">Categoría: Todas</option>
           <option value="INSTITUCIONAL">Institucional</option>
@@ -789,14 +788,14 @@ export default function ExcepcionesLicencias() {
 
       {/* 5. VISTA 1: DESGLOSE POR AGENTE */}
       {tabPrincipal === "DESGLOSE" && (
-        <div className="space-y-4">
+        <div className="space-y-3 sm:space-y-4">
           {loading ? (
-            <div className="p-12 text-center text-slate-400 bg-white rounded-3xl border border-slate-200 text-xs">
+            <div className="p-8 sm:p-12 text-center text-slate-400 bg-white rounded-2xl sm:rounded-3xl border border-slate-200 text-xs">
               <Loader2 className="w-5 h-5 animate-spin mx-auto text-indigo-600 mb-2" />
               Consultando licencias del servidor...
             </div>
           ) : desgloseAgentes.length === 0 ? (
-            <div className="p-12 text-center text-slate-400 bg-white rounded-3xl border border-slate-200 text-xs italic">
+            <div className="p-8 sm:p-12 text-center text-slate-400 bg-white rounded-2xl sm:rounded-3xl border border-slate-200 text-xs italic">
               No se registran licencias ni excepciones para el filtro aplicado.
             </div>
           ) : (
@@ -804,7 +803,6 @@ export default function ExcepcionesLicencias() {
               const key = agente.idEmpleado || "INSTITUCIONAL";
               const isExpanded = !!desglosesAbiertos[key];
 
-              // Obtención del color de configuración para el agente
               const colorCat = obtenerColorDeConfiguracion(
                 agente.rolArea,
                 agente.esInstitucional,
@@ -815,28 +813,27 @@ export default function ExcepcionesLicencias() {
               return (
                 <div
                   key={key}
-                  className="bg-white border border-slate-200 rounded-3xl shadow-xs overflow-hidden transition-all border-l-4 border-l-indigo-600"
+                  className="bg-white border border-slate-200 rounded-2xl sm:rounded-3xl shadow-xs overflow-hidden transition-all border-l-4 border-l-indigo-600"
                 >
                   <div
                     onClick={() => toggleDesglose(key)}
-                    className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-50/40 hover:bg-slate-100/70 cursor-pointer select-none transition-colors"
+                    className="p-3.5 sm:p-5 flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-4 bg-slate-50/40 hover:bg-slate-100/70 cursor-pointer select-none transition-colors"
                   >
-                    <div className="flex items-center gap-3.5">
-                      <div className="w-11 h-11 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-700 font-black text-xs shrink-0">
+                    <div className="flex items-center gap-3 sm:gap-3.5">
+                      <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-700 font-black text-xs shrink-0">
                         {agente.esInstitucional ? (
                           <Building className="w-5 h-5 text-purple-600" />
                         ) : (
                           agente.iniciales
                         )}
                       </div>
-                      <div>
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <h3 className="font-black text-slate-900 text-sm">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+                          <h3 className="font-black text-slate-900 text-sm truncate">
                             {agente.nombreCompleto}
                           </h3>
-                          {/* BADGE CON COLOR ASIGNADO POR EL USUARIO EN CONFIGURACIÓN */}
                           <span
-                            className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md font-bold text-[10px] border ${estiloBadgeCat}`}
+                            className={`inline-flex items-center gap-1.5 px-2 sm:px-2.5 py-0.5 rounded-md font-bold text-[9px] sm:text-[10px] border ${estiloBadgeCat}`}
                           >
                             <span
                               className={`w-1.5 h-1.5 rounded-full ${estiloDotCat}`}
@@ -844,7 +841,7 @@ export default function ExcepcionesLicencias() {
                             <span>{agente.rolArea}</span>
                           </span>
                         </div>
-                        <p className="text-[11px] text-slate-400 mt-0.5">
+                        <p className="text-[11px] text-slate-400 mt-0.5 truncate">
                           {agente.esInstitucional
                             ? agente.departamento
                             : `#${agente.nroLegajo || "S/L"}`}
@@ -852,52 +849,57 @@ export default function ExcepcionesLicencias() {
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-3 self-end sm:self-center flex-wrap">
-                      {agente.cantEnCursoHoy > 0 && (
-                        <span className="px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 font-bold text-[10px]">
-                          ● {agente.cantEnCursoHoy} en curso hoy
-                        </span>
-                      )}
-                      {agente.cantPendientesRrhh > 0 && (
-                        <span className="px-2.5 py-1 rounded-full bg-amber-50 text-amber-800 border border-amber-200 font-bold text-[10px]">
-                          ⚠ {agente.cantPendientesRrhh} pendiente RRHH
-                        </span>
-                      )}
-                      {agente.cantProximas > 0 && (
-                        <span className="px-2.5 py-1 rounded-full bg-sky-50 text-sky-800 border border-sky-200 font-bold text-[10px]">
-                          {agente.cantProximas} próxima
-                        </span>
-                      )}
-                      {agente.cantFinalizadas > 0 && (
-                        <span className="px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 border border-slate-200 font-medium text-[10px]">
-                          {agente.cantFinalizadas} finalizada
-                        </span>
-                      )}
-
-                      <div className="text-right pl-2 border-l border-slate-200 text-xs">
-                        <div className="font-bold text-slate-800">
-                          {agente.totalDias} días totales
-                        </div>
-                        <div className="text-[10px] text-slate-400">
-                          {agente.licencias.length} registros
-                        </div>
+                    <div className="flex items-center justify-between md:justify-end gap-2 sm:gap-3 flex-wrap pt-2 md:pt-0 border-t border-slate-100 md:border-none">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {agente.cantEnCursoHoy > 0 && (
+                          <span className="px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 font-bold text-[9px] sm:text-[10px]">
+                            ● {agente.cantEnCursoHoy} en curso hoy
+                          </span>
+                        )}
+                        {agente.cantPendientesRrhh > 0 && (
+                          <span className="px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full bg-amber-50 text-amber-800 border border-amber-200 font-bold text-[9px] sm:text-[10px]">
+                            ⚠ {agente.cantPendientesRrhh} pendiente RRHH
+                          </span>
+                        )}
+                        {agente.cantProximas > 0 && (
+                          <span className="px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full bg-sky-50 text-sky-800 border border-sky-200 font-bold text-[9px] sm:text-[10px]">
+                            {agente.cantProximas} próxima
+                          </span>
+                        )}
+                        {agente.cantFinalizadas > 0 && (
+                          <span className="px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full bg-slate-100 text-slate-600 border border-slate-200 font-medium text-[9px] sm:text-[10px]">
+                            {agente.cantFinalizadas} finalizada
+                          </span>
+                        )}
                       </div>
 
-                      <div className="px-3 py-1.5 bg-white border border-slate-200 text-slate-700 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ml-1 shadow-2xs">
-                        <span>Desglose ({agente.licencias.length})</span>
-                        {isExpanded ? (
-                          <ChevronUp className="w-3.5 h-3.5" />
-                        ) : (
-                          <ChevronDown className="w-3.5 h-3.5" />
-                        )}
+                      <div className="flex items-center gap-2">
+                        <div className="text-right pl-2 border-l border-slate-200 text-xs">
+                          <div className="font-bold text-slate-800 text-[11px] sm:text-xs">
+                            {agente.totalDias} días totales
+                          </div>
+                          <div className="text-[10px] text-slate-400">
+                            {agente.licencias.length} registros
+                          </div>
+                        </div>
+
+                        <div className="px-2.5 sm:px-3 py-1 sm:py-1.5 bg-white border border-slate-200 text-slate-700 rounded-xl text-xs font-bold transition flex items-center gap-1 sm:gap-1.5 shadow-2xs">
+                          <span className="hidden sm:inline">Desglose</span>
+                          <span>({agente.licencias.length})</span>
+                          {isExpanded ? (
+                            <ChevronUp className="w-3.5 h-3.5" />
+                          ) : (
+                            <ChevronDown className="w-3.5 h-3.5" />
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>
 
                   {isExpanded && (
-                    <div className="p-5 border-t border-slate-100 space-y-4 bg-white">
-                      <div className="flex items-center justify-between text-xs font-bold text-slate-600 pb-1 border-b border-slate-50">
-                        <div className="flex items-center gap-1.5 tracking-wider uppercase text-[11px] text-indigo-950 font-black">
+                    <div className="p-3.5 sm:p-5 border-t border-slate-100 space-y-3 sm:space-y-4 bg-white">
+                      <div className="flex items-center justify-between text-xs font-bold text-slate-600 pb-1 border-b border-slate-50 flex-wrap gap-2">
+                        <div className="flex items-center gap-1.5 tracking-wider uppercase text-[10px] sm:text-[11px] text-indigo-950 font-black">
                           <span className="text-indigo-600">❖</span>
                           <span>
                             DESGLOSE DE LICENCIAS Y EXCEPCIONES REGISTRADAS (
@@ -953,19 +955,21 @@ export default function ExcepcionesLicencias() {
                         return (
                           <div
                             key={lic.id}
-                            className={`p-4 rounded-2xl border transition-all space-y-2.5 ${clasesRecuadro}`}
+                            className={`p-3 sm:p-4 rounded-2xl border transition-all space-y-2.5 ${clasesRecuadro}`}
                           >
-                            <div className="flex items-center justify-between gap-2 flex-wrap">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
                               <div className="flex items-center gap-2 flex-wrap text-xs">
                                 <span
-                                  className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-xl font-bold border text-xs shadow-2xs ${getEstiloPildoraTipo(lic.tipo)}`}
+                                  className={`inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-xl font-bold border text-xs shadow-2xs ${getEstiloPildoraTipo(
+                                    lic.tipo,
+                                  )}`}
                                 >
                                   {getIconoTipo(lic.tipo)}
                                   <span>{lic.tipoEtiqueta}</span>
                                 </span>
 
                                 <span className="flex items-center gap-1 text-slate-700 text-xs font-semibold">
-                                  <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                                  <Calendar className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                                   <span>{textoFechaRango}</span>
                                 </span>
 
@@ -975,14 +979,18 @@ export default function ExcepcionesLicencias() {
                                   </span>
                                 ) : esPendiente ? (
                                   <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-300">
-                                    <span className="w-3.5 h-3.5 rounded-full border border-amber-500 text-amber-700 flex items-center justify-center text-[9px] font-bold">
+                                    <span className="w-3.5 h-3.5 rounded-full border border-amber-500 text-amber-700 flex items-center justify-center text-[9px] font-bold shrink-0">
                                       !
                                     </span>
                                     <span>Pendiente de RRHH</span>
                                   </span>
                                 ) : (
                                   <span
-                                    className={`px-2 py-0.5 rounded-lg text-[10px] font-bold border ${lic.estado === "APROBADA" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-rose-50 text-rose-700 border-rose-200"}`}
+                                    className={`px-2 py-0.5 rounded-lg text-[10px] font-bold border ${
+                                      lic.estado === "APROBADA"
+                                        ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                        : "bg-rose-50 text-rose-700 border-rose-200"
+                                    }`}
                                   >
                                     {lic.estado === "APROBADA"
                                       ? "Aprobada"
@@ -991,7 +999,7 @@ export default function ExcepcionesLicencias() {
                                 )}
                               </div>
 
-                              <div className="flex items-center gap-1.5 self-end sm:self-center">
+                              <div className="flex items-center gap-1.5 self-end sm:self-center flex-wrap">
                                 {estaActivo &&
                                   esPendiente &&
                                   puedeDictaminar && (
@@ -1004,7 +1012,7 @@ export default function ExcepcionesLicencias() {
                                         className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition shadow-2xs cursor-pointer"
                                       >
                                         <CheckCircle2 className="w-3.5 h-3.5 stroke-[2.5]" />
-                                        Aprobar
+                                        <span>Aprobar</span>
                                       </button>
                                       <button
                                         type="button"
@@ -1014,7 +1022,7 @@ export default function ExcepcionesLicencias() {
                                         className="inline-flex items-center gap-1 px-2.5 py-1 bg-white hover:bg-rose-50 text-rose-600 border border-rose-200 rounded-lg text-xs font-bold transition cursor-pointer"
                                       >
                                         <XCircle className="w-3.5 h-3.5" />
-                                        Rechazar
+                                        <span>Rechazar</span>
                                       </button>
                                     </>
                                   )}
@@ -1154,9 +1162,17 @@ export default function ExcepcionesLicencias() {
                                 </div>
                                 <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
                                   <div
-                                    className={`h-full rounded-full transition-all duration-300 ${esVenceHoy ? "bg-amber-500" : "bg-emerald-500"}`}
+                                    className={`h-full rounded-full transition-all duration-300 ${
+                                      esVenceHoy
+                                        ? "bg-amber-500"
+                                        : "bg-emerald-500"
+                                    }`}
                                     style={{
-                                      width: `${Math.max(4, lic.porcentajeProgreso || (esVenceHoy ? 100 : 20))}%`,
+                                      width: `${Math.max(
+                                        4,
+                                        lic.porcentajeProgreso ||
+                                          (esVenceHoy ? 100 : 20),
+                                      )}%`,
                                     }}
                                   />
                                 </div>
@@ -1183,45 +1199,30 @@ export default function ExcepcionesLicencias() {
         </div>
       )}
 
-      {/* 6. VISTA 2: LISTADO DETALLADO */}
+      {/* 6. VISTA 2: LISTADO DETALLADO (RESPONSIVE: TARJETAS EN MÓVIL Y TABLA EN ESCRITORIO) */}
       {tabPrincipal === "LISTADO" && (
-        <div className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-xs">
-          <table className="w-full text-left text-xs">
-            <thead className="bg-[#f8fafc] text-slate-500 uppercase text-[10px] font-bold border-b border-slate-200 tracking-wider">
-              <tr>
-                <th className="px-6 py-4">AGENTE / EMPLEADO</th>
-                <th className="px-4 py-4">TIPO DE LICENCIA</th>
-                <th className="px-4 py-4">PERÍODO (DESDE - HASTA)</th>
-                <th className="px-4 py-4">CONTADOR & ESTADO DINÁMICO</th>
-                <th className="px-6 py-4">MOTIVO / CONSTANCIA</th>
-                <th className="px-4 py-4">DICTAMEN RRHH</th>
-                <th className="px-6 py-4 text-right">ACCIONES</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 text-slate-700">
-              {loading ? (
-                <tr>
-                  <td colSpan={7} className="text-center py-12 text-slate-400">
-                    <Loader2 className="w-5 h-5 animate-spin mx-auto text-indigo-600 mb-2" />
-                    Consultando licencias del servidor...
-                  </td>
-                </tr>
-              ) : registros.length === 0 ? (
-                <tr>
-                  <td
-                    colSpan={7}
-                    className="text-center py-12 text-slate-400 italic"
-                  >
-                    No se registran licencias para los filtros aplicados.
-                  </td>
-                </tr>
-              ) : (
-                registros.map((lic) => {
+        <div>
+          {loading ? (
+            <div className="bg-white border border-slate-200 rounded-2xl sm:rounded-3xl p-8 sm:p-12 text-center text-slate-400 text-xs">
+              <Loader2 className="w-5 h-5 animate-spin mx-auto text-indigo-600 mb-2" />
+              Consultando licencias del servidor...
+            </div>
+          ) : registros.length === 0 ? (
+            <div className="bg-white border border-slate-200 rounded-2xl sm:rounded-3xl p-8 sm:p-12 text-center text-slate-400 text-xs italic">
+              No se registran licencias para los filtros aplicados.
+            </div>
+          ) : (
+            <>
+              {/* VISTA MÓVIL (< md): TARJETAS TÁCTILES LIMPIAS SIN SCROLL LATERAL */}
+              <div className="grid grid-cols-1 gap-3 md:hidden">
+                {registros.map((lic) => {
                   const estaActivo = esActivo(lic);
                   const esUnSoloDia =
                     lic.diasDuracion === 1 || lic.fechaInicio === lic.fechaFin;
+                  const esEnCurso = lic.condicionTemporal === "EN_CURSO";
+                  const esPendiente = lic.estado === "PENDIENTE_RRHH";
+                  const esVenceHoy = esEnCurso && esUnSoloDia;
 
-                  // Resolución del color configurado para la categoría
                   const colorCat = obtenerColorDeConfiguracion(
                     lic.rolArea,
                     lic.esInstitucional,
@@ -1230,12 +1231,17 @@ export default function ExcepcionesLicencias() {
                   const estiloDotCat = getDotColorClass(colorCat);
 
                   return (
-                    <tr
+                    <div
                       key={lic.id}
-                      className={`transition-colors ${!estaActivo ? "bg-slate-50/70 opacity-75" : "hover:bg-slate-50/70"}`}
+                      className={`bg-white border rounded-2xl p-4 shadow-xs space-y-3 transition ${
+                        !estaActivo
+                          ? "bg-slate-50/70 border-dashed border-rose-300 opacity-75"
+                          : "border-slate-200"
+                      }`}
                     >
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-3">
+                      {/* Cabecera del colaborador */}
+                      <div className="flex items-start justify-between gap-2.5">
+                        <div className="flex items-center gap-2.5 min-w-0">
                           <div className="w-9 h-9 rounded-xl bg-slate-100 border border-slate-200 font-bold text-slate-700 flex items-center justify-center text-xs shrink-0">
                             {lic.esInstitucional ? (
                               <Building className="w-4 h-4 text-purple-600" />
@@ -1243,19 +1249,18 @@ export default function ExcepcionesLicencias() {
                               getAvatarIniciales(lic.nombreEmpleado)
                             )}
                           </div>
-                          <div>
-                            <div className="font-bold text-slate-900 leading-tight">
+                          <div className="min-w-0">
+                            <h4 className="font-bold text-slate-900 text-sm leading-tight truncate">
                               {lic.nombreEmpleado}
-                            </div>
+                            </h4>
                             <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
                               {lic.legajoEmpleado && (
                                 <span className="text-[10px] text-slate-400 font-mono">
-                                  #{lic.legajoEmpleado} •
+                                  #{lic.legajoEmpleado}
                                 </span>
                               )}
-                              {/* BADGE DE CATEGORÍA CON EL COLOR CONFIGURADO POR EL USUARIO */}
                               <span
-                                className={`inline-flex items-center gap-1 px-2 py-0.2 rounded-md font-bold text-[9px] border ${estiloBadgeCat}`}
+                                className={`inline-flex items-center gap-1 px-1.5 py-0.2 rounded font-bold text-[9px] border ${estiloBadgeCat}`}
                               >
                                 <span
                                   className={`w-1 h-1 rounded-full ${estiloDotCat}`}
@@ -1265,67 +1270,10 @@ export default function ExcepcionesLicencias() {
                             </div>
                           </div>
                         </div>
-                      </td>
 
-                      <td className="px-4 py-4 whitespace-nowrap">
+                        {/* Estado Dictamen */}
                         <span
-                          className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-semibold border ${getEstiloPildoraTipo(lic.tipo)}`}
-                        >
-                          {getIconoTipo(lic.tipo)}
-                          <span>{lic.tipoEtiqueta}</span>
-                        </span>
-                      </td>
-
-                      <td className="px-4 py-4 whitespace-nowrap">
-                        <div className="font-semibold text-slate-800 text-[11px]">
-                          {esUnSoloDia
-                            ? `${formatearFechaVisual(lic.fechaInicio)}`
-                            : `${formatearFechaVisual(lic.fechaInicio)} al ${formatearFechaVisual(lic.fechaFin)}`}
-                        </div>
-                        <div className="text-[10px] text-slate-400 mt-0.5">
-                          Duración: {lic.diasDuracion}{" "}
-                          {esUnSoloDia ? "día" : "días"}
-                        </div>
-                      </td>
-
-                      <td className="px-4 py-4">
-                        <div className="space-y-1">
-                          <span
-                            className={`inline-block px-2.5 py-0.5 rounded-md font-bold text-[10px] uppercase tracking-wider ${
-                              !estaActivo
-                                ? "bg-rose-50 text-rose-700 border border-rose-200"
-                                : lic.condicionTemporal === "FINALIZADA"
-                                  ? "bg-slate-100 text-slate-600 border border-slate-200"
-                                  : esUnSoloDia &&
-                                      lic.condicionTemporal === "EN_CURSO"
-                                    ? "bg-rose-50 text-rose-600 border border-rose-200 animate-pulse font-black"
-                                    : "bg-emerald-50 text-emerald-800 border border-emerald-200"
-                            }`}
-                          >
-                            {!estaActivo ? "Baja Lógica" : lic.textoProgreso}
-                          </span>
-                          <div className="text-[11px] font-bold text-slate-800 leading-tight">
-                            {lic.condicionTemporal === "EN_CURSO"
-                              ? `En curso: van ${lic.diasTranscurridos} de ${lic.diasDuracion} días`
-                              : lic.condicionTemporal === "FINALIZADA"
-                                ? "Completada"
-                                : "Programada"}
-                          </div>
-                        </div>
-                      </td>
-
-                      <td className="px-6 py-4 max-w-xs">
-                        <div
-                          className="text-slate-600 text-xs truncate font-medium"
-                          title={lic.motivoDictamen}
-                        >
-                          {lic.motivoDictamen}
-                        </div>
-                      </td>
-
-                      <td className="px-4 py-4 whitespace-nowrap">
-                        <span
-                          className={`inline-block px-3 py-1 rounded-xl text-xs font-bold border ${
+                          className={`px-2 py-0.5 rounded-md text-[10px] font-bold border shrink-0 ${
                             lic.estado === "APROBADA"
                               ? "bg-emerald-50 text-emerald-700 border-emerald-200"
                               : lic.estado === "PENDIENTE_RRHH"
@@ -1334,27 +1282,105 @@ export default function ExcepcionesLicencias() {
                           }`}
                         >
                           {lic.estado === "PENDIENTE_RRHH"
-                            ? "Pendiente RRHH"
+                            ? "Pendiente"
                             : lic.estado}
                         </span>
-                      </td>
+                      </div>
 
-                      <td className="px-6 py-4 whitespace-nowrap text-right">
-                        <div className="flex items-center justify-end gap-1.5">
+                      {/* Datos de la Licencia: Tipo y Fechas */}
+                      <div className="bg-slate-50/70 p-2.5 rounded-xl border border-slate-100 space-y-1.5 text-xs">
+                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                          <span
+                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[11px] font-semibold border ${getEstiloPildoraTipo(
+                              lic.tipo,
+                            )}`}
+                          >
+                            {getIconoTipo(lic.tipo)}
+                            <span>{lic.tipoEtiqueta}</span>
+                          </span>
+
+                          <span className="text-slate-700 font-semibold text-[11px] flex items-center gap-1">
+                            <Calendar className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                            {esUnSoloDia
+                              ? `${formatearFechaVisual(lic.fechaInicio)} (1 d)`
+                              : `${formatearFechaVisual(
+                                  lic.fechaInicio,
+                                )} al ${formatearFechaVisual(lic.fechaFin)} (${lic.diasDuracion} d)`}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center justify-between text-[11px] pt-1 border-t border-slate-200/60">
+                          <span className="text-slate-500">Condición:</span>
+                          <span
+                            className={`font-bold ${
+                              !estaActivo
+                                ? "text-rose-700"
+                                : esVenceHoy
+                                  ? "text-rose-600 animate-pulse font-black"
+                                  : "text-slate-800"
+                            }`}
+                          >
+                            {!estaActivo
+                              ? "Baja lógica"
+                              : lic.textoProgreso || "En curso"}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Motivo o Dictamen */}
+                      <div className="text-[11px] text-slate-600">
+                        <strong className="text-slate-800">Motivo:</strong>{" "}
+                        <span className="text-slate-600">
+                          {lic.motivoDictamen ||
+                            "Sin observaciones adicionales"}
+                        </span>
+                      </div>
+
+                      {/* Botones de acción */}
+                      <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-2">
+                        {/* Aprobación rápida para RRHH si está pendiente */}
+                        <div className="flex items-center gap-1.5">
+                          {estaActivo && esPendiente && puedeDictaminar && (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  handleDictaminar(lic.id, "APROBADA")
+                                }
+                                className="inline-flex items-center gap-1 px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition cursor-pointer"
+                              >
+                                <CheckCircle2 className="w-3.5 h-3.5 stroke-[2.5]" />
+                                <span>Aprobar</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  handleDictaminar(lic.id, "RECHAZADA")
+                                }
+                                className="inline-flex items-center gap-1 px-2 py-1 bg-white hover:bg-rose-50 text-rose-600 border border-rose-200 rounded-lg text-xs font-bold transition cursor-pointer"
+                              >
+                                <XCircle className="w-3.5 h-3.5" />
+                                <span>Rechazar</span>
+                              </button>
+                            </>
+                          )}
+                        </div>
+
+                        <div className="flex items-center gap-1">
                           <button
                             type="button"
                             onClick={() => setLicenciaFicha(lic)}
-                            className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition cursor-pointer"
-                            title="Ver Ficha Detallada"
+                            className="inline-flex items-center gap-1 px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition cursor-pointer"
                           >
-                            <Eye className="w-4 h-4" />
+                            <Eye className="w-3.5 h-3.5" />
+                            <span>Ficha</span>
                           </button>
 
                           {estaActivo && puedeCrear && (
                             <button
                               type="button"
                               onClick={() => abrirModalEditar(lic)}
-                              className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition cursor-pointer"
+                              className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition cursor-pointer"
                               title="Editar"
                             >
                               <Pencil className="w-3.5 h-3.5" />
@@ -1366,7 +1392,7 @@ export default function ExcepcionesLicencias() {
                               <button
                                 type="button"
                                 onClick={() => handleEliminar(lic)}
-                                className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer"
+                                className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition cursor-pointer"
                                 title="Dar de baja"
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
@@ -1375,30 +1401,255 @@ export default function ExcepcionesLicencias() {
                               <button
                                 type="button"
                                 onClick={() => handleReactivar(lic)}
-                                className="p-1.5 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition cursor-pointer"
+                                className="p-1.5 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-xl transition cursor-pointer"
                                 title="Reactivar"
                               >
                                 <RotateCcw className="w-3.5 h-3.5" />
                               </button>
                             ))}
                         </div>
-                      </td>
-                    </tr>
+                      </div>
+                    </div>
                   );
-                })
-              )}
-            </tbody>
-          </table>
+                })}
+              </div>
+
+              {/* VISTA ESCRITORIO (>= md): TABLA ESTRUCTURADA COMPLETA */}
+              <div className="hidden md:block bg-white border border-slate-200 rounded-2xl sm:rounded-3xl overflow-hidden shadow-xs">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-[#f8fafc] text-slate-500 uppercase text-[10px] font-bold border-b border-slate-200 tracking-wider">
+                    <tr>
+                      <th className="px-6 py-4">AGENTE / EMPLEADO</th>
+                      <th className="px-4 py-4">TIPO DE LICENCIA</th>
+                      <th className="px-4 py-4">PERÍODO (DESDE - HASTA)</th>
+                      <th className="px-4 py-4">CONTADOR & ESTADO DINÁMICO</th>
+                      <th className="px-6 py-4">MOTIVO / CONSTANCIA</th>
+                      <th className="px-4 py-4">DICTAMEN RRHH</th>
+                      <th className="px-6 py-4 text-right">ACCIONES</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 text-slate-700">
+                    {registros.map((lic) => {
+                      const estaActivo = esActivo(lic);
+                      const esUnSoloDia =
+                        lic.diasDuracion === 1 ||
+                        lic.fechaInicio === lic.fechaFin;
+                      const esPendiente = lic.estado === "PENDIENTE_RRHH";
+
+                      const colorCat = obtenerColorDeConfiguracion(
+                        lic.rolArea,
+                        lic.esInstitucional,
+                      );
+                      const estiloBadgeCat = getBadgeColorClasses(colorCat);
+                      const estiloDotCat = getDotColorClass(colorCat);
+
+                      return (
+                        <tr
+                          key={lic.id}
+                          className={`transition-colors ${
+                            !estaActivo
+                              ? "bg-slate-50/70 opacity-75"
+                              : "hover:bg-slate-50/70"
+                          }`}
+                        >
+                          <td className="px-6 py-4">
+                            <div className="flex items-center gap-3">
+                              <div className="w-9 h-9 rounded-xl bg-slate-100 border border-slate-200 font-bold text-slate-700 flex items-center justify-center text-xs shrink-0">
+                                {lic.esInstitucional ? (
+                                  <Building className="w-4 h-4 text-purple-600" />
+                                ) : (
+                                  getAvatarIniciales(lic.nombreEmpleado)
+                                )}
+                              </div>
+                              <div className="min-w-0">
+                                <div className="font-bold text-slate-900 leading-tight">
+                                  {lic.nombreEmpleado}
+                                </div>
+                                <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                                  {lic.legajoEmpleado && (
+                                    <span className="text-[10px] text-slate-400 font-mono">
+                                      #{lic.legajoEmpleado} •
+                                    </span>
+                                  )}
+                                  <span
+                                    className={`inline-flex items-center gap-1 px-2 py-0.2 rounded-md font-bold text-[9px] border ${estiloBadgeCat}`}
+                                  >
+                                    <span
+                                      className={`w-1 h-1 rounded-full ${estiloDotCat}`}
+                                    />
+                                    <span>{lic.rolArea}</span>
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+
+                          <td className="px-4 py-4 whitespace-nowrap">
+                            <span
+                              className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-semibold border ${getEstiloPildoraTipo(
+                                lic.tipo,
+                              )}`}
+                            >
+                              {getIconoTipo(lic.tipo)}
+                              <span>{lic.tipoEtiqueta}</span>
+                            </span>
+                          </td>
+
+                          <td className="px-4 py-4 whitespace-nowrap">
+                            <div className="font-semibold text-slate-800 text-[11px]">
+                              {esUnSoloDia
+                                ? `${formatearFechaVisual(lic.fechaInicio)}`
+                                : `${formatearFechaVisual(
+                                    lic.fechaInicio,
+                                  )} al ${formatearFechaVisual(lic.fechaFin)}`}
+                            </div>
+                            <div className="text-[10px] text-slate-400 mt-0.5">
+                              Duración: {lic.diasDuracion}{" "}
+                              {esUnSoloDia ? "día" : "días"}
+                            </div>
+                          </td>
+
+                          <td className="px-4 py-4">
+                            <div className="space-y-1">
+                              <span
+                                className={`inline-block px-2.5 py-0.5 rounded-md font-bold text-[10px] uppercase tracking-wider ${
+                                  !estaActivo
+                                    ? "bg-rose-50 text-rose-700 border border-rose-200"
+                                    : lic.condicionTemporal === "FINALIZADA"
+                                      ? "bg-slate-100 text-slate-600 border border-slate-200"
+                                      : esUnSoloDia &&
+                                          lic.condicionTemporal === "EN_CURSO"
+                                        ? "bg-rose-50 text-rose-600 border border-rose-200 animate-pulse font-black"
+                                        : "bg-emerald-50 text-emerald-800 border border-emerald-200"
+                                }`}
+                              >
+                                {!estaActivo
+                                  ? "Baja Lógica"
+                                  : lic.textoProgreso}
+                              </span>
+                              <div className="text-[11px] font-bold text-slate-800 leading-tight">
+                                {lic.condicionTemporal === "EN_CURSO"
+                                  ? `En curso: van ${lic.diasTranscurridos} de ${lic.diasDuracion} días`
+                                  : lic.condicionTemporal === "FINALIZADA"
+                                    ? "Completada"
+                                    : "Programada"}
+                              </div>
+                            </div>
+                          </td>
+
+                          <td className="px-6 py-4 max-w-xs">
+                            <div
+                              className="text-slate-600 text-xs truncate font-medium"
+                              title={lic.motivoDictamen}
+                            >
+                              {lic.motivoDictamen}
+                            </div>
+                          </td>
+
+                          <td className="px-4 py-4 whitespace-nowrap">
+                            <span
+                              className={`inline-block px-3 py-1 rounded-xl text-xs font-bold border ${
+                                lic.estado === "APROBADA"
+                                  ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                  : lic.estado === "PENDIENTE_RRHH"
+                                    ? "bg-amber-50 text-amber-800 border-amber-300"
+                                    : "bg-rose-50 text-rose-700 border-rose-200"
+                              }`}
+                            >
+                              {lic.estado === "PENDIENTE_RRHH"
+                                ? "Pendiente RRHH"
+                                : lic.estado}
+                            </span>
+                          </td>
+
+                          <td className="px-6 py-4 whitespace-nowrap text-right">
+                            <div className="flex items-center justify-end gap-1.5">
+                              {estaActivo && esPendiente && puedeDictaminar && (
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      handleDictaminar(lic.id, "APROBADA")
+                                    }
+                                    className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition cursor-pointer"
+                                    title="Aprobar Solicitud"
+                                  >
+                                    <CheckCircle2 className="w-3.5 h-3.5 stroke-[2.5]" />
+                                    <span>Aprobar</span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      handleDictaminar(lic.id, "RECHAZADA")
+                                    }
+                                    className="inline-flex items-center gap-1 px-2.5 py-1 bg-white hover:bg-rose-50 text-rose-600 border border-rose-200 rounded-lg text-xs font-bold transition cursor-pointer"
+                                    title="Rechazar Solicitud"
+                                  >
+                                    <XCircle className="w-3.5 h-3.5" />
+                                  </button>
+                                </>
+                              )}
+
+                              <button
+                                type="button"
+                                onClick={() => setLicenciaFicha(lic)}
+                                className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition cursor-pointer"
+                                title="Ver Ficha Detallada"
+                              >
+                                <Eye className="w-4 h-4" />
+                              </button>
+
+                              {estaActivo && puedeCrear && (
+                                <button
+                                  type="button"
+                                  onClick={() => abrirModalEditar(lic)}
+                                  className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition cursor-pointer"
+                                  title="Editar"
+                                >
+                                  <Pencil className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+
+                              {puedeEliminar &&
+                                (estaActivo ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleEliminar(lic)}
+                                    className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer"
+                                    title="Dar de baja"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleReactivar(lic)}
+                                    className="p-1.5 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition cursor-pointer"
+                                    title="Reactivar"
+                                  >
+                                    <RotateCcw className="w-3.5 h-3.5" />
+                                  </button>
+                                ))}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
         </div>
       )}
 
       {/* 7. VISTA 3: ASUETOS & FERIADOS INSTITUCIONALES */}
       {tabPrincipal === "ASUETOS" && (
-        <div className="space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-5 border border-slate-200 rounded-3xl shadow-xs">
+        <div className="space-y-3 sm:space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-4 sm:p-5 border border-slate-200 rounded-2xl sm:rounded-3xl shadow-xs">
             <div>
               <div className="flex items-center gap-2">
-                <Building className="w-4 h-4 text-purple-600" />
+                <Building className="w-4 h-4 text-purple-600 shrink-0" />
                 <h3 className="font-bold text-sm text-slate-900">
                   Calendario Institucional de Feriados y Asuetos de la
                   Institución
@@ -1414,22 +1665,22 @@ export default function ExcepcionesLicencias() {
               <button
                 type="button"
                 onClick={() => abrirModalNuevo(null, true)}
-                className="px-4 py-2 bg-[#8b5cf6] hover:bg-[#7c3aed] text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer flex items-center gap-1.5 shrink-0"
+                className="w-full sm:w-auto px-4 py-2 bg-[#8b5cf6] hover:bg-[#7c3aed] text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer flex items-center justify-center gap-1.5 shrink-0"
               >
                 <Plus className="w-4 h-4 stroke-[2.5]" />
-                Agregar Feriado / Asueto
+                <span>Agregar Feriado / Asueto</span>
               </button>
             )}
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
             {loading ? (
-              <div className="col-span-2 p-12 text-center text-slate-400 bg-white border border-slate-200 rounded-3xl text-xs">
+              <div className="col-span-full p-8 sm:p-12 text-center text-slate-400 bg-white border border-slate-200 rounded-2xl sm:rounded-3xl text-xs">
                 <Loader2 className="w-5 h-5 animate-spin mx-auto text-indigo-600 mb-2" />
                 Consultando asuetos...
               </div>
             ) : asuetos.length === 0 ? (
-              <div className="col-span-2 p-12 text-center text-slate-400 bg-white border border-slate-200 rounded-3xl text-xs italic">
+              <div className="col-span-full p-8 sm:p-12 text-center text-slate-400 bg-white border border-slate-200 rounded-2xl sm:rounded-3xl text-xs italic">
                 No hay asuetos o feriados institucionales registrados bajo este
                 filtro.
               </div>
@@ -1441,7 +1692,7 @@ export default function ExcepcionesLicencias() {
                 return (
                   <div
                     key={lic.id}
-                    className={`bg-white border rounded-3xl p-5 shadow-xs space-y-3 flex flex-col justify-between transition ${
+                    className={`bg-white border rounded-2xl sm:rounded-3xl p-4 sm:p-5 shadow-xs space-y-3 flex flex-col justify-between transition ${
                       !estaActivo
                         ? "border-dashed border-rose-300 opacity-75"
                         : "border-purple-200 hover:border-purple-300"
@@ -1529,8 +1780,8 @@ export default function ExcepcionesLicencias() {
       )}
 
       {/* 8. BARRA DE CONTROL DE PAGINACIÓN */}
-      <div className="bg-white px-6 py-4 border border-slate-200 rounded-3xl flex flex-col sm:flex-row items-center justify-between gap-3 text-xs shadow-xs">
-        <div className="text-slate-500">
+      <div className="bg-white px-4 sm:px-6 py-3.5 sm:py-4 border border-slate-200 rounded-2xl sm:rounded-3xl flex flex-col sm:flex-row items-center justify-between gap-3 text-xs shadow-xs">
+        <div className="text-slate-500 text-center sm:text-left">
           {Number(totalElementos) === 0 ? (
             <span>
               Mostrando <span className="font-bold text-slate-800">0</span> de{" "}
@@ -1560,11 +1811,11 @@ export default function ExcepcionesLicencias() {
           )}
         </div>
 
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1 sm:gap-1.5 flex-wrap justify-center">
           <button
             onClick={() => handleCambiarPagina((Number(paginaActual) || 1) - 1)}
             disabled={Number(paginaActual) <= 1 || loading}
-            className="p-2 border border-slate-200 rounded-xl hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer"
+            className="p-1.5 sm:p-2 border border-slate-200 rounded-xl hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer"
             title="Página Anterior"
           >
             <ChevronLeft className="w-4 h-4" />
@@ -1578,7 +1829,7 @@ export default function ExcepcionesLicencias() {
               key={num}
               onClick={() => handleCambiarPagina(num)}
               disabled={loading}
-              className={`w-8 h-8 rounded-xl font-bold transition cursor-pointer ${
+              className={`w-7 h-7 sm:w-8 sm:h-8 rounded-xl font-bold transition cursor-pointer text-xs ${
                 (Number(paginaActual) || 1) === num
                   ? "bg-[#4b35e6] text-white shadow-xs"
                   : "border border-slate-200 text-slate-600 hover:bg-slate-50"
@@ -1591,7 +1842,7 @@ export default function ExcepcionesLicencias() {
           <button
             onClick={() => handleCambiarPagina((Number(paginaActual) || 1) + 1)}
             disabled={Number(paginaActual) >= Number(totalPaginas) || loading}
-            className="p-2 border border-slate-200 rounded-xl hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer"
+            className="p-1.5 sm:p-2 border border-slate-200 rounded-xl hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer"
             title="Página Siguiente"
           >
             <ChevronRight className="w-4 h-4" />

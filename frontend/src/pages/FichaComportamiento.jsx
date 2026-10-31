@@ -80,7 +80,7 @@ export default function FichaComportamiento() {
     const empId = location.state?.empleadoId || searchParams.get("empleadoId");
     return empId ? { id: Number(empId) } : null;
   });
-  const [sidebarAbierto, setSidebarAbierto] = useState(true);
+  const [sidebarAbierto, setSidebarAbierto] = useState(false);
   const [menuImpresionAbierto, setMenuImpresionAbierto] = useState(false);
   const [mostrarKpis, setMostrarKpis] = useState(true);
 
@@ -222,7 +222,7 @@ export default function FichaComportamiento() {
 
     horariosConfigurados.forEach((h) => {
       if (h.activo === false) return;
-      if (h.diaSemana == null) return; // Se omiten franjas flexibles de la proyección de días rígidos
+      if (h.diaSemana == null) return;
 
       let diaNum = null;
       if (typeof h.diaSemana === "number") {
@@ -664,8 +664,6 @@ export default function FichaComportamiento() {
     });
   }, [fichaData?.incidentes, filtroEstadoModal]);
 
-  // En src/pages/FichaComportamiento.jsx:
-
   const renderItemIncidenteInteractivo = (inc, mostrarFecha = false) => {
     const esCritica =
       inc.severidad === "CRÍTICA" || inc.severidad === "CRITICA";
@@ -675,7 +673,6 @@ export default function FichaComportamiento() {
       (inc.tipo || "").toLowerCase().includes("ausencia") ||
       (inc.tipo || "").toLowerCase().includes("falta");
 
-    // Detección de horario inactivo o histórico
     const esHorarioHistorico =
       (inc.detalle || "").includes("Horario Histórico") ||
       (inc.detalle || "").includes("Dado de Baja") ||
@@ -722,7 +719,6 @@ export default function FichaComportamiento() {
               {tituloLimpio}
             </span>
 
-            {/* BADGE DE ESPECIFICACIÓN DE HORARIO DADO DE BAJA / HISTÓRICO */}
             {esHorarioHistorico && (
               <span className="text-[9px] font-bold px-2 py-0.5 rounded-md bg-slate-200 text-slate-700 border border-slate-300 shadow-2xs">
                 Horario Histórico (Inactivo)
@@ -865,10 +861,10 @@ export default function FichaComportamiento() {
     const horariosDia = obtenerHorariosDeFecha(diaInspeccionado.fecha);
 
     return (
-      <div className="bg-white border-2 border-indigo-500/80 rounded-3xl p-5 shadow-sm space-y-4 transition-all animate-fadeIn">
-        <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+      <div className="bg-white border-2 border-indigo-500/80 rounded-2xl sm:rounded-3xl p-4 sm:p-5 shadow-sm space-y-4 transition-all animate-fadeIn">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600">
+            <div className="w-10 h-10 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 shrink-0">
               <CalendarIcon className="w-5 h-5" />
             </div>
             <div>
@@ -880,7 +876,7 @@ export default function FichaComportamiento() {
               </h4>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 justify-end">
             <button
               type="button"
               onClick={() => {
@@ -888,10 +884,10 @@ export default function FichaComportamiento() {
                 setModalidad("DIARIO");
                 setDiaInspeccionado(null);
               }}
-              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-xs transition cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-xs transition cursor-pointer"
             >
               <Eye className="w-3.5 h-3.5" />
-              Ver en Ficha Diaria Completa
+              <span>Ver Ficha Diaria</span>
             </button>
             <button
               type="button"
@@ -905,7 +901,7 @@ export default function FichaComportamiento() {
         </div>
 
         {esLicencia && (
-          <div className="p-3.5 bg-sky-50 border border-sky-200 rounded-2xl flex items-center justify-between gap-3 text-xs">
+          <div className="p-3.5 bg-sky-50 border border-sky-200 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs">
             <div className="flex items-center gap-2.5 text-sky-900 font-bold">
               <ShieldCheck className="w-5 h-5 text-sky-600 shrink-0" />
               <div>
@@ -915,7 +911,7 @@ export default function FichaComportamiento() {
                 </span>
               </div>
             </div>
-            <span className="px-2.5 py-0.5 bg-white border border-sky-300 text-sky-800 rounded-lg font-bold text-[10px]">
+            <span className="px-2.5 py-0.5 bg-white border border-sky-300 text-sky-800 rounded-lg font-bold text-[10px] self-start sm:self-center">
               Eximido por RRHH
             </span>
           </div>
@@ -952,15 +948,15 @@ export default function FichaComportamiento() {
         )}
 
         <div
-          className={`grid grid-cols-2 ${esDocente ? "md:grid-cols-5" : "md:grid-cols-4"} gap-3 text-xs`}
+          className={`grid grid-cols-2 ${esDocente ? "sm:grid-cols-3 lg:grid-cols-5" : "sm:grid-cols-2 lg:grid-cols-4"} gap-2.5 sm:gap-3 text-xs`}
         >
           <div className="bg-slate-50 border border-slate-200/80 p-3 rounded-2xl flex flex-col justify-between">
             <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-              1RA ENTRADA - ÚLTIMO EGRESO
+              ENTRADA → EGRESO
             </span>
-            <div className="font-mono font-bold text-slate-800 text-xs sm:text-sm mt-1">
+            <div className="font-mono font-bold text-slate-800 text-xs sm:text-sm mt-1 truncate">
               {diaInspeccionado.primeraEntrada !== "--:--"
-                ? `${diaInspeccionado.primeraEntrada} hs → ${diaInspeccionado.ultimoEgreso} hs`
+                ? `${diaInspeccionado.primeraEntrada} → ${diaInspeccionado.ultimoEgreso}`
                 : esLicencia
                   ? "Licencia"
                   : "--:--"}
@@ -994,7 +990,7 @@ export default function FichaComportamiento() {
             </div>
           </div>
           {esDocente && (
-            <div className="bg-purple-50/60 border border-purple-200/80 p-3 rounded-2xl flex flex-col justify-between">
+            <div className="bg-purple-50/60 border border-purple-200/80 p-3 rounded-2xl flex flex-col justify-between col-span-2 sm:col-span-1">
               <span className="text-[10px] font-bold uppercase tracking-wider text-purple-700">
                 CLASES DICTADAS
               </span>
@@ -1035,13 +1031,14 @@ export default function FichaComportamiento() {
     );
   };
 
+  // --- CUADRÍCULA CALENDARIO: LIMPIO EN MÓVIL Y DETALLADO EN ESCRITORIO ---
   const renderCuadriculaCalendario = (dias, offset) => {
     return (
-      <div className="grid grid-cols-7 gap-2">
+      <div className="grid grid-cols-7 gap-1 sm:gap-2">
         {["LUN", "MAR", "MIÉ", "JUE", "VIE", "SÁB", "DOM"].map((d) => (
           <div
             key={d}
-            className="text-center font-bold text-[10px] text-slate-400 py-1 uppercase"
+            className="text-center font-bold text-[9px] sm:text-xs text-slate-400 py-1 uppercase tracking-wider"
           >
             {d}
           </div>
@@ -1050,7 +1047,7 @@ export default function FichaComportamiento() {
         {Array.from({ length: offset }).map((_, idx) => (
           <div
             key={`vacio-${idx}`}
-            className="border border-transparent rounded-2xl min-h-[95px] hidden sm:block pointer-events-none opacity-0"
+            className="border border-transparent rounded-xl sm:rounded-2xl min-h-[50px] sm:min-h-[105px] hidden sm:block pointer-events-none opacity-0"
           />
         ))}
 
@@ -1125,32 +1122,32 @@ export default function FichaComportamiento() {
             dia.presenciaNetaMinutos > 0;
 
           let cardBgClasses =
-            "bg-white border-slate-200 hover:border-slate-300";
+            "bg-white border-slate-200 hover:border-indigo-300";
           if (estaSeleccionado)
             cardBgClasses =
-              "bg-indigo-50/50 border-indigo-500 ring-2 ring-indigo-300 shadow-sm";
+              "bg-indigo-50/60 border-indigo-600 ring-2 ring-indigo-400/40 shadow-sm";
           else if (esLicencia)
             cardBgClasses =
               "bg-sky-50/80 border-sky-300 hover:border-sky-400 hover:shadow-xs";
           else if (esFuturo && tieneHorarioAsignado)
             cardBgClasses =
-              "bg-indigo-50/30 border-indigo-200/80 hover:border-indigo-400";
+              "bg-indigo-50/30 border-indigo-200/70 hover:border-indigo-400";
           else if (esFuturo)
-            cardBgClasses = "bg-slate-50/40 border-slate-200/60 opacity-60";
+            cardBgClasses = "bg-slate-50/50 border-slate-200/60 opacity-60";
           else if (esCritica)
             cardBgClasses =
-              "bg-rose-50/70 border-rose-300 hover:border-rose-400 hover:shadow-sm";
+              "bg-rose-50/80 border-rose-300 hover:border-rose-400 hover:shadow-sm";
           else if (esDesvio)
             cardBgClasses =
-              "bg-amber-50/50 border-amber-300 hover:border-amber-400 hover:shadow-sm";
+              "bg-amber-50/60 border-amber-300 hover:border-amber-400 hover:shadow-sm";
           else if (esSalidaIntermedia)
             cardBgClasses =
-              "bg-sky-50/50 border-sky-300 hover:border-sky-400 hover:shadow-sm";
+              "bg-sky-50/60 border-sky-300 hover:border-sky-400 hover:shadow-sm";
           else if (esNormal)
             cardBgClasses =
-              "bg-emerald-50/40 border-emerald-300 hover:border-emerald-400 hover:shadow-sm";
+              "bg-emerald-50/50 border-emerald-300 hover:border-emerald-400 hover:shadow-sm";
           else if (esSinRegistro)
-            cardBgClasses = "bg-rose-50/60 border-rose-200";
+            cardBgClasses = "bg-rose-50/70 border-rose-300";
 
           return (
             <div
@@ -1160,98 +1157,150 @@ export default function FichaComportamiento() {
                   setDiaInspeccionado(null);
                 else setDiaInspeccionado(dia);
               }}
-              className={`border rounded-2xl p-2.5 min-h-[95px] flex flex-col justify-between hover:shadow-xs transition cursor-pointer ${cardBgClasses}`}
+              className={`border rounded-xl sm:rounded-2xl p-1.5 sm:p-2.5 min-h-[50px] sm:min-h-[105px] h-full flex flex-col justify-between hover:shadow-xs transition cursor-pointer overflow-hidden ${cardBgClasses}`}
             >
-              <div className="flex items-center justify-between text-xs font-bold text-slate-800">
+              {/* FILA SUPERIOR: NÚMERO Y BADGE HOY / INDICADOR */}
+              <div className="flex items-center justify-between leading-none">
                 <span
-                  className={`text-sm font-black ${
+                  className={`text-[11px] sm:text-sm font-black ${
                     esCritica
-                      ? "text-rose-900"
+                      ? "text-rose-950 font-mono"
                       : esLicencia
-                        ? "text-sky-900"
-                        : ""
+                        ? "text-sky-950 font-mono"
+                        : "text-slate-900 font-mono"
                   }`}
                 >
                   {numDia}
                 </span>
-                {esHoy && (
-                  <span className="px-1.5 py-0.2 bg-indigo-600 text-white text-[9px] font-bold rounded-md uppercase tracking-wider">
-                    HOY
-                  </span>
-                )}
-                {esLicencia ? (
-                  <span className="w-2 h-2 rounded-full bg-sky-500" />
-                ) : !esHoy && incidentesValidos.length > 0 ? (
-                  <span className="w-2 h-2 rounded-full bg-rose-500" />
-                ) : !esHoy && dia.presenciaNetaMinutos > 0 ? (
-                  <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                ) : null}
+
+                <div className="flex items-center gap-1">
+                  {esHoy && (
+                    <span className="px-1 sm:px-1.5 py-0.5 bg-indigo-600 text-white text-[7px] sm:text-[9px] font-black rounded-md tracking-wider uppercase">
+                      HOY
+                    </span>
+                  )}
+
+                  {esLicencia ? (
+                    <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-sky-500 shrink-0" />
+                  ) : !esHoy && incidentesValidos.length > 0 ? (
+                    <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-rose-500 shrink-0" />
+                  ) : !esHoy && dia.presenciaNetaMinutos > 0 ? (
+                    <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-emerald-500 shrink-0" />
+                  ) : null}
+                </div>
               </div>
 
-              {esDocente &&
-                dia.clasesDictadasTexto &&
-                dia.clasesDictadasTexto !== "0h 0m / 0h 0m" && (
-                  <div
-                    className={`mt-1 text-[9px] font-bold px-1.5 py-0.5 rounded-md w-fit ${
-                      esCritica
-                        ? "bg-rose-100 text-rose-800 border border-rose-200"
-                        : "bg-purple-100 text-purple-800 border border-purple-200"
-                    } flex items-center gap-1`}
-                  >
-                    <GraduationCap className="w-2.5 h-2.5" />
-                    <span>
-                      Clase: {String(dia.clasesDictadasTexto).split(" (")[0]}
+              {/* CUERPO CENTRAL: OCULTO EN MÓVIL (sm:hidden), VISIBLE EN ESCRITORIO (sm:block) */}
+              <div className="hidden sm:block my-1 space-y-1">
+                {esDocente &&
+                  dia.clasesDictadasTexto &&
+                  dia.clasesDictadasTexto !== "0h 0m / 0h 0m" && (
+                    <div
+                      className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md flex items-center justify-between gap-1 ${
+                        esCritica
+                          ? "bg-rose-100 text-rose-900 border border-rose-200"
+                          : "bg-purple-100 text-purple-900 border border-purple-200"
+                      }`}
+                    >
+                      <span className="flex items-center gap-1 truncate">
+                        <GraduationCap className="w-3 h-3 shrink-0" />
+                        <span className="truncate">Clase</span>
+                      </span>
+                      <span className="font-mono shrink-0">
+                        {String(dia.clasesDictadasTexto).split(" (")[0]}
+                      </span>
+                    </div>
+                  )}
+
+                {esLicencia ? (
+                  <div className="space-y-0.5">
+                    <span className="inline-block px-1.5 py-0.5 bg-sky-100 text-sky-900 border border-sky-200 rounded-md text-[9px] font-black uppercase tracking-wider truncate max-w-full">
+                      {dia.tipoLicenciaEtiqueta || "Licencia"}
+                    </span>
+                    <span className="text-[10px] text-sky-800 font-semibold block leading-tight truncate">
+                      Día eximido
                     </span>
                   </div>
-                )}
-
-              {esLicencia ? (
-                <div className="space-y-0.5 mt-1">
-                  <span className="inline-block px-1.5 py-0.2 bg-sky-100 text-sky-900 border border-sky-200 rounded-md text-[9px] font-black uppercase tracking-wider truncate max-w-full">
-                    {dia.tipoLicenciaEtiqueta || "Licencia / Asueto"}
+                ) : dia.presenciaNetaMinutos > 0 ? (
+                  <div className="space-y-1">
+                    <div className="text-[10px] text-slate-600 font-mono leading-none truncate">
+                      {dia.primeraEntrada} → {dia.ultimoEgreso}
+                    </div>
+                    <span className="inline-block px-1.5 py-0.5 bg-emerald-100 text-emerald-900 border border-emerald-200 rounded-md text-[10px] font-black font-mono">
+                      ✓ {dia.presenciaNetaTexto}
+                    </span>
+                  </div>
+                ) : esFlexible ? (
+                  <span className="text-[10px] text-emerald-700 font-semibold italic block">
+                    {esFuturo ? "Optativo" : "Libre (0h)"}
                   </span>
-                  <div className="text-[10px] text-sky-700 font-semibold">
-                    Día Justificado
+                ) : esSinRegistro && tieneHorarioAsignado ? (
+                  <div className="space-y-0.5">
+                    <div className="text-[9px] text-rose-800 font-mono leading-none truncate">
+                      {horariosProgramados[0]?.entrada} →{" "}
+                      {horariosProgramados[0]?.salida}
+                    </div>
+                    <span className="inline-block px-1.5 py-0.5 bg-rose-600 text-white rounded-md text-[9px] font-black uppercase tracking-wider truncate max-w-full">
+                      ✕ Ausencia
+                    </span>
                   </div>
-                </div>
-              ) : dia.presenciaNetaMinutos > 0 ? (
-                <div className="space-y-0.5 mt-1">
-                  <div className="text-[10px] text-slate-500 font-mono">
-                    {dia.primeraEntrada} → {dia.ultimoEgreso}
+                ) : esFuturo && tieneHorarioAsignado ? (
+                  <div className="space-y-0.5">
+                    <div className="text-[9px] text-indigo-700 font-mono font-bold leading-none truncate">
+                      {horariosProgramados[0]?.entrada} →{" "}
+                      {horariosProgramados[0]?.salida}
+                    </div>
+                    <span className="inline-block px-1.5 py-0.5 bg-indigo-100 text-indigo-900 rounded-md text-[9px] font-medium truncate max-w-full">
+                      {horariosProgramados[0]?.nombre || "Programado"}
+                    </span>
                   </div>
-                  <span className="inline-block px-1.5 py-0.2 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-md text-[9px] font-bold">
+                ) : (
+                  <span className="text-[10px] text-slate-400 italic block leading-none">
+                    {esSinRegistro ? "Ausencia" : "Franco"}
+                  </span>
+                )}
+              </div>
+
+              {/* PIE EN MÓVIL: MINI PUNTO / PASTILLA COMPACTA PARA SEÑALAR ESTADO */}
+              <div className="sm:hidden flex items-center justify-center mt-1">
+                {dia.presenciaNetaMinutos > 0 ? (
+                  <span className="text-[8px] font-mono font-bold text-emerald-800 bg-emerald-100/90 px-1 py-0.2 rounded">
                     {dia.presenciaNetaTexto}
                   </span>
-                </div>
-              ) : esFlexible ? (
-                <span className="text-[10px] text-emerald-700/70 font-semibold italic mt-1">
-                  {esFuturo ? "Optativo" : "Libre (0h)"}
-                </span>
-              ) : esSinRegistro && tieneHorarioAsignado ? (
-                <div className="space-y-0.5 mt-1">
-                  <div className="text-[10px] text-rose-700 font-mono font-bold">
-                    {horariosProgramados[0].entrada} →{" "}
-                    {horariosProgramados[0].salida}
-                  </div>
-                  <span className="inline-block px-1.5 py-0.2 bg-rose-100 text-rose-800 border border-rose-200 rounded-md text-[9px] font-black uppercase tracking-wider truncate max-w-full">
-                    Ausencia ({horariosProgramados[0].nombre})
+                ) : esLicencia ? (
+                  <span className="text-[7px] font-bold text-sky-800 bg-sky-100 px-1 py-0.2 rounded uppercase">
+                    Lic.
                   </span>
-                </div>
-              ) : esFuturo && tieneHorarioAsignado ? (
-                <div className="space-y-0.5 mt-1">
-                  <div className="text-[10px] text-indigo-700 font-mono font-bold">
-                    {horariosProgramados[0].entrada} →{" "}
-                    {horariosProgramados[0].salida}
-                  </div>
-                  <span className="inline-block px-1.5 py-0.2 bg-indigo-100 text-indigo-800 rounded-md text-[9px] font-semibold truncate max-w-full">
-                    {horariosProgramados[0].nombre}
+                ) : esSinRegistro && tieneHorarioAsignado ? (
+                  <span className="text-[7px] font-bold text-rose-800 bg-rose-100 px-1 py-0.2 rounded uppercase">
+                    Falta
                   </span>
-                </div>
-              ) : (
-                <span className="text-[10px] text-slate-400 italic mt-1">
-                  {esSinRegistro ? "Ausencia" : "Sin horario"}
-                </span>
-              )}
+                ) : incidentesValidos.length > 0 ? (
+                  <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+                ) : (
+                  <span className="text-[8px] text-slate-300 font-mono">-</span>
+                )}
+              </div>
+
+              {/* PIE EN ESCRITORIO: CONTADOR DETALLADO */}
+              <div className="hidden sm:block leading-none pt-0.5">
+                {incidentesValidos.length > 0 && !esLicencia ? (
+                  <span
+                    className={`inline-block text-[9px] font-bold px-1.5 py-0.5 rounded ${
+                      tieneCritica
+                        ? "bg-rose-100 text-rose-800 font-black"
+                        : "bg-amber-100 text-amber-800"
+                    }`}
+                  >
+                    {incidentesValidos.length}{" "}
+                    {incidentesValidos.length === 1 ? "desvío" : "desvíos"}
+                  </span>
+                ) : dia.salidasIntermedias > 0 && !esLicencia ? (
+                  <span className="text-[9px] font-semibold text-sky-700">
+                    {dia.salidasIntermedias} sal.
+                  </span>
+                ) : null}
+              </div>
             </div>
           );
         })}
@@ -1260,15 +1309,15 @@ export default function FichaComportamiento() {
   };
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8 max-w-[1600px] mx-auto space-y-5 font-sans relative">
+    <div className="p-3 sm:p-5 lg:p-8 max-w-[1600px] mx-auto space-y-4 sm:space-y-5 font-sans relative">
       <style>{`@media print { body { background: white !important; } .no-print { display: none !important; } .print-full { width: 100% !important; margin: 0 !important; } }`}</style>
 
       {/* BARRA SUPERIOR DE ACCIÓN / SIDEBAR */}
-      <div className="flex items-center justify-between no-print">
+      <div className="flex items-center justify-between no-print gap-2">
         <button
           type="button"
           onClick={() => setSidebarAbierto(!sidebarAbierto)}
-          className="inline-flex items-center gap-2 px-3.5 py-2 bg-white border border-slate-200 hover:border-indigo-400 text-slate-700 hover:text-indigo-600 rounded-2xl text-xs font-bold transition shadow-xs cursor-pointer"
+          className="inline-flex items-center gap-2 px-3 py-2 bg-white border border-slate-200 hover:border-indigo-400 text-slate-700 hover:text-indigo-600 rounded-2xl text-xs font-bold transition shadow-xs cursor-pointer shrink-0"
         >
           {sidebarAbierto ? (
             <>
@@ -1278,24 +1327,24 @@ export default function FichaComportamiento() {
           ) : (
             <>
               <PanelLeftOpen className="w-4 h-4 text-indigo-600" />
-              <span>Ver listado de empleados</span>
+              <span>Listado de personal</span>
             </>
           )}
         </button>
         {!sidebarAbierto && empleadoSeleccionado && (
-          <div className="flex items-center gap-2 text-xs text-slate-500 font-medium">
-            <span>Inspeccionando a:</span>
-            <strong className="text-slate-900 bg-slate-100 px-2.5 py-1 rounded-xl">
+          <div className="flex items-center gap-1.5 text-xs text-slate-500 font-medium truncate">
+            <span className="hidden sm:inline">Inspeccionando:</span>
+            <strong className="text-slate-900 bg-slate-100 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-xl truncate">
               {empleadoSeleccionado.apellido}, {empleadoSeleccionado.nombre}
             </strong>
           </div>
         )}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-5 items-start">
         {/* SIDEBAR LISTA DE EMPLEADOS */}
         <div
-          className={`no-print transition-all duration-300 ${sidebarAbierto ? "lg:col-span-3 block" : "lg:hidden"}`}
+          className={`no-print transition-all duration-300 ${sidebarAbierto ? "lg:col-span-3 block" : "lg:hidden hidden"}`}
         >
           <ListaEmpleadosSidebar
             isOpen={sidebarAbierto}
@@ -1307,18 +1356,18 @@ export default function FichaComportamiento() {
 
         {/* ÁREA DE CONTENIDO */}
         <div
-          className={`print-full space-y-5 transition-all duration-300 ${sidebarAbierto ? "lg:col-span-9" : "lg:col-span-12"}`}
+          className={`print-full space-y-4 sm:space-y-5 transition-all duration-300 ${sidebarAbierto ? "lg:col-span-9" : "lg:col-span-12"}`}
         >
           {/* BARRA DE MODALIDAD */}
-          <div className="bg-white border border-slate-200 rounded-3xl p-4 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4 no-print">
+          <div className="bg-white border border-slate-200 rounded-2xl sm:rounded-3xl p-3 sm:p-4 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3 no-print">
             <div className="flex items-center gap-2">
-              <CalendarIcon className="w-4 h-4 text-indigo-600" />
+              <CalendarIcon className="w-4 h-4 text-indigo-600 shrink-0" />
               <span className="text-xs font-bold uppercase tracking-wider text-slate-800">
                 Modalidad de Reporte:
               </span>
             </div>
 
-            <div className="flex items-center bg-slate-100 p-1 rounded-2xl border border-slate-200 text-xs font-semibold overflow-x-auto">
+            <div className="flex items-center bg-slate-100 p-1 rounded-2xl border border-slate-200 text-xs font-semibold overflow-x-auto w-full md:w-fit scrollbar-none">
               {[
                 { label: "Diario", key: "DIARIO" },
                 { label: "Semanal", key: "SEMANAL" },
@@ -1338,7 +1387,7 @@ export default function FichaComportamiento() {
                       setModalListaIncidentesAbierto(false);
                       setMesesExpandidos({});
                     }}
-                    className={`px-3.5 py-1.5 rounded-xl transition cursor-pointer whitespace-nowrap ${
+                    className={`px-3 py-1.5 rounded-xl transition cursor-pointer whitespace-nowrap flex-1 md:flex-initial text-center ${
                       activo
                         ? "bg-white text-indigo-700 shadow-xs border border-slate-200 font-bold"
                         : "text-slate-600 hover:text-slate-900"
@@ -1362,9 +1411,9 @@ export default function FichaComportamiento() {
                     : modalidad === "MENSUAL"
                       ? "Mes:"
                       : modalidad === "TRIMESTRE"
-                        ? "Trimestre Fijo (3 meses):"
+                        ? "Trimestre (3 meses):"
                         : modalidad === "CUATRIMESTRE"
-                          ? "Cuatrimestre Fijo (4 meses):"
+                          ? "Cuatrimestre (4 meses):"
                           : "Período:"}
               </span>
 
@@ -1458,16 +1507,13 @@ export default function FichaComportamiento() {
 
               {(modalidad === "TRIMESTRE" || modalidad === "CUATRIMESTRE") && (
                 <div className="flex items-center gap-2">
-                  <span className="text-[10px] text-slate-400 font-bold uppercase">
-                    Desde Mes a Elección
-                  </span>
                   <select
                     value={fechaConsulta.substring(0, 7)}
                     onChange={(e) => {
                       if (e.target.value)
                         setFechaConsulta(`${e.target.value}-01`);
                     }}
-                    className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 font-semibold text-slate-800 outline-none cursor-pointer"
+                    className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 font-semibold text-slate-800 outline-none cursor-pointer text-xs"
                   >
                     <option value={`${hoyIso.substring(0, 4)}-01`}>
                       Enero (contar {modalidad === "TRIMESTRE" ? "3" : "4"}{" "}
@@ -1509,22 +1555,21 @@ export default function FichaComportamiento() {
               )}
 
               {modalidad === "RANGO_FECHAS" && (
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5 flex-wrap">
                   <div
                     onClick={(e) => {
                       const input = e.currentTarget.querySelector("input");
                       if (input && typeof input.showPicker === "function")
                         input.showPicker();
                     }}
-                    className="relative inline-flex items-center border border-slate-200 rounded-xl px-3 py-1.5 bg-white shadow-2xs hover:border-indigo-400 cursor-pointer"
+                    className="relative inline-flex items-center border border-slate-200 rounded-xl px-2.5 py-1.5 bg-white shadow-2xs hover:border-indigo-400 cursor-pointer"
                   >
-                    <span className="text-[10px] text-slate-400 uppercase mr-1.5 select-none font-bold pointer-events-none">
+                    <span className="text-[10px] text-slate-400 uppercase mr-1 select-none font-bold pointer-events-none">
                       Desde:
                     </span>
                     <span className="font-mono font-semibold text-slate-800 text-xs select-none pointer-events-none">
                       {formatearFechaVisual(fechaConsulta)}
                     </span>
-                    <CalendarIcon className="w-3.5 h-3.5 text-slate-400 ml-2 pointer-events-none" />
                     <input
                       type="date"
                       value={fechaConsulta}
@@ -1539,7 +1584,7 @@ export default function FichaComportamiento() {
                     />
                   </div>
 
-                  <ArrowRight className="w-3.5 h-3.5 text-slate-400" />
+                  <ArrowRight className="w-3.5 h-3.5 text-slate-400 shrink-0" />
 
                   <div
                     onClick={(e) => {
@@ -1547,15 +1592,14 @@ export default function FichaComportamiento() {
                       if (input && typeof input.showPicker === "function")
                         input.showPicker();
                     }}
-                    className="relative inline-flex items-center border border-slate-200 rounded-xl px-3 py-1.5 bg-white shadow-2xs hover:border-indigo-400 cursor-pointer"
+                    className="relative inline-flex items-center border border-slate-200 rounded-xl px-2.5 py-1.5 bg-white shadow-2xs hover:border-indigo-400 cursor-pointer"
                   >
-                    <span className="text-[10px] text-slate-400 uppercase mr-1.5 select-none font-bold pointer-events-none">
+                    <span className="text-[10px] text-slate-400 uppercase mr-1 select-none font-bold pointer-events-none">
                       Hasta:
                     </span>
                     <span className="font-mono font-semibold text-slate-800 text-xs select-none pointer-events-none">
                       {formatearFechaVisual(fechaHastaRango)}
                     </span>
-                    <CalendarIcon className="w-3.5 h-3.5 text-slate-400 ml-2 pointer-events-none" />
                     <input
                       type="date"
                       value={fechaHastaRango}
@@ -1589,14 +1633,15 @@ export default function FichaComportamiento() {
               )}
             </div>
 
-            <div className="flex items-center gap-2 no-print relative">
+            <div className="flex items-center gap-2 no-print relative justify-end">
               <button
                 type="button"
                 onClick={handleExportarExcel}
                 className="flex items-center gap-1.5 px-3 py-1.5 border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 rounded-xl font-bold transition shadow-2xs cursor-pointer text-xs"
               >
                 <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-700" />
-                Exportar CSV
+                <span className="hidden sm:inline">Exportar CSV</span>
+                <span className="sm:hidden">CSV</span>
               </button>
 
               <div className="relative">
@@ -1606,7 +1651,8 @@ export default function FichaComportamiento() {
                   className="flex items-center gap-1.5 px-3 py-1.5 border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 rounded-xl font-bold transition shadow-2xs cursor-pointer text-xs"
                 >
                   <Printer className="w-3.5 h-3.5 text-slate-600" />
-                  <span>Imprimir / PDF</span>
+                  <span className="hidden sm:inline">Imprimir / PDF</span>
+                  <span className="sm:hidden">PDF</span>
                   <ChevronDown className="w-3 h-3 text-slate-400 ml-0.5" />
                 </button>
 
@@ -1631,7 +1677,7 @@ export default function FichaComportamiento() {
                             Imprimir (B&W)
                           </div>
                           <div className="text-[10px] text-slate-400">
-                            Apto blanco y negro / fotocopia
+                            Apto blanco y negro
                           </div>
                         </div>
                       </button>
@@ -1651,7 +1697,7 @@ export default function FichaComportamiento() {
                             Generar PDF Color
                           </div>
                           <div className="text-[10px] text-indigo-500">
-                            Diseño institucional en color
+                            Diseño institucional
                           </div>
                         </div>
                       </button>
@@ -1663,32 +1709,28 @@ export default function FichaComportamiento() {
           </div>
 
           {/* CABECERA CON BOTONES: BADGE FLEXIBLE Y ESTADO */}
-          <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div className="flex items-center gap-4">
-              <div className="w-14 h-14 rounded-2xl bg-[#1e293b] flex items-center justify-center text-white font-bold text-base shadow-md shrink-0">
-                <Users className="w-7 h-7 text-indigo-400" />
+          <div className="bg-white border border-slate-200 rounded-2xl sm:rounded-3xl p-4 sm:p-5 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex items-center gap-3.5 sm:gap-4">
+              <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-[#1e293b] flex items-center justify-center text-white font-bold text-base shadow-md shrink-0">
+                <Users className="w-6 h-6 sm:w-7 sm:h-7 text-indigo-400" />
               </div>
-              <div>
+              <div className="min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <h2 className="text-base font-bold text-slate-900">
+                  <h2 className="text-sm sm:text-base font-bold text-slate-900 truncate">
                     {fichaData?.nombreCompleto ||
                       `${empleadoSeleccionado?.apellido || ""}, ${empleadoSeleccionado?.nombre || ""}`}
                   </h2>
                   <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
                     Activo
                   </span>
-                  {/* BADGE GLOBAL DE HORARIO FLEXIBLE */}
                   {esFlexible && (
                     <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-100/90 text-emerald-800 border border-emerald-300 flex items-center gap-1 shadow-2xs">
                       <Sparkles className="w-3 h-3 text-emerald-600" />
-                      Horario Flexible ({franjaFlexible?.horasObjetivo} hs{" "}
-                      {franjaFlexible?.tipoFrecuencia?.toLowerCase() ||
-                        "mensual"}
-                      )
+                      Flexible ({franjaFlexible?.horasObjetivo} hs)
                     </span>
                   )}
                 </div>
-                <div className="text-xs text-slate-500 mt-0.5">
+                <div className="text-xs text-slate-500 mt-0.5 truncate">
                   <span className="font-semibold text-purple-700">
                     {fichaData?.rolOArea}
                   </span>{" "}
@@ -1696,16 +1738,15 @@ export default function FichaComportamiento() {
               </div>
             </div>
 
-            <div className="flex items-center gap-2.5 self-end md:self-center flex-wrap">
+            <div className="flex items-center gap-2 self-stretch md:self-center justify-between md:justify-end flex-wrap pt-2 md:pt-0 border-t border-slate-100 md:border-none">
               <button
                 type="button"
                 onClick={() => setModalKpiJustificacionesAbierto(true)}
-                className="inline-flex items-center gap-1.5 px-3 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-2xl text-xs font-bold transition border border-indigo-200 cursor-pointer shadow-2xs"
-                title="Ver desglose analítico de justificaciones y ranking de motivos para este período"
+                className="inline-flex items-center gap-1.5 px-3 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-2xl text-xs font-bold transition border border-indigo-200 cursor-pointer shadow-2xs flex-1 md:flex-initial justify-center"
               >
-                <FileCheck className="w-4 h-4 text-indigo-600" />
+                <FileCheck className="w-4 h-4 text-indigo-600 shrink-0" />
                 <span>
-                  Auditoría Justificaciones (
+                  Auditoría (
                   {metricas.incidentesJustificados +
                     metricas.incidentesObservados}
                   )
@@ -1715,38 +1756,33 @@ export default function FichaComportamiento() {
               <button
                 type="button"
                 onClick={() => setMostrarKpis(!mostrarKpis)}
-                className="inline-flex items-center gap-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-2xl text-xs font-bold transition border border-slate-200/80 cursor-pointer shadow-2xs"
-                title={
-                  mostrarKpis
-                    ? "Ocultar panel de KPIs"
-                    : "Mostrar panel de KPIs"
-                }
+                className="inline-flex items-center gap-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-2xl text-xs font-bold transition border border-slate-200/80 cursor-pointer shadow-2xs justify-center"
               >
                 {mostrarKpis ? (
                   <>
                     <ChevronUp className="w-4 h-4 text-slate-600" />
-                    <span>Ocultar Métricas</span>
+                    <span className="hidden sm:inline">Ocultar Métricas</span>
                   </>
                 ) : (
                   <>
                     <ChevronDown className="w-4 h-4 text-slate-600" />
-                    <span>Mostrar Métricas</span>
+                    <span className="hidden sm:inline">Mostrar Métricas</span>
                   </>
                 )}
               </button>
 
-              <div className="border border-slate-100 bg-slate-50/60 p-3 rounded-2xl text-right shrink-0 min-w-[130px]">
-                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+              <div className="border border-slate-100 bg-slate-50/60 p-2 sm:p-3 rounded-2xl text-right shrink-0 min-w-[100px] sm:min-w-[120px]">
+                <div className="text-[9px] sm:text-[10px] font-bold uppercase tracking-wider text-slate-400">
                   CUMPLIMIENTO
                 </div>
-                <div className="text-2xl font-black mt-0.5 text-slate-900">
+                <div className="text-lg sm:text-2xl font-black mt-0.5 text-slate-900">
                   {fichaData?.porcentajeCumplimiento || 0}%
                 </div>
               </div>
             </div>
           </div>
 
-          {/* BANNER INFORMATIVO EN MODALIDADES MULTI-DÍA CUANDO TIENE HORARIO FLEXIBLE */}
+          {/* BANNER FLEXIBLE EN VISTAS MULTI-DÍA */}
           {esFlexible && modalidad !== "DIARIO" && (
             <div className="bg-gradient-to-r from-emerald-50 to-teal-50/70 border border-emerald-200 rounded-2xl p-4 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-fadeIn">
               <div className="flex items-start gap-3">
@@ -1770,31 +1806,29 @@ export default function FichaComportamiento() {
                         "mensual"}
                       )
                     </strong>
-                    . El agente no cuenta con días fijos obligatorios y no
-                    incurre en tardanzas ni ausencias en jornadas no
-                    concurridas.
+                    . Cumplimiento libre sin penalización en días no
+                    concurridos.
                   </p>
                 </div>
               </div>
-              <div className="px-3.5 py-1.5 rounded-xl bg-white/90 border border-emerald-200 text-xs font-bold text-emerald-900 shadow-2xs shrink-0">
+              <div className="px-3.5 py-1.5 rounded-xl bg-white/90 border border-emerald-200 text-xs font-bold text-emerald-900 shadow-2xs shrink-0 self-start sm:self-center">
                 Horas Realizadas: {metricas.presenciaNetaTexto}
               </div>
             </div>
           )}
 
-          {/* --- ESCENARIOS DIARIOS --- */}
-
+          {/* ESCENARIOS DIARIOS */}
           {modalidad === "DIARIO" && estadoJornadaDiaria.esLicencia && (
-            <div className="bg-sky-50 border-2 border-sky-300 rounded-3xl p-6 sm:p-7 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-fadeIn">
-              <div className="flex items-center gap-4">
-                <div className="w-13 h-13 rounded-2xl bg-sky-100 border border-sky-200 flex items-center justify-center text-sky-700 shrink-0 shadow-2xs">
-                  <ShieldCheck className="w-7 h-7" />
+            <div className="bg-sky-50 border-2 border-sky-300 rounded-2xl sm:rounded-3xl p-5 sm:p-7 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-fadeIn">
+              <div className="flex items-center gap-3.5 sm:gap-4">
+                <div className="w-12 h-12 sm:w-13 sm:h-13 rounded-2xl bg-sky-100 border border-sky-200 flex items-center justify-center text-sky-700 shrink-0 shadow-2xs">
+                  <ShieldCheck className="w-6 h-6 sm:w-7 sm:h-7" />
                 </div>
                 <div className="space-y-1">
                   <span className="inline-block px-2.5 py-0.5 rounded-full bg-sky-600 text-white font-black text-[9px] uppercase tracking-wider shadow-2xs">
                     Jornada Justificada por Dictamen
                   </span>
-                  <h3 className="text-base sm:text-lg font-black text-sky-950">
+                  <h3 className="text-sm sm:text-lg font-black text-sky-950">
                     {infoLicenciaDiaria?.tipoLicenciaEtiqueta ||
                       "Licencia / Asueto Institucional Vigente"}
                   </h3>
@@ -1802,18 +1836,16 @@ export default function FichaComportamiento() {
                     Para el día{" "}
                     <strong>{formatearFechaVisual(fechaConsulta)}</strong> (
                     {obtenerNombreDia(fechaConsulta)}) consta una excepción o
-                    licencia formal aprobada por Recursos Humanos. La jornada se
-                    computa eximida sin generar déficit, horas en contra ni
-                    marcas de inasistencia.
+                    licencia formal aprobada por Recursos Humanos.
                   </p>
                 </div>
               </div>
-              <div className="flex flex-col sm:items-end gap-1.5 shrink-0">
+              <div className="flex flex-col sm:items-end gap-1.5 shrink-0 self-start sm:self-center">
                 <span className="inline-flex items-center gap-1 px-3 py-1 bg-white border border-sky-300 text-sky-800 rounded-xl text-xs font-bold shadow-2xs">
                   ✓ Amparado por Reglamentación
                 </span>
                 <span className="text-[11px] font-mono text-sky-700 font-bold">
-                  Cumplimiento asignado: 100%
+                  Cumplimiento: 100%
                 </span>
               </div>
             </div>
@@ -1822,23 +1854,21 @@ export default function FichaComportamiento() {
           {modalidad === "DIARIO" &&
             !estadoJornadaDiaria.esLicencia &&
             estadoJornadaDiaria.esFuturoConHorario && (
-              <div className="bg-indigo-50/60 border-2 border-indigo-200 rounded-3xl p-6 sm:p-8 text-center space-y-4 shadow-sm animate-fadeIn">
-                <div className="w-14 h-14 mx-auto rounded-2xl bg-indigo-100 border border-indigo-200 flex items-center justify-center text-indigo-600 shadow-2xs">
-                  <CalendarCheck className="w-7 h-7" />
+              <div className="bg-indigo-50/60 border-2 border-indigo-200 rounded-2xl sm:rounded-3xl p-5 sm:p-8 text-center space-y-4 shadow-sm animate-fadeIn">
+                <div className="w-12 h-12 sm:w-14 sm:h-14 mx-auto rounded-2xl bg-indigo-100 border border-indigo-200 flex items-center justify-center text-indigo-600 shadow-2xs">
+                  <CalendarCheck className="w-6 h-6 sm:w-7 sm:h-7" />
                 </div>
                 <div className="max-w-xl mx-auto space-y-1.5">
                   <span className="inline-block px-3 py-0.5 rounded-full bg-indigo-600 text-white font-bold text-[10px] uppercase tracking-wider shadow-2xs">
                     Jornada Futura Programada
                   </span>
-                  <h3 className="text-base sm:text-lg font-black text-slate-900">
-                    Horarios pautados para el{" "}
-                    {formatearFechaVisual(fechaConsulta)} (
+                  <h3 className="text-sm sm:text-lg font-black text-slate-900">
+                    Horarios para el {formatearFechaVisual(fechaConsulta)} (
                     {obtenerNombreDia(fechaConsulta)})
                   </h3>
                   <p className="text-xs text-slate-600">
                     Esta fecha es posterior al día de hoy. El colaborador tiene
-                    los siguientes horarios laborales registrados que deberá
-                    cumplir al iniciar la jornada.
+                    los siguientes horarios laborales que deberá cumplir.
                   </p>
                 </div>
 
@@ -1873,24 +1903,22 @@ export default function FichaComportamiento() {
             !estadoJornadaDiaria.esLicencia &&
             estadoJornadaDiaria.esInasistencia &&
             !esFlexible && (
-              <div className="bg-rose-50/80 border-2 border-rose-300 rounded-3xl p-6 sm:p-8 text-center space-y-4 shadow-sm animate-fadeIn">
-                <div className="w-14 h-14 mx-auto rounded-2xl bg-rose-100 border border-rose-200 flex items-center justify-center text-rose-600 shadow-2xs">
-                  <UserX className="w-7 h-7" />
+              <div className="bg-rose-50/80 border-2 border-rose-300 rounded-2xl sm:rounded-3xl p-5 sm:p-8 text-center space-y-4 shadow-sm animate-fadeIn">
+                <div className="w-12 h-12 sm:w-14 sm:h-14 mx-auto rounded-2xl bg-rose-100 border border-rose-200 flex items-center justify-center text-rose-600 shadow-2xs">
+                  <UserX className="w-6 h-6 sm:w-7 sm:h-7" />
                 </div>
                 <div className="max-w-xl mx-auto space-y-1.5">
                   <span className="inline-block px-3 py-0.5 rounded-full bg-rose-600 text-white font-black text-[10px] uppercase tracking-wider shadow-2xs">
                     Inasistencia detectada
                   </span>
-                  <h3 className="text-base sm:text-lg font-black text-rose-950">
-                    El empleado tenía jornada laboral asignada pero no registró
-                    asistencia
+                  <h3 className="text-sm sm:text-lg font-black text-rose-950">
+                    Jornada laboral asignada sin registro de asistencia
                   </h3>
                   <p className="text-xs text-rose-800">
                     Para el día{" "}
-                    <strong>{formatearFechaVisual(fechaConsulta)}</strong> (
-                    {obtenerNombreDia(fechaConsulta)}) constan franjas horarias
-                    obligatorias programadas, pero no se registraron marcaciones
-                    biométricas válidas de ingreso ni egreso.
+                    <strong>{formatearFechaVisual(fechaConsulta)}</strong> no se
+                    registraron marcaciones biométricas válidas de ingreso ni
+                    egreso.
                   </p>
                 </div>
 
@@ -1925,9 +1953,9 @@ export default function FichaComportamiento() {
             !estadoJornadaDiaria.esLicencia &&
             (estadoJornadaDiaria.esSinHorario ||
               (esFlexible && !estadoJornadaDiaria.tieneDatos)) && (
-              <div className="bg-white border border-slate-200 rounded-3xl p-8 sm:p-12 text-center space-y-4 shadow-xs animate-fadeIn">
-                <div className="w-16 h-16 mx-auto rounded-3xl bg-slate-50 border border-slate-200/80 flex items-center justify-center text-slate-400 shadow-2xs">
-                  <CalendarOff className="w-8 h-8 text-slate-400" />
+              <div className="bg-white border border-slate-200 rounded-2xl sm:rounded-3xl p-6 sm:p-12 text-center space-y-4 shadow-xs animate-fadeIn">
+                <div className="w-14 h-14 sm:w-16 sm:h-16 mx-auto rounded-3xl bg-slate-50 border border-slate-200/80 flex items-center justify-center text-slate-400 shadow-2xs">
+                  <CalendarOff className="w-7 h-7 sm:w-8 sm:h-8 text-slate-400" />
                 </div>
                 <div className="max-w-md mx-auto space-y-1.5">
                   <span className="inline-block px-3 py-0.5 rounded-full bg-slate-100 text-slate-600 font-bold text-[10px] uppercase tracking-wider">
@@ -1942,67 +1970,64 @@ export default function FichaComportamiento() {
                   </h3>
                   <p className="text-xs text-slate-500 leading-relaxed">
                     {esFlexible
-                      ? `El colaborador cuenta con esquema flexible de ${franjaFlexible?.horasObjetivo} hs y no registró fichajes el día ${formatearFechaVisual(fechaConsulta)}. No computa inasistencia ni deuda horaria.`
-                      : `No existe registro de un horario laboral asignado ni marcaciones biométricas para el día ${formatearFechaVisual(fechaConsulta)} (${obtenerNombreDia(fechaConsulta)}).`}
+                      ? `El colaborador cuenta con esquema flexible y no registró fichajes el día ${formatearFechaVisual(fechaConsulta)}.`
+                      : `No existe horario asignado ni fichajes para el día ${formatearFechaVisual(fechaConsulta)}.`}
                   </p>
                 </div>
               </div>
             )}
 
-          {/* TARJETAS KPI DE ACTIVIDAD (EXPANDIBLES / COLAPSABLES) */}
+          {/* TARJETAS KPI DE ACTIVIDAD */}
           {mostrarKpis &&
             (modalidad !== "DIARIO" ||
               (!estadoJornadaDiaria.esSinHorario &&
                 !estadoJornadaDiaria.esFuturoConHorario)) && (
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-3 animate-fadeIn">
-                <div className="bg-white border border-slate-200 p-4 rounded-2xl shadow-xs flex flex-col justify-between">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-2.5 sm:gap-3 animate-fadeIn">
+                <div className="bg-white border border-slate-200 p-3.5 sm:p-4 rounded-2xl shadow-xs flex flex-col justify-between">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block truncate">
                     {modalidad === "DIARIO"
-                      ? "1RA ENTRADA → EGRESO"
+                      ? "ENTRADA → EGRESO"
                       : "DÍAS EN SEDE"}
                   </span>
-                  <div className="text-sm font-black text-slate-900 mt-2 font-mono">
+                  <div className="text-xs sm:text-sm font-black text-slate-900 mt-2 font-mono truncate">
                     {modalidad === "DIARIO"
                       ? `${metricas.primeraEntrada} hs → ${metricas.ultimoEgreso} hs`
                       : metricas.primeraEntrada}
                   </div>
                 </div>
 
-                <div className="bg-emerald-50/60 border border-emerald-200 p-4 rounded-2xl shadow-xs flex flex-col justify-between">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-800 block">
-                    TOTAL HORAS NETAS
+                <div className="bg-emerald-50/60 border border-emerald-200 p-3.5 sm:p-4 rounded-2xl shadow-xs flex flex-col justify-between">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-800 block truncate">
+                    HORAS NETAS
                   </span>
                   <div>
-                    <div className="text-xl font-black text-emerald-950 mt-1">
+                    <div className="text-lg sm:text-xl font-black text-emerald-950 mt-1">
                       {metricas.presenciaNetaTexto}
                     </div>
                   </div>
                 </div>
 
-                <div className="bg-sky-50/70 border border-sky-200 p-4 rounded-2xl shadow-xs flex flex-col justify-between">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-sky-800 block">
-                    LICENCIAS Y ASUETOS
+                <div className="bg-sky-50/70 border border-sky-200 p-3.5 sm:p-4 rounded-2xl shadow-xs flex flex-col justify-between">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-sky-800 block truncate">
+                    LICENCIAS
                   </span>
                   <div>
-                    <div className="text-xl font-black text-sky-950 mt-1">
+                    <div className="text-lg sm:text-xl font-black text-sky-950 mt-1">
                       {metricas.horasLicenciaTexto || "0h 0m"}
                     </div>
-                    <div className="text-[10px] font-semibold text-sky-700 mt-0.5">
-                      {metricas.diasLicenciaPeriodo || 0}{" "}
-                      {metricas.diasLicenciaPeriodo === 1
-                        ? "día eximido"
-                        : "días eximidos"}
+                    <div className="text-[10px] font-semibold text-sky-700 mt-0.5 truncate">
+                      {metricas.diasLicenciaPeriodo || 0} eximidos
                     </div>
                   </div>
                 </div>
 
                 {esDocente && (
-                  <div className="bg-purple-50/60 border border-purple-200 p-4 rounded-2xl shadow-xs flex flex-col justify-between">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-purple-800 block">
+                  <div className="bg-purple-50/60 border border-purple-200 p-3.5 sm:p-4 rounded-2xl shadow-xs flex flex-col justify-between">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-purple-800 block truncate">
                       CLASES DICTADAS
                     </span>
                     <div>
-                      <div className="text-xl font-black text-purple-950 mt-1 font-mono">
+                      <div className="text-lg sm:text-xl font-black text-purple-950 mt-1 font-mono">
                         {String(
                           metricas.clasesDictadasTexto || "0h 0m / 0h 0m (0%)",
                         )
@@ -2013,22 +2038,22 @@ export default function FichaComportamiento() {
                   </div>
                 )}
 
-                <div className="bg-rose-50/60 border border-rose-200 p-4 rounded-2xl shadow-xs flex flex-col justify-between">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-rose-800 block">
-                    HORAS EN CONTRA (DEUDA)
+                <div className="bg-rose-50/60 border border-rose-200 p-3.5 sm:p-4 rounded-2xl shadow-xs flex flex-col justify-between">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-rose-800 block truncate">
+                    HORAS EN CONTRA
                   </span>
                   <div>
-                    <div className="text-xl font-black text-rose-950 mt-1">
+                    <div className="text-lg sm:text-xl font-black text-rose-950 mt-1">
                       -{metricas.horasEnContraTexto || "0h 0m"}
                     </div>
                   </div>
                 </div>
 
-                <div className="bg-amber-50/50 border border-amber-200/70 p-4 rounded-2xl shadow-xs flex flex-col justify-between">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-amber-800 block">
+                <div className="bg-amber-50/50 border border-amber-200/70 p-3.5 sm:p-4 rounded-2xl shadow-xs flex flex-col justify-between">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-amber-800 block truncate">
                     SALIDAS INTERMEDIAS
                   </span>
-                  <div className="text-base font-black text-amber-950 mt-1">
+                  <div className="text-sm sm:text-base font-black text-amber-950 mt-1">
                     {metricas.salidasIntermediasCantidad} (
                     {metricas.salidasIntermediasMinutos} min)
                   </div>
@@ -2036,34 +2061,33 @@ export default function FichaComportamiento() {
 
                 <div
                   onClick={() => abrirModalListaFiltrada("TODOS")}
-                  className="p-4 rounded-2xl shadow-xs flex flex-col justify-between transition cursor-pointer select-none border bg-white hover:bg-rose-50/40 border-rose-200"
+                  className="p-3.5 sm:p-4 rounded-2xl shadow-xs flex flex-col justify-between transition cursor-pointer select-none border bg-white hover:bg-rose-50/40 border-rose-200 col-span-2 sm:col-span-1"
                 >
                   <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-bold uppercase tracking-wider block text-rose-600">
-                      INCIDENTES TOTALES
+                    <span className="text-[10px] font-bold uppercase tracking-wider block text-rose-600 truncate">
+                      INCIDENTES
                     </span>
-                    <Eye className="w-3.5 h-3.5 text-rose-500" />
+                    <Eye className="w-3.5 h-3.5 text-rose-500 shrink-0" />
                   </div>
                   <div>
-                    <div className="text-xl font-black mt-1 text-slate-900">
+                    <div className="text-lg sm:text-xl font-black mt-1 text-slate-900">
                       {metricas.totalIncidentes}
                     </div>
                     <div className="text-[10px] font-semibold mt-0.5 text-slate-400">
-                      {metricas.incidentesJustificados} justif. •{" "}
-                      <span className="underline">Ver lista</span>
+                      {metricas.incidentesJustificados} justif.
                     </div>
                   </div>
                 </div>
               </div>
             )}
 
-          {/* --- VISTA 1: DIARIO --- */}
+          {/* VISTA 1: DIARIO */}
           {modalidad === "DIARIO" &&
             !estadoJornadaDiaria.esSinHorario &&
             !estadoJornadaDiaria.esFuturoConHorario && (
               <>
                 {!estadoJornadaDiaria.esInasistencia && (
-                  <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-xs space-y-4">
+                  <div className="bg-white border border-slate-200 rounded-2xl sm:rounded-3xl p-4 sm:p-5 shadow-xs space-y-4">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2 font-bold text-xs uppercase tracking-wider text-slate-800">
                         <Clock className="w-4 h-4 text-indigo-600" />
@@ -2131,25 +2155,24 @@ export default function FichaComportamiento() {
                 {/* TABLA INFERIOR */}
                 <div
                   ref={tablaDetalleRef}
-                  className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-xs scroll-mt-6"
+                  className="bg-white border border-slate-200 rounded-2xl sm:rounded-3xl overflow-hidden shadow-xs scroll-mt-6"
                 >
-                  <div className="flex border-b border-slate-100 bg-[#f8fafc] px-4 pt-3 gap-2 text-xs font-bold no-print">
+                  <div className="flex border-b border-slate-100 bg-[#f8fafc] px-3 sm:px-4 pt-3 gap-1 sm:gap-2 text-xs font-bold no-print overflow-x-auto scrollbar-none">
                     <button
                       type="button"
                       onClick={() => setTabInferior("INTERVALOS")}
-                      className={`pb-2.5 px-3 border-b-2 transition cursor-pointer ${
+                      className={`pb-2.5 px-2.5 sm:px-3 border-b-2 transition cursor-pointer whitespace-nowrap ${
                         tabInferior === "INTERVALOS"
                           ? "border-indigo-600 text-indigo-700"
                           : "border-transparent text-slate-500 hover:text-slate-800"
                       }`}
                     >
-                      Intervalos de Jornada (
-                      {fichaData?.intervalosDetalle?.length || 0})
+                      Intervalos ({fichaData?.intervalosDetalle?.length || 0})
                     </button>
                     <button
                       type="button"
                       onClick={() => setTabInferior("INCIDENTES")}
-                      className={`pb-2.5 px-3 border-b-2 transition cursor-pointer flex items-center gap-1.5 ${
+                      className={`pb-2.5 px-2.5 sm:px-3 border-b-2 transition cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
                         tabInferior === "INCIDENTES"
                           ? "border-rose-600 text-rose-700"
                           : "border-transparent text-slate-500 hover:text-slate-800"
@@ -2165,61 +2188,64 @@ export default function FichaComportamiento() {
                     <button
                       type="button"
                       onClick={() => setTabInferior("BRUTOS")}
-                      className={`pb-2.5 px-3 border-b-2 transition cursor-pointer ${
+                      className={`pb-2.5 px-2.5 sm:px-3 border-b-2 transition cursor-pointer whitespace-nowrap ${
                         tabInferior === "BRUTOS"
                           ? "border-indigo-600 text-indigo-700"
                           : "border-transparent text-slate-500 hover:text-slate-800"
                       }`}
                     >
-                      Fichajes en Bruto (
-                      {fichaData?.fichajesBrutos?.length || 0})
+                      Fichajes ({fichaData?.fichajesBrutos?.length || 0})
                     </button>
                   </div>
 
-                  <div className="p-4">
+                  <div className="p-3 sm:p-4">
                     {tabInferior === "INTERVALOS" && (
-                      <table className="w-full text-left text-xs">
-                        <thead className="text-[10px] uppercase font-bold text-slate-400 border-b border-slate-100">
-                          <tr>
-                            <th className="py-2">Tipo</th>
-                            <th className="py-2">Inicio</th>
-                            <th className="py-2">Fin</th>
-                            <th className="py-2">Duración</th>
-                            <th className="py-2">Detalle</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100">
-                          {(fichaData?.intervalosDetalle || []).map(
-                            (it, idx) => (
-                              <tr key={idx} className="hover:bg-slate-50">
-                                <td className="py-3 font-bold">
-                                  {it.tipo === "Presencia" ? (
-                                    <span className="text-emerald-600">
-                                      →] Presencia
-                                    </span>
-                                  ) : (
-                                    <span className="text-amber-600">
-                                      [→ Salida Intermedia
-                                    </span>
-                                  )}
-                                </td>
-                                <td className="py-3 font-mono">
-                                  {it.horaInicio}
-                                </td>
-                                <td className="py-3 font-mono">{it.horaFin}</td>
-                                <td className="py-3 font-bold">
-                                  {it.duracionTexto}
-                                </td>
-                                <td
-                                  className={`py-3 ${it.esInfraccion ? "text-rose-600 font-bold" : "text-slate-500"}`}
-                                >
-                                  {it.detalle}
-                                </td>
-                              </tr>
-                            ),
-                          )}
-                        </tbody>
-                      </table>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left text-xs min-w-[500px]">
+                          <thead className="text-[10px] uppercase font-bold text-slate-400 border-b border-slate-100">
+                            <tr>
+                              <th className="py-2">Tipo</th>
+                              <th className="py-2">Inicio</th>
+                              <th className="py-2">Fin</th>
+                              <th className="py-2">Duración</th>
+                              <th className="py-2">Detalle</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {(fichaData?.intervalosDetalle || []).map(
+                              (it, idx) => (
+                                <tr key={idx} className="hover:bg-slate-50">
+                                  <td className="py-3 font-bold">
+                                    {it.tipo === "Presencia" ? (
+                                      <span className="text-emerald-600">
+                                        →] Presencia
+                                      </span>
+                                    ) : (
+                                      <span className="text-amber-600">
+                                        [→ Salida Intermedia
+                                      </span>
+                                    )}
+                                  </td>
+                                  <td className="py-3 font-mono">
+                                    {it.horaInicio}
+                                  </td>
+                                  <td className="py-3 font-mono">
+                                    {it.horaFin}
+                                  </td>
+                                  <td className="py-3 font-bold">
+                                    {it.duracionTexto}
+                                  </td>
+                                  <td
+                                    className={`py-3 ${it.esInfraccion ? "text-rose-600 font-bold" : "text-slate-500"}`}
+                                  >
+                                    {it.detalle}
+                                  </td>
+                                </tr>
+                              ),
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
                     )}
 
                     {tabInferior === "INCIDENTES" && (
@@ -2249,41 +2275,45 @@ export default function FichaComportamiento() {
                     )}
 
                     {tabInferior === "BRUTOS" && (
-                      <table className="w-full text-left text-xs">
-                        <thead className="text-[10px] uppercase font-bold text-slate-400 border-b border-slate-100">
-                          <tr>
-                            <th className="py-2">Hora</th>
-                            <th className="py-2">Evento</th>
-                            <th className="py-2">Dispositivo / Reloj</th>
-                            <th className="py-2">Estado</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100 font-mono">
-                          {(fichaData?.fichajesBrutos || []).map((b) => (
-                            <tr key={b.id} className="hover:bg-slate-50">
-                              <td className="py-2.5 font-bold">{b.hora} hs</td>
-                              <td className="py-2.5 uppercase font-semibold text-indigo-700">
-                                {b.tipoEvento}
-                              </td>
-                              <td className="py-2.5 text-slate-600">
-                                {b.nombreReloj}
-                              </td>
-                              <td className="py-2.5 text-emerald-600 font-bold">
-                                ✓ {b.estado}
-                              </td>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left text-xs min-w-[450px]">
+                          <thead className="text-[10px] uppercase font-bold text-slate-400 border-b border-slate-100">
+                            <tr>
+                              <th className="py-2">Hora</th>
+                              <th className="py-2">Evento</th>
+                              <th className="py-2">Dispositivo / Reloj</th>
+                              <th className="py-2">Estado</th>
                             </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100 font-mono">
+                            {(fichaData?.fichajesBrutos || []).map((b) => (
+                              <tr key={b.id} className="hover:bg-slate-50">
+                                <td className="py-2.5 font-bold">
+                                  {b.hora} hs
+                                </td>
+                                <td className="py-2.5 uppercase font-semibold text-indigo-700">
+                                  {b.tipoEvento}
+                                </td>
+                                <td className="py-2.5 text-slate-600">
+                                  {b.nombreReloj}
+                                </td>
+                                <td className="py-2.5 text-emerald-600 font-bold">
+                                  ✓ {b.estado}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
                     )}
                   </div>
                 </div>
               </>
             )}
 
-          {/* --- VISTA 2: SEMANAL (ADAPTADA PARA HORARIO FLEXIBLE) --- */}
+          {/* VISTA 2: SEMANAL */}
           {modalidad === "SEMANAL" && (
-            <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-xs space-y-4">
+            <div className="bg-white border border-slate-200 rounded-2xl sm:rounded-3xl p-4 sm:p-5 shadow-xs space-y-4">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
                   <h3 className="text-sm font-bold text-slate-900">
@@ -2292,203 +2322,261 @@ export default function FichaComportamiento() {
                   </h3>
                   <p className="text-[11px] text-slate-500">
                     {esFlexible
-                      ? `Régimen flexible: Se listan únicamente los días con asistencia. Horas a cubrir en la semana: ~${horasObjetivoSemana} hs.`
-                      : 'Haga clic en "Ver Día" para abrir la inspección detallada de cualquier jornada.'}
+                      ? `Régimen flexible: ~${horasObjetivoSemana} hs semanales.`
+                      : 'Haga clic en "Ver Día" para abrir la inspección detallada.'}
                   </p>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   {esFlexible && (
                     <span className="px-3 py-1 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-xl font-bold text-xs">
-                      Meta Semanal: ~{horasObjetivoSemana} hs
+                      Meta: ~{horasObjetivoSemana} hs
                     </span>
                   )}
                   <span className="px-3 py-1 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-xl font-bold text-xs">
-                    Total: {metricas.presenciaNetaTexto} realizadas
+                    Total: {metricas.presenciaNetaTexto}
                   </span>
                 </div>
               </div>
 
               {renderCardInspeccionDiaria()}
 
-              {/* EN MODO FLEXIBLE: SI NO HUBO ASISTENCIA EN TODA LA SEMANA */}
               {esFlexible &&
               (fichaData?.diasPeriodo || []).filter(
                 (d) =>
                   d.presenciaNetaMinutos > 0 ||
                   (d.primeraEntrada && d.primeraEntrada !== "--:--"),
               ).length === 0 ? (
-                <div className="p-8 text-center bg-slate-50 border border-dashed border-slate-200 rounded-2xl space-y-2">
+                <div className="p-6 sm:p-8 text-center bg-slate-50 border border-dashed border-slate-200 rounded-2xl space-y-2">
                   <div className="text-xs font-bold text-slate-700">
                     Sin marcaciones registradas en esta semana
                   </div>
                   <p className="text-[11px] text-slate-500 max-w-md mx-auto">
                     El colaborador cuenta con esquema libre y debe cubrir
                     aproximadamente{" "}
-                    <strong>{horasObjetivoSemana} horas semanales</strong>. No
-                    se computan faltas ni incidentes en los días no concurridos.
+                    <strong>{horasObjetivoSemana} horas semanales</strong>.
                   </p>
                 </div>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs">
-                    <thead className="bg-[#f8fafc] text-slate-500 uppercase text-[10px] font-bold border-b border-slate-100">
-                      <tr>
-                        <th className="px-4 py-3">Fecha</th>
-                        <th className="px-4 py-3">Día</th>
-                        <th className="px-4 py-3">1ra Entrada</th>
-                        <th className="px-4 py-3">Último Egreso</th>
-                        <th className="px-4 py-3">Horas Realizadas</th>
-                        <th className="px-4 py-3">Salidas Interm.</th>
-                        <th className="px-4 py-3">Incidentes</th>
-                        <th className="px-4 py-3">Cumplimiento</th>
-                        <th className="px-4 py-3 text-right no-print">
-                          Acción
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100 text-slate-700">
-                      {(fichaData?.diasPeriodo || [])
-                        // SI ES FLEXIBLE, FILTRAR ÚNICAMENTE DÍAS CON PRESENCIA O LICENCIA
-                        .filter((dia) => {
-                          if (!esFlexible) return true;
-                          const huboActividad =
-                            dia.presenciaNetaMinutos > 0 ||
-                            (dia.primeraEntrada &&
-                              dia.primeraEntrada !== "--:--");
-                          const esLic =
-                            dia.tieneLicencia ||
-                            dia.estadoGeneral === "LICENCIA" ||
-                            dia.estadoGeneral === "ASUETO";
-                          return huboActividad || esLic;
-                        })
-                        .map((dia) => {
-                          const estaInspeccionado =
-                            diaInspeccionado?.fecha === dia.fecha;
+                <>
+                  {/* Cards Mobile (< md) */}
+                  <div className="grid grid-cols-1 gap-2.5 md:hidden">
+                    {(fichaData?.diasPeriodo || [])
+                      .filter((dia) => {
+                        if (!esFlexible) return true;
+                        const huboActividad =
+                          dia.presenciaNetaMinutos > 0 ||
+                          (dia.primeraEntrada &&
+                            dia.primeraEntrada !== "--:--");
+                        const esLic =
+                          dia.tieneLicencia ||
+                          dia.estadoGeneral === "LICENCIA" ||
+                          dia.estadoGeneral === "ASUETO";
+                        return huboActividad || esLic;
+                      })
+                      .map((dia) => {
+                        const estaInspeccionado =
+                          diaInspeccionado?.fecha === dia.fecha;
+                        const esLicencia =
+                          dia.tieneLicencia ||
+                          dia.estadoGeneral === "LICENCIA" ||
+                          dia.estadoGeneral === "ASUETO";
+                        const esFuturo = dia.fecha > hoyIso;
+                        const horariosProgramados = obtenerHorariosDeFecha(
+                          dia.fecha,
+                        );
+                        const tieneHorario = horariosProgramados.length > 0;
+                        const huboActividad =
+                          dia.presenciaNetaMinutos > 0 ||
+                          (dia.primeraEntrada &&
+                            dia.primeraEntrada !== "--:--");
+                        const esFalta =
+                          tieneHorario &&
+                          !huboActividad &&
+                          !esFuturo &&
+                          !esFlexible;
 
-                          const esLicencia =
-                            dia.tieneLicencia ||
-                            dia.estadoGeneral === "LICENCIA" ||
-                            dia.estadoGeneral === "ASUETO";
-
-                          const esFuturo = dia.fecha > hoyIso;
-                          const horariosProgramados = obtenerHorariosDeFecha(
-                            dia.fecha,
-                          );
-                          const tieneHorario = horariosProgramados.length > 0;
-                          const huboActividad =
-                            dia.presenciaNetaMinutos > 0 ||
-                            (dia.primeraEntrada &&
-                              dia.primeraEntrada !== "--:--");
-
-                          if (esLicencia) {
-                            return (
-                              <tr
-                                key={dia.fecha}
-                                className={`transition ${
-                                  estaInspeccionado
-                                    ? "bg-sky-100/70 font-semibold"
-                                    : "bg-sky-50/50 hover:bg-sky-50/80"
-                                }`}
+                        return (
+                          <div
+                            key={dia.fecha}
+                            className={`p-3 rounded-2xl border text-xs space-y-2 ${
+                              estaInspeccionado
+                                ? "bg-indigo-50/70 border-indigo-400"
+                                : esLicencia
+                                  ? "bg-sky-50/50 border-sky-200"
+                                  : esFalta
+                                    ? "bg-rose-50/50 border-rose-200"
+                                    : "bg-white border-slate-200"
+                            }`}
+                          >
+                            <div className="flex items-center justify-between">
+                              <span className="font-mono font-bold text-slate-900">
+                                {formatearFechaVisual(dia.fecha)} (
+                                {dia.diaSemana})
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (diaInspeccionado?.fecha === dia.fecha)
+                                    setDiaInspeccionado(null);
+                                  else setDiaInspeccionado(dia);
+                                }}
+                                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold bg-white border border-slate-200 text-slate-700 shadow-2xs"
                               >
-                                <td className="px-4 py-3 font-mono font-bold text-sky-950">
-                                  {formatearFechaVisual(dia.fecha)}
-                                </td>
-                                <td className="px-4 py-3 font-semibold text-sky-900">
-                                  {dia.diaSemana}
-                                </td>
-                                <td colSpan={4} className="px-4 py-3">
-                                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white text-sky-800 border border-sky-300 font-bold text-[11px] shadow-2xs">
-                                    <ShieldCheck className="w-3.5 h-3.5 text-sky-600" />
-                                    {dia.tipoLicenciaEtiqueta ||
-                                      "Licencia / Asueto Institucional"}
-                                    • Eximido de asistencia
-                                  </span>
-                                </td>
-                                <td className="px-4 py-3">
-                                  <span className="inline-block text-[10px] font-bold px-2 py-0.5 rounded-full bg-sky-100 text-sky-800 border border-sky-300">
-                                    Justificada
-                                  </span>
-                                </td>
-                                <td className="px-4 py-3 font-bold text-sky-900">
-                                  100%
-                                </td>
-                                <td className="px-4 py-3 text-right no-print">
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      if (diaInspeccionado?.fecha === dia.fecha)
-                                        setDiaInspeccionado(null);
-                                      else setDiaInspeccionado(dia);
-                                    }}
-                                    className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold cursor-pointer transition ${
-                                      estaInspeccionado
-                                        ? "bg-sky-700 text-white shadow-xs"
-                                        : "bg-white hover:bg-sky-100 text-sky-800 border border-sky-300"
-                                    }`}
-                                  >
-                                    <Eye className="w-3.5 h-3.5" />
-                                    {estaInspeccionado ? "Cerrar" : "Ver Día"}
-                                  </button>
-                                </td>
-                              </tr>
+                                <Eye className="w-3.5 h-3.5" />
+                                <span>
+                                  {estaInspeccionado ? "Cerrar" : "Ver"}
+                                </span>
+                              </button>
+                            </div>
+
+                            {esLicencia ? (
+                              <div className="text-sky-800 font-bold text-[11px]">
+                                {dia.tipoLicenciaEtiqueta ||
+                                  "Licencia / Asueto"}{" "}
+                                • Eximido
+                              </div>
+                            ) : esFalta ? (
+                              <div className="text-rose-700 font-bold text-[11px]">
+                                ⚠ Ausencia (
+                                {horariosProgramados[0]?.nombre ||
+                                  "Horario programado"}
+                                )
+                              </div>
+                            ) : (
+                              <div className="flex items-center justify-between text-slate-600">
+                                <span className="font-mono">
+                                  {dia.primeraEntrada} → {dia.ultimoEgreso}
+                                </span>
+                                <span className="font-bold text-emerald-700">
+                                  {dia.presenciaNetaTexto}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                  </div>
+
+                  {/* Tabla Desktop (>= md) */}
+                  <div className="hidden md:block overflow-x-auto">
+                    <table className="w-full text-left text-xs">
+                      <thead className="bg-[#f8fafc] text-slate-500 uppercase text-[10px] font-bold border-b border-slate-100">
+                        <tr>
+                          <th className="px-4 py-3">Fecha</th>
+                          <th className="px-4 py-3">Día</th>
+                          <th className="px-4 py-3">1ra Entrada</th>
+                          <th className="px-4 py-3">Último Egreso</th>
+                          <th className="px-4 py-3">Horas Realizadas</th>
+                          <th className="px-4 py-3">Salidas Interm.</th>
+                          <th className="px-4 py-3">Incidentes</th>
+                          <th className="px-4 py-3">Cumplimiento</th>
+                          <th className="px-4 py-3 text-right no-print">
+                            Acción
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 text-slate-700">
+                        {(fichaData?.diasPeriodo || [])
+                          .filter((dia) => {
+                            if (!esFlexible) return true;
+                            const huboActividad =
+                              dia.presenciaNetaMinutos > 0 ||
+                              (dia.primeraEntrada &&
+                                dia.primeraEntrada !== "--:--");
+                            const esLic =
+                              dia.tieneLicencia ||
+                              dia.estadoGeneral === "LICENCIA" ||
+                              dia.estadoGeneral === "ASUETO";
+                            return huboActividad || esLic;
+                          })
+                          .map((dia) => {
+                            const estaInspeccionado =
+                              diaInspeccionado?.fecha === dia.fecha;
+                            const esLicencia =
+                              dia.tieneLicencia ||
+                              dia.estadoGeneral === "LICENCIA" ||
+                              dia.estadoGeneral === "ASUETO";
+                            const esFuturo = dia.fecha > hoyIso;
+                            const horariosProgramados = obtenerHorariosDeFecha(
+                              dia.fecha,
                             );
-                          }
+                            const tieneHorario = horariosProgramados.length > 0;
+                            const huboActividad =
+                              dia.presenciaNetaMinutos > 0 ||
+                              (dia.primeraEntrada &&
+                                dia.primeraEntrada !== "--:--");
 
-                          const esFrancoSinActividad =
-                            !tieneHorario && !huboActividad;
-
-                          if (esFrancoSinActividad) {
-                            return (
-                              <tr
-                                key={dia.fecha}
-                                className={`transition ${
-                                  estaInspeccionado
-                                    ? "bg-indigo-50/70 font-semibold"
-                                    : "bg-slate-50/40 hover:bg-slate-50/80"
-                                }`}
-                              >
-                                <td className="px-4 py-3 font-mono font-bold text-slate-500">
-                                  {formatearFechaVisual(dia.fecha)}
-                                </td>
-                                <td className="px-4 py-3 font-semibold text-slate-500">
-                                  {dia.diaSemana}
-                                </td>
-                                <td
-                                  colSpan={6}
-                                  className="px-4 py-3 text-slate-400 italic"
+                            if (esLicencia) {
+                              return (
+                                <tr
+                                  key={dia.fecha}
+                                  className={`transition ${
+                                    estaInspeccionado
+                                      ? "bg-sky-100/70 font-semibold"
+                                      : "bg-sky-50/50 hover:bg-sky-50/80"
+                                  }`}
                                 >
-                                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg bg-slate-100 text-slate-600 text-[11px] font-medium border border-slate-200/60">
-                                    Sin horario asignado para este día / Sin
-                                    actividad registrada
-                                  </span>
-                                </td>
-                                <td className="px-4 py-3 text-right no-print">
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      if (diaInspeccionado?.fecha === dia.fecha)
-                                        setDiaInspeccionado(null);
-                                      else setDiaInspeccionado(dia);
-                                    }}
-                                    className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-semibold text-slate-500 hover:bg-slate-200 transition cursor-pointer"
-                                  >
-                                    <Eye className="w-3.5 h-3.5" />
-                                    {estaInspeccionado ? "Cerrar" : "Ver Día"}
-                                  </button>
-                                </td>
-                              </tr>
-                            );
-                          }
+                                  <td className="px-4 py-3 font-mono font-bold text-sky-950">
+                                    {formatearFechaVisual(dia.fecha)}
+                                  </td>
+                                  <td className="px-4 py-3 font-semibold text-sky-900">
+                                    {dia.diaSemana}
+                                  </td>
+                                  <td colSpan={4} className="px-4 py-3">
+                                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white text-sky-800 border border-sky-300 font-bold text-[11px] shadow-2xs">
+                                      <ShieldCheck className="w-3.5 h-3.5 text-sky-600" />
+                                      {dia.tipoLicenciaEtiqueta ||
+                                        "Licencia / Asueto Institucional"}
+                                      • Eximido de asistencia
+                                    </span>
+                                  </td>
+                                  <td className="px-4 py-3">
+                                    <span className="inline-block text-[10px] font-bold px-2 py-0.5 rounded-full bg-sky-100 text-sky-800 border border-sky-300">
+                                      Justificada
+                                    </span>
+                                  </td>
+                                  <td className="px-4 py-3 font-bold text-sky-900">
+                                    100%
+                                  </td>
+                                  <td className="px-4 py-3 text-right no-print">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        if (
+                                          diaInspeccionado?.fecha === dia.fecha
+                                        )
+                                          setDiaInspeccionado(null);
+                                        else setDiaInspeccionado(dia);
+                                      }}
+                                      className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold cursor-pointer transition ${
+                                        estaInspeccionado
+                                          ? "bg-sky-700 text-white shadow-xs"
+                                          : "bg-white hover:bg-sky-100 text-sky-800 border border-sky-300"
+                                      }`}
+                                    >
+                                      <Eye className="w-3.5 h-3.5" />
+                                      {estaInspeccionado ? "Cerrar" : "Ver Día"}
+                                    </button>
+                                  </td>
+                                </tr>
+                              );
+                            }
 
-                          if (esFuturo && tieneHorario && !huboActividad) {
-                            const hProg = horariosProgramados[0];
+                            const esFalta =
+                              tieneHorario &&
+                              !huboActividad &&
+                              !esFuturo &&
+                              !esFlexible;
+
                             return (
                               <tr
                                 key={dia.fecha}
                                 className={`transition ${
                                   estaInspeccionado
                                     ? "bg-indigo-50/70 font-semibold"
-                                    : "bg-indigo-50/20 hover:bg-indigo-50/40"
+                                    : esFalta
+                                      ? "bg-rose-50/40 hover:bg-rose-50/70"
+                                      : "hover:bg-slate-50/70"
                                 }`}
                               >
                                 <td className="px-4 py-3 font-mono font-bold text-slate-900">
@@ -2497,25 +2585,70 @@ export default function FichaComportamiento() {
                                 <td className="px-4 py-3 font-semibold">
                                   {dia.diaSemana}
                                 </td>
-                                <td className="px-4 py-3 font-mono text-indigo-700 font-bold">
-                                  {hProg.entrada} hs
+                                <td className="px-4 py-3 font-mono">
+                                  {esFalta ? (
+                                    <span className="text-rose-600 font-bold">
+                                      --:--
+                                    </span>
+                                  ) : (
+                                    dia.primeraEntrada
+                                  )}
                                 </td>
-                                <td className="px-4 py-3 font-mono text-indigo-700 font-bold">
-                                  {hProg.salida} hs
+                                <td className="px-4 py-3 font-mono">
+                                  {esFalta ? (
+                                    <span className="text-rose-600 font-bold">
+                                      --:--
+                                    </span>
+                                  ) : (
+                                    dia.ultimoEgreso
+                                  )}
+                                </td>
+                                <td className="px-4 py-3 font-bold">
+                                  {esFalta ? (
+                                    <span className="text-rose-600 font-bold">
+                                      0h 00m
+                                    </span>
+                                  ) : (
+                                    <span className="text-emerald-700">
+                                      {dia.presenciaNetaTexto}
+                                    </span>
+                                  )}
                                 </td>
                                 <td className="px-4 py-3">
-                                  <span className="text-[11px] text-indigo-900 font-medium bg-indigo-100/70 px-2 py-0.5 rounded-md">
-                                    {hProg.nombre}
-                                  </span>
+                                  {dia.salidasIntermedias > 0 ? (
+                                    `${dia.salidasIntermedias} (${dia.minutosFuera} min)`
+                                  ) : (
+                                    <span className="text-slate-400">0</span>
+                                  )}
                                 </td>
-                                <td className="px-4 py-3 text-slate-400">0</td>
                                 <td className="px-4 py-3">
-                                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-800 border border-indigo-200">
-                                    Programado
-                                  </span>
+                                  {esFalta ? (
+                                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-600 text-white shadow-2xs">
+                                      ⚠ Falta
+                                    </span>
+                                  ) : dia.totalIncidentes > 0 ? (
+                                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200">
+                                      ⚠ {dia.totalIncidentes} desvío(s)
+                                    </span>
+                                  ) : (
+                                    <span className="text-slate-400">-</span>
+                                  )}
                                 </td>
-                                <td className="px-4 py-3 font-bold text-slate-400">
-                                  -
+                                <td className="px-4 py-3 font-bold">
+                                  <span
+                                    className={
+                                      esFalta ||
+                                      dia.porcentajeCumplimiento < 100
+                                        ? "text-rose-600"
+                                        : "text-emerald-700"
+                                    }
+                                  >
+                                    {esFlexible
+                                      ? "Acredita Bolsa"
+                                      : esFalta
+                                        ? "0%"
+                                        : `${dia.porcentajeCumplimiento}%`}
+                                  </span>
                                 </td>
                                 <td className="px-4 py-3 text-right no-print">
                                   <button
@@ -2528,7 +2661,9 @@ export default function FichaComportamiento() {
                                     className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold cursor-pointer transition ${
                                       estaInspeccionado
                                         ? "bg-indigo-600 text-white shadow-xs"
-                                        : "bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200"
+                                        : esFalta
+                                          ? "bg-rose-100 hover:bg-rose-200 text-rose-800 font-bold"
+                                          : "bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200"
                                     }`}
                                   >
                                     <Eye className="w-3.5 h-3.5" />
@@ -2537,164 +2672,31 @@ export default function FichaComportamiento() {
                                 </td>
                               </tr>
                             );
-                          }
-
-                          const esFalta =
-                            tieneHorario &&
-                            !huboActividad &&
-                            !esFuturo &&
-                            !esFlexible;
-                          const hExigido = horariosProgramados[0] || null;
-
-                          return (
-                            <tr
-                              key={dia.fecha}
-                              className={`transition ${
-                                estaInspeccionado
-                                  ? "bg-indigo-50/70 font-semibold"
-                                  : esFalta
-                                    ? "bg-rose-50/40 hover:bg-rose-50/70"
-                                    : "hover:bg-slate-50/70"
-                              }`}
-                            >
-                              <td className="px-4 py-3 font-mono font-bold text-slate-900">
-                                {formatearFechaVisual(dia.fecha)}
-                              </td>
-                              <td className="px-4 py-3 font-semibold">
-                                {dia.diaSemana}
-                              </td>
-                              <td className="px-4 py-3 font-mono">
-                                {esFalta ? (
-                                  <div className="leading-tight">
-                                    <span className="text-rose-600 font-bold block">
-                                      --:--
-                                    </span>
-                                    {hExigido && (
-                                      <span className="text-[10px] text-slate-400 block font-normal">
-                                        Debía: {hExigido.entrada} hs
-                                      </span>
-                                    )}
-                                  </div>
-                                ) : (
-                                  dia.primeraEntrada
-                                )}
-                              </td>
-                              <td className="px-4 py-3 font-mono">
-                                {esFalta ? (
-                                  <div className="leading-tight">
-                                    <span className="text-rose-600 font-bold block">
-                                      --:--
-                                    </span>
-                                    {hExigido && (
-                                      <span className="text-[10px] text-slate-400 block font-normal">
-                                        Debía: {hExigido.salida} hs
-                                      </span>
-                                    )}
-                                  </div>
-                                ) : (
-                                  dia.ultimoEgreso
-                                )}
-                              </td>
-                              <td className="px-4 py-3 font-bold">
-                                {esFalta ? (
-                                  <span className="text-rose-600 font-bold">
-                                    0h 00m
-                                  </span>
-                                ) : (
-                                  <span className="text-emerald-700">
-                                    {dia.presenciaNetaTexto}
-                                  </span>
-                                )}
-                              </td>
-                              <td className="px-4 py-3">
-                                {dia.salidasIntermedias > 0 ? (
-                                  `${dia.salidasIntermedias} (${dia.minutosFuera} min)`
-                                ) : (
-                                  <span className="text-slate-400">0</span>
-                                )}
-                              </td>
-                              <td className="px-4 py-3">
-                                {esFalta ? (
-                                  <div className="space-y-0.5">
-                                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-600 text-white shadow-2xs block w-fit">
-                                      ⚠ Ausencia / Falta
-                                    </span>
-                                    {hExigido && (
-                                      <span className="text-[10px] text-slate-500 font-medium block">
-                                        {hExigido.nombre}
-                                      </span>
-                                    )}
-                                  </div>
-                                ) : dia.totalIncidentes > 0 ? (
-                                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200">
-                                    ⚠ {dia.totalIncidentes} desvío(s)
-                                  </span>
-                                ) : (
-                                  <span className="text-slate-400">-</span>
-                                )}
-                              </td>
-                              <td className="px-4 py-3 font-bold">
-                                <span
-                                  className={
-                                    esFalta || dia.porcentajeCumplimiento < 100
-                                      ? "text-rose-600"
-                                      : "text-emerald-700"
-                                  }
-                                >
-                                  {esFlexible
-                                    ? "Acredita Bolsa"
-                                    : esFalta
-                                      ? "0%"
-                                      : `${dia.porcentajeCumplimiento}%`}
-                                </span>
-                              </td>
-                              <td className="px-4 py-3 text-right no-print">
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    if (diaInspeccionado?.fecha === dia.fecha)
-                                      setDiaInspeccionado(null);
-                                    else setDiaInspeccionado(dia);
-                                  }}
-                                  className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold cursor-pointer transition ${
-                                    estaInspeccionado
-                                      ? "bg-indigo-600 text-white shadow-xs"
-                                      : esFalta
-                                        ? "bg-rose-100 hover:bg-rose-200 text-rose-800 font-bold"
-                                        : "bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200"
-                                  }`}
-                                >
-                                  <Eye className="w-3.5 h-3.5" />
-                                  {estaInspeccionado ? "Cerrar" : "Ver Día"}
-                                </button>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                    </tbody>
-                  </table>
-                </div>
+                          })}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
               )}
             </div>
           )}
 
-          {/* --- VISTA 3: RANGO DE FECHAS --- */}
+          {/* VISTA 3: RANGO DE FECHAS */}
           {modalidad === "RANGO_FECHAS" && (
-            <div className="space-y-6">
-              <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs flex items-center justify-between">
+            <div className="space-y-4 sm:space-y-6">
+              <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <div>
                   <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800">
                     Calendario del Rango ({formatearFechaVisual(fechaConsulta)}{" "}
                     al {formatearFechaVisual(fechaHastaRango)})
                   </h3>
                   <p className="text-[11px] text-slate-500 mt-0.5">
-                    {esFlexible
-                      ? "Régimen flexible: Se muestran las horas trabajadas en los días con marcación física registrada."
-                      : "Meses diferenciados para una lectura clara de asistencia e incidentes."}
+                    Meses diferenciados para una lectura clara de asistencia e
+                    incidentes.
                   </p>
                 </div>
-                <span className="px-3 py-1 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-xl font-bold text-xs">
-                  Total: {metricas.presenciaNetaTexto} realizadas
+                <span className="px-3 py-1 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-xl font-bold text-xs self-start sm:self-center">
+                  Total: {metricas.presenciaNetaTexto}
                 </span>
               </div>
 
@@ -2703,11 +2705,11 @@ export default function FichaComportamiento() {
               {mesesDelRango.map((mes) => (
                 <div
                   key={mes.mesKey}
-                  className="bg-white border border-slate-200 rounded-3xl p-5 shadow-xs space-y-4"
+                  className="bg-white border border-slate-200 rounded-2xl sm:rounded-3xl p-4 sm:p-5 shadow-xs space-y-4"
                 >
                   <div className="flex items-center justify-between pb-3 border-b border-slate-100">
                     <div className="flex items-center gap-2.5">
-                      <div className="w-8 h-8 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 font-bold">
+                      <div className="w-8 h-8 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 font-bold shrink-0">
                         <CalendarIcon className="w-4 h-4" />
                       </div>
                       <h4 className="text-sm font-black text-slate-900 uppercase tracking-wide">
@@ -2715,7 +2717,7 @@ export default function FichaComportamiento() {
                       </h4>
                     </div>
                     <span className="text-[11px] text-slate-400 font-medium">
-                      {mes.dias.length} días comprendidos
+                      {mes.dias.length} días
                     </span>
                   </div>
 
@@ -2725,9 +2727,9 @@ export default function FichaComportamiento() {
             </div>
           )}
 
-          {/* --- VISTA 4: MENSUAL --- */}
+          {/* VISTA 4: MENSUAL */}
           {modalidad === "MENSUAL" && (
-            <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-xs space-y-4">
+            <div className="bg-white border border-slate-200 rounded-2xl sm:rounded-3xl p-4 sm:p-5 shadow-xs space-y-4">
               <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
                 <div>
                   <div className="flex items-center gap-2">
@@ -2737,19 +2739,18 @@ export default function FichaComportamiento() {
                     </h3>
                   </div>
                   <p className="text-[11px] text-slate-500 mt-0.5">
-                    {esFlexible
-                      ? "Toque cualquier día con actividad para ver el detalle de horas y entradas/salidas registradas."
-                      : "Toque cualquier día para ver sus marcas, horarios y justificar desvíos."}
+                    Toque cualquier día para ver sus marcas, horarios y
+                    justificar desvíos.
                   </p>
                 </div>
-                <div className="flex items-center gap-3 text-[11px] font-bold flex-wrap">
+                <div className="flex items-center gap-2.5 sm:gap-3 text-[10px] sm:text-[11px] font-bold flex-wrap">
                   <span className="flex items-center gap-1 text-emerald-700">
                     <span className="w-2 h-2 rounded-full bg-emerald-500" />{" "}
                     Normal
                   </span>
                   <span className="flex items-center gap-1 text-sky-700">
                     <span className="w-2 h-2 rounded-full bg-sky-500" />{" "}
-                    Licencia / Asueto
+                    Licencia
                   </span>
                   {!esFlexible && (
                     <>
@@ -2764,8 +2765,8 @@ export default function FichaComportamiento() {
                     </>
                   )}
                   <span className="flex items-center gap-1 text-slate-400">
-                    <span className="w-2 h-2 rounded-full bg-slate-300" />{" "}
-                    {esFlexible ? "Libre / Sin Fichaje" : "Sin Registro"}
+                    <span className="w-2 h-2 rounded-full bg-slate-300" /> Sin
+                    Registro
                   </span>
                 </div>
               </div>
@@ -2778,7 +2779,7 @@ export default function FichaComportamiento() {
             </div>
           )}
 
-          {/* --- VISTA 5: MULTIMES (TRIMESTRE / CUATRIMESTRE) --- */}
+          {/* VISTA 5: MULTIMES (TRIMESTRE / CUATRIMESTRE) */}
           {(modalidad === "TRIMESTRE" || modalidad === "CUATRIMESTRE") && (
             <div className="space-y-4">
               <div className="flex items-center justify-between bg-white border border-slate-200 rounded-2xl p-4 shadow-xs">
@@ -2794,14 +2795,14 @@ export default function FichaComportamiento() {
                     onClick={expandirTodos}
                     className="px-3 py-1.5 bg-indigo-50 text-indigo-700 font-bold rounded-xl text-xs hover:bg-indigo-100 transition cursor-pointer"
                   >
-                    Expandir Todos
+                    Expandir
                   </button>
                   <button
                     type="button"
                     onClick={colapsarTodos}
                     className="px-3 py-1.5 bg-slate-100 text-slate-700 font-bold rounded-xl text-xs hover:bg-slate-200 transition cursor-pointer"
                   >
-                    Colapsar Todos
+                    Colapsar
                   </button>
                 </div>
               </div>
@@ -2811,9 +2812,9 @@ export default function FichaComportamiento() {
                 return (
                   <div
                     key={mes.mesKey}
-                    className="bg-white border border-slate-200 rounded-3xl shadow-xs overflow-hidden transition-all"
+                    className="bg-white border border-slate-200 rounded-2xl sm:rounded-3xl shadow-xs overflow-hidden transition-all"
                   >
-                    <div className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50/50">
+                    <div className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50/50">
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 font-bold">
                           <CalendarIcon className="w-5 h-5" />
@@ -2843,7 +2844,7 @@ export default function FichaComportamiento() {
                     </div>
 
                     {isExpanded && (
-                      <div className="p-5 border-t border-slate-100">
+                      <div className="p-4 sm:p-5 border-t border-slate-100">
                         {renderCardInspeccionDiaria()}
                         {renderCuadriculaCalendario(
                           mes.diasPeriodo,
@@ -2861,20 +2862,20 @@ export default function FichaComportamiento() {
 
       {/* MODAL AUDITORÍA DE JUSTIFICACIONES */}
       {modalKpiJustificacionesAbierto && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl w-full max-w-3xl shadow-2xl overflow-hidden border border-slate-200 animate-in zoom-in-95 max-h-[92vh] flex flex-col">
-            <div className="bg-[#111827] px-6 py-4 text-white flex items-center justify-between shrink-0">
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
+          <div className="bg-white rounded-2xl sm:rounded-3xl w-full max-w-3xl shadow-2xl overflow-hidden border border-slate-200 animate-in zoom-in-95 max-h-[92vh] flex flex-col">
+            <div className="bg-[#111827] px-4 sm:px-6 py-4 text-white flex items-center justify-between shrink-0">
               <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center text-indigo-400">
+                <div className="w-9 h-9 rounded-xl bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center text-indigo-400 shrink-0">
                   <FileCheck className="w-5 h-5" />
                 </div>
-                <div>
-                  <h3 className="font-bold text-sm tracking-tight text-white">
-                    Auditoría de Descargos y Motivos de Justificación
+                <div className="min-w-0">
+                  <h3 className="font-bold text-sm tracking-tight text-white truncate">
+                    Auditoría de Descargos y Motivos
                   </h3>
-                  <div className="flex items-center gap-1.5 text-[11px] text-slate-300 mt-0.5">
-                    <CalendarRange className="w-3.5 h-3.5 text-indigo-400" />
-                    <span>{textoRangoContemplado}</span>
+                  <div className="flex items-center gap-1.5 text-[11px] text-slate-300 mt-0.5 truncate">
+                    <CalendarRange className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                    <span className="truncate">{textoRangoContemplado}</span>
                   </div>
                 </div>
               </div>
@@ -2887,45 +2888,39 @@ export default function FichaComportamiento() {
               </button>
             </div>
 
-            <div className="bg-indigo-50/70 border-b border-indigo-100 px-6 py-2.5 flex items-center justify-between gap-3 text-xs">
-              <div className="flex items-center gap-2 text-indigo-950 font-medium">
+            <div className="bg-indigo-50/70 border-b border-indigo-100 px-4 sm:px-6 py-2.5 flex items-center justify-between gap-2 text-xs flex-wrap">
+              <div className="flex items-center gap-2 text-indigo-950 font-medium truncate">
                 <span className="font-bold uppercase tracking-wider text-[10px] bg-indigo-600 text-white px-2 py-0.5 rounded-md shadow-2xs">
                   {modalidad.replace("_", " ")}
                 </span>
-                <span>
-                  Período analizado:{" "}
+                <span className="truncate">
+                  Período:{" "}
                   <strong className="font-bold">{textoRangoContemplado}</strong>
                 </span>
               </div>
-              <span className="text-[11px] font-mono text-indigo-700 bg-white border border-indigo-200/80 px-2 py-0.5 rounded-lg shadow-2xs">
-                Empleado ID: {empleadoSeleccionado?.id || fichaData?.empleadoId}
-              </span>
             </div>
 
-            <div className="p-6 space-y-6 overflow-y-auto flex-1">
+            <div className="p-4 sm:p-6 space-y-4 sm:space-y-6 overflow-y-auto flex-1">
               <div className="space-y-2">
                 <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
                   Distribución de Resoluciones en este Período
                 </div>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3">
                   <div
                     onClick={() => {
                       setModalKpiJustificacionesAbierto(false);
                       abrirModalListaFiltrada("PENDIENTES");
                     }}
-                    className="p-4 rounded-2xl border border-amber-300 bg-amber-50/70 hover:bg-amber-100/70 transition cursor-pointer shadow-2xs"
+                    className="p-3 sm:p-4 rounded-2xl border border-amber-300 bg-amber-50/70 hover:bg-amber-100/70 transition cursor-pointer shadow-2xs"
                   >
                     <div className="flex items-center justify-between">
-                      <span className="text-[11px] font-bold uppercase text-amber-900">
+                      <span className="text-[10px] sm:text-[11px] font-bold uppercase text-amber-900">
                         Pendientes
                       </span>
                       <AlertTriangle className="w-4 h-4 text-amber-600" />
                     </div>
-                    <div className="text-2xl font-black text-amber-950 mt-2 font-mono">
+                    <div className="text-xl sm:text-2xl font-black text-amber-950 mt-1 sm:mt-2 font-mono">
                       {metricas.incidentesPendientes}
-                    </div>
-                    <div className="text-[10px] text-amber-700 mt-1 font-medium">
-                      Sin justificar aún
                     </div>
                   </div>
 
@@ -2934,19 +2929,16 @@ export default function FichaComportamiento() {
                       setModalKpiJustificacionesAbierto(false);
                       abrirModalListaFiltrada("JUSTIFICADAS");
                     }}
-                    className="p-4 rounded-2xl border border-emerald-300 bg-emerald-50/70 hover:bg-emerald-100/70 transition cursor-pointer shadow-2xs"
+                    className="p-3 sm:p-4 rounded-2xl border border-emerald-300 bg-emerald-50/70 hover:bg-emerald-100/70 transition cursor-pointer shadow-2xs"
                   >
                     <div className="flex items-center justify-between">
-                      <span className="text-[11px] font-bold uppercase text-emerald-900">
+                      <span className="text-[10px] sm:text-[11px] font-bold uppercase text-emerald-900">
                         Justificados
                       </span>
                       <Check className="w-4 h-4 text-emerald-600 stroke-[3]" />
                     </div>
-                    <div className="text-2xl font-black text-emerald-950 mt-2 font-mono">
+                    <div className="text-xl sm:text-2xl font-black text-emerald-950 mt-1 sm:mt-2 font-mono">
                       {metricas.incidentesJustificados}
-                    </div>
-                    <div className="text-[10px] text-emerald-700 mt-1 font-medium">
-                      Descargos aceptados
                     </div>
                   </div>
 
@@ -2955,19 +2947,16 @@ export default function FichaComportamiento() {
                       setModalKpiJustificacionesAbierto(false);
                       abrirModalListaFiltrada("OBSERVADAS");
                     }}
-                    className="p-4 rounded-2xl border border-indigo-200 bg-indigo-50/70 hover:bg-indigo-100/70 transition cursor-pointer shadow-2xs"
+                    className="p-3 sm:p-4 rounded-2xl border border-indigo-200 bg-indigo-50/70 hover:bg-indigo-100/70 transition cursor-pointer shadow-2xs"
                   >
                     <div className="flex items-center justify-between">
-                      <span className="text-[11px] font-bold uppercase text-indigo-900">
+                      <span className="text-[10px] sm:text-[11px] font-bold uppercase text-indigo-900">
                         Observados
                       </span>
                       <HelpCircle className="w-4 h-4 text-indigo-600" />
                     </div>
-                    <div className="text-2xl font-black text-indigo-950 mt-2 font-mono">
+                    <div className="text-xl sm:text-2xl font-black text-indigo-950 mt-1 sm:mt-2 font-mono">
                       {metricas.incidentesObservados}
-                    </div>
-                    <div className="text-[10px] text-indigo-700 mt-1 font-medium">
-                      Descargos procesados
                     </div>
                   </div>
 
@@ -2976,30 +2965,27 @@ export default function FichaComportamiento() {
                       setModalKpiJustificacionesAbierto(false);
                       abrirModalListaFiltrada("RECHAZADAS");
                     }}
-                    className="p-4 rounded-2xl border border-rose-300 bg-rose-50/70 hover:bg-rose-100/70 transition cursor-pointer shadow-2xs"
+                    className="p-3 sm:p-4 rounded-2xl border border-rose-300 bg-rose-50/70 hover:bg-rose-100/70 transition cursor-pointer shadow-2xs"
                   >
                     <div className="flex items-center justify-between">
-                      <span className="text-[11px] font-bold uppercase text-rose-900">
+                      <span className="text-[10px] sm:text-[11px] font-bold uppercase text-rose-900">
                         Rechazados
                       </span>
                       <Ban className="w-4 h-4 text-rose-600" />
                     </div>
-                    <div className="text-2xl font-black text-rose-950 mt-2 font-mono">
+                    <div className="text-xl sm:text-2xl font-black text-rose-950 mt-1 sm:mt-2 font-mono">
                       {metricas.incidentesRechazados}
-                    </div>
-                    <div className="text-[10px] text-rose-700 mt-1 font-medium">
-                      Descargos desestimados
                     </div>
                   </div>
                 </div>
               </div>
 
-              <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 space-y-4">
+              <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 sm:p-5 space-y-4">
                 <div className="flex items-center justify-between pb-3 border-b border-slate-200">
                   <div className="flex items-center gap-2 text-slate-800">
                     <BarChart3 className="w-4 h-4 text-indigo-600" />
                     <span className="text-xs font-bold uppercase tracking-wider">
-                      Ranking de Motivos Más Utilizados
+                      Ranking de Motivos
                     </span>
                   </div>
                   <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-white border border-slate-200 text-slate-600">
@@ -3009,12 +2995,11 @@ export default function FichaComportamiento() {
 
                 {!metricas.topJustificaciones ||
                 metricas.topJustificaciones.length === 0 ? (
-                  <div className="p-8 text-center text-slate-400 text-xs italic">
-                    No constan justificaciones u observaciones fundamentadas
-                    para el período seleccionado.
+                  <div className="p-6 text-center text-slate-400 text-xs italic">
+                    No constan justificaciones fundamentadas en el período.
                   </div>
                 ) : (
-                  <div className="space-y-3">
+                  <div className="space-y-2.5">
                     {metricas.topJustificaciones.map((item, idx) => {
                       const porcentaje =
                         metricas.totalIncidentesJustificadosConMotivo > 0
@@ -3028,19 +3013,18 @@ export default function FichaComportamiento() {
                       return (
                         <div
                           key={idx}
-                          className="bg-white border border-slate-200/80 rounded-xl p-3.5 shadow-2xs space-y-2"
+                          className="bg-white border border-slate-200/80 rounded-xl p-3 shadow-2xs space-y-2"
                         >
-                          <div className="flex items-center justify-between text-xs">
-                            <span className="font-bold text-slate-800 flex items-center gap-2">
-                              <span className="w-5 h-5 rounded-full bg-indigo-50 border border-indigo-200 text-indigo-700 flex items-center justify-center text-[10px] font-mono">
+                          <div className="flex items-center justify-between text-xs gap-2">
+                            <span className="font-bold text-slate-800 flex items-center gap-2 min-w-0">
+                              <span className="w-5 h-5 rounded-full bg-indigo-50 border border-indigo-200 text-indigo-700 flex items-center justify-center text-[10px] font-mono shrink-0">
                                 {idx + 1}
                               </span>
-                              {item.texto}
+                              <span className="truncate">{item.texto}</span>
                             </span>
-                            <div className="flex items-center gap-2 shrink-0">
+                            <div className="flex items-center gap-1.5 shrink-0">
                               <span className="font-mono font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-md text-[11px]">
-                                {item.cantidad}{" "}
-                                {item.cantidad === 1 ? "caso" : "casos"}
+                                {item.cantidad}
                               </span>
                               <span className="text-slate-400 text-[11px] font-semibold">
                                 ({porcentaje}%)
@@ -3062,7 +3046,7 @@ export default function FichaComportamiento() {
               </div>
             </div>
 
-            <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between shrink-0">
+            <div className="px-4 sm:px-6 py-3.5 bg-slate-50 border-t border-slate-100 flex items-center justify-between shrink-0">
               <button
                 type="button"
                 onClick={() => {
@@ -3071,7 +3055,7 @@ export default function FichaComportamiento() {
                 }}
                 className="text-xs font-bold text-indigo-600 hover:text-indigo-800 hover:underline cursor-pointer"
               >
-                Ver listado de incidentes del período →
+                Ver incidentes →
               </button>
 
               <button
@@ -3088,28 +3072,28 @@ export default function FichaComportamiento() {
 
       {/* MODAL LISTA DE INCIDENTES */}
       {modalListaIncidentesAbierto && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl w-full max-w-3xl shadow-2xl overflow-hidden border border-slate-200 animate-in zoom-in-95 max-h-[90vh] flex flex-col">
-            <div className="bg-[#111827] px-6 py-4 text-white flex items-center justify-between shrink-0">
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
+          <div className="bg-white rounded-2xl sm:rounded-3xl w-full max-w-3xl shadow-2xl overflow-hidden border border-slate-200 animate-in zoom-in-95 max-h-[90vh] flex flex-col">
+            <div className="bg-[#111827] px-4 sm:px-6 py-4 text-white flex items-center justify-between shrink-0">
               <div className="flex items-center gap-3">
                 <button
                   type="button"
                   onClick={volverAAuditoriaPrincipal}
                   className="p-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition cursor-pointer flex items-center gap-1 text-xs font-semibold"
-                  title="Volver a la Auditoría de Justificaciones"
+                  title="Volver"
                 >
                   <ArrowLeft className="w-4 h-4" />
                   <span className="hidden sm:inline">Volver</span>
                 </button>
 
-                <div>
-                  <div className="flex items-center gap-2 font-bold text-sm">
-                    <AlertTriangle className="w-4 h-4 text-rose-400" />
-                    <span>
-                      Listado de Incidentes ({incidentesFiltradosModal.length})
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 font-bold text-sm truncate">
+                    <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+                    <span className="truncate">
+                      Incidentes ({incidentesFiltradosModal.length})
                     </span>
                   </div>
-                  <div className="text-[10px] text-slate-400 font-mono mt-0.5">
+                  <div className="text-[10px] text-slate-400 font-mono mt-0.5 truncate">
                     {textoRangoContemplado}
                   </div>
                 </div>
@@ -3123,7 +3107,7 @@ export default function FichaComportamiento() {
               </button>
             </div>
 
-            <div className="bg-slate-100 px-6 py-2.5 border-b border-slate-200 flex items-center gap-2 overflow-x-auto text-xs font-semibold">
+            <div className="bg-slate-100 px-4 sm:px-6 py-2 border-b border-slate-200 flex items-center gap-2 overflow-x-auto text-xs font-semibold scrollbar-none">
               {[
                 {
                   label: "Todos",
@@ -3169,11 +3153,10 @@ export default function FichaComportamiento() {
               ))}
             </div>
 
-            <div className="p-6 space-y-3 overflow-y-auto flex-1">
+            <div className="p-4 sm:p-6 space-y-3 overflow-y-auto flex-1">
               {incidentesFiltradosModal.length === 0 ? (
                 <div className="p-8 text-center text-slate-400 italic text-xs">
-                  No se registran incidentes bajo el estado seleccionado para{" "}
-                  {textoRangoContemplado}.
+                  No se registran incidentes bajo el estado seleccionado.
                 </div>
               ) : (
                 incidentesFiltradosModal.map((inc) =>
@@ -3181,14 +3164,15 @@ export default function FichaComportamiento() {
                 )
               )}
             </div>
-            <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between shrink-0">
+            <div className="px-4 sm:px-6 py-3.5 bg-slate-50 border-t border-slate-100 flex items-center justify-between shrink-0">
               <button
                 type="button"
                 onClick={volverAAuditoriaPrincipal}
-                className="inline-flex items-center gap-1.5 px-4 py-2 border border-slate-200 bg-white hover:bg-slate-100 text-slate-700 rounded-xl font-semibold text-xs cursor-pointer transition shadow-2xs"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-slate-200 bg-white hover:bg-slate-100 text-slate-700 rounded-xl font-semibold text-xs cursor-pointer transition shadow-2xs"
               >
                 <ArrowLeft className="w-3.5 h-3.5 text-indigo-600" />
-                <span>Volver a Auditoría de Justificaciones</span>
+                <span className="hidden sm:inline">Volver a Auditoría</span>
+                <span className="sm:hidden">Volver</span>
               </button>
 
               <button
