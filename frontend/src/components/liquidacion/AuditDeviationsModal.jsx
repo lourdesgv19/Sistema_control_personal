@@ -111,29 +111,29 @@ export default function AuditDeviationsModal({
   return (
     <div
       onClick={onClose}
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs animate-in fade-in duration-150"
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/40 backdrop-blur-xs animate-in fade-in duration-150 cursor-pointer"
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col overflow-hidden"
+        className="bg-white rounded-2xl sm:rounded-3xl border border-slate-200 shadow-2xl max-w-2xl w-full max-h-[92vh] flex flex-col overflow-hidden cursor-default"
       >
         {/* ENCABEZADO */}
-        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+        <div className="px-4 sm:px-6 py-3.5 sm:py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50 shrink-0">
           <div className="flex items-center gap-3">
             <div
-              className={`w-11 h-11 rounded-full border flex items-center justify-center font-bold text-sm shadow-xs select-none shrink-0 ${obtenerColorIniciales(
+              className={`w-10 h-10 sm:w-11 sm:h-11 rounded-full border flex items-center justify-center font-bold text-xs sm:text-sm shadow-xs select-none shrink-0 ${obtenerColorIniciales(
                 docente.nombreDocente,
               )}`}
             >
               {obtenerIniciales(docente.nombreDocente)}
             </div>
             <div>
-              <h3 className="text-base font-bold text-slate-800">
+              <h3 className="text-sm sm:text-base font-bold text-slate-800 leading-tight">
                 {esDetalleMateria
-                  ? `Detalle de Desvíos: ${materiaSeleccionada.nombreMateria}`
-                  : "Bitácora Consolidada de Desvíos del Docente"}
+                  ? `Detalle: ${materiaSeleccionada.nombreMateria}`
+                  : "Bitácora Consolidada de Desvíos"}
               </h3>
-              <p className="text-xs text-slate-500 font-medium">
+              <p className="text-[11px] sm:text-xs text-slate-500 font-medium mt-0.5">
                 {docente.nombreDocente} • Leg. {docente.nroLegajo}
                 {periodoTexto ? ` • ${periodoTexto}` : ""}
               </p>
@@ -148,15 +148,15 @@ export default function AuditDeviationsModal({
         </div>
 
         {/* CONTENIDO SCROLLEABLE */}
-        <div className="p-6 overflow-y-auto space-y-6">
+        <div className="p-4 sm:p-6 overflow-y-auto space-y-4 sm:space-y-6">
           {/* TARJETA DE MATERIA ESPECÍFICA */}
           {esDetalleMateria && (
-            <div className="bg-slate-50/80 border border-slate-200/90 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-3">
+            <div className="bg-slate-50/80 border border-slate-200/90 rounded-2xl p-3.5 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
-                <h4 className="text-sm font-bold text-slate-900">
+                <h4 className="text-xs sm:text-sm font-bold text-slate-900">
                   {materiaSeleccionada.nombreMateria}
                 </h4>
-                <div className="flex items-center gap-2 text-xs text-slate-500 mt-1 flex-wrap font-mono">
+                <div className="flex items-center gap-1.5 text-xs text-slate-500 mt-1 flex-wrap font-mono">
                   <span className="font-semibold text-slate-700 font-sans">
                     Días:{" "}
                     {materiaSeleccionada.diasNombres?.join(", ") || "Lun - Vie"}
@@ -169,11 +169,11 @@ export default function AuditDeviationsModal({
                   </span>
                 </div>
               </div>
-              <div className="text-right">
+              <div className="text-left sm:text-right border-t sm:border-t-0 pt-2 sm:pt-0 border-slate-200/60">
                 <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">
                   Tarifa Cátedra
                 </span>
-                <div className="text-sm font-black font-mono text-slate-900 mt-0.5">
+                <div className="text-xs sm:text-sm font-black font-mono text-slate-900 mt-0.5">
                   $
                   {Math.round(
                     materiaSeleccionada.tarifaHora || 0,
@@ -184,43 +184,43 @@ export default function AuditDeviationsModal({
             </div>
           )}
 
-          {/* TARJETAS DE TOTALES */}
-          <div className="grid grid-cols-4 gap-3">
-            <div className="bg-rose-50/60 border border-rose-100 p-3.5 rounded-2xl">
-              <span className="text-[10px] font-bold text-rose-500 uppercase tracking-wider">
+          {/* TARJETAS DE TOTALES (GRID 2x2 EN MÓVILES / 4 EN ESCRITORIO) */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3">
+            <div className="bg-rose-50/60 border border-rose-100 p-3 sm:p-3.5 rounded-2xl">
+              <span className="text-[10px] font-bold text-rose-500 uppercase tracking-wider block">
                 Total Descontado
               </span>
-              <div className="text-lg font-black text-rose-600 mt-1 font-mono">
+              <div className="text-base sm:text-lg font-black text-rose-600 mt-1 font-mono">
                 -{formatearHorasYMinutos(totalHorasDesc)}
               </div>
-              <div className="text-[11px] font-bold text-rose-400 mt-0.5">
+              <div className="text-[10px] sm:text-[11px] font-bold text-rose-400 mt-0.5 truncate">
                 -${Math.round(montoDesc).toLocaleString("es-AR")}
               </div>
             </div>
 
-            <div className="bg-slate-50 border border-slate-200/80 p-3.5 rounded-2xl">
-              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+            <div className="bg-slate-50 border border-slate-200/80 p-3 sm:p-3.5 rounded-2xl">
+              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
                 Por Faltas
               </span>
-              <div className="text-lg font-black text-slate-700 mt-1 font-mono">
+              <div className="text-base sm:text-lg font-black text-slate-700 mt-1 font-mono">
                 {formatearHorasYMinutos(horasFaltas)}
               </div>
             </div>
 
-            <div className="bg-slate-50 border border-slate-200/80 p-3.5 rounded-2xl">
-              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+            <div className="bg-slate-50 border border-slate-200/80 p-3 sm:p-3.5 rounded-2xl">
+              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
                 Por Tardanzas
               </span>
-              <div className="text-lg font-black text-slate-700 mt-1 font-mono">
+              <div className="text-base sm:text-lg font-black text-slate-700 mt-1 font-mono">
                 {formatearHorasYMinutos(horasTardanzas)}
               </div>
             </div>
 
-            <div className="bg-slate-50 border border-slate-200/80 p-3.5 rounded-2xl">
-              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                Por Retiros / Salidas
+            <div className="bg-slate-50 border border-slate-200/80 p-3 sm:p-3.5 rounded-2xl">
+              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
+                Por Retiros
               </span>
-              <div className="text-lg font-black text-slate-700 mt-1 font-mono">
+              <div className="text-base sm:text-lg font-black text-slate-700 mt-1 font-mono">
                 {formatearHorasYMinutos(horasRetiros)}
               </div>
             </div>
@@ -228,11 +228,11 @@ export default function AuditDeviationsModal({
 
           {/* CRONOLOGÍA DE DESVÍOS FORENSES */}
           <div>
-            <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center justify-between mb-2.5 sm:mb-3">
               <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700">
                 Bitácora de Desvíos Registrados ({desviosMostrar.length})
               </h4>
-              <span className="text-[11px] text-slate-400">
+              <span className="text-[10px] sm:text-[11px] text-slate-400">
                 Auditoría cronológica
               </span>
             </div>
@@ -242,11 +242,10 @@ export default function AuditDeviationsModal({
                 Sin incidencias ni desvíos registrados para este período.
               </div>
             ) : (
-              <div className="space-y-2.5">
+              <div className="space-y-2 sm:space-y-2.5">
                 {desviosMostrar.map((desv, idx) => {
                   const estilo = obtenerEstiloDesvio(desv.tipoDesvio);
 
-                  // Limpieza estricta: se quitan prefijos de fecha o día del renglón de abajo para evitar duplicación
                   const detalleLimpio = desv.detalleForense
                     ? desv.detalleForense
                         .replace(/^\d{1,2}[-/]\d{1,2}(\s*\([^)]*\))?:\s*/i, "")
@@ -260,9 +259,9 @@ export default function AuditDeviationsModal({
                   return (
                     <div
                       key={idx}
-                      className="border border-slate-200/90 rounded-2xl p-3 flex items-start justify-between bg-white hover:bg-slate-50/50 transition"
+                      className="border border-slate-200/90 rounded-2xl p-3 flex items-start justify-between bg-white hover:bg-slate-50/50 transition gap-2"
                     >
-                      <div className="flex items-start gap-3">
+                      <div className="flex items-start gap-2.5 sm:gap-3">
                         <div
                           className={`mt-0.5 p-1.5 rounded-xl shrink-0 ${estilo.iconoContenedor}`}
                         >
@@ -274,8 +273,7 @@ export default function AuditDeviationsModal({
                         </div>
 
                         <div>
-                          {/* PRIMER RENGLÓN: FECHA dd/mm/aaaa • Día de la semana + BADGES */}
-                          <div className="flex items-center gap-2 flex-wrap">
+                          <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
                             <span className="text-xs font-bold text-slate-800 font-mono">
                               {formatearFechaVisual(desv.fecha)}
                             </span>
@@ -284,27 +282,26 @@ export default function AuditDeviationsModal({
                             </span>
 
                             <span
-                              className={`px-2 py-0.5 rounded-md text-[10px] font-bold tracking-wide uppercase ${estilo.badgeClase}`}
+                              className={`px-1.5 py-0.2 rounded-md text-[9px] sm:text-[10px] font-bold tracking-wide uppercase ${estilo.badgeClase}`}
                             >
                               {estilo.label}
                             </span>
 
                             {!esDetalleMateria && (
-                              <span className="text-xs text-slate-500 font-medium">
+                              <span className="text-[11px] text-slate-500 font-medium">
                                 ({desv.materiaNombre})
                               </span>
                             )}
                           </div>
 
-                          {/* SEGUNDO RENGLÓN: ÚNICAMENTE EL DETALLE EXPLICATIVO */}
-                          <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                          <p className="text-[11px] sm:text-xs text-slate-500 mt-1 leading-relaxed">
                             {detalleLimpio}
                           </p>
                         </div>
                       </div>
 
-                      <div className="text-right shrink-0 ml-3">
-                        <span className="text-xs font-bold text-rose-600 font-mono">
+                      <div className="text-right shrink-0">
+                        <span className="text-xs font-bold text-rose-600 font-mono block">
                           -{formatearHorasYMinutos(desv.horasDescontadas)}
                         </span>
                         <div className="text-[10px] text-slate-400">
@@ -320,10 +317,10 @@ export default function AuditDeviationsModal({
         </div>
 
         {/* PIE */}
-        <div className="px-6 py-3.5 border-t border-slate-100 flex justify-end bg-slate-50/50">
+        <div className="px-4 sm:px-6 py-3 sm:py-3.5 border-t border-slate-100 flex justify-end bg-slate-50/50 shrink-0">
           <button
             onClick={onClose}
-            className="px-5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition shadow-xs cursor-pointer"
+            className="w-full sm:w-auto px-5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition shadow-xs cursor-pointer text-center"
           >
             Cerrar
           </button>

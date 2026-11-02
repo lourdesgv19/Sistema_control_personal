@@ -1,15 +1,11 @@
 import React, { useState, useEffect, useMemo } from "react";
 import {
   X,
-  Clock,
   Users,
   Loader2,
   DollarSign,
   Calculator,
-  UserCheck,
   CalendarCheck,
-  Repeat,
-  ShieldCheck,
 } from "lucide-react";
 import { postNuevaMateria } from "../../services/gestionMateriasService";
 import { getEmpleadosActivos } from "../../services/empleadoService";
@@ -281,13 +277,13 @@ export default function ModalNuevaMateria({
     <>
       <div
         onClick={onClose}
-        className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 animate-in fade-in duration-150 cursor-pointer"
+        className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-3 sm:p-4 animate-in fade-in duration-150 cursor-pointer"
       >
         <div
           onClick={(e) => e.stopPropagation()}
-          className="bg-white rounded-3xl w-full max-w-lg shadow-xl overflow-hidden border border-slate-100 flex flex-col cursor-default"
+          className="bg-white rounded-2xl sm:rounded-3xl w-full max-w-lg shadow-xl overflow-hidden border border-slate-100 flex flex-col cursor-default"
         >
-          <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+          <div className="px-5 sm:px-6 py-4 border-b border-slate-100 flex items-center justify-between">
             <div>
               <h3 className="text-sm font-bold text-slate-900">
                 {esEdicion
@@ -314,7 +310,7 @@ export default function ModalNuevaMateria({
               e.preventDefault();
               handleGuardar(false);
             }}
-            className="p-6 space-y-4 text-xs overflow-y-auto max-h-[80vh]"
+            className="p-4 sm:p-6 space-y-4 text-xs overflow-y-auto max-h-[80vh]"
           >
             <div>
               <label className="font-semibold text-slate-700 block mb-1">
@@ -329,7 +325,7 @@ export default function ModalNuevaMateria({
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="font-semibold text-slate-700 block mb-1">
                   Código (Opcional)
@@ -363,7 +359,7 @@ export default function ModalNuevaMateria({
                   {form.diasSemana.length} seleccionados
                 </span>
               </div>
-              <div className="grid grid-cols-6 gap-1.5">
+              <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5">
                 {DIAS_OPCIONES.map((d) => {
                   const activo = form.diasSemana.includes(d.id);
                   return (
@@ -384,7 +380,7 @@ export default function ModalNuevaMateria({
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="font-semibold text-slate-700 block mb-1">
                   Hora Inicio
@@ -436,7 +432,7 @@ export default function ModalNuevaMateria({
                     onClick={() =>
                       setForm({ ...form, tipoFrecuencia: frec.id })
                     }
-                    className={`px-2.5 py-2 text-xs font-semibold rounded-xl border text-center transition cursor-pointer ${
+                    className={`px-2 py-2 text-[11px] sm:text-xs font-semibold rounded-xl border text-center transition cursor-pointer ${
                       form.tipoFrecuencia === frec.id
                         ? "bg-[#4b35e6] text-white border-[#4b35e6] shadow-xs"
                         : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
@@ -448,7 +444,7 @@ export default function ModalNuevaMateria({
               </div>
 
               {form.tipoFrecuencia === "SEMANA_POR_MEDIO" && (
-                <div className="flex items-center gap-4 p-3 bg-indigo-50/50 border border-indigo-100 rounded-xl mt-2 text-xs">
+                <div className="flex flex-wrap items-center gap-3 sm:gap-4 p-3 bg-indigo-50/50 border border-indigo-100 rounded-xl mt-2 text-xs">
                   <span className="text-slate-700 font-medium">Rotación:</span>
                   <label className="flex items-center gap-1.5 cursor-pointer text-slate-700 font-medium">
                     <input
@@ -480,7 +476,7 @@ export default function ModalNuevaMateria({
               )}
             </div>
 
-            {/* ASIGNACIÓN DE DOCENTES (TITULAR Y AUXILIAR/ALTERNO) */}
+            {/* ASIGNACIÓN DE DOCENTES */}
             <div className="space-y-3 bg-slate-50 p-3.5 rounded-2xl border border-slate-200">
               <div className="flex items-center justify-between">
                 <span className="font-bold text-slate-800 flex items-center gap-1.5">
@@ -495,7 +491,7 @@ export default function ModalNuevaMateria({
                   className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 underline cursor-pointer"
                 >
                   {mostrarTodosLosEmpleados
-                    ? "Mostrar solo docentes"
+                    ? "Solo docentes"
                     : "+ Ver todo el personal"}
                 </button>
               </div>
@@ -507,7 +503,6 @@ export default function ModalNuevaMateria({
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {/* Docente Titular */}
                   <div>
                     <label className="font-semibold text-slate-700 block mb-1">
                       Profesor Titular a Cargo
@@ -531,7 +526,6 @@ export default function ModalNuevaMateria({
                     </select>
                   </div>
 
-                  {/* Docente Auxiliar / Reemplazante Alterno */}
                   <div>
                     <label className="font-semibold text-slate-700 block mb-1">
                       Docente Auxiliar / Alterno (Reemplazos y Licencias)
@@ -571,7 +565,7 @@ export default function ModalNuevaMateria({
                   Liquidación de Cátedra
                 </span>
                 <span className="text-[10px] text-slate-400 font-mono">
-                  Duración: {duracionHoras.toFixed(1)}h por jornada
+                  {duracionHoras.toFixed(1)}h / jornada
                 </span>
               </div>
 
@@ -600,7 +594,7 @@ export default function ModalNuevaMateria({
                 </button>
               </div>
 
-              <div className="grid grid-cols-2 gap-3 items-center">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-center">
                 <div>
                   <label className="text-[10px] font-semibold text-slate-600 block mb-1">
                     Valor por Hora Cátedra *
@@ -662,18 +656,18 @@ export default function ModalNuevaMateria({
               </div>
             </div>
 
-            <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2">
+            <div className="pt-3 border-t border-slate-100 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2">
               <button
                 type="button"
                 onClick={onClose}
-                className="px-4 py-2 rounded-xl text-slate-600 font-semibold hover:bg-slate-50 cursor-pointer"
+                className="w-full sm:w-auto px-4 py-2 rounded-xl text-slate-600 font-semibold hover:bg-slate-50 cursor-pointer text-center"
               >
                 Cancelar
               </button>
               <button
                 type="submit"
                 disabled={guardando}
-                className="px-5 py-2 rounded-xl bg-[#4b35e6] hover:bg-[#3f2bc9] text-white font-semibold flex items-center gap-1.5 cursor-pointer shadow-xs"
+                className="w-full sm:w-auto px-5 py-2 rounded-xl bg-[#4b35e6] hover:bg-[#3f2bc9] text-white font-semibold flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
               >
                 {guardando && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
                 {esEdicion ? "Guardar Cambios" : "Guardar Cátedra"}

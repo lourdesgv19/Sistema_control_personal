@@ -9,8 +9,6 @@ import {
   Trash2,
   Search,
   AlignLeft,
-  X,
-  Check,
   Loader2,
   RotateCcw,
   Lock,
@@ -33,17 +31,11 @@ import {
   reactivarHorario,
 } from "../services/configuracionService";
 import ModalAlerta from "../components/comunes/ModalAlerta";
+import ModalCategoria from "../components/configuracion/ModalCategoria";
+import ModalCargo from "../components/configuracion/ModalCargo";
+import ModalHorario from "../components/configuracion/ModalHorario";
 import { buscarSimilar } from "../utils/textSimilarity";
 import { useAuth } from "../context/AuthContext";
-
-const PALETA_COLORES = [
-  { id: "indigo", bg: "bg-[#4338ca]", ring: "ring-[#4338ca]" },
-  { id: "emerald", bg: "bg-[#10b981]", ring: "ring-[#10b981]" },
-  { id: "amber", bg: "bg-[#f59e0b]", ring: "ring-[#f59e0b]" },
-  { id: "purple", bg: "bg-[#a855f7]", ring: "ring-[#a855f7]" },
-  { id: "cyan", bg: "bg-[#06b6d4]", ring: "ring-[#06b6d4]" },
-  { id: "rose", bg: "bg-[#f43f5e]", ring: "ring-[#f43f5e]" },
-];
 
 const FORM_CAT_INICIAL = {
   nombre: "",
@@ -95,7 +87,7 @@ const StatusBadge = ({ activo }) => {
   const isActivo = activo !== false;
   return (
     <span
-      className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border ${
+      className={`inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-0.5 sm:py-1 rounded-full text-[11px] sm:text-xs font-semibold border ${
         isActivo
           ? "bg-emerald-50 text-emerald-700 border-emerald-200"
           : "bg-rose-50 text-rose-700 border-rose-200"
@@ -118,7 +110,7 @@ export default function TiposConfiguracion() {
   const puedeEditarCargos = tienePermiso("CONFIG_EDITAR_CARGOS");
   const puedeEditarTurnos = tienePermiso("CONFIG_EDITAR_MATERIAS_TURNOS");
 
-  const [activeTab, setActiveTab] = useState("categorias"); // "categorias" | "cargos" | "horarios"
+  const [activeTab, setActiveTab] = useState("categorias");
   const [loading, setLoading] = useState(true);
 
   const [categorias, setCategorias] = useState([]);
@@ -224,7 +216,7 @@ export default function TiposConfiguracion() {
 
   const categoriasActivas = categorias.filter((c) => c.activo !== false);
 
-  // --- HANDLERS: CATEGORÍAS ---
+  // --- HANDLERS CATEGORÍAS ---
   const abrirModalCrearCategoria = () => {
     if (!puedeEditarCategorias) return;
     setEditandoCatId(null);
@@ -385,7 +377,7 @@ export default function TiposConfiguracion() {
     });
   };
 
-  // --- HANDLERS: CARGOS ---
+  // --- HANDLERS CARGOS ---
   const abrirModalCrearCargo = () => {
     if (!puedeEditarCargos) return;
     setEditandoCargoId(null);
@@ -557,7 +549,7 @@ export default function TiposConfiguracion() {
     });
   };
 
-  // --- HANDLERS: HORARIOS PREESTABLECIDOS ---
+  // --- HANDLERS HORARIOS ---
   const abrirModalCrearHorario = () => {
     if (!puedeEditarTurnos) return;
     setEditandoHorarioId(null);
@@ -764,17 +756,6 @@ export default function TiposConfiguracion() {
     });
   };
 
-  const toggleDia = (dia) => {
-    if (formHorario.dias.includes(dia)) {
-      setFormHorario({
-        ...formHorario,
-        dias: formHorario.dias.filter((d) => d !== dia),
-      });
-    } else {
-      setFormHorario({ ...formHorario, dias: [...formHorario.dias, dia] });
-    }
-  };
-
   // --- FILTROS DE LISTAS ---
   const filteredCategorias = categorias.filter((cat) => {
     if (filtroEstadoCat === "ACTIVOS") return cat.activo !== false;
@@ -831,66 +812,69 @@ export default function TiposConfiguracion() {
   }
 
   return (
-    <div className="p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
+    <div className="p-3.5 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-4 sm:space-y-6 font-sans">
       {/* 1. HEADER PRINCIPAL */}
-      <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <div className="w-12 h-12 rounded-xl bg-[#4b35e6] flex items-center justify-center text-white shadow-md">
-            <Settings className="w-6 h-6 stroke-[1.8]" />
+      <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex items-center gap-3 sm:gap-4">
+          <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-[#4b35e6] flex items-center justify-center text-white shadow-md shrink-0">
+            <Settings className="w-5 h-5 sm:w-6 sm:h-6 stroke-[1.8]" />
           </div>
           <div>
-            <h1 className="text-xl font-bold text-slate-900 tracking-tight">
+            <h1 className="text-lg sm:text-xl font-bold text-slate-900 tracking-tight">
               Configuración del Sistema
             </h1>
-            <p className="text-xs text-slate-500">
+            <p className="text-[11px] sm:text-xs text-slate-500">
               Gestión centralizada de Categorías, Cargos y Tabla de Horarios
               Preestablecidos
             </p>
           </div>
         </div>
 
-        {/* Subpestañas (3 principales) */}
-        <div className="flex flex-wrap bg-slate-100 p-1.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-600">
+        {/* Subpestañas fluidas */}
+        <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs font-semibold text-slate-600 overflow-x-auto w-full md:w-auto">
           <button
+            type="button"
             onClick={() => setActiveTab("categorias")}
-            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg transition-all ${
+            className={`flex items-center gap-2 px-3 sm:px-3.5 py-1.5 rounded-lg transition-all shrink-0 cursor-pointer ${
               activeTab === "categorias"
-                ? "bg-white text-indigo-700 shadow-xs border border-slate-200"
+                ? "bg-white text-indigo-700 shadow-xs border border-slate-200 font-bold"
                 : "hover:text-slate-900"
             }`}
           >
-            <Tag className="w-3.5 h-3.5 text-indigo-600" />
-            Categorías
+            <Tag className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+            <span>Categorías</span>
             <span className="bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded-full text-[10px] font-bold">
               {categorias.length}
             </span>
           </button>
 
           <button
+            type="button"
             onClick={() => setActiveTab("cargos")}
-            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg transition-all ${
+            className={`flex items-center gap-2 px-3 sm:px-3.5 py-1.5 rounded-lg transition-all shrink-0 cursor-pointer ${
               activeTab === "cargos"
-                ? "bg-white text-indigo-700 shadow-xs border border-slate-200"
+                ? "bg-white text-indigo-700 shadow-xs border border-slate-200 font-bold"
                 : "hover:text-slate-900"
             }`}
           >
-            <Briefcase className="w-3.5 h-3.5 text-indigo-600" />
-            Cargos y Puestos
+            <Briefcase className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+            <span>Cargos y Puestos</span>
             <span className="bg-slate-200 text-slate-700 px-1.5 py-0.5 rounded-full text-[10px] font-bold">
               {cargos.length}
             </span>
           </button>
 
           <button
+            type="button"
             onClick={() => setActiveTab("horarios")}
-            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg transition-all ${
+            className={`flex items-center gap-2 px-3 sm:px-3.5 py-1.5 rounded-lg transition-all shrink-0 cursor-pointer ${
               activeTab === "horarios"
-                ? "bg-white text-indigo-700 shadow-xs border border-slate-200"
+                ? "bg-white text-indigo-700 shadow-xs border border-slate-200 font-bold"
                 : "hover:text-slate-900"
             }`}
           >
-            <Clock className="w-3.5 h-3.5 text-indigo-600" />
-            Tabla de Horarios
+            <Clock className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+            <span>Tabla de Horarios</span>
             <span className="bg-slate-200 text-slate-700 px-1.5 py-0.5 rounded-full text-[10px] font-bold">
               {horarios.length}
             </span>
@@ -903,23 +887,23 @@ export default function TiposConfiguracion() {
          ======================================================== */}
       {activeTab === "categorias" && (
         <div className="space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-2 gap-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-1 sm:pb-2 gap-3 sm:gap-4">
             <div>
-              <h2 className="text-base font-bold text-slate-900">
+              <h2 className="text-sm sm:text-base font-bold text-slate-900">
                 Categorías de Personal
               </h2>
-              <p className="text-xs text-slate-500">
+              <p className="text-[11px] sm:text-xs text-slate-500">
                 Listado de categorías con nombre y estado de vigencia
               </p>
             </div>
 
-            <div className="flex items-center gap-3">
-              <div className="flex items-center gap-2 text-xs">
+            <div className="flex items-center justify-between sm:justify-end gap-2.5 sm:gap-3 flex-wrap">
+              <div className="flex items-center gap-2 text-xs flex-1 sm:flex-initial">
                 <span className="text-slate-500 font-medium">Estado:</span>
                 <select
                   value={filtroEstadoCat}
                   onChange={(e) => setFiltroEstadoCat(e.target.value)}
-                  className="bg-white border border-slate-200 text-slate-700 font-semibold rounded-xl px-3 py-2 text-xs outline-none focus:border-indigo-600 transition shadow-xs"
+                  className="bg-white border border-slate-200 text-slate-700 font-semibold rounded-xl px-2.5 sm:px-3 py-1.5 sm:py-2 text-xs outline-none focus:border-indigo-600 transition shadow-xs cursor-pointer flex-1 sm:flex-initial"
                 >
                   <option value="ACTIVOS">Solo Activos</option>
                   <option value="TODOS">Todos</option>
@@ -930,10 +914,10 @@ export default function TiposConfiguracion() {
               {puedeEditarCategorias ? (
                 <button
                   onClick={abrirModalCrearCategoria}
-                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#4b35e6] hover:bg-[#3f2bc9] text-white text-xs font-semibold shadow-md transition cursor-pointer"
+                  className="flex items-center justify-center gap-2 px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl bg-[#4b35e6] hover:bg-[#3f2bc9] text-white text-xs font-semibold shadow-md transition cursor-pointer"
                 >
                   <Plus className="w-4 h-4 stroke-[2.5]" />
-                  Nueva Categoría
+                  <span>Nueva Categoría</span>
                 </button>
               ) : (
                 <span
@@ -941,14 +925,101 @@ export default function TiposConfiguracion() {
                   title="Requiere permiso CONFIG_EDITAR_CATEGORIAS"
                 >
                   <Lock className="w-3.5 h-3.5" />
-                  Creación Restringida
+                  <span>Creación Restringida</span>
                 </span>
               )}
             </div>
           </div>
 
-          <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-xs">
-            <table className="w-full text-left text-xs">
+          {/* VISTA MÓVIL CATEGORÍAS (md:hidden) — TARJETAS TÁCTILES */}
+          <div className="md:hidden divide-y divide-slate-100 bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-xs">
+            {filteredCategorias.length === 0 ? (
+              <div className="p-8 text-center text-slate-400 text-xs italic">
+                No se encontraron categorías registradas con este estado.
+              </div>
+            ) : (
+              filteredCategorias.map((cat) => (
+                <div
+                  key={cat.id}
+                  className={`p-4 space-y-2.5 transition-colors ${
+                    cat.activo === false
+                      ? "bg-slate-50/60 opacity-80"
+                      : "bg-white"
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <h3 className="font-bold text-slate-900 text-sm leading-snug">
+                        {cat.nombre}
+                      </h3>
+                      <div className="mt-1">
+                        <span
+                          className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-wider font-mono uppercase border ${getBadgeColorClasses(
+                            cat.colorIdentificacion,
+                          )}`}
+                        >
+                          {cat.codigoTag?.toUpperCase()}
+                        </span>
+                      </div>
+                    </div>
+                    <StatusBadge activo={cat.activo} />
+                  </div>
+
+                  {cat.descripcion && (
+                    <p className="text-[11px] text-slate-500 leading-relaxed bg-slate-50 p-2 rounded-xl border border-slate-100">
+                      {cat.descripcion}
+                    </p>
+                  )}
+
+                  <div className="pt-2 border-t border-slate-100 flex items-center justify-end gap-2 text-slate-400">
+                    {puedeEditarCategorias ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => abrirModalEditarCategoria(cat)}
+                          className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-xs font-semibold flex items-center gap-1 transition cursor-pointer"
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                          <span>Editar</span>
+                        </button>
+                        {cat.activo !== false ? (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handleEliminarCategoria(cat.id, cat.nombre)
+                            }
+                            className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-xl text-xs font-semibold flex items-center gap-1 transition cursor-pointer"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span>Baja</span>
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handleReactivarCategoria(cat.id, cat.nombre)
+                            }
+                            className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-xl text-xs font-semibold flex items-center gap-1 transition cursor-pointer"
+                          >
+                            <RotateCcw className="w-3.5 h-3.5" />
+                            <span>Reactivar</span>
+                          </button>
+                        )}
+                      </>
+                    ) : (
+                      <span className="p-1 text-slate-300">
+                        <Lock className="w-3.5 h-3.5" />
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          {/* VISTA ESCRITORIO CATEGORÍAS (hidden md:block) — TABLA COMPLETA */}
+          <div className="hidden md:block bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-xs">
+            <table className="w-full text-left text-xs border-collapse">
               <thead className="bg-[#f8fafc] text-slate-500 font-bold uppercase text-[10px] border-b border-slate-100">
                 <tr>
                   <th className="px-6 py-3.5 tracking-wider">Nombre</th>
@@ -1040,12 +1111,12 @@ export default function TiposConfiguracion() {
          ======================================================== */}
       {activeTab === "cargos" && (
         <div className="space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-2 gap-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-1 sm:pb-2 gap-3 sm:gap-4">
             <div>
-              <h2 className="text-base font-bold text-slate-900">
+              <h2 className="text-sm sm:text-base font-bold text-slate-900">
                 Catálogo de Cargos y Puestos
               </h2>
-              <p className="text-xs text-slate-500">
+              <p className="text-[11px] sm:text-xs text-slate-500">
                 Estructura de cargos asignables a los colaboradores con vigencia
                 y descripción
               </p>
@@ -1053,10 +1124,10 @@ export default function TiposConfiguracion() {
             {puedeEditarCargos ? (
               <button
                 onClick={abrirModalCrearCargo}
-                className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#4b35e6] hover:bg-[#3f2bc9] text-white text-xs font-semibold shadow-md transition cursor-pointer"
+                className="flex items-center justify-center gap-2 px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl bg-[#4b35e6] hover:bg-[#3f2bc9] text-white text-xs font-semibold shadow-md transition cursor-pointer w-full sm:w-auto"
               >
                 <Plus className="w-4 h-4 stroke-[2.5]" />
-                Nuevo Cargo
+                <span>Nuevo Cargo</span>
               </button>
             ) : (
               <span
@@ -1064,12 +1135,12 @@ export default function TiposConfiguracion() {
                 title="Requiere permiso CONFIG_EDITAR_CARGOS"
               >
                 <Lock className="w-3.5 h-3.5" />
-                Creación Restringida
+                <span>Creación Restringida</span>
               </span>
             )}
           </div>
 
-          <div className="bg-white p-3 border border-slate-200 rounded-xl shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3">
+          <div className="bg-white p-3 border border-slate-200 rounded-xl shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="relative flex-1">
               <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
@@ -1081,13 +1152,13 @@ export default function TiposConfiguracion() {
               />
             </div>
 
-            <div className="flex flex-wrap items-center gap-3 text-xs">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 text-xs">
               <div className="flex items-center gap-2 text-slate-600">
                 <span className="font-medium text-slate-500">Categoría:</span>
                 <select
                   value={cargoCategoryFilter}
                   onChange={(e) => setCargoCategoryFilter(e.target.value)}
-                  className="border border-slate-200 rounded-xl px-3 py-2 text-xs bg-white outline-none focus:border-indigo-500"
+                  className="border border-slate-200 rounded-xl px-2.5 py-1.5 sm:py-2 text-xs bg-white outline-none focus:border-indigo-500 flex-1 sm:flex-initial"
                 >
                   <option value="TODAS">Todas las categorías</option>
                   {categoriasActivas.map((c) => (
@@ -1103,7 +1174,7 @@ export default function TiposConfiguracion() {
                 <select
                   value={filtroEstadoCargo}
                   onChange={(e) => setFiltroEstadoCargo(e.target.value)}
-                  className="bg-white border border-slate-200 text-slate-700 font-semibold rounded-xl px-3 py-2 text-xs outline-none focus:border-indigo-600 transition shadow-xs"
+                  className="bg-white border border-slate-200 text-slate-700 font-semibold rounded-xl px-2.5 py-1.5 sm:py-2 text-xs outline-none focus:border-indigo-600 transition shadow-xs flex-1 sm:flex-initial"
                 >
                   <option value="ACTIVOS">Solo Activos</option>
                   <option value="TODOS">Todos</option>
@@ -1113,8 +1184,100 @@ export default function TiposConfiguracion() {
             </div>
           </div>
 
-          <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-xs">
-            <table className="w-full text-left text-xs">
+          {/* VISTA MÓVIL CARGOS (md:hidden) — TARJETAS TÁCTILES */}
+          <div className="md:hidden divide-y divide-slate-100 bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-xs">
+            {filteredCargos.length === 0 ? (
+              <div className="p-8 text-center text-slate-400 text-xs italic">
+                No se encontraron cargos coincidentes con los filtros aplicados.
+              </div>
+            ) : (
+              filteredCargos.map((cg) => (
+                <div
+                  key={cg.id}
+                  className={`p-4 space-y-2.5 transition-colors ${
+                    cg.activo === false
+                      ? "bg-slate-50/60 opacity-80"
+                      : "bg-white"
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <h3 className="font-bold text-slate-900 text-sm leading-snug">
+                        {cg.nombre}
+                      </h3>
+                      <div className="mt-1">
+                        <span
+                          className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-wider font-mono uppercase border ${getBadgeColorClasses(
+                            cg.categoria?.colorIdentificacion,
+                          )}`}
+                        >
+                          {cg.categoria?.codigoTag?.toUpperCase() ||
+                            cg.categoria?.nombre?.toUpperCase() ||
+                            "DOCENTES"}
+                        </span>
+                      </div>
+                    </div>
+                    <StatusBadge activo={cg.activo} />
+                  </div>
+
+                  <div className="text-slate-600 text-xs bg-slate-50 p-2.5 rounded-xl border border-slate-100 flex items-start gap-2">
+                    <AlignLeft className="w-3.5 h-3.5 text-slate-400 shrink-0 mt-0.5" />
+                    <span className="leading-relaxed">
+                      {cg.descripcion || (
+                        <em className="text-slate-400">Sin descripción</em>
+                      )}
+                    </span>
+                  </div>
+
+                  <div className="pt-2 border-t border-slate-100 flex items-center justify-end gap-2 text-slate-400">
+                    {puedeEditarCargos ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => abrirModalEditarCargo(cg)}
+                          className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-xs font-semibold flex items-center gap-1 transition cursor-pointer"
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                          <span>Editar</span>
+                        </button>
+                        {cg.activo !== false ? (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handleEliminarCargo(cg.id, cg.nombre)
+                            }
+                            className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-xl text-xs font-semibold flex items-center gap-1 transition cursor-pointer"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span>Baja</span>
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handleReactivarCargo(cg.id, cg.nombre)
+                            }
+                            className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-xl text-xs font-semibold flex items-center gap-1 transition cursor-pointer"
+                          >
+                            <RotateCcw className="w-3.5 h-3.5" />
+                            <span>Reactivar</span>
+                          </button>
+                        )}
+                      </>
+                    ) : (
+                      <span className="p-1 text-slate-300">
+                        <Lock className="w-3.5 h-3.5" />
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          {/* VISTA ESCRITORIO CARGOS (hidden md:block) — TABLA COMPLETA */}
+          <div className="hidden md:block bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-xs">
+            <table className="w-full text-left text-xs border-collapse">
               <thead className="bg-[#f8fafc] text-slate-500 font-bold uppercase text-[10px] border-b border-slate-100">
                 <tr>
                   <th className="px-6 py-3.5 tracking-wider w-1/4">
@@ -1223,12 +1386,12 @@ export default function TiposConfiguracion() {
          ======================================================== */}
       {activeTab === "horarios" && (
         <div className="space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-2 gap-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-1 sm:pb-2 gap-3 sm:gap-4">
             <div>
-              <h2 className="text-base font-bold text-slate-900">
+              <h2 className="text-sm sm:text-base font-bold text-slate-900">
                 Tabla de Horarios Preestablecidos
               </h2>
-              <p className="text-xs text-slate-500">
+              <p className="text-[11px] sm:text-xs text-slate-500">
                 Horarios corporativos y parámetros de tolerancia para asignación
                 directa o por régimen
               </p>
@@ -1236,10 +1399,10 @@ export default function TiposConfiguracion() {
             {puedeEditarTurnos ? (
               <button
                 onClick={abrirModalCrearHorario}
-                className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#4b35e6] hover:bg-[#3f2bc9] text-white text-xs font-semibold shadow-md transition cursor-pointer"
+                className="flex items-center justify-center gap-2 px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl bg-[#4b35e6] hover:bg-[#3f2bc9] text-white text-xs font-semibold shadow-md transition cursor-pointer w-full sm:w-auto"
               >
                 <Plus className="w-4 h-4 stroke-[2.5]" />
-                Nuevo Horario Preestablecido
+                <span>Nuevo Horario Preestablecido</span>
               </button>
             ) : (
               <span
@@ -1247,22 +1410,23 @@ export default function TiposConfiguracion() {
                 title="Requiere permiso CONFIG_EDITAR_MATERIAS_TURNOS"
               >
                 <Lock className="w-3.5 h-3.5" />
-                Creación Restringida
+                <span>Creación Restringida</span>
               </span>
             )}
           </div>
 
-          <div className="bg-white p-3 border border-slate-200 rounded-xl shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-slate-500 font-medium mr-1">
+          <div className="bg-white p-3 border border-slate-200 rounded-xl shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+            <div className="flex items-center gap-2 overflow-x-auto w-full sm:w-auto pb-1 sm:pb-0">
+              <span className="text-slate-500 font-medium shrink-0">
                 Categoría:
               </span>
               {["TODOS", ...categoriasActivas.map((c) => c.nombre)].map(
                 (cat) => (
                   <button
                     key={cat}
+                    type="button"
                     onClick={() => setHorarioCategoryFilter(cat)}
-                    className={`px-3 py-1.5 rounded-xl font-medium transition cursor-pointer ${
+                    className={`px-3 py-1.5 rounded-xl font-medium transition cursor-pointer shrink-0 whitespace-nowrap ${
                       horarioCategoryFilter === cat
                         ? "bg-[#4338ca] text-white font-semibold shadow-xs"
                         : "bg-slate-100 text-slate-600 hover:bg-slate-200"
@@ -1274,12 +1438,12 @@ export default function TiposConfiguracion() {
               )}
             </div>
 
-            <div className="flex items-center gap-2 text-slate-600 self-start md:self-auto">
+            <div className="flex items-center gap-2 text-slate-600 self-start sm:self-auto">
               <span className="font-medium text-slate-500">Estado:</span>
               <select
                 value={filtroEstadoHorario}
                 onChange={(e) => setFiltroEstadoHorario(e.target.value)}
-                className="bg-white border border-slate-200 text-slate-700 font-semibold rounded-xl px-3 py-2 text-xs outline-none focus:border-indigo-600 transition shadow-xs"
+                className="bg-white border border-slate-200 text-slate-700 font-semibold rounded-xl px-2.5 py-1.5 text-xs outline-none focus:border-indigo-600 transition shadow-xs"
               >
                 <option value="ACTIVOS">Solo Activos</option>
                 <option value="TODOS">Todos</option>
@@ -1288,7 +1452,7 @@ export default function TiposConfiguracion() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
             {filteredHorarios.map((h) => {
               const diasArray = h.diasLaborables
                 ? h.diasLaborables.split(",")
@@ -1296,7 +1460,7 @@ export default function TiposConfiguracion() {
               return (
                 <div
                   key={h.id}
-                  className={`bg-white border rounded-2xl p-6 shadow-xs flex flex-col justify-between transition-colors ${
+                  className={`bg-white border rounded-2xl p-4 sm:p-6 shadow-xs flex flex-col justify-between transition-colors ${
                     h.activo === false
                       ? "border-dashed border-rose-300 bg-rose-50/15"
                       : "border-slate-200"
@@ -1360,11 +1524,11 @@ export default function TiposConfiguracion() {
                       </div>
                     </div>
 
-                    <h3 className="text-sm font-bold text-slate-900 mb-3">
+                    <h3 className="text-sm font-bold text-slate-900 mb-2.5 sm:mb-3">
                       {h.nombre}
                     </h3>
 
-                    <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-indigo-50/70 border border-indigo-100 rounded-lg text-xs font-semibold text-indigo-700 mb-4">
+                    <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-indigo-50/70 border border-indigo-100 rounded-lg text-xs font-semibold text-indigo-700 mb-3 sm:mb-4">
                       <Clock className="w-3.5 h-3.5" />
                       <span>
                         {h.horaEntrada?.substring(0, 5)} →{" "}
@@ -1372,7 +1536,7 @@ export default function TiposConfiguracion() {
                       </span>
                     </div>
 
-                    <div className="mb-5">
+                    <div className="mb-4 sm:mb-5">
                       <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">
                         Días Laborables:
                       </div>
@@ -1398,7 +1562,7 @@ export default function TiposConfiguracion() {
                     </div>
                   </div>
 
-                  {/* BLOQUE INFERIOR: TOLERANCIAS Y SALIDAS INTERMEDIAS */}
+                  {/* BLOQUE INFERIOR: TOLERANCIAS Y SALIDAS */}
                   <div className="grid grid-cols-2 gap-2 pt-3 border-t border-slate-100 text-center">
                     <div className="bg-[#f8fafc] p-2 rounded-xl">
                       <div className="text-[9px] font-bold uppercase text-slate-400">
@@ -1441,497 +1605,36 @@ export default function TiposConfiguracion() {
       )}
 
       {/* ========================================================
-          MODALES DE FORMULARIO
+          MODALES DE FORMULARIO MODULARIZADOS
          ======================================================== */}
-      {/* Modal 1: Categoría */}
-      {modalCat && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl w-full max-w-md overflow-hidden shadow-2xl">
-            <div className="bg-[#111827] px-6 py-4 text-white flex items-center justify-between">
-              <div className="flex items-center gap-2.5 font-bold text-sm">
-                <Tag className="w-4 h-4 text-indigo-400" />
-                <span>
-                  {editandoCatId
-                    ? "Editar Categoría de Personal"
-                    : "Nueva Categoría de Personal"}
-                </span>
-              </div>
-              <button
-                onClick={() => setModalCat(false)}
-                className="text-slate-400 hover:text-white cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
+      <ModalCategoria
+        isOpen={modalCat}
+        onClose={() => setModalCat(false)}
+        onSubmit={handleGuardarCategoria}
+        formCat={formCat}
+        setFormCat={setFormCat}
+        editandoCatId={editandoCatId}
+      />
 
-            <form
-              onSubmit={handleGuardarCategoria}
-              className="p-6 space-y-4 text-xs"
-            >
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">
-                  Nombre de la Categoría *
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="ej. Docentes, Administrativos, Investigadores"
-                  value={formCat.nombre}
-                  onChange={(e) =>
-                    setFormCat({ ...formCat, nombre: e.target.value })
-                  }
-                  className="w-full border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-indigo-600"
-                />
-              </div>
+      <ModalCargo
+        isOpen={modalCargo}
+        onClose={() => setModalCargo(false)}
+        onSubmit={handleGuardarCargo}
+        formCargo={formCargo}
+        setFormCargo={setFormCargo}
+        editandoCargoId={editandoCargoId}
+        categoriasActivas={categoriasActivas}
+      />
 
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">
-                  Estado *
-                </label>
-                <select
-                  value={formCat.estado}
-                  onChange={(e) =>
-                    setFormCat({ ...formCat, estado: e.target.value })
-                  }
-                  className="w-full border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-indigo-600 bg-white"
-                >
-                  <option value="Activo">
-                    Activo (Habilitada en el sistema)
-                  </option>
-                  <option value="Inactivo">Inactivo (Deshabilitada)</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">
-                  Código Identificador (único)
-                </label>
-                <input
-                  type="text"
-                  placeholder="ej. docente, investigacion, maestranza"
-                  value={formCat.codigoTag}
-                  onChange={(e) =>
-                    setFormCat({ ...formCat, codigoTag: e.target.value })
-                  }
-                  className="w-full border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-indigo-600 font-mono"
-                />
-                <span className="text-[10px] text-slate-400 block mt-1">
-                  Si se deja en blanco se generará automáticamente a partir del
-                  nombre.
-                </span>
-              </div>
-
-              <div>
-                <label className="block font-semibold text-slate-700 mb-2">
-                  Color de Identificación
-                </label>
-                <div className="flex items-center gap-3">
-                  {PALETA_COLORES.map((c) => (
-                    <button
-                      key={c.id}
-                      type="button"
-                      onClick={() =>
-                        setFormCat({ ...formCat, colorIdentificacion: c.id })
-                      }
-                      className={`w-9 h-9 rounded-xl ${c.bg} flex items-center justify-center text-white transition-transform cursor-pointer ${
-                        formCat.colorIdentificacion === c.id
-                          ? "scale-110 ring-3 ring-offset-2 " + c.ring
-                          : "opacity-90"
-                      }`}
-                    >
-                      {formCat.colorIdentificacion === c.id && (
-                        <Check className="w-4 h-4 stroke-[3]" />
-                      )}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">
-                  Descripción (Opcional)
-                </label>
-                <textarea
-                  rows="3"
-                  placeholder="Alcance, funciones o tipo de régimen institucional..."
-                  value={formCat.descripcion}
-                  onChange={(e) =>
-                    setFormCat({ ...formCat, descripcion: e.target.value })
-                  }
-                  className="w-full border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-indigo-600"
-                ></textarea>
-              </div>
-
-              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => setModalCat(false)}
-                  className="px-4 py-2 font-medium text-slate-600 hover:bg-slate-100 rounded-xl cursor-pointer"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2 font-semibold text-white bg-[#4b35e6] hover:bg-[#3e2bc0] rounded-xl shadow-md cursor-pointer"
-                >
-                  {editandoCatId ? "Guardar Cambios" : "Guardar Categoría"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Modal 2: Cargo */}
-      {modalCargo && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl w-full max-w-md overflow-hidden shadow-2xl">
-            <div className="bg-[#111827] px-6 py-4 text-white flex items-center justify-between">
-              <div className="flex items-center gap-2.5 font-bold text-sm">
-                <Briefcase className="w-4 h-4 text-indigo-400" />
-                <span>
-                  {editandoCargoId
-                    ? "Editar Cargo / Puesto"
-                    : "Nuevo Cargo / Puesto"}
-                </span>
-              </div>
-              <button
-                onClick={() => setModalCargo(false)}
-                className="text-slate-400 hover:text-white cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <form
-              onSubmit={handleGuardarCargo}
-              className="p-6 space-y-4 text-xs"
-            >
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">
-                  Nombre del Cargo *
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="ej. Profesor Titular, Bedel, Coordinador"
-                  value={formCargo.nombre}
-                  onChange={(e) =>
-                    setFormCargo({ ...formCargo, nombre: e.target.value })
-                  }
-                  className="w-full border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-indigo-600"
-                />
-              </div>
-
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">
-                  Categoría Institucional *
-                </label>
-                <select
-                  value={formCargo.categoriaId}
-                  onChange={(e) =>
-                    setFormCargo({ ...formCargo, categoriaId: e.target.value })
-                  }
-                  className="w-full border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-indigo-600 bg-white"
-                >
-                  {categoriasActivas.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.nombre} ({c.codigoTag})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">
-                  Estado *
-                </label>
-                <select
-                  value={formCargo.estado}
-                  onChange={(e) =>
-                    setFormCargo({ ...formCargo, estado: e.target.value })
-                  }
-                  className="w-full border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-indigo-600 bg-white"
-                >
-                  <option value="Activo">Activo (Habilitado)</option>
-                  <option value="Inactivo">Inactivo (Baja lógica)</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">
-                  Descripción (Opcional)
-                </label>
-                <textarea
-                  rows="3"
-                  placeholder="Responsabilidades y perfil del puesto..."
-                  value={formCargo.descripcion}
-                  onChange={(e) =>
-                    setFormCargo({ ...formCargo, descripcion: e.target.value })
-                  }
-                  className="w-full border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-indigo-600"
-                ></textarea>
-              </div>
-
-              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => setModalCargo(false)}
-                  className="px-4 py-2 font-medium text-slate-600 hover:bg-slate-100 rounded-xl cursor-pointer"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2 font-semibold text-white bg-[#4b35e6] hover:bg-[#3e2bc0] rounded-xl shadow-md cursor-pointer"
-                >
-                  {editandoCargoId ? "Guardar Cambios" : "Guardar Cargo"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Modal 3: Horario Preestablecido */}
-      {modalHorario && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl">
-            <div className="bg-[#111827] px-6 py-4 text-white flex items-center justify-between">
-              <div className="flex items-center gap-2.5 font-bold text-sm">
-                <Clock className="w-4 h-4 text-indigo-400" />
-                <span>
-                  {editandoHorarioId
-                    ? "Editar Horario Preestablecido"
-                    : "Nuevo Horario Preestablecido"}
-                </span>
-              </div>
-              <button
-                onClick={() => setModalHorario(false)}
-                className="text-slate-400 hover:text-white cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <form
-              onSubmit={handleGuardarHorario}
-              className="p-6 space-y-4 text-xs"
-            >
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">
-                  Nombre del Horario *
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="ej. Administrativo Central (08:00 a 16:00)"
-                  value={formHorario.nombre}
-                  onChange={(e) =>
-                    setFormHorario({ ...formHorario, nombre: e.target.value })
-                  }
-                  className="w-full border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-indigo-600"
-                />
-              </div>
-
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">
-                  Categoría Aplicable *
-                </label>
-                <select
-                  value={formHorario.categoriaId}
-                  onChange={(e) =>
-                    setFormHorario({
-                      ...formHorario,
-                      categoriaId: e.target.value,
-                    })
-                  }
-                  className="w-full border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-indigo-600 bg-white"
-                >
-                  {categoriasActivas.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.nombre} ({c.codigoTag})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">
-                  Estado *
-                </label>
-                <select
-                  value={formHorario.estado}
-                  onChange={(e) =>
-                    setFormHorario({ ...formHorario, estado: e.target.value })
-                  }
-                  className="w-full border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-indigo-600 bg-white"
-                >
-                  <option value="Activo">Activo (Habilitado)</option>
-                  <option value="Inactivo">Inactivo (Baja lógica)</option>
-                </select>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">
-                    Hora Entrada (Fija) *
-                  </label>
-                  <input
-                    type="time"
-                    required
-                    value={formHorario.horaEntrada}
-                    onChange={(e) =>
-                      setFormHorario({
-                        ...formHorario,
-                        horaEntrada: e.target.value,
-                      })
-                    }
-                    className="w-full border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-indigo-600"
-                  />
-                </div>
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">
-                    Hora Salida (Fija) *
-                  </label>
-                  <input
-                    type="time"
-                    required
-                    value={formHorario.horaEgreso}
-                    onChange={(e) =>
-                      setFormHorario({
-                        ...formHorario,
-                        horaEgreso: e.target.value,
-                      })
-                    }
-                    className="w-full border border-slate-200 rounded-xl px-3 py-2 outline-none focus:border-indigo-600"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block font-semibold text-slate-700 mb-2">
-                  Días Laborables Semanales *
-                </label>
-                <div className="flex gap-1.5">
-                  {["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"].map(
-                    (d) => {
-                      const sel = formHorario.dias.includes(d);
-                      return (
-                        <button
-                          type="button"
-                          key={d}
-                          onClick={() => toggleDia(d)}
-                          className={`flex-1 py-2 rounded-xl font-bold transition cursor-pointer ${
-                            sel
-                              ? "bg-[#4b35e6] text-white shadow-xs"
-                              : "bg-white border border-slate-200 text-slate-600 hover:bg-slate-50"
-                          }`}
-                        >
-                          {d}
-                        </button>
-                      );
-                    },
-                  )}
-                </div>
-              </div>
-
-              {/* SECCIÓN DE TOLERANCIAS Y SALIDAS INTERMEDIAS */}
-              <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-4 space-y-3">
-                <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-500">
-                  Parámetros de Auditoría y Salidas Intermedias (RF11)
-                </span>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block font-semibold text-slate-700 mb-1 text-[11px]">
-                      Tolerancia Entrada (minutos)
-                    </label>
-                    <input
-                      type="number"
-                      min="0"
-                      value={formHorario.tolEntrada}
-                      onChange={(e) =>
-                        setFormHorario({
-                          ...formHorario,
-                          tolEntrada: e.target.value,
-                        })
-                      }
-                      className="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 outline-none focus:border-indigo-600"
-                    />
-                  </div>
-                  <div>
-                    <label className="block font-semibold text-slate-700 mb-1 text-[11px]">
-                      Tolerancia Salida (minutos)
-                    </label>
-                    <input
-                      type="number"
-                      min="0"
-                      value={formHorario.tolEgreso}
-                      onChange={(e) =>
-                        setFormHorario({
-                          ...formHorario,
-                          tolEgreso: e.target.value,
-                        })
-                      }
-                      className="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 outline-none focus:border-indigo-600"
-                    />
-                  </div>
-                  <div>
-                    <label className="block font-semibold text-slate-700 mb-1 text-[11px]">
-                      Máx. Salidas Intermedias
-                    </label>
-                    <input
-                      type="number"
-                      min="0"
-                      value={formHorario.maxSalidas}
-                      onChange={(e) =>
-                        setFormHorario({
-                          ...formHorario,
-                          maxSalidas: e.target.value,
-                        })
-                      }
-                      className="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 outline-none focus:border-indigo-600 font-semibold text-indigo-700"
-                    />
-                  </div>
-                  <div>
-                    <label className="block font-semibold text-slate-700 mb-1 text-[11px]">
-                      Tiempo Máx. Fuera (minutos)
-                    </label>
-                    <input
-                      type="number"
-                      min="0"
-                      value={formHorario.tiempoMaxFuera}
-                      onChange={(e) =>
-                        setFormHorario({
-                          ...formHorario,
-                          tiempoMaxFuera: e.target.value,
-                        })
-                      }
-                      className="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 outline-none focus:border-indigo-600 font-semibold text-indigo-700"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => setModalHorario(false)}
-                  className="px-4 py-2 font-medium text-slate-600 hover:bg-slate-100 rounded-xl cursor-pointer"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2 font-semibold text-white bg-[#4b35e6] hover:bg-[#3e2bc0] rounded-xl shadow-md cursor-pointer"
-                >
-                  {editandoHorarioId ? "Guardar Cambios" : "Guardar Horario"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      <ModalHorario
+        isOpen={modalHorario}
+        onClose={() => setModalHorario(false)}
+        onSubmit={handleGuardarHorario}
+        formHorario={formHorario}
+        setFormHorario={setFormHorario}
+        editandoHorarioId={editandoHorarioId}
+        categoriasActivas={categoriasActivas}
+      />
 
       {/* MODAL DE ALERTA UNIFICADO */}
       <ModalAlerta

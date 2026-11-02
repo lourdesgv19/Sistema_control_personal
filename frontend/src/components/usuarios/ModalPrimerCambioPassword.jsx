@@ -1,7 +1,6 @@
 import React, { useState } from "react";
 import {
   KeyRound,
-  Lock,
   Eye,
   EyeOff,
   CheckCircle2,
@@ -26,7 +25,6 @@ export default function ModalPrimerCambioPassword({
 
   if (!isOpen) return null;
 
-  // Validaciones visuales en tiempo real
   const tieneMinimo6 = passNueva.length >= 6;
   const noEsIgualAActual = passNueva.length > 0 && passNueva !== passActual;
   const coinciden = passNueva.length > 0 && passNueva === passConfirm;
@@ -56,7 +54,6 @@ export default function ModalPrimerCambioPassword({
     try {
       const idUsuario = usuario?.id || usuario?.idUsuario;
 
-      // Endpoint que actualiza la clave y desactiva debe_cambiar_password
       await apiClient.put(`/usuarios/${idUsuario}/primer-cambio-password`, {
         passwordActual: passActual,
         passwordNueva: passNueva.trim(),
@@ -76,17 +73,17 @@ export default function ModalPrimerCambioPassword({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/75 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden border border-slate-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/75 backdrop-blur-sm p-3 sm:p-4 animate-in fade-in duration-200">
+      <div className="bg-white rounded-2xl sm:rounded-3xl shadow-2xl w-full max-w-md overflow-hidden border border-slate-200 max-h-[95vh] flex flex-col">
         {/* Cabecera de Alerta de Seguridad */}
-        <div className="bg-gradient-to-r from-amber-500 to-indigo-600 p-6 text-white text-center relative">
-          <div className="w-14 h-14 bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center mx-auto mb-3 shadow-inner">
-            <KeyRound className="w-7 h-7 text-white stroke-[2.2]" />
+        <div className="bg-gradient-to-r from-amber-500 to-indigo-600 p-5 sm:p-6 text-white text-center relative shrink-0">
+          <div className="w-12 h-12 sm:w-14 sm:h-14 bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center mx-auto mb-2.5 sm:mb-3 shadow-inner">
+            <KeyRound className="w-6 h-6 sm:w-7 sm:h-7 text-white stroke-[2.2]" />
           </div>
-          <h2 className="text-lg font-bold tracking-tight">
+          <h2 className="text-base sm:text-lg font-bold tracking-tight">
             Actualización Obligatoria de Clave
           </h2>
-          <p className="text-xs text-white/90 mt-1 max-w-xs mx-auto">
+          <p className="text-[11px] sm:text-xs text-white/90 mt-1 max-w-xs mx-auto">
             Por políticas de seguridad, debe cambiar su contraseña
             predeterminada para poder acceder al sistema.
           </p>
@@ -95,7 +92,7 @@ export default function ModalPrimerCambioPassword({
         {/* Formulario */}
         <form
           onSubmit={handleSubmit}
-          className="p-6 space-y-4 font-sans text-xs"
+          className="p-4 sm:p-6 space-y-3.5 sm:space-y-4 font-sans text-xs overflow-y-auto"
         >
           {error && (
             <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 flex items-start gap-2.5 animate-shake">

@@ -39,7 +39,6 @@ export default function CalendarioSemanalMaterias({ onEditarMateriaParam }) {
   const [docentes, setDocentes] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Estado para el modal de auditoría al hacer click en una clase
   const [claseSeleccionadaAuditoria, setClaseSeleccionadaAuditoria] =
     useState(null);
 
@@ -134,21 +133,22 @@ export default function CalendarioSemanalMaterias({ onEditarMateriaParam }) {
   const cantidadColumnas = datosCalendario?.dias?.length || 6;
   const getGridColsClass = () => {
     if (cantidadColumnas === 1) return "grid-cols-1 max-w-2xl mx-auto";
-    if (cantidadColumnas === 2) return "grid-cols-1 md:grid-cols-2";
-    if (cantidadColumnas === 3) return "grid-cols-1 md:grid-cols-3";
+    if (cantidadColumnas === 2) return "grid-cols-1 sm:grid-cols-2";
+    if (cantidadColumnas === 3)
+      return "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3";
     if (cantidadColumnas === 4)
-      return "grid-cols-1 md:grid-cols-2 lg:grid-cols-4";
+      return "grid-cols-1 sm:grid-cols-2 lg:grid-cols-4";
     if (cantidadColumnas === 5)
-      return "grid-cols-1 md:grid-cols-3 lg:grid-cols-5";
-    return "grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6";
+      return "grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5";
+    return "grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6";
   };
 
   return (
     <div className="space-y-4">
       {/* 1. BARRA DE FILTROS SUPERIOR */}
-      <div className="bg-white border border-slate-200 rounded-2xl p-3 shadow-xs flex flex-wrap items-center justify-between gap-3">
+      <div className="bg-white border border-slate-200 rounded-2xl p-3 sm:p-4 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3">
         {/* Selector de Rango Semanal */}
-        <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-xl px-2 py-1">
+        <div className="flex items-center justify-between sm:justify-start gap-1 bg-slate-50 border border-slate-200 rounded-xl px-2 py-1 w-full md:w-auto">
           <button
             type="button"
             onClick={() => cambiarSemana(-7)}
@@ -157,7 +157,7 @@ export default function CalendarioSemanalMaterias({ onEditarMateriaParam }) {
           >
             <ChevronLeft className="w-4 h-4" />
           </button>
-          <span className="text-xs font-bold text-slate-700 px-2 select-none">
+          <span className="text-xs font-bold text-slate-700 px-2 select-none text-center">
             {textoRangoSemana()}
           </span>
           <button
@@ -171,14 +171,14 @@ export default function CalendarioSemanalMaterias({ onEditarMateriaParam }) {
         </div>
 
         {/* Selector de Días Múltiples */}
-        <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl">
-          <span className="text-[11px] font-medium text-slate-400 px-2 select-none">
+        <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl overflow-x-auto w-full md:w-auto">
+          <span className="text-[11px] font-medium text-slate-400 px-1.5 shrink-0 select-none">
             Días:
           </span>
           <button
             type="button"
             onClick={seleccionarTodosLosDias}
-            className={`px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
+            className={`px-2.5 py-1 rounded-lg text-xs font-bold transition shrink-0 cursor-pointer ${
               diasSeleccionados.length === 0
                 ? "bg-[#4b35e6] text-white shadow-xs"
                 : "text-slate-600 hover:text-slate-900 hover:bg-white/60"
@@ -194,7 +194,7 @@ export default function CalendarioSemanalMaterias({ onEditarMateriaParam }) {
                 key={dia.id}
                 type="button"
                 onClick={() => toggleDia(dia.id)}
-                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
+                className={`px-2 py-1 rounded-lg text-xs font-bold transition shrink-0 cursor-pointer ${
                   estaActivo
                     ? "bg-[#4b35e6] text-white shadow-xs"
                     : "text-slate-600 hover:text-slate-900 hover:bg-white/60"
@@ -206,55 +206,56 @@ export default function CalendarioSemanalMaterias({ onEditarMateriaParam }) {
           })}
         </div>
 
-        {/* Dropdown de Docentes */}
-        <div className="relative min-w-[200px]">
-          <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
-            <Users className="w-3.5 h-3.5" />
+        {/* Dropdown de Docentes y Buscador */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full md:w-auto">
+          <div className="relative flex-1 sm:w-56">
+            <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
+              <Users className="w-3.5 h-3.5" />
+            </div>
+            <select
+              value={idDocenteSeleccionado}
+              onChange={(e) => setIdDocenteSeleccionado(e.target.value)}
+              className="w-full pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 outline-none focus:border-indigo-600 cursor-pointer"
+            >
+              <option value="">Todos los Docentes ({docentes.length})</option>
+              {docentes.map((d) => (
+                <option key={d.idEmpleado} value={d.idEmpleado}>
+                  {d.nombreCompleto} ({d.legajo || "S/L"})
+                </option>
+              ))}
+            </select>
           </div>
-          <select
-            value={idDocenteSeleccionado}
-            onChange={(e) => setIdDocenteSeleccionado(e.target.value)}
-            className="w-full pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 outline-none focus:border-indigo-600 cursor-pointer"
-          >
-            <option value="">Todos los Docentes ({docentes.length})</option>
-            {docentes.map((d) => (
-              <option key={d.idEmpleado} value={d.idEmpleado}>
-                {d.nombreCompleto} ({d.legajo || "S/L"})
-              </option>
-            ))}
-          </select>
-        </div>
 
-        {/* Buscador */}
-        <div className="relative flex-1 min-w-[180px] max-w-xs">
-          <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input
-            type="text"
-            placeholder="Buscar materia o aula..."
-            value={busqueda}
-            onChange={(e) => setBusqueda(e.target.value)}
-            className="w-full pl-8 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-indigo-600"
-          />
+          <div className="relative flex-1 sm:w-52">
+            <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Buscar materia o aula..."
+              value={busqueda}
+              onChange={(e) => setBusqueda(e.target.value)}
+              className="w-full pl-8 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-indigo-600"
+            />
+          </div>
         </div>
       </div>
 
       {/* 2. LEYENDA DEL SEMÁFORO */}
-      <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-3 flex flex-wrap items-center gap-3 text-xs font-semibold text-slate-600">
-        <span className="text-slate-400 font-normal flex items-center gap-1.5">
-          <AlertCircle className="w-3.5 h-3.5 text-slate-400" />
+      <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-3 flex flex-wrap items-center gap-2 sm:gap-3 text-xs font-semibold text-slate-600">
+        <span className="text-slate-400 font-normal flex items-center gap-1.5 w-full sm:w-auto">
+          <AlertCircle className="w-3.5 h-3.5 text-slate-400 shrink-0" />
           Semáforo de Dictado de Materia:
         </span>
         <span className="flex items-center gap-1.5 text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-lg border border-emerald-200 text-[11px]">
-          <span className="w-2 h-2 rounded-full bg-emerald-500" /> Verde: Dio
-          todas las horas correspondientes (100%)
+          <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
+          Verde: Dio todas las horas (100%)
         </span>
         <span className="flex items-center gap-1.5 text-amber-700 bg-amber-50 px-2.5 py-0.5 rounded-lg border border-amber-200 text-[11px]">
-          <span className="w-2 h-2 rounded-full bg-amber-500" /> Ámbar: Llegó
-          tarde, hubo desvíos o se fue antes
+          <span className="w-2 h-2 rounded-full bg-amber-500 shrink-0" />
+          Ámbar: Llegó tarde o desvíos
         </span>
         <span className="flex items-center gap-1.5 text-rose-700 bg-rose-50 px-2.5 py-0.5 rounded-lg border border-rose-200 text-[11px]">
-          <span className="w-2 h-2 rounded-full bg-rose-500" /> Rojo: No dio la
-          clase (Sin registro / Falta)
+          <span className="w-2 h-2 rounded-full bg-rose-500 shrink-0" />
+          Rojo: No dio la clase / Falta
         </span>
       </div>
 
@@ -286,7 +287,6 @@ export default function CalendarioSemanalMaterias({ onEditarMateriaParam }) {
                       Hoy
                     </span>
                   )}
-                  {/* Fecha exacta en formato dd/mm/aaaa */}
                   <span className="text-[10px] text-slate-400 font-mono">
                     {formatearFechaVisual(dia.fecha)}
                   </span>
@@ -310,9 +310,9 @@ export default function CalendarioSemanalMaterias({ onEditarMateriaParam }) {
                       className={`border rounded-xl p-3 shadow-2xs space-y-2 transition-all cursor-pointer select-none active:scale-[0.99] ${getBordeClase(clase.estadoSemaforo)}`}
                       title="Haga clic para ver la auditoría de dictado de clase"
                     >
-                      {/* Horario y Estado Semáforo */}
-                      <div className="flex items-center justify-between text-[11px]">
-                        <span className="flex items-center gap-1 text-slate-700 font-semibold font-mono">
+                      {/* Horario y Semáforo */}
+                      <div className="flex items-center justify-between text-[11px] gap-2">
+                        <span className="flex items-center gap-1 text-slate-700 font-semibold font-mono shrink-0">
                           <Clock className="w-3 h-3 text-slate-400" />
                           {clase.horaInicio
                             ? clase.horaInicio.slice(0, 5)
@@ -320,7 +320,9 @@ export default function CalendarioSemanalMaterias({ onEditarMateriaParam }) {
                           -{" "}
                           {clase.horaFin ? clase.horaFin.slice(0, 5) : "--:--"}
                         </span>
-                        {renderBadgeSemaforo(clase)}
+                        <div className="truncate text-right">
+                          {renderBadgeSemaforo(clase)}
+                        </div>
                       </div>
 
                       {/* Nombre y Aula */}
@@ -329,14 +331,14 @@ export default function CalendarioSemanalMaterias({ onEditarMateriaParam }) {
                           {clase.nombreMateria}
                         </h4>
                         <div className="flex items-center gap-1 text-[10px] text-slate-500 mt-0.5">
-                          <MapPin className="w-2.5 h-2.5 text-slate-400" />
+                          <MapPin className="w-2.5 h-2.5 text-slate-400 shrink-0" />
                           <span className="truncate">{clase.aula}</span>
                         </div>
                       </div>
 
                       {/* Docente */}
                       <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px]">
-                        <span className="text-slate-600 font-medium truncate max-w-[110px]">
+                        <span className="text-slate-600 font-medium truncate">
                           {clase.apellidoDocente}{" "}
                           {clase.nombreDocente ? clase.nombreDocente : ""}
                         </span>

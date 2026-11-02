@@ -13,6 +13,7 @@ import {
   ChevronRight,
   Filter,
   ArrowRight,
+  User,
 } from "lucide-react";
 import {
   getEmpleadosActivos,
@@ -239,7 +240,6 @@ export default function GestionHorarios() {
 
     try {
       if (tipoAsignacionTurno === "FLEXIBLE") {
-        // Asignación de Horas Flexibles (Bolsa de Horas sin días fijos)
         if (!horasObjetivoTurno || horasObjetivoTurno <= 0) {
           mostrarAviso(
             "warning",
@@ -250,7 +250,7 @@ export default function GestionHorarios() {
         }
 
         await addEmpleadoHorario(empleadoEnModal.id, {
-          diasSemana: [], // Vacío -> día de la semana nulo en base de datos
+          diasSemana: [],
           horaEntrada: null,
           horaSalida: null,
           horasObjetivo: Number(horasObjetivoTurno),
@@ -410,14 +410,15 @@ export default function GestionHorarios() {
   };
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-5 font-sans">
-      <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-xs flex items-center justify-between">
+    <div className="p-3 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-4 sm:space-y-5 font-sans">
+      {/* HEADER DE LA SECCIÓN */}
+      <div className="bg-white border border-slate-200 rounded-2xl sm:rounded-3xl p-4 sm:p-5 shadow-xs flex items-center justify-between">
         <div className="flex items-center gap-3 sm:gap-4">
-          <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-purple-50 border border-purple-100 flex items-center justify-center text-purple-600 shadow-xs shrink-0">
+          <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-purple-50 border border-purple-100 flex items-center justify-center text-purple-600 shadow-xs shrink-0">
             <Calendar className="w-5 h-5 sm:w-6 sm:h-6 stroke-[1.8]" />
           </div>
           <div>
-            <h1 className="text-lg sm:text-xl font-bold text-slate-900 tracking-tight leading-tight">
+            <h1 className="text-base sm:text-xl font-bold text-slate-900 tracking-tight leading-tight">
               Gestión de Horarios y Cronogramas
             </h1>
             <p className="text-[11px] sm:text-xs text-slate-500 mt-0.5">
@@ -428,13 +429,14 @@ export default function GestionHorarios() {
         </div>
       </div>
 
-      <div className="bg-white border border-slate-200 rounded-2xl p-3.5 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div className="flex items-center gap-2 text-xs font-bold text-slate-500 uppercase tracking-wider">
+      {/* FILTRO DE CATEGORÍAS */}
+      <div className="bg-white border border-slate-200 rounded-2xl p-3 sm:p-3.5 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3">
+        <div className="flex items-center gap-2 text-xs font-bold text-slate-500 uppercase tracking-wider shrink-0">
           <Filter className="w-3.5 h-3.5 text-indigo-600" />
           <span>Categoría de Personal:</span>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 md:pb-0 scrollbar-none">
           {categorias.map((cat) => {
             const activa =
               categoriaActiva.toLowerCase() === cat.nombre.toLowerCase();
@@ -449,7 +451,7 @@ export default function GestionHorarios() {
                   setCategoriaActiva(cat.nombre);
                   setPaginaActual(1);
                 }}
-                className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
                   activa
                     ? estiloActivo
                     : "bg-slate-100/90 hover:bg-slate-200/80 text-slate-700 border border-slate-200/60"
@@ -467,7 +469,8 @@ export default function GestionHorarios() {
         </div>
       </div>
 
-      <div className="bg-white p-3.5 border border-slate-200 rounded-2xl shadow-xs flex flex-col sm:flex-row items-center justify-between gap-3">
+      {/* BUSCADOR Y TOTAL */}
+      <div className="bg-white p-3 sm:p-3.5 border border-slate-200 rounded-2xl shadow-xs flex flex-col sm:flex-row items-center justify-between gap-3">
         <div className="relative w-full sm:w-80">
           <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
           <input
@@ -491,123 +494,218 @@ export default function GestionHorarios() {
         </div>
       </div>
 
+      {/* CONTENEDOR PRINCIPAL: TABLA (DESKTOP) Y TARJETAS (MÓVIL) */}
       <div className="bg-white border border-slate-200 rounded-2xl shadow-xs overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs min-w-[750px]">
-            <thead className="bg-[#f8fafc] text-slate-500 font-bold uppercase text-[10px] border-b border-slate-100">
-              <tr>
-                <th className="px-6 py-3.5 tracking-wider">Empleado</th>
-                <th className="px-6 py-3.5 tracking-wider">Cargos / Puestos</th>
-                <th className="px-6 py-3.5 tracking-wider">
-                  Cronograma Semanal
-                </th>
-                <th className="px-6 py-3.5 tracking-wider text-right">
-                  Acciones
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 text-slate-800">
-              {loading ? (
-                <tr>
-                  <td colSpan={4} className="text-center py-12 text-slate-400">
-                    <Loader2 className="w-5 h-5 animate-spin mx-auto text-indigo-600 mb-2" />
-                    Cargando nómina de horarios...
-                  </td>
-                </tr>
-              ) : empleadosPaginados.length === 0 ? (
-                <tr>
-                  <td
-                    colSpan={4}
-                    className="text-center py-12 text-slate-400 text-xs italic"
+        {loading ? (
+          <div className="text-center py-12 text-slate-400">
+            <Loader2 className="w-5 h-5 animate-spin mx-auto text-indigo-600 mb-2" />
+            <span className="text-xs font-medium">
+              Cargando nómina de horarios...
+            </span>
+          </div>
+        ) : empleadosPaginados.length === 0 ? (
+          <div className="text-center py-12 text-slate-400 text-xs italic">
+            No se encontraron empleados registrados en la categoría{" "}
+            {categoriaActiva}.
+          </div>
+        ) : (
+          <>
+            {/* 1. VISTA MÓVIL (md:hidden): TARJETAS COMPACTAS SIN SCROLL LATERAL */}
+            <div className="md:hidden divide-y divide-slate-100">
+              {empleadosPaginados.map((emp) => {
+                const cargosStr =
+                  (emp.cargos || []).map((c) => c.nombre || c).join(", ") ||
+                  "General";
+
+                return (
+                  <div
+                    key={emp.id}
+                    className="p-4 flex flex-col gap-3 hover:bg-slate-50/60 transition-colors"
                   >
-                    No se encontraron empleados registrados en la categoría{" "}
-                    {categoriaActiva}.
-                  </td>
-                </tr>
-              ) : (
-                empleadosPaginados.map((emp) => {
-                  const cargosStr =
-                    (emp.cargos || []).map((c) => c.nombre || c).join(", ") ||
-                    "General";
-
-                  return (
-                    <tr
-                      key={emp.id}
-                      className="hover:bg-slate-50/70 transition-colors"
-                    >
-                      <td className="px-6 py-4">
-                        <div className="font-bold text-slate-900 text-sm">
-                          {emp.apellido}, {emp.nombre}
+                    {/* Encabezado del Agente */}
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-start gap-2.5">
+                        <div className="w-8 h-8 rounded-lg bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 shrink-0 mt-0.5">
+                          <User className="w-4 h-4" />
                         </div>
-                        <div className="text-[11px] text-slate-500 mt-0.5 font-mono">
-                          Legajo: {emp.nroLegajo || "Sin asignar"} • DNI:{" "}
-                          {emp.dni || "-"}
+                        <div>
+                          <div className="font-bold text-slate-900 text-sm leading-snug">
+                            {emp.apellido}, {emp.nombre}
+                          </div>
+                          <div className="text-[11px] text-slate-500 font-mono mt-0.5">
+                            Legajo:{" "}
+                            <span className="font-semibold text-slate-700">
+                              {emp.nroLegajo || "Sin asignar"}
+                            </span>{" "}
+                            • DNI: {emp.dni || "-"}
+                          </div>
                         </div>
-                      </td>
+                      </div>
+                    </div>
 
-                      <td className="px-6 py-4">
-                        <span className="inline-block px-2.5 py-1 rounded-lg bg-slate-100 border border-slate-200 text-slate-700 text-xs font-medium">
-                          {cargosStr}
-                        </span>
-                      </td>
+                    {/* Cargo / Puesto */}
+                    <div className="flex items-center gap-1.5 text-xs text-slate-600">
+                      <span className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">
+                        Cargo:
+                      </span>
+                      <span className="px-2 py-0.5 rounded-md bg-slate-100 border border-slate-200 text-slate-700 text-[11px] font-medium">
+                        {cargosStr}
+                      </span>
+                    </div>
 
-                      <td className="px-6 py-4">
-                        <button
-                          type="button"
-                          onClick={() => abrirCronograma(emp)}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-xs font-bold transition cursor-pointer shadow-2xs"
-                        >
-                          <Eye className="w-3.5 h-3.5" />
-                          <span>Ver cronograma</span>
-                        </button>
-                      </td>
+                    {/* Botones de Acción Táctiles */}
+                    <div className="grid grid-cols-2 gap-2 pt-1 border-t border-slate-100/80">
+                      <button
+                        type="button"
+                        onClick={() => abrirCronograma(emp)}
+                        className="flex items-center justify-center gap-1.5 px-3 py-2 bg-indigo-50 hover:bg-indigo-100 active:bg-indigo-200 text-indigo-700 rounded-xl text-xs font-bold transition cursor-pointer"
+                      >
+                        <Eye className="w-3.5 h-3.5 shrink-0" />
+                        <span>Cronograma</span>
+                      </button>
 
-                      <td className="px-6 py-4 text-right whitespace-nowrap">
-                        <div className="flex items-center justify-end gap-2 text-slate-400">
-                          {puedeCrear || puedeEditar ? (
-                            esVistaDocente ? (
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  navigate("/materias", {
-                                    state: {
-                                      tab: "catalogo",
-                                      docenteId: emp.id,
-                                    },
-                                  })
-                                }
-                                className="flex items-center gap-1.5 px-3 py-1 bg-purple-50 hover:bg-purple-100 text-purple-700 font-bold rounded-lg text-xs transition cursor-pointer border border-purple-200"
-                              >
-                                <span>Gestionar Materias</span>
-                                <ArrowRight className="w-3.5 h-3.5" />
-                              </button>
+                      {puedeCrear || puedeEditar ? (
+                        esVistaDocente ? (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              navigate("/materias", {
+                                state: {
+                                  tab: "catalogo",
+                                  docenteId: emp.id,
+                                },
+                              })
+                            }
+                            className="flex items-center justify-center gap-1.5 px-3 py-2 bg-purple-50 hover:bg-purple-100 active:bg-purple-200 text-purple-700 font-bold rounded-xl text-xs transition cursor-pointer border border-purple-200"
+                          >
+                            <span>Materias</span>
+                            <ArrowRight className="w-3.5 h-3.5 shrink-0" />
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => abrirTurno(emp)}
+                            className="flex items-center justify-center gap-1.5 px-3 py-2 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white font-bold rounded-xl text-xs transition cursor-pointer shadow-xs"
+                          >
+                            <Sliders className="w-3.5 h-3.5 shrink-0" />
+                            <span>Asignar Horario</span>
+                          </button>
+                        )
+                      ) : (
+                        <div className="flex items-center justify-center gap-1 px-3 py-2 bg-slate-50 border border-slate-200 text-slate-400 font-bold rounded-xl text-xs">
+                          <Lock className="w-3.5 h-3.5" />
+                          <span>Bloqueado</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* 2. VISTA ESCRITORIO (hidden md:block): TABLA TRADICIONAL COMPLETA */}
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-[#f8fafc] text-slate-500 font-bold uppercase text-[10px] border-b border-slate-100">
+                  <tr>
+                    <th className="px-6 py-3.5 tracking-wider">Empleado</th>
+                    <th className="px-6 py-3.5 tracking-wider">
+                      Cargos / Puestos
+                    </th>
+                    <th className="px-6 py-3.5 tracking-wider">
+                      Cronograma Semanal
+                    </th>
+                    <th className="px-6 py-3.5 tracking-wider text-right">
+                      Acciones
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 text-slate-800">
+                  {empleadosPaginados.map((emp) => {
+                    const cargosStr =
+                      (emp.cargos || []).map((c) => c.nombre || c).join(", ") ||
+                      "General";
+
+                    return (
+                      <tr
+                        key={emp.id}
+                        className="hover:bg-slate-50/70 transition-colors"
+                      >
+                        <td className="px-6 py-4">
+                          <div className="font-bold text-slate-900 text-sm">
+                            {emp.apellido}, {emp.nombre}
+                          </div>
+                          <div className="text-[11px] text-slate-500 mt-0.5 font-mono">
+                            Legajo: {emp.nroLegajo || "Sin asignar"} • DNI:{" "}
+                            {emp.dni || "-"}
+                          </div>
+                        </td>
+
+                        <td className="px-6 py-4">
+                          <span className="inline-block px-2.5 py-1 rounded-lg bg-slate-100 border border-slate-200 text-slate-700 text-xs font-medium">
+                            {cargosStr}
+                          </span>
+                        </td>
+
+                        <td className="px-6 py-4">
+                          <button
+                            type="button"
+                            onClick={() => abrirCronograma(emp)}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-xs font-bold transition cursor-pointer shadow-2xs"
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                            <span>Ver cronograma</span>
+                          </button>
+                        </td>
+
+                        <td className="px-6 py-4 text-right whitespace-nowrap">
+                          <div className="flex items-center justify-end gap-2 text-slate-400">
+                            {puedeCrear || puedeEditar ? (
+                              esVistaDocente ? (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    navigate("/materias", {
+                                      state: {
+                                        tab: "catalogo",
+                                        docenteId: emp.id,
+                                      },
+                                    })
+                                  }
+                                  className="flex items-center gap-1.5 px-3 py-1 bg-purple-50 hover:bg-purple-100 text-purple-700 font-bold rounded-lg text-xs transition cursor-pointer border border-purple-200"
+                                >
+                                  <span>Gestionar Materias</span>
+                                  <ArrowRight className="w-3.5 h-3.5" />
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => abrirTurno(emp)}
+                                  className="flex items-center gap-1 px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold rounded-lg text-xs transition cursor-pointer"
+                                >
+                                  <Sliders className="w-3.5 h-3.5" />
+                                  <span>Asignar Horario</span>
+                                </button>
+                              )
                             ) : (
-                              <button
-                                type="button"
-                                onClick={() => abrirTurno(emp)}
-                                className="flex items-center gap-1 px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold rounded-lg text-xs transition cursor-pointer"
-                              >
-                                <Sliders className="w-3.5 h-3.5" />
-                                <span>Asignar Horario</span>
-                              </button>
-                            )
-                          ) : (
-                            <span className="p-1 text-slate-300 cursor-not-allowed">
-                              <Lock className="w-4 h-4" />
-                            </span>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
+                              <span className="p-1 text-slate-300 cursor-not-allowed">
+                                <Lock className="w-4 h-4" />
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
 
-        <div className="bg-white px-6 py-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
-          <div className="text-slate-500">
+        {/* PAGINACIÓN RESPONSIVE */}
+        <div className="bg-white px-4 sm:px-6 py-3.5 sm:py-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+          <div className="text-slate-500 text-center sm:text-left">
             Mostrando{" "}
             <span className="font-bold text-slate-800">
               {empleadosFiltrados.length === 0
@@ -670,6 +768,7 @@ export default function GestionHorarios() {
         </div>
       </div>
 
+      {/* MODALES */}
       <ModalDetalleCronograma
         isOpen={modalDetalle}
         onClose={() => setModalDetalle(false)}

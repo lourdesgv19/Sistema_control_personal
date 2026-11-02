@@ -216,21 +216,21 @@ export default function CatalogoMateriasABM({
       case "SEMANA_POR_MEDIO":
         return (
           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
-            <Repeat className="w-3 h-3 text-amber-600" />
+            <Repeat className="w-3 h-3 text-amber-600 shrink-0" />
             Quincenal (Sem. {alterna})
           </span>
         );
       case "MENSUAL":
         return (
           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
-            <CalendarCheck className="w-3 h-3 text-blue-600" />
+            <CalendarCheck className="w-3 h-3 text-blue-600 shrink-0" />
             {reps} {reps === 1 ? "vez al mes" : "veces al mes"}
           </span>
         );
       case "ANUAL":
         return (
           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200">
-            <CalendarCheck className="w-3 h-3 text-purple-600" />
+            <CalendarCheck className="w-3 h-3 text-purple-600 shrink-0" />
             {reps} {reps === 1 ? "vez al año" : "veces al año"}
           </span>
         );
@@ -244,21 +244,11 @@ export default function CatalogoMateriasABM({
     }
   };
 
-  // Normaliza y formatea la hora para comparar ("HH:mm")
   const normalizarHora = (h) => {
     if (!h) return "";
     return String(h).trim().slice(0, 5);
   };
 
-  /**
-   * Determina si todos los horarios configurados son exactamente uniformes.
-   * COMPARA:
-   * 1. Hora Inicio
-   * 2. Hora Fin
-   * 3. Tipo de Frecuencia (SEMANAL, SEMANA_POR_MEDIO, etc.)
-   * 4. Semana Alterna (PAR/IMPAR)
-   * 5. Repeticiones del período
-   */
   const sonHorariosUniforme = (desglose) => {
     if (!Array.isArray(desglose) || desglose.length === 0) return false;
     if (desglose.length === 1) return true;
@@ -299,31 +289,31 @@ export default function CatalogoMateriasABM({
   }
 
   return (
-    <div className="bg-white border border-slate-200 rounded-3xl shadow-xs overflow-hidden">
+    <div className="bg-white border border-slate-200 rounded-2xl sm:rounded-3xl shadow-xs overflow-hidden">
       {/* HEADER DE LA SECCIÓN */}
-      <div className="p-6 border-b border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="p-4 sm:p-6 border-b border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2.5">
-            <h2 className="text-base font-bold text-slate-900 tracking-tight">
+            <h2 className="text-sm sm:text-base font-bold text-slate-900 tracking-tight">
               Catálogo de Asignaturas Académicas
             </h2>
             <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-slate-100 text-slate-600 border border-slate-200">
               {materiasFiltradas.length} materias
             </span>
           </div>
-          <p className="text-xs text-slate-500 mt-1">
+          <p className="text-[11px] sm:text-xs text-slate-500 mt-1">
             Haga clic sobre cualquier fila para desglosar u ocultar los días,
             horarios y profesores asignados.
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2.5">
-          <div className="flex items-center gap-2 text-xs">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
+          <div className="flex items-center gap-2 text-xs w-full sm:w-auto">
             <span className="text-slate-500 font-medium">Estado:</span>
             <select
               value={filtroEstado}
               onChange={(e) => setFiltroEstado(e.target.value)}
-              className="bg-white border border-slate-200 text-slate-700 font-semibold rounded-xl px-3 py-2 text-xs outline-none focus:border-indigo-600 transition shadow-xs cursor-pointer"
+              className="bg-white border border-slate-200 text-slate-700 font-semibold rounded-xl px-3 py-2 text-xs outline-none focus:border-indigo-600 transition shadow-xs cursor-pointer flex-1 sm:flex-initial"
             >
               <option value="ACTIVOS">Solo Activas</option>
               <option value="TODOS">Todas las Materias</option>
@@ -334,7 +324,7 @@ export default function CatalogoMateriasABM({
           <button
             type="button"
             onClick={toggleTodos}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition cursor-pointer"
+            className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition cursor-pointer"
           >
             {expandidos.length === materiasFiltradas.length &&
             materiasFiltradas.length > 0 ? (
@@ -354,7 +344,7 @@ export default function CatalogoMateriasABM({
             <button
               type="button"
               onClick={onNuevaMateria}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#4b35e6] hover:bg-[#3f2bc9] text-white text-xs font-semibold shadow-xs transition cursor-pointer"
+              className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-[#4b35e6] hover:bg-[#3f2bc9] text-white text-xs font-semibold shadow-xs transition cursor-pointer"
             >
               <Plus className="w-4 h-4 stroke-[2.5]" />
               <span>Agregar Materia</span>
@@ -363,8 +353,331 @@ export default function CatalogoMateriasABM({
         </div>
       </div>
 
-      {/* TABLA PRINCIPAL DE MATERIAS */}
-      <div className="overflow-x-auto">
+      {/* 1. VISTA MÓVIL (md:hidden) — LISTADO DE TARJETAS SIN SCROLL LATERAL */}
+      <div className="md:hidden divide-y divide-slate-100">
+        {materiasFiltradas.length === 0 ? (
+          <div className="p-8 text-center text-slate-400 text-xs italic">
+            No se encontraron materias con el estado seleccionado.
+          </div>
+        ) : (
+          materiasFiltradas.map((materia) => {
+            const estaExpandido = expandidos.includes(materia.idMateria);
+            const esInactiva = materia.activo === false;
+            const horariosIguales = sonHorariosUniforme(
+              materia.desgloseHorarios,
+            );
+
+            return (
+              <div
+                key={materia.idMateria}
+                className={`p-4 transition-colors ${
+                  esInactiva
+                    ? "bg-slate-50/70 opacity-75"
+                    : estaExpandido
+                      ? "bg-indigo-50/30"
+                      : "bg-white"
+                }`}
+              >
+                {/* Cabecera de la Tarjeta Móvil */}
+                <div
+                  onClick={() => toggleExpandir(materia.idMateria)}
+                  className="cursor-pointer select-none"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-3">
+                      <div
+                        className={`w-9 h-9 rounded-xl border flex items-center justify-center font-bold text-sm shrink-0 ${
+                          esInactiva
+                            ? "bg-slate-100 border-slate-200 text-slate-400"
+                            : "bg-indigo-50 border-indigo-100 text-[#4b35e6]"
+                        }`}
+                      >
+                        {materia.totalHorarios}
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={`font-bold text-xs ${
+                              esInactiva
+                                ? "text-slate-500 line-through"
+                                : "text-slate-900"
+                            }`}
+                          >
+                            {materia.nombre}
+                          </span>
+                          {esInactiva && (
+                            <span className="px-1.5 py-0.2 rounded text-[9px] font-bold uppercase bg-rose-50 text-rose-600 border border-rose-200">
+                              Baja
+                            </span>
+                          )}
+                        </div>
+                        <span className="text-[11px] text-slate-400 block mt-0.5">
+                          {materia.totalHorarios}{" "}
+                          {materia.totalHorarios === 1
+                            ? "clase por semana"
+                            : "clases por semana"}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="p-1 text-slate-400">
+                      <ChevronRight
+                        className={`w-4 h-4 transition-transform duration-200 ${
+                          estaExpandido ? "rotate-90 text-indigo-600" : ""
+                        }`}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Datos resumidos de la cátedra */}
+                  <div className="grid grid-cols-2 gap-2 mt-3 pt-3 border-t border-slate-100 text-xs">
+                    <div>
+                      <span className="text-[10px] text-slate-400 font-semibold block uppercase">
+                        Aula Base
+                      </span>
+                      <div className="flex items-center gap-1 text-slate-700 mt-0.5">
+                        <MapPin className="w-3 h-3 text-slate-400 shrink-0" />
+                        <span className="truncate">
+                          {materia.aulaPredeterminada || "S/A"}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="text-right">
+                      <span className="text-[10px] text-slate-400 font-semibold block uppercase">
+                        Tarifa Cátedra
+                      </span>
+                      <span className="font-bold text-slate-900 font-mono mt-0.5 block">
+                        ${materia.tarifaHora.toLocaleString("es-AR")}/h
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="mt-2.5">
+                    <span className="text-[10px] text-slate-400 font-semibold block uppercase mb-1">
+                      Carga y Días
+                    </span>
+                    <div className="flex flex-wrap gap-1 items-center">
+                      {DIAS_ORDEN.map((dia) => {
+                        const activo = materia.diasResumen.includes(dia);
+                        return (
+                          <span
+                            key={dia}
+                            className={`px-1.5 py-0.5 rounded text-[10px] font-semibold border ${
+                              activo
+                                ? "bg-slate-100 text-slate-800 border-slate-200 font-bold"
+                                : "text-slate-300 border-transparent"
+                            }`}
+                          >
+                            {dia}
+                          </span>
+                        );
+                      })}
+                      <span className="text-[10px] text-slate-500 font-medium ml-1">
+                        • {materia.totalHorasSemanales.toFixed(1)}h / sem
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Docentes a Cargo */}
+                  <div className="mt-2.5 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                    {materia.sinDocente ? (
+                      <div className="inline-flex items-center gap-1.5 text-amber-800 text-[11px] font-bold">
+                        <AlertCircle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                        <span>Sin Docente Asignado</span>
+                      </div>
+                    ) : (
+                      <div className="space-y-1 text-xs">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] uppercase font-bold text-indigo-600">
+                            Titular:
+                          </span>
+                          <span className="font-semibold text-slate-800 text-[11px] truncate">
+                            {materia.docenteTitularNombre}
+                          </span>
+                        </div>
+                        {materia.docenteAuxiliarNombre && (
+                          <div className="flex items-center justify-between pt-1 border-t border-slate-200/60">
+                            <span className="text-[10px] uppercase font-bold text-purple-600">
+                              Auxiliar:
+                            </span>
+                            <span className="font-medium text-slate-700 text-[11px] truncate">
+                              {materia.docenteAuxiliarNombre}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Acciones principales de la tarjeta */}
+                <div className="mt-3 flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                  {!esInactiva ? (
+                    <>
+                      {puedeEditar &&
+                        (horariosIguales ? (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (onEditarMateria) onEditarMateria(materia);
+                            }}
+                            className="px-3 py-1.5 bg-indigo-50 text-indigo-700 rounded-lg text-xs font-semibold hover:bg-indigo-100 transition flex items-center gap-1"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                            Editar
+                          </button>
+                        ) : (
+                          <span className="text-[10px] text-slate-500 font-semibold bg-slate-100 border border-slate-200 px-2 py-1 rounded-md">
+                            Horarios diversos
+                          </span>
+                        ))}
+
+                      {puedeEliminar && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (onEliminarMateria)
+                              onEliminarMateria(
+                                materia.idMateria,
+                                materia.nombre,
+                              );
+                          }}
+                          className="px-3 py-1.5 bg-rose-50 text-rose-600 rounded-lg text-xs font-semibold hover:bg-rose-100 transition flex items-center gap-1"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          Baja
+                        </button>
+                      )}
+                    </>
+                  ) : (
+                    puedeEditar && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleReactivarMateria(
+                            materia.idMateria,
+                            materia.nombre,
+                          );
+                        }}
+                        className="px-3 py-1.5 bg-emerald-50 text-emerald-700 rounded-lg text-xs font-semibold hover:bg-emerald-100 transition flex items-center gap-1"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5" />
+                        Reactivar
+                      </button>
+                    )
+                  )}
+                </div>
+
+                {/* Desglose Expandido Móvil */}
+                {estaExpandido && (
+                  <div className="mt-3 space-y-2 pt-3 border-t-2 border-indigo-100">
+                    <span className="text-[11px] font-bold text-indigo-950 block">
+                      Comisiones Asignadas:
+                    </span>
+                    {materia.desgloseHorarios.map((horario) => (
+                      <div
+                        key={horario.idHorario}
+                        className="bg-white rounded-xl border border-indigo-100 p-3 space-y-2 text-xs shadow-2xs"
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold text-slate-900">
+                            {horario.diaNombre}
+                          </span>
+                          {renderBadgeTurnoOFrecuencia(horario)}
+                        </div>
+
+                        <div className="flex items-center justify-between text-slate-600 font-mono text-[11px]">
+                          <span>
+                            {horario.horaInicio} - {horario.horaFin} (
+                            {horario.horasClase.toFixed(1)}h)
+                          </span>
+                          <span className="font-bold text-slate-900">
+                            ${horario.tarifaHora.toLocaleString("es-AR")}/h
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-1.5 text-slate-500 text-[11px]">
+                          <MapPin className="w-3 h-3 text-slate-400 shrink-0" />
+                          <span>{horario.aula}</span>
+                        </div>
+
+                        {/* Docentes en Horario Desglosado */}
+                        <div className="pt-2 border-t border-slate-100 text-[11px]">
+                          {horario.idDocente ? (
+                            <div>
+                              <span className="font-semibold text-slate-800">
+                                {horario.nombreDocente}
+                              </span>
+                              <span className="text-[10px] text-indigo-600 font-mono block">
+                                Titular • Leg. {horario.legajoDocente}
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="text-amber-700 font-bold text-[10px] flex items-center gap-1">
+                              <AlertCircle className="w-3 h-3" /> Sin titular
+                              asignado
+                            </span>
+                          )}
+
+                          {materia.docenteAuxiliarNombre && (
+                            <div className="mt-1 pt-1 border-t border-slate-100 text-slate-600">
+                              <span className="font-medium text-slate-700">
+                                {materia.docenteAuxiliarNombre}
+                              </span>
+                              <span className="text-[9px] uppercase font-bold text-purple-600 block">
+                                Auxiliar
+                              </span>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Acciones de la Comisión */}
+                        <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                          {puedeEditar && !esInactiva && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                onEditarHorario &&
+                                onEditarHorario(horario, materia)
+                              }
+                              className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-[11px] font-semibold flex items-center gap-1 transition"
+                            >
+                              <Pencil className="w-3 h-3" />
+                              Editar Comisión
+                            </button>
+                          )}
+                          {puedeEliminar && !esInactiva && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleConfirmarBajaHorario(
+                                  horario,
+                                  materia.nombre,
+                                )
+                              }
+                              className="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg text-[11px] font-semibold flex items-center gap-1 transition"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                              Quitar
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })
+        )}
+      </div>
+
+      {/* 2. VISTA ESCRITORIO (hidden md:block) — TABLA CLÁSICA COMPLETA */}
+      <div className="hidden md:block overflow-x-auto">
         <table className="w-full text-left text-xs border-collapse">
           <thead className="bg-[#f8fafc] text-slate-500 font-bold uppercase text-[10px] tracking-wider border-b border-slate-200/80">
             <tr>
@@ -398,7 +711,6 @@ export default function CatalogoMateriasABM({
 
                 return (
                   <React.Fragment key={materia.idMateria}>
-                    {/* FILA PRINCIPAL: AL CLICKEAR EN CUALQUIER PARTE SE DESGLOSA */}
                     <tr
                       onClick={() => toggleExpandir(materia.idMateria)}
                       className={`transition-colors cursor-pointer select-none ${
@@ -420,7 +732,6 @@ export default function CatalogoMateriasABM({
                         </span>
                       </td>
 
-                      {/* MATERIA */}
                       <td className="py-4 px-4">
                         <div className="flex items-center gap-3">
                           <div
@@ -491,7 +802,6 @@ export default function CatalogoMateriasABM({
                         </span>
                       </td>
 
-                      {/* DOCENTES EN FILA PRINCIPAL */}
                       <td className="py-4 px-4">
                         {materia.sinDocente ? (
                           <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-amber-50 text-amber-800 border border-amber-200 text-[11px] font-bold">
@@ -500,7 +810,6 @@ export default function CatalogoMateriasABM({
                           </div>
                         ) : (
                           <div className="space-y-1.5">
-                            {/* Titular */}
                             <div className="flex items-center gap-2">
                               <div className="w-6 h-6 rounded-full bg-indigo-100 text-indigo-700 font-bold text-[10px] flex items-center justify-center shrink-0">
                                 {materia.docenteTitularNombre.charAt(0)}
@@ -515,7 +824,6 @@ export default function CatalogoMateriasABM({
                               </div>
                             </div>
 
-                            {/* Auxiliar */}
                             {materia.docenteAuxiliarNombre ? (
                               <div className="flex items-center gap-2 pl-1 border-l-2 border-indigo-200">
                                 <div className="w-5 h-5 rounded-full bg-purple-100 text-purple-700 font-bold text-[9px] flex items-center justify-center shrink-0">
@@ -548,7 +856,6 @@ export default function CatalogoMateriasABM({
                         </span>
                       </td>
 
-                      {/* ACCIONES (STOP PROPAGATION PARA NO ABRIR/CERRAR LA FILA ACCIDENTALMENTE) */}
                       <td
                         className="py-4 px-4 text-center"
                         onClick={(e) => e.stopPropagation()}
@@ -619,7 +926,7 @@ export default function CatalogoMateriasABM({
                       </td>
                     </tr>
 
-                    {/* SUBFILAS DE COMISIONES: EDICIÓN INDIVIDUAL EN CADA HORARIO */}
+                    {/* SUBFILAS DE COMISIONES */}
                     {estaExpandido &&
                       materia.desgloseHorarios.map((horario) => (
                         <tr
@@ -653,7 +960,6 @@ export default function CatalogoMateriasABM({
                             {renderBadgeTurnoOFrecuencia(horario)}
                           </td>
 
-                          {/* CUERPO DOCENTE DETALLADO */}
                           <td className="py-3 px-4">
                             <div className="space-y-1.5">
                               {!horario.idDocente ? (
@@ -709,7 +1015,6 @@ export default function CatalogoMateriasABM({
                             </span>
                           </td>
 
-                          {/* ACCIONES DEL DESGLOSE INDIVIDUAL */}
                           <td className="py-3 px-4 text-center">
                             <div className="flex items-center justify-center gap-2 text-slate-400">
                               {puedeEditar && !esInactiva && (

@@ -142,7 +142,7 @@ function BuscadorEmpleadoSelect({
   }, []);
 
   return (
-    <div className="relative w-72" ref={dropdownRef}>
+    <div className="relative w-full sm:w-72" ref={dropdownRef}>
       <button
         type="button"
         disabled={disabled}
@@ -181,7 +181,7 @@ function BuscadorEmpleadoSelect({
       </button>
 
       {abierto && !disabled && (
-        <div className="absolute z-50 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-xl p-2 space-y-1.5 animate-in fade-in-50 zoom-in-95">
+        <div className="absolute z-50 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-xl p-2 space-y-1.5 animate-in fade-in-50 zoom-in-95 left-0">
           <div className="relative">
             <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2" />
             <input
@@ -294,14 +294,11 @@ export default function ImportacionFichajes() {
   const [empleados, setEmpleados] = useState([]);
   const [conteoSinVincular, setConteoSinVincular] = useState(0);
 
-  // Filtro por Estado: 'ACTIVOS' | 'TODOS' | 'INACTIVOS'
   const [filtroEstadoHistorial, setFiltroEstadoHistorial] = useState("ACTIVOS");
 
-  // Catálogos auxiliares
   const [categoriasActivas, setCategoriasActivas] = useState([]);
   const [cargosActivos, setCargosActivos] = useState([]);
 
-  // Paginación servidor
   const [fichajesPaginados, setFichajesPaginados] = useState([]);
   const [paginaFichajes, setPaginaFichajes] = useState(0);
   const [totalPaginasFichajes, setTotalPaginasFichajes] = useState(1);
@@ -309,13 +306,11 @@ export default function ImportacionFichajes() {
   const [busquedaFichaje, setBusquedaFichaje] = useState("");
   const [cargandoFichajes, setCargandoFichajes] = useState(false);
 
-  // Vistas y subida
   const [archivo, setArchivo] = useState(null);
   const [vistaActual, setVistaActual] = useState("historial");
   const [resultadoSubida, setResultadoSubida] = useState(null);
   const [errorGlobal, setErrorGlobal] = useState("");
 
-  // Modal Detalle Lote (Ojito)
   const [modalArchivo, setModalArchivo] = useState({
     isOpen: false,
     item: null,
@@ -325,15 +320,12 @@ export default function ImportacionFichajes() {
   const [fichajesLote, setFichajesLote] = useState([]);
   const [cargandoModalFichajes, setCargandoModalFichajes] = useState(false);
 
-  // Asistente de Vinculación
   const [vinculaciones, setVinculaciones] = useState([]);
   const [cargandoAsistente, setCargandoAsistente] = useState(false);
 
-  // Modal Registro Empleado
   const [modalRegistro, setModalRegistro] = useState(false);
   const [formEmpleado, setFormEmpleado] = useState(ESTADO_INICIAL_EMPLEADO);
 
-  // Modal Alerta
   const [modalAlerta, setModalAlerta] = useState({
     isOpen: false,
     tipo: "info",
@@ -357,7 +349,6 @@ export default function ImportacionFichajes() {
     });
   };
 
-  // 1. Cargar historial, empleados, conteos y catálogos
   const cargarDatos = useCallback(async () => {
     setLoading(true);
     setErrorGlobal("");
@@ -405,7 +396,6 @@ export default function ImportacionFichajes() {
     }
   }, []);
 
-  // 2. Cargar marcaciones paginadas del servidor
   const cargarMarcacionesServidor = useCallback(async (q = "", page = 0) => {
     setCargandoFichajes(true);
     try {
@@ -426,7 +416,6 @@ export default function ImportacionFichajes() {
     }
   }, []);
 
-  // Consulta para el modal de un lote
   const consultarFichajesDelLote = useCallback(async (id, nombre, fecha) => {
     setCargandoModalFichajes(true);
     try {
@@ -440,12 +429,10 @@ export default function ImportacionFichajes() {
     }
   }, []);
 
-  // Carga inicial
   useEffect(() => {
     cargarDatos();
   }, [cargarDatos]);
 
-  // Sincronización automática con Debounce para eventos de tiempo real
   useEffect(() => {
     let timerActualizacion = null;
 
@@ -510,7 +497,6 @@ export default function ImportacionFichajes() {
     filtroModalFecha,
   ]);
 
-  // Consulta controlada para el padrón general
   useEffect(() => {
     if (vistaActual !== "marcaciones") return;
 
@@ -615,7 +601,6 @@ export default function ImportacionFichajes() {
     }
   };
 
-  // Baja lógica
   const handleEliminarHistorial = (id, nombre) => {
     if (!puedeEliminarLote) return;
     setModalAlerta({
@@ -647,7 +632,6 @@ export default function ImportacionFichajes() {
     });
   };
 
-  // Reactivación lógica
   const handleReactivarHistorial = (id, nombre) => {
     if (!puedeEliminarLote) return;
     setModalAlerta({
@@ -805,7 +789,6 @@ export default function ImportacionFichajes() {
     }
   };
 
-  // Filtrado reactivo contemplando valores booleanos y numéricos de MySQL
   const historialFiltrado = useMemo(() => {
     return historial.filter((h) => {
       const activo = esRegistroActivo(h.activo);
@@ -830,32 +813,32 @@ export default function ImportacionFichajes() {
   );
 
   return (
-    <div className="p-6 lg:p-8 max-w-7xl mx-auto space-y-6 font-sans">
+    <div className="p-3.5 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-4 sm:space-y-6 font-sans">
       {/* 1. HEADER */}
-      <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <div className="w-12 h-12 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 shadow-xs">
-            <UploadCloud className="w-6 h-6 stroke-[1.8]" />
+      <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex items-center gap-3 sm:gap-4">
+          <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 shadow-xs shrink-0">
+            <UploadCloud className="w-5 h-5 sm:w-6 sm:h-6 stroke-[1.8]" />
           </div>
           <div>
-            <h1 className="text-xl font-bold text-slate-900 tracking-tight">
+            <h1 className="text-lg sm:text-xl font-bold text-slate-900 tracking-tight">
               Ingesta & Carga de Marcaciones Biométricas
             </h1>
-            <p className="text-xs text-slate-500">
+            <p className="text-[11px] sm:text-xs text-slate-500">
               Procesamiento y almacenamiento de marcaciones válidas del reloj de
               asistencia.
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
           <button
             onClick={() =>
               setVistaActual(
                 vistaActual === "historial" ? "marcaciones" : "historial",
               )
             }
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold border transition cursor-pointer ${
+            className={`flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold border transition cursor-pointer ${
               vistaActual === "historial"
                 ? "bg-white border-slate-200 text-slate-700 hover:bg-slate-50 shadow-xs"
                 : "bg-indigo-600 text-white border-indigo-600 shadow-md shadow-indigo-100"
@@ -879,7 +862,7 @@ export default function ImportacionFichajes() {
               <button
                 onClick={handleAbrirAsistenteDesdeCabecera}
                 disabled={cargandoAsistente}
-                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold border transition cursor-pointer ${
+                className={`flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold border transition cursor-pointer ${
                   vistaActual === "asistente"
                     ? "bg-slate-100 border-slate-300 text-slate-700"
                     : "bg-amber-500 hover:bg-amber-600 text-white border-amber-600 shadow-md shadow-amber-100 font-bold"
@@ -892,35 +875,37 @@ export default function ImportacionFichajes() {
                 ) : (
                   <UserX className="w-4 h-4 text-white" />
                 )}
-                {vistaActual === "asistente"
-                  ? "Volver a Importaciones"
-                  : `Empleados sin vincular (${conteoSinVincular})`}
+                <span>
+                  {vistaActual === "asistente"
+                    ? "Volver a Importaciones"
+                    : `Empleados sin vincular (${conteoSinVincular})`}
+                </span>
               </button>
             )
           ) : (
             <span
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-400 text-xs font-semibold select-none cursor-not-allowed"
+              className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-400 text-xs font-semibold select-none cursor-not-allowed"
               title="Requiere permiso FICHAJES_VINCULAR"
             >
               <Lock className="w-3.5 h-3.5" />
-              Vinculación Restringida
+              <span>Vinculación Restringida</span>
             </span>
           )}
         </div>
       </div>
 
       {/* 2. ZONA DE CARGA */}
-      <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs">
+      <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-6 shadow-xs">
         {puedeImportar ? (
-          <div className="flex flex-col md:flex-row items-center justify-between gap-6">
-            <label className="flex-1 w-full border-2 border-dashed border-slate-300 hover:border-indigo-500 rounded-2xl p-6 flex flex-col items-center justify-center cursor-pointer bg-slate-50 hover:bg-indigo-50/20 transition group">
-              <FileSpreadsheet className="w-10 h-10 text-indigo-500 group-hover:scale-110 transition duration-200 mb-2 stroke-[1.5]" />
-              <span className="font-semibold text-slate-700 text-sm">
+          <div className="flex flex-col md:flex-row items-center justify-between gap-4 sm:gap-6">
+            <label className="flex-1 w-full border-2 border-dashed border-slate-300 hover:border-indigo-500 rounded-2xl p-5 sm:p-6 flex flex-col items-center justify-center cursor-pointer bg-slate-50 hover:bg-indigo-50/20 transition group text-center">
+              <FileSpreadsheet className="w-8 h-8 sm:w-10 sm:h-10 text-indigo-500 group-hover:scale-110 transition duration-200 mb-2 stroke-[1.5]" />
+              <span className="font-semibold text-slate-700 text-xs sm:text-sm break-all">
                 {archivo
                   ? archivo.name
                   : "Haz clic para seleccionar o arrastra tu archivo aquí"}
               </span>
-              <span className="text-[11px] text-slate-400 mt-1">
+              <span className="text-[10px] sm:text-[11px] text-slate-400 mt-1">
                 Admite exportaciones directas del reloj (.csv, .xlsx, .xls o
                 .txt)
               </span>
@@ -936,19 +921,19 @@ export default function ImportacionFichajes() {
               <button
                 onClick={handleImportar}
                 disabled={!archivo || loading}
-                className="flex items-center justify-center gap-2 w-full py-3 bg-[#4b35e6] hover:bg-[#3f2bc9] disabled:opacity-50 text-white rounded-xl text-xs font-semibold shadow-md shadow-indigo-100 transition cursor-pointer"
+                className="flex items-center justify-center gap-2 w-full py-2.5 sm:py-3 bg-[#4b35e6] hover:bg-[#3f2bc9] disabled:opacity-50 text-white rounded-xl text-xs font-semibold shadow-md shadow-indigo-100 transition cursor-pointer"
               >
                 {loading ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
                 ) : (
                   <UploadCloud className="w-4 h-4" />
                 )}
-                Importar Marcaciones
+                <span>Importar Marcaciones</span>
               </button>
             </div>
           </div>
         ) : (
-          <div className="p-6 border-2 border-dashed border-slate-200 rounded-2xl bg-slate-50/60 flex flex-col items-center justify-center text-center">
+          <div className="p-5 sm:p-6 border-2 border-dashed border-slate-200 rounded-2xl bg-slate-50/60 flex flex-col items-center justify-center text-center">
             <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center text-slate-400 mb-2">
               <Lock className="w-5 h-5" />
             </div>
@@ -970,41 +955,41 @@ export default function ImportacionFichajes() {
         )}
 
         {resultadoSubida && (
-          <div className="mt-4 p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
+          <div className="mt-4 p-3.5 sm:p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
             <div className="flex items-center gap-2 text-xs font-bold text-slate-800">
               <CheckCircle2 className="w-4 h-4 text-emerald-600" />
               <span>Resultado de la importación</span>
             </div>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-center pt-2">
-              <div className="bg-white border border-slate-200 p-2.5 rounded-xl">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3 text-center pt-2">
+              <div className="bg-white border border-slate-200 p-2 sm:p-2.5 rounded-xl">
                 <div className="text-[10px] text-slate-400 font-bold uppercase">
                   Total Filas Archivo
                 </div>
-                <div className="text-base font-black text-slate-800">
+                <div className="text-sm sm:text-base font-black text-slate-800">
                   {resultadoSubida.totalFilas}
                 </div>
               </div>
-              <div className="bg-emerald-50 border border-emerald-200 p-2.5 rounded-xl">
+              <div className="bg-emerald-50 border border-emerald-200 p-2 sm:p-2.5 rounded-xl">
                 <div className="text-[10px] text-emerald-700 font-bold uppercase">
                   Guardadas con Éxito
                 </div>
-                <div className="text-base font-black text-emerald-800">
+                <div className="text-sm sm:text-base font-black text-emerald-800">
                   {resultadoSubida.procesadasOk}
                 </div>
               </div>
-              <div className="bg-amber-50 border border-amber-200 p-2.5 rounded-xl">
+              <div className="bg-amber-50 border border-amber-200 p-2 sm:p-2.5 rounded-xl">
                 <div className="text-[10px] text-amber-700 font-bold uppercase">
                   Nulos / Omitidos
                 </div>
-                <div className="text-base font-black text-amber-800">
+                <div className="text-sm sm:text-base font-black text-amber-800">
                   {resultadoSubida.registrosNulos}
                 </div>
               </div>
-              <div className="bg-rose-50 border border-rose-200 p-2.5 rounded-xl">
+              <div className="bg-rose-50 border border-rose-200 p-2 sm:p-2.5 rounded-xl">
                 <div className="text-[10px] text-rose-700 font-bold uppercase">
-                  Errores de Conversión
+                  Errores Conversión
                 </div>
-                <div className="text-base font-black text-rose-800">
+                <div className="text-sm sm:text-base font-black text-rose-800">
                   {resultadoSubida.errores}
                 </div>
               </div>
@@ -1015,11 +1000,11 @@ export default function ImportacionFichajes() {
 
       {/* 3. VISTAS CONDICIONALES */}
       {vistaActual === "asistente" ? (
-        <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs space-y-4">
+        <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-6 shadow-xs space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-sm font-bold text-slate-900">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-xs sm:text-sm font-bold text-slate-900">
                   Asistente de Vinculación Biometría ↔ Empleados
                 </h2>
                 {pendientesCount > 0 ? (
@@ -1032,7 +1017,7 @@ export default function ImportacionFichajes() {
                   </span>
                 )}
               </div>
-              <p className="text-xs text-slate-500 mt-0.5">
+              <p className="text-[11px] sm:text-xs text-slate-500 mt-0.5">
                 Los registros pendientes y sugeridos se ubican al inicio.
                 Escribe en el buscador para asociar o dar de alta al empleado y
                 pulsa guardar.
@@ -1041,14 +1026,88 @@ export default function ImportacionFichajes() {
             {puedeVincular && (
               <button
                 onClick={handleGuardarVinculaciones}
-                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold shadow-xs transition cursor-pointer self-start sm:self-auto"
+                className="w-full sm:w-auto px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold shadow-xs transition cursor-pointer text-center"
               >
                 Guardar Vinculaciones
               </button>
             )}
           </div>
 
-          <div className="overflow-x-auto">
+          {/* VISTA MÓVIL ASISTENTE (md:hidden) — Tarjetas verticales */}
+          <div className="md:hidden divide-y divide-slate-100">
+            {vinculacionesOrdenadas.length === 0 ? (
+              <div className="text-center py-8 text-slate-400 text-xs italic">
+                No se encontraron registros para vincular.
+              </div>
+            ) : (
+              vinculacionesOrdenadas.map((v) => (
+                <div
+                  key={v.sJobNo}
+                  className={`p-4 space-y-2.5 transition rounded-xl my-1 border ${
+                    v.yaVinculado
+                      ? "bg-slate-50/50 border-slate-200/60"
+                      : "bg-white border-slate-200"
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <span className="text-[10px] text-slate-400 uppercase font-bold block">
+                        Lector Biométrico
+                      </span>
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        <span className="font-mono font-bold text-indigo-700 text-xs">
+                          ID: {v.sJobNo}
+                        </span>
+                        <span className="text-slate-700 font-medium text-xs">
+                          • {v.sName}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div>
+                      {v.yaVinculado ? (
+                        <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded-full font-bold text-[10px] inline-flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                          Ya Vinculado
+                        </span>
+                      ) : v.sugeridoEmpleadoId ? (
+                        <span className="bg-blue-50 text-blue-700 border border-blue-200 px-2 py-0.5 rounded-full font-bold text-[10px] inline-flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
+                          Sugerido
+                        </span>
+                      ) : (
+                        <span className="bg-amber-50 text-amber-700 border border-amber-200 px-2 py-0.5 rounded-full font-bold text-[10px] inline-flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                          Pendiente
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div>
+                    <span className="text-[10px] text-slate-400 uppercase font-bold block mb-1">
+                      Asignar a Empleado
+                    </span>
+                    <BuscadorEmpleadoSelect
+                      empleados={empleados}
+                      valorSeleccionado={v.sugeridoEmpleadoId}
+                      onSeleccionar={(nuevoId) =>
+                        handleCambiarEmpleadoAsignado(v.sJobNo, nuevoId)
+                      }
+                      disabled={v.yaVinculado || !puedeVincular}
+                      sJobNo={v.sJobNo}
+                      sName={v.sName}
+                      onRegistrarNuevo={handleAbrirRegistroNuevo}
+                      puedeCrearEmpleado={puedeCrearEmpleado}
+                    />
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          {/* VISTA ESCRITORIO ASISTENTE (hidden md:block) — Tabla */}
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-left text-xs">
               <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase tracking-wider text-[10px]">
                 <tr>
@@ -1124,30 +1183,85 @@ export default function ImportacionFichajes() {
           </div>
         </div>
       ) : vistaActual === "marcaciones" ? (
-        <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs space-y-4">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-6 shadow-xs space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
-              <h2 className="text-sm font-bold text-slate-900">
+              <h2 className="text-xs sm:text-sm font-bold text-slate-900">
                 Padrón Completo de Marcaciones Almacenadas en BD
               </h2>
-              <p className="text-xs text-slate-500">
+              <p className="text-[11px] sm:text-xs text-slate-500">
                 Total de {totalElementosFichajes} registros guardados en la base
                 de datos.
               </p>
             </div>
-            <div className="relative">
+            <div className="relative w-full sm:w-64">
               <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
               <input
                 type="text"
                 placeholder="Buscar por nombre, ID o Serial..."
                 value={busquedaFichaje}
                 onChange={handleCambioBusqueda}
-                className="pl-9 pr-3 py-1.5 border border-slate-200 rounded-xl text-xs outline-none focus:border-indigo-500 w-64"
+                className="w-full pl-9 pr-3 py-1.5 border border-slate-200 rounded-xl text-xs outline-none focus:border-indigo-500"
               />
             </div>
           </div>
 
-          <div className="overflow-x-auto max-h-[500px]">
+          {/* VISTA MÓVIL PADRÓN (md:hidden) — Tarjetas verticales */}
+          <div className="md:hidden divide-y divide-slate-100 max-h-[500px] overflow-y-auto">
+            {cargandoFichajes ? (
+              <div className="text-center py-10 text-slate-400 text-xs">
+                <Loader2 className="w-5 h-5 animate-spin mx-auto text-indigo-600 mb-2" />
+                Cargando marcaciones desde el servidor...
+              </div>
+            ) : fichajesPaginados.length === 0 ? (
+              <div className="text-center py-10 text-slate-400 text-xs italic">
+                No se encontraron registros de marcaciones.
+              </div>
+            ) : (
+              fichajesPaginados.map((f) => (
+                <div key={f.id} className="p-3.5 space-y-2 bg-white text-xs">
+                  <div className="flex items-center justify-between">
+                    <span className="font-mono font-bold text-indigo-600">
+                      ID: {f.idBiometrico}
+                    </span>
+                    <span className="bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded text-[10px] font-bold">
+                      {f.estadoFichaje}
+                    </span>
+                  </div>
+
+                  <div>
+                    <div className="font-semibold text-slate-800">
+                      {f.empleado ? (
+                        <span className="text-emerald-700 font-semibold">
+                          {f.empleado.nombre} {f.empleado.apellido}
+                        </span>
+                      ) : (
+                        <span className="text-slate-400 italic">
+                          Sin vincular
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-[11px] text-slate-500 mt-0.5">
+                      Reloj: {f.nombreReloj || "-"} (Serial: {f.serialNo || "-"}
+                      )
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between pt-1 border-t border-slate-100 text-[11px]">
+                    <span className="text-slate-700 font-mono">
+                      {formatearFechaHora24(f.horaFichaje)}
+                    </span>
+                    <span className="font-mono text-indigo-600 font-bold">
+                      {f.tipoEvento}
+                    </span>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          {/* VISTA ESCRITORIO PADRÓN (hidden md:block) — Tabla */}
+          <div className="hidden md:block overflow-x-auto max-h-[500px]">
             <table className="w-full text-left text-xs">
               <thead className="bg-slate-50 sticky top-0 border-b border-slate-200 text-slate-500 uppercase tracking-wider text-[10px]">
                 <tr>
@@ -1253,30 +1367,29 @@ export default function ImportacionFichajes() {
           </div>
         </div>
       ) : (
-        <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs space-y-4">
+        <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-6 shadow-xs space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
-              <h2 className="text-sm font-bold text-slate-900">
+              <h2 className="text-xs sm:text-sm font-bold text-slate-900">
                 Historial de Importaciones
               </h2>
-              <p className="text-xs text-slate-500">
+              <p className="text-[11px] sm:text-xs text-slate-500">
                 Auditoría de lotes procesados, ordenados de forma descendente
                 por fecha de carga.
               </p>
             </div>
 
-            <div className="flex items-center gap-3">
-              {/* FILTRO POR ESTADO */}
-              <div className="flex items-center gap-2 text-xs">
+            <div className="flex items-center justify-between sm:justify-end gap-2.5">
+              <div className="flex items-center gap-2 text-xs flex-1 sm:flex-initial">
                 <span className="text-slate-500 font-medium">Estado:</span>
                 <select
                   value={filtroEstadoHistorial}
                   onChange={(e) => setFiltroEstadoHistorial(e.target.value)}
-                  className="bg-white border border-slate-200 text-slate-700 font-semibold rounded-xl px-3 py-1.5 text-xs outline-none focus:border-indigo-600 transition shadow-xs cursor-pointer"
+                  className="bg-white border border-slate-200 text-slate-700 font-semibold rounded-xl px-2.5 py-1.5 text-xs outline-none focus:border-indigo-600 transition shadow-xs cursor-pointer flex-1 sm:flex-initial"
                 >
                   <option value="ACTIVOS">Solo Activos</option>
                   <option value="TODOS">Todos los lotes</option>
-                  <option value="INACTIVOS">Solo Eliminados (Bajas)</option>
+                  <option value="INACTIVOS">Solo Eliminados</option>
                 </select>
               </div>
 
@@ -1293,8 +1406,133 @@ export default function ImportacionFichajes() {
             </div>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
+          {/* VISTA MÓVIL HISTORIAL (md:hidden) — Tarjetas verticales sin scroll lateral */}
+          <div className="md:hidden divide-y divide-slate-100">
+            {historialFiltrado.length === 0 ? (
+              <div className="text-center py-8 text-slate-400 text-xs italic">
+                {loading
+                  ? "Cargando historial..."
+                  : "No se registran importaciones con el filtro seleccionado."}
+              </div>
+            ) : (
+              historialFiltrado.map((h) => {
+                const estaActivo = esRegistroActivo(h.activo);
+                return (
+                  <div
+                    key={h.id}
+                    className={`p-4 space-y-3 transition rounded-xl my-1 border ${
+                      !estaActivo
+                        ? "bg-slate-50/75 border-slate-200/60 opacity-80"
+                        : "bg-white border-slate-200"
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-1.5 font-medium text-slate-800 text-xs">
+                        <FileText
+                          className={`w-4 h-4 shrink-0 ${
+                            estaActivo ? "text-indigo-500" : "text-slate-400"
+                          }`}
+                        />
+                        <span
+                          className={`break-all ${
+                            !estaActivo ? "line-through text-slate-500" : ""
+                          }`}
+                        >
+                          {h.nombreArchivo}
+                        </span>
+                      </div>
+                      <StatusBadge activo={h.activo} />
+                    </div>
+
+                    <div className="flex items-center gap-1.5 text-[11px] text-slate-500 font-mono">
+                      <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                      <span>{formatearFechaHora24(h.fechaImportacion)}</span>
+                    </div>
+
+                    {/* Grilla de contadores compactos */}
+                    <div className="grid grid-cols-4 gap-1.5 text-center text-xs pt-1">
+                      <div className="bg-slate-50 p-1.5 rounded-lg border border-slate-100">
+                        <span className="text-[9px] text-slate-400 font-bold uppercase block">
+                          Total
+                        </span>
+                        <span className="font-bold text-slate-800">
+                          {h.totalFilas}
+                        </span>
+                      </div>
+                      <div className="bg-emerald-50 p-1.5 rounded-lg border border-emerald-100">
+                        <span className="text-[9px] text-emerald-700 font-bold uppercase block">
+                          Ok
+                        </span>
+                        <span className="font-bold text-emerald-800">
+                          {h.procesadasOk}
+                        </span>
+                      </div>
+                      <div className="bg-amber-50 p-1.5 rounded-lg border border-amber-100">
+                        <span className="text-[9px] text-amber-700 font-bold uppercase block">
+                          Nulos
+                        </span>
+                        <span className="font-bold text-amber-800">
+                          {h.registrosNulos || 0}
+                        </span>
+                      </div>
+                      <div className="bg-rose-50 p-1.5 rounded-lg border border-rose-100">
+                        <span className="text-[9px] text-rose-700 font-bold uppercase block">
+                          Errores
+                        </span>
+                        <span className="font-bold text-rose-800">
+                          {h.errores}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-xs">
+                      <span className="text-[11px] text-slate-400">
+                        Por: {h.usuarioResponsable || "Sistema"}
+                      </span>
+
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          onClick={() => handleAbrirModalLote(h)}
+                          className="px-2.5 py-1 text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-lg text-xs font-semibold flex items-center gap-1 transition cursor-pointer"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                          <span>Ver</span>
+                        </button>
+
+                        {puedeEliminarLote ? (
+                          estaActivo ? (
+                            <button
+                              onClick={() =>
+                                handleEliminarHistorial(h.id, h.nombreArchivo)
+                              }
+                              className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer"
+                              title="Dar de baja este registro"
+                            >
+                              <Trash2 className="w-4 h-4 text-rose-500" />
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() =>
+                                handleReactivarHistorial(h.id, h.nombreArchivo)
+                              }
+                              className="p-1 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition cursor-pointer"
+                              title="Reactivar importación"
+                            >
+                              <RotateCcw className="w-4 h-4 text-emerald-600" />
+                            </button>
+                          )
+                        ) : null}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+
+          {/* VISTA ESCRITORIO HISTORIAL (hidden md:block) — Tabla tradicional */}
+          <div className="hidden md:block overflow-x-auto">
+            <table className="w-full text-left text-xs border-collapse">
               <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase tracking-wider text-[10px]">
                 <tr>
                   <th className="py-3 px-4">Fecha y Hora</th>
@@ -1446,28 +1684,36 @@ export default function ImportacionFichajes() {
 
       {/* MODAL DETALLE DEL LOTE (OJITO) */}
       {modalArchivo.isOpen && modalArchivo.item && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl w-full max-w-4xl shadow-2xl overflow-hidden border border-slate-200 animate-in zoom-in-95">
-            <div className="bg-[#111827] px-6 py-4 text-white flex items-center justify-between">
-              <div className="flex items-center gap-2.5 font-bold text-sm">
-                <FileText className="w-5 h-5 text-indigo-400" />
-                <span>Detalle del Lote: {modalArchivo.item.nombreArchivo}</span>
+        <div
+          onClick={() => setModalArchivo({ isOpen: false, item: null })}
+          className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 cursor-pointer"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-2xl w-full max-w-4xl shadow-2xl overflow-hidden border border-slate-200 animate-in zoom-in-95 cursor-default flex flex-col max-h-[92vh]"
+          >
+            <div className="bg-[#111827] px-4 sm:px-6 py-4 text-white flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-2.5 font-bold text-xs sm:text-sm">
+                <FileText className="w-5 h-5 text-indigo-400 shrink-0" />
+                <span className="truncate">
+                  Detalle del Lote: {modalArchivo.item.nombreArchivo}
+                </span>
               </div>
               <button
                 onClick={() => setModalArchivo({ isOpen: false, item: null })}
-                className="text-slate-400 hover:text-white cursor-pointer"
+                className="text-slate-400 hover:text-white cursor-pointer p-1"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="p-6 space-y-4 text-xs">
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 bg-slate-50 p-4 rounded-xl border border-slate-100">
+            <div className="p-4 sm:p-6 space-y-4 text-xs overflow-y-auto">
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3 bg-slate-50 p-3 sm:p-4 rounded-xl border border-slate-100">
                 <div>
                   <span className="text-slate-400 block text-[10px] uppercase font-bold">
                     Fecha de Carga
                   </span>
-                  <span className="font-semibold text-slate-800 font-mono">
+                  <span className="font-semibold text-slate-800 font-mono text-[11px] sm:text-xs">
                     {formatearFechaHora24(modalArchivo.item.fechaImportacion)}
                   </span>
                 </div>
@@ -1475,7 +1721,7 @@ export default function ImportacionFichajes() {
                   <span className="text-slate-400 block text-[10px] uppercase font-bold">
                     Total Marcaciones
                   </span>
-                  <span className="font-bold text-indigo-700 text-sm">
+                  <span className="font-bold text-indigo-700 text-xs sm:text-sm">
                     {modalArchivo.item.totalFilas}
                   </span>
                 </div>
@@ -1483,7 +1729,7 @@ export default function ImportacionFichajes() {
                   <span className="text-slate-400 block text-[10px] uppercase font-bold">
                     Guardadas Válidas
                   </span>
-                  <span className="font-bold text-emerald-600 text-sm">
+                  <span className="font-bold text-emerald-600 text-xs sm:text-sm">
                     {modalArchivo.item.procesadasOk}
                   </span>
                 </div>
@@ -1491,13 +1737,13 @@ export default function ImportacionFichajes() {
                   <span className="text-slate-400 block text-[10px] uppercase font-bold">
                     Nulos Omitidos
                   </span>
-                  <span className="font-bold text-amber-600 text-sm">
+                  <span className="font-bold text-amber-600 text-xs sm:text-sm">
                     {modalArchivo.item.registrosNulos || 0}
                   </span>
                 </div>
               </div>
 
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pt-2">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2">
                 <div>
                   <h4 className="font-bold text-slate-800">
                     Marcaciones Importadas:
@@ -1508,7 +1754,7 @@ export default function ImportacionFichajes() {
                       <span className="font-extrabold text-indigo-700">
                         {fichajesLote.length}
                       </span>{" "}
-                      de {modalArchivo.item.procesadasOk} marcaciones del lote
+                      de {modalArchivo.item.procesadasOk} marcaciones
                     </span>
                     {(filtroModalNombre || filtroModalFecha) && (
                       <span className="bg-indigo-50 border border-indigo-200 text-indigo-700 text-[10px] font-bold px-2 py-0.2 rounded-full">
@@ -1518,16 +1764,16 @@ export default function ImportacionFichajes() {
                   </div>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-2">
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
                   <input
                     type="date"
                     value={filtroModalFecha}
                     onChange={(e) => setFiltroModalFecha(e.target.value)}
-                    className="pl-3 pr-2 py-1.5 border border-slate-200 rounded-xl text-xs outline-none focus:border-indigo-500 bg-white text-slate-700 font-medium"
+                    className="px-2.5 py-1.5 border border-slate-200 rounded-xl text-xs outline-none focus:border-indigo-500 bg-white text-slate-700 font-medium"
                     title="Filtrar por fecha"
                   />
 
-                  <div className="relative w-48 sm:w-60">
+                  <div className="relative flex-1 sm:w-56">
                     <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2" />
                     <input
                       type="text"
@@ -1544,7 +1790,7 @@ export default function ImportacionFichajes() {
                         setFiltroModalNombre("");
                         setFiltroModalFecha("");
                       }}
-                      className="px-2.5 py-1.5 border border-slate-200 hover:bg-slate-100 text-slate-600 rounded-xl text-[11px] font-semibold transition cursor-pointer"
+                      className="px-2.5 py-1.5 border border-slate-200 hover:bg-slate-100 text-slate-600 rounded-xl text-[11px] font-semibold transition cursor-pointer text-center"
                     >
                       Limpiar
                     </button>
@@ -1552,8 +1798,44 @@ export default function ImportacionFichajes() {
                 </div>
               </div>
 
-              <div className="border border-slate-200 rounded-xl overflow-hidden max-h-64 overflow-y-auto shadow-xs">
-                <table className="w-full text-left text-xs">
+              {/* LISTADO MODAL MÓVIL (sm:hidden) */}
+              <div className="sm:hidden divide-y divide-slate-100 max-h-64 overflow-y-auto border border-slate-200 rounded-xl p-2 bg-white">
+                {cargandoModalFichajes ? (
+                  <div className="text-center py-8 text-slate-400">
+                    <Loader2 className="w-5 h-5 animate-spin mx-auto text-indigo-600 mb-1" />
+                    Consultando marcaciones del lote...
+                  </div>
+                ) : fichajesLote.length === 0 ? (
+                  <div className="text-center py-8 text-slate-400 italic">
+                    No se encontraron marcaciones para este lote con los filtros
+                    aplicados.
+                  </div>
+                ) : (
+                  fichajesLote.map((f) => (
+                    <div key={f.id} className="py-2.5 px-1 space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="font-mono font-bold text-indigo-600">
+                          ID: {f.idBiometrico}
+                        </span>
+                        <span className="font-mono text-indigo-600 font-bold text-[10px]">
+                          {f.tipoEvento}
+                        </span>
+                      </div>
+                      <div className="text-slate-800 font-medium truncate">
+                        {f.nombreReloj || "Reloj sin nombre"} (Serial:{" "}
+                        {f.serialNo || "-"})
+                      </div>
+                      <div className="text-slate-500 font-mono text-[10px]">
+                        {formatearFechaHora24(f.horaFichaje)}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              {/* TABLA MODAL ESCRITORIO (hidden sm:block) */}
+              <div className="hidden sm:block border border-slate-200 rounded-xl overflow-hidden max-h-64 overflow-y-auto shadow-xs">
+                <table className="w-full text-left text-xs border-collapse">
                   <thead className="bg-slate-100 text-slate-600 text-[10px] uppercase sticky top-0 tracking-wider">
                     <tr>
                       <th className="py-2.5 px-3">Serial</th>
@@ -1609,19 +1891,19 @@ export default function ImportacionFichajes() {
                 </table>
               </div>
 
-              <div className="flex justify-between items-center pt-2 border-t border-slate-100">
+              <div className="flex flex-col-reverse sm:flex-row justify-between items-center gap-2 pt-2 border-t border-slate-100">
                 <button
                   onClick={() => {
                     setModalArchivo({ isOpen: false, item: null });
                     setVistaActual("marcaciones");
                   }}
-                  className="text-indigo-600 font-semibold hover:underline cursor-pointer"
+                  className="text-indigo-600 font-semibold hover:underline cursor-pointer text-xs"
                 >
                   Abrir vista completa general &rarr;
                 </button>
                 <button
                   onClick={() => setModalArchivo({ isOpen: false, item: null })}
-                  className="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-xl font-medium cursor-pointer transition"
+                  className="w-full sm:w-auto px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-xl font-medium cursor-pointer transition text-center"
                 >
                   Cerrar
                 </button>

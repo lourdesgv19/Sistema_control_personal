@@ -312,7 +312,6 @@ export default function LiquidacionDocente() {
         fechaFicha = lunesSeleccionado;
     }
 
-    // Ruta de FichaComportamiento corregida a /comportamiento
     navigate(`/fichas-comportamiento?empleadoId=${idDocente}`, {
       state: {
         empleadoId: idDocente,
@@ -383,18 +382,18 @@ export default function LiquidacionDocente() {
   }, [modalidad, data, fechaBase, hoyIso]);
 
   return (
-    <div className="p-6 space-y-6 max-w-7xl mx-auto">
+    <div className="p-3.5 sm:p-6 lg:p-8 space-y-4 sm:space-y-6 max-w-7xl mx-auto font-sans">
       {/* 1. ENCABEZADO CON BOTÓN A LA DERECHA */}
-      <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs flex items-center justify-between gap-4">
-        <div className="flex items-center gap-3.5">
-          <div className="w-12 h-12 rounded-2xl bg-emerald-600 flex items-center justify-center text-white shadow-xs shrink-0">
-            <DollarSign className="w-6 h-6 stroke-[2.5]" />
+      <div className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 shadow-xs flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3 sm:gap-3.5">
+          <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-emerald-600 flex items-center justify-center text-white shadow-xs shrink-0">
+            <DollarSign className="w-5 h-5 sm:w-6 sm:h-6 stroke-[2.5]" />
           </div>
           <div>
-            <h1 className="text-xl font-bold text-slate-900 tracking-tight">
+            <h1 className="text-lg sm:text-xl font-bold text-slate-900 tracking-tight">
               Liquidación y Pagos Docente
             </h1>
-            <p className="text-xs text-slate-500 mt-0.5">
+            <p className="text-[11px] sm:text-xs text-slate-500 mt-0.5">
               Comparativa del estimado del período, lo devengado ideal hasta hoy
               y el total real auditado con desvíos.
             </p>
@@ -407,7 +406,7 @@ export default function LiquidacionDocente() {
           title={
             mostrarMetricas ? "Ocultar tarjetas KPI" : "Mostrar tarjetas KPI"
           }
-          className="p-2.5 rounded-xl border border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-50 transition cursor-pointer flex items-center gap-1.5 shrink-0"
+          className="p-2 sm:p-2.5 rounded-xl border border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-50 transition cursor-pointer flex items-center gap-1.5 shrink-0"
         >
           {mostrarMetricas ? (
             <ChevronUp className="w-4 h-4 text-slate-600" />
@@ -421,18 +420,18 @@ export default function LiquidacionDocente() {
       </div>
 
       {/* 2. BARRA DE FILTROS Y PERÍODOS */}
-      <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-xs space-y-4">
-        <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+      <div className="bg-white rounded-2xl border border-slate-200 p-3.5 sm:p-4 shadow-xs space-y-3.5 sm:space-y-4">
+        <div className="text-[10px] sm:text-[11px] font-bold text-slate-400 uppercase tracking-wider">
           Período de Liquidación y Análisis
         </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+          <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl overflow-x-auto w-full lg:w-auto">
             {PERIODOS.map((p) => (
               <button
                 key={p.id}
                 onClick={() => setModalidad(p.id)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-bold transition shrink-0 cursor-pointer ${
                   modalidad === p.id
                     ? "bg-white text-slate-800 shadow-xs"
                     : "text-slate-500 hover:text-slate-800"
@@ -443,8 +442,8 @@ export default function LiquidacionDocente() {
             ))}
           </div>
 
-          <div className="flex items-center gap-2 flex-1 max-w-md justify-end">
-            <div className="relative flex-1 min-w-[160px]">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full lg:max-w-md lg:justify-end">
+            <div className="relative flex-1">
               <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
                 type="text"
@@ -458,7 +457,7 @@ export default function LiquidacionDocente() {
             <select
               value={idDocenteSeleccionado}
               onChange={(e) => setIdDocenteSeleccionado(e.target.value)}
-              className="py-1.5 px-3 text-xs bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-700 outline-none focus:border-indigo-600 cursor-pointer"
+              className="py-1.5 px-3 text-xs bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-700 outline-none focus:border-indigo-600 cursor-pointer w-full sm:w-auto"
             >
               <option value="">
                 Todos los docentes ({data?.docentes?.length || 0})
@@ -472,8 +471,7 @@ export default function LiquidacionDocente() {
           </div>
         </div>
 
-        {/* CONTROLES CONTEXTUALES */}
-        <div className="pt-2 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3">
+        <div className="pt-2 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center gap-2 flex-wrap">
             {modalidad === "SEMANAL" && (
               <div className="flex items-center gap-2 flex-wrap">
@@ -514,7 +512,7 @@ export default function LiquidacionDocente() {
                 <select
                   value={lunesSeleccionado}
                   onChange={(e) => setLunesSeleccionado(e.target.value)}
-                  className="py-1 px-3 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-700 outline-none cursor-pointer text-xs"
+                  className="py-1 px-2.5 sm:px-3 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-700 outline-none cursor-pointer text-xs max-w-[200px] sm:max-w-none truncate"
                 >
                   {semanasDelMes.map((s) => (
                     <option key={s.lunesIso} value={s.lunesIso}>
@@ -534,7 +532,7 @@ export default function LiquidacionDocente() {
             )}
 
             {modalidad === "DIARIO" && (
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1.5 flex-wrap">
                 <button
                   type="button"
                   onClick={() => moverDiaDiario(-1)}
@@ -578,7 +576,7 @@ export default function LiquidacionDocente() {
             )}
 
             {modalidad === "MES" && (
-              <div className="flex items-center gap-2 text-xs">
+              <div className="flex items-center gap-2 text-xs flex-wrap">
                 <span className="font-semibold text-slate-500">
                   Seleccionar Mes:
                 </span>
@@ -646,7 +644,7 @@ export default function LiquidacionDocente() {
             )}
 
             {modalidad === "RANGO" && (
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <label className="relative inline-flex items-center border border-slate-200 rounded-xl px-3 py-1.5 bg-slate-50 hover:bg-white shadow-2xs cursor-pointer">
                   <span className="text-[10px] text-slate-400 uppercase mr-1.5 select-none font-bold">
                     Desde:
@@ -693,7 +691,7 @@ export default function LiquidacionDocente() {
             )}
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 self-start sm:self-auto">
             <span className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-indigo-50 border border-indigo-100 text-xs font-semibold text-indigo-700">
               <Calendar className="w-3.5 h-3.5" />
               {modalidad === "MES"
@@ -867,18 +865,18 @@ export default function LiquidacionDocente() {
         <>
           {/* 3. TARJETAS DE RESUMEN GLOBAL (5 KPIS) */}
           {mostrarMetricas && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 animate-in fade-in duration-200">
-              {/* KPI 1: Estimado Período Completo */}
-              <div className="bg-slate-50 rounded-2xl border border-slate-200 p-5 shadow-xs relative">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4 animate-in fade-in duration-200">
+              {/* KPI 1 */}
+              <div className="bg-slate-50 rounded-2xl border border-slate-200 p-4 sm:p-5 shadow-xs relative">
                 <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                  <span className="text-[10px] sm:text-[11px] font-bold text-slate-500 uppercase tracking-wider">
                     Total Estimado (Período)
                   </span>
-                  <div className="w-8 h-8 rounded-full bg-slate-200 text-slate-600 flex items-center justify-center">
+                  <div className="w-8 h-8 rounded-full bg-slate-200 text-slate-600 flex items-center justify-center shrink-0">
                     <Bookmark className="w-4 h-4" />
                   </div>
                 </div>
-                <div className="text-2xl font-black text-slate-800 mt-2 font-mono">
+                <div className="text-xl sm:text-2xl font-black text-slate-800 mt-2 font-mono">
                   $
                   {Math.round(
                     data?.totalPagoEstimadoPeriodo || data?.totalPagoIdeal || 0,
@@ -894,22 +892,22 @@ export default function LiquidacionDocente() {
                     prog. total
                   </span>
                 </div>
-                <div className="text-[11px] text-slate-400 mt-2 pt-2 border-t border-slate-200">
+                <div className="text-[10px] sm:text-[11px] text-slate-400 mt-2 pt-2 border-t border-slate-200">
                   Estimación al 100% al completar el período
                 </div>
               </div>
 
-              {/* KPI 2: Ideal Exigible Hasta Hoy */}
-              <div className="bg-white rounded-2xl border border-indigo-100 p-5 shadow-xs relative">
+              {/* KPI 2 */}
+              <div className="bg-white rounded-2xl border border-indigo-100 p-4 sm:p-5 shadow-xs relative">
                 <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-bold text-indigo-700 uppercase tracking-wider">
+                  <span className="text-[10px] sm:text-[11px] font-bold text-indigo-700 uppercase tracking-wider">
                     Total Ideal Hasta Hoy
                   </span>
-                  <div className="w-8 h-8 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center">
+                  <div className="w-8 h-8 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
                     <Calendar className="w-4 h-4" />
                   </div>
                 </div>
-                <div className="text-2xl font-black text-indigo-950 mt-2 font-mono">
+                <div className="text-xl sm:text-2xl font-black text-indigo-950 mt-2 font-mono">
                   $
                   {Math.round(
                     data?.totalPagoIdealHastaHoy || data?.totalPagoIdeal || 0,
@@ -925,22 +923,22 @@ export default function LiquidacionDocente() {
                     debidas a hoy
                   </span>
                 </div>
-                <div className="text-[11px] text-slate-400 mt-2 pt-2 border-t border-slate-100">
+                <div className="text-[10px] sm:text-[11px] text-slate-400 mt-2 pt-2 border-t border-slate-100">
                   Teórico de días transcurridos sin deducción
                 </div>
               </div>
 
-              {/* KPI 3: Real Liquidado Hasta Hoy */}
-              <div className="bg-white rounded-2xl border border-emerald-200 p-5 shadow-xs relative">
+              {/* KPI 3 */}
+              <div className="bg-white rounded-2xl border border-emerald-200 p-4 sm:p-5 shadow-xs relative">
                 <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-bold text-emerald-700 uppercase tracking-wider">
+                  <span className="text-[10px] sm:text-[11px] font-bold text-emerald-700 uppercase tracking-wider">
                     Total Real (Hasta Hoy)
                   </span>
-                  <div className="w-8 h-8 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                  <div className="w-8 h-8 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
                     <DollarSign className="w-4 h-4" />
                   </div>
                 </div>
-                <div className="text-2xl font-black text-emerald-600 mt-2 font-mono">
+                <div className="text-xl sm:text-2xl font-black text-emerald-600 mt-2 font-mono">
                   $
                   {Math.round(data?.totalPagoReal || 0).toLocaleString("es-AR")}
                 </div>
@@ -951,7 +949,7 @@ export default function LiquidacionDocente() {
                     auditadas
                   </span>
                 </div>
-                <div className="flex items-center justify-between text-[11px] text-slate-500 mt-2 pt-2 border-t border-slate-100">
+                <div className="flex items-center justify-between text-[10px] sm:text-[11px] text-slate-500 mt-2 pt-2 border-t border-slate-100">
                   <span>Cumplimiento a hoy:</span>
                   <span className="font-bold text-emerald-600">
                     {data?.porcentajeCumplimientoGlobal || 100}%
@@ -959,17 +957,17 @@ export default function LiquidacionDocente() {
                 </div>
               </div>
 
-              {/* KPI 4: Descuentos Aplicados */}
-              <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs relative">
+              {/* KPI 4 */}
+              <div className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 shadow-xs relative">
                 <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                  <span className="text-[10px] sm:text-[11px] font-bold text-slate-500 uppercase tracking-wider">
                     Descuentos Aplicados
                   </span>
-                  <div className="w-8 h-8 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center">
+                  <div className="w-8 h-8 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center shrink-0">
                     <TrendingDown className="w-4 h-4" />
                   </div>
                 </div>
-                <div className="text-2xl font-black text-rose-600 mt-2 font-mono">
+                <div className="text-xl sm:text-2xl font-black text-rose-600 mt-2 font-mono">
                   -$
                   {Math.round(data?.totalMontoDescontado || 0).toLocaleString(
                     "es-AR",
@@ -982,7 +980,7 @@ export default function LiquidacionDocente() {
                     descontadas
                   </span>
                 </div>
-                <div className="flex items-center justify-between text-[11px] text-slate-500 mt-2 pt-2 border-t border-slate-100">
+                <div className="flex items-center justify-between text-[10px] sm:text-[11px] text-slate-500 mt-2 pt-2 border-t border-slate-100">
                   <span>Deducción s/ ideal a hoy:</span>
                   <span className="font-bold text-rose-600">
                     {data?.porcentajePerdida || 0}%
@@ -990,13 +988,13 @@ export default function LiquidacionDocente() {
                 </div>
               </div>
 
-              {/* KPI 5: Motivos de Descuento */}
-              <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs relative">
+              {/* KPI 5 */}
+              <div className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 shadow-xs relative sm:col-span-2 lg:col-span-1">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                  <span className="text-[10px] sm:text-[11px] font-bold text-slate-500 uppercase tracking-wider">
                     Motivos de Descuento
                   </span>
-                  <div className="w-8 h-8 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center">
+                  <div className="w-8 h-8 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
                     <Layers className="w-4 h-4" />
                   </div>
                 </div>
@@ -1050,20 +1048,20 @@ export default function LiquidacionDocente() {
             </div>
           )}
 
-          {/* 4. TABLA COMPARATIVA PRINCIPAL (MAESTRO - DETALLE) */}
+          {/* 4. PLANILLA COMPARATIVA */}
           <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
-            <div className="p-4 border-b border-slate-100 flex items-center justify-between">
+            <div className="p-4 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <div>
-                <h3 className="text-sm font-bold text-slate-800">
+                <h3 className="text-xs sm:text-sm font-bold text-slate-800">
                   Planilla Comparativa de Liquidación Docente
                 </h3>
-                <p className="text-xs text-slate-400">
+                <p className="text-[11px] sm:text-xs text-slate-400">
                   Primera línea consolidada por docente y desglose por
                   materia/horario. Filas compactas con bitácora forense
                   accesible por modal.
                 </p>
               </div>
-              <span className="text-xs font-semibold text-slate-500">
+              <span className="text-xs font-semibold text-slate-500 self-start sm:self-auto">
                 Docentes evaluados: {docentesFiltrados.length}
               </span>
             </div>
@@ -1074,262 +1072,453 @@ export default function LiquidacionDocente() {
                 Calculando liquidación y cruzando huellas biométricas...
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse">
-                  <thead>
-                    <tr className="bg-slate-50/70 border-b border-slate-200/80 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                      <th className="py-3 px-4">Docente</th>
-                      <th className="py-3 px-3 text-center">Clases</th>
-                      <th className="py-3 px-3 text-center">Horas Prog.</th>
-                      <th className="py-3 px-3 text-center">Horas Dictadas</th>
-                      <th className="py-3 px-3 text-center">
-                        Horas Descontadas (Motivos)
-                      </th>
-                      <th className="py-3 px-3 text-right">
-                        Pago Ideal (Hasta Hoy)
-                      </th>
-                      <th className="py-3 px-3 text-right">
-                        Pago Real Liquidado
-                      </th>
-                      <th className="py-3 px-3 text-right">Descuento ($)</th>
-                      <th className="py-3 px-3 text-center">% Cumplimiento</th>
-                      <th className="py-3 px-4 text-center">Acciones</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 text-xs">
-                    {docentesFiltrados.length === 0 ? (
-                      <tr>
-                        <td
-                          colSpan={10}
-                          className="p-12 text-center text-slate-500"
-                        >
-                          <div className="max-w-md mx-auto space-y-2">
-                            <AlertCircle className="w-8 h-8 text-slate-300 mx-auto" />
-                            <h4 className="text-sm font-bold text-slate-700">
-                              Sin actividad registrada en este período
-                            </h4>
-                            <p className="text-xs text-slate-400">
-                              {busqueda
-                                ? `No hay coincidencias para "${busqueda}".`
-                                : "No se encontraron marcaciones biométricas ni clases asignadas a docentes en el rango seleccionado."}
-                            </p>
-                          </div>
-                        </td>
-                      </tr>
-                    ) : (
-                      docentesFiltrados.map((d) => {
-                        const expandido = filasExpandidas.has(d.idDocente);
-                        const tieneClasesAsignadas =
-                          d.comisiones && d.comisiones.length > 0;
-                        const tieneHorasProgramadas =
-                          (d.horasProgramadas || 0) > 0;
+              <>
+                {/* 4.A VISTA MÓVIL (md:hidden) — REDISEÑADA SIN BOTONES AMONTONADOS */}
+                <div className="md:hidden divide-y divide-slate-100">
+                  {docentesFiltrados.length === 0 ? (
+                    <div className="p-8 text-center text-slate-500 text-xs">
+                      <AlertCircle className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                      <h4 className="text-sm font-bold text-slate-700">
+                        Sin actividad registrada en este período
+                      </h4>
+                      <p className="text-xs text-slate-400 mt-1">
+                        {busqueda
+                          ? `No hay coincidencias para "${busqueda}".`
+                          : "No se encontraron marcaciones biométricas ni clases asignadas a docentes en el rango seleccionado."}
+                      </p>
+                    </div>
+                  ) : (
+                    docentesFiltrados.map((d) => {
+                      const expandido = filasExpandidas.has(d.idDocente);
+                      const tieneClasesAsignadas =
+                        d.comisiones && d.comisiones.length > 0;
+                      const tieneHorasProgramadas =
+                        (d.horasProgramadas || 0) > 0;
 
-                        if (!tieneHorasProgramadas) {
-                          return (
-                            <tr
-                              key={d.idDocente}
-                              className="bg-slate-50/50 hover:bg-slate-50 transition-colors"
-                            >
-                              <td className="py-3 px-4">
-                                <div className="flex items-center gap-3">
-                                  <div
-                                    className={`w-9 h-9 rounded-full border flex items-center justify-center font-bold text-xs select-none shadow-2xs shrink-0 ${obtenerColorIniciales(
-                                      d.nombreDocente,
-                                    )}`}
-                                  >
-                                    {obtenerIniciales(d.nombreDocente)}
-                                  </div>
-                                  <div>
-                                    <div className="font-bold text-slate-700 leading-snug">
-                                      {d.nombreDocente}
-                                    </div>
-                                    <div className="text-[10px] text-slate-400 mt-0.5">
-                                      {d.nroLegajo !== "S/L"
-                                        ? `Leg. ${d.nroLegajo}`
-                                        : "Sin legajo asignado"}
-                                    </div>
-                                  </div>
-                                </div>
-                              </td>
-
-                              <td colSpan={8} className="py-3 px-4 text-center">
-                                <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-100 text-slate-500 text-xs font-medium border border-slate-200/60">
-                                  <CalendarX2 className="w-4 h-4 text-slate-400 shrink-0" />
-                                  <span>
-                                    Sin cátedras ni clases programadas para este
-                                    período evaluado.
-                                  </span>
-                                </div>
-                              </td>
-
-                              <td className="py-3 px-4 text-center">
-                                {puedeVerFicha ? (
-                                  <button
-                                    type="button"
-                                    onClick={() => irAFichaDocente(d.idDocente)}
-                                    className="px-2.5 py-1 text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 rounded-lg text-[11px] font-bold transition cursor-pointer"
-                                  >
-                                    Ficha
-                                  </button>
-                                ) : (
-                                  <span
-                                    className="inline-flex items-center gap-1 px-2.5 py-1 text-slate-300 bg-slate-50 border border-slate-200 rounded-lg text-[11px] font-semibold cursor-not-allowed select-none"
-                                    title="Sin permiso para ver ficha de comportamiento"
-                                  >
-                                    <Lock className="w-3 h-3" /> Ficha
-                                  </span>
-                                )}
-                              </td>
-                            </tr>
-                          );
-                        }
-
+                      if (!tieneHorasProgramadas) {
                         return (
-                          <React.Fragment key={d.idDocente}>
-                            {/* FILA PRINCIPAL */}
-                            <tr
-                              className={`hover:bg-slate-50/80 transition cursor-pointer ${
-                                expandido ? "bg-slate-50/40" : ""
-                              }`}
-                              onClick={() => toggleFila(d.idDocente)}
-                            >
-                              <td className="py-3.5 px-4">
-                                <div className="flex items-center gap-3">
-                                  <button
-                                    type="button"
-                                    className="p-1 rounded-md text-slate-400 hover:text-slate-600 transition cursor-pointer"
-                                  >
-                                    {expandido ? (
-                                      <ChevronUp className="w-4 h-4" />
-                                    ) : (
-                                      <ChevronDown className="w-4 h-4" />
-                                    )}
-                                  </button>
-
-                                  <div
-                                    className={`w-9 h-9 rounded-full border flex items-center justify-center font-bold text-xs select-none shadow-2xs shrink-0 ${obtenerColorIniciales(
-                                      d.nombreDocente,
-                                    )}`}
-                                  >
-                                    {obtenerIniciales(d.nombreDocente)}
+                          <div
+                            key={d.idDocente}
+                            className="p-4 bg-slate-50/50 space-y-2 text-xs"
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2.5">
+                                <div
+                                  className={`w-9 h-9 rounded-full border flex items-center justify-center font-bold text-xs shrink-0 ${obtenerColorIniciales(
+                                    d.nombreDocente,
+                                  )}`}
+                                >
+                                  {obtenerIniciales(d.nombreDocente)}
+                                </div>
+                                <div>
+                                  <div className="font-bold text-slate-700">
+                                    {d.nombreDocente}
                                   </div>
-
-                                  <div>
-                                    <div className="font-bold text-slate-800 leading-snug">
-                                      {d.nombreDocente}
-                                    </div>
-                                    <div className="flex items-center gap-2 mt-0.5">
-                                      {tieneClasesAsignadas ? (
-                                        <span className="px-1.5 py-0.5 rounded-md bg-indigo-50 text-indigo-700 text-[10px] font-semibold">
-                                          {d.totalMaterias}{" "}
-                                          {d.totalMaterias === 1
-                                            ? "materia"
-                                            : "materias"}
-                                        </span>
-                                      ) : (
-                                        <span className="px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-500 text-[10px] font-semibold">
-                                          Sin materias
-                                        </span>
-                                      )}
-                                    </div>
+                                  <div className="text-[10px] text-slate-400">
+                                    {d.nroLegajo !== "S/L"
+                                      ? `Leg. ${d.nroLegajo}`
+                                      : "Sin legajo asignado"}
                                   </div>
                                 </div>
-                              </td>
+                              </div>
 
-                              <td className="py-3.5 px-3 text-center font-semibold text-slate-700">
-                                {d.totalClases}
-                              </td>
+                              {puedeVerFicha ? (
+                                <button
+                                  type="button"
+                                  onClick={() => irAFichaDocente(d.idDocente)}
+                                  className="px-3 py-1.5 text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-lg text-xs font-bold transition"
+                                >
+                                  Ficha
+                                </button>
+                              ) : (
+                                <span className="p-1 text-slate-300">
+                                  <Lock className="w-3.5 h-3.5" />
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-[11px] text-slate-500 bg-slate-100 p-2 rounded-xl border border-slate-200/60 text-center">
+                              Sin cátedras ni clases programadas para este
+                              período.
+                            </div>
+                          </div>
+                        );
+                      }
 
-                              <td className="py-3.5 px-3 text-center font-mono text-slate-600">
-                                {formatearHorasYMinutos(d.horasProgramadas)}
-                              </td>
-
-                              <td className="py-3.5 px-3 text-center font-bold font-mono text-emerald-600">
-                                {formatearHorasYMinutos(d.horasDictadas)}
-                              </td>
-
-                              <td className="py-3.5 px-3 text-center">
-                                {d.horasDescontadas > 0 ? (
-                                  <div className="flex flex-col items-center gap-1">
-                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[11px] font-bold font-mono bg-rose-50 text-rose-600 border border-rose-200">
-                                      <ArrowDownRight className="w-3 h-3 stroke-[2.5]" />
-                                      -
-                                      {formatearHorasYMinutos(
-                                        d.horasDescontadas,
-                                      )}{" "}
-                                      desc.
-                                    </span>
-                                    <button
-                                      type="button"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setMateriaParaModal(null);
-                                        setDocenteParaModal(d);
-                                      }}
-                                      className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 hover:underline cursor-pointer"
-                                    >
-                                      Ver ({d.cantidadDesvios}) →
-                                    </button>
-                                  </div>
-                                ) : (
-                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                                    <CheckCircle2 className="w-3 h-3" />
-                                    0h desc. (100% puntual)
+                      return (
+                        <div
+                          key={d.idDocente}
+                          className={`p-4 space-y-3 transition-colors ${
+                            expandido ? "bg-slate-50/50" : "bg-white"
+                          }`}
+                        >
+                          {/* Cabecera del Docente */}
+                          <div
+                            onClick={() => toggleFila(d.idDocente)}
+                            className="flex items-start justify-between gap-2 cursor-pointer select-none"
+                          >
+                            <div className="flex items-center gap-2.5">
+                              <div
+                                className={`w-10 h-10 rounded-full border flex items-center justify-center font-bold text-xs shrink-0 shadow-2xs ${obtenerColorIniciales(
+                                  d.nombreDocente,
+                                )}`}
+                              >
+                                {obtenerIniciales(d.nombreDocente)}
+                              </div>
+                              <div>
+                                <h4 className="font-bold text-slate-800 text-xs leading-snug">
+                                  {d.nombreDocente}
+                                </h4>
+                                <div className="flex items-center gap-1.5 mt-0.5">
+                                  <span className="text-[10px] text-slate-400 font-mono">
+                                    Leg. {d.nroLegajo}
                                   </span>
-                                )}
-                              </td>
+                                  {tieneClasesAsignadas ? (
+                                    <span className="px-1.5 py-0.2 rounded bg-indigo-50 text-indigo-700 text-[9px] font-semibold">
+                                      {d.totalMaterias}{" "}
+                                      {d.totalMaterias === 1
+                                        ? "materia"
+                                        : "materias"}
+                                    </span>
+                                  ) : (
+                                    <span className="px-1.5 py-0.2 rounded bg-slate-100 text-slate-500 text-[9px] font-semibold">
+                                      Sin materias
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
 
-                              <td className="py-3.5 px-3 text-right font-medium font-mono text-slate-500">
+                            <div className="text-right shrink-0">
+                              <span className="font-black text-slate-900 font-mono text-sm block">
+                                $
+                                {Math.round(d.pagoReal).toLocaleString("es-AR")}
+                              </span>
+                              <span
+                                className={`inline-block px-1.5 py-0.2 rounded-full text-[9px] font-bold ${
+                                  d.porcentajeCumplimiento >= 95
+                                    ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                                    : d.porcentajeCumplimiento >= 80
+                                      ? "bg-amber-50 text-amber-700 border border-amber-200"
+                                      : "bg-rose-50 text-rose-600 border border-rose-200"
+                                }`}
+                              >
+                                {d.porcentajeCumplimiento}% cumpl.
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Métricas Compactas */}
+                          <div className="grid grid-cols-3 gap-2 bg-slate-50 p-2.5 rounded-xl text-center text-xs">
+                            <div>
+                              <span className="text-[9px] text-slate-400 uppercase font-bold block">
+                                Clases
+                              </span>
+                              <span className="font-bold text-slate-800">
+                                {d.totalClases}
+                              </span>
+                            </div>
+                            <div>
+                              <span className="text-[9px] text-slate-400 uppercase font-bold block">
+                                Dictadas / Prog
+                              </span>
+                              <span className="font-mono text-slate-700 text-[11px] block truncate">
+                                <strong className="text-emerald-600 font-bold">
+                                  {formatearHorasYMinutos(d.horasDictadas)}
+                                </strong>{" "}
+                                / {formatearHorasYMinutos(d.horasProgramadas)}
+                              </span>
+                            </div>
+                            <div>
+                              <span className="text-[9px] text-slate-400 uppercase font-bold block">
+                                Pago Ideal
+                              </span>
+                              <span className="font-mono text-slate-500 font-medium text-[11px]">
                                 $
                                 {Math.round(d.pagoIdeal).toLocaleString(
                                   "es-AR",
                                 )}
-                              </td>
+                              </span>
+                            </div>
+                          </div>
 
-                              <td className="py-3.5 px-3 text-right font-black font-mono text-slate-900">
-                                $
-                                {Math.round(d.pagoReal).toLocaleString("es-AR")}
-                              </td>
-
-                              <td className="py-3.5 px-3 text-right font-mono">
-                                {d.montoDescontado > 0 ? (
-                                  <span className="font-bold text-rose-600">
-                                    -$
-                                    {Math.round(
-                                      d.montoDescontado,
-                                    ).toLocaleString("es-AR")}
+                          {/* LÍNEA 1: ESTADO DE DESVÍOS Y DESCUENTOS (HOLGADA) */}
+                          <div className="flex items-center justify-between text-xs pt-1 border-t border-slate-100">
+                            <div>
+                              {d.horasDescontadas > 0 ? (
+                                <div className="flex items-center gap-1.5">
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold font-mono bg-rose-50 text-rose-600 border border-rose-200">
+                                    <ArrowDownRight className="w-3 h-3 stroke-[2.5]" />
+                                    -
+                                    {formatearHorasYMinutos(d.horasDescontadas)}
                                   </span>
-                                ) : (
-                                  <span className="text-slate-400">$0</span>
-                                )}
-                              </td>
-
-                              <td className="py-3.5 px-3 text-center">
-                                <span
-                                  className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
-                                    d.porcentajeCumplimiento >= 95
-                                      ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                                      : d.porcentajeCumplimiento >= 80
-                                        ? "bg-amber-50 text-amber-700 border border-amber-200"
-                                        : "bg-rose-50 text-rose-600 border border-rose-200"
-                                  }`}
-                                >
-                                  {d.porcentajeCumplimiento}%
-                                </span>
-                              </td>
-
-                              <td className="py-3.5 px-4 text-center">
-                                <div
-                                  className="flex items-center justify-center gap-1.5"
-                                  onClick={(e) => e.stopPropagation()}
-                                >
                                   <button
                                     type="button"
-                                    onClick={() => toggleFila(d.idDocente)}
-                                    className="px-2.5 py-1 text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 rounded-lg text-[11px] font-bold transition cursor-pointer"
+                                    onClick={() => {
+                                      setMateriaParaModal(null);
+                                      setDocenteParaModal(d);
+                                    }}
+                                    className="text-[11px] font-bold text-indigo-600 hover:text-indigo-800 underline cursor-pointer"
                                   >
-                                    {expandido ? "Ocultar" : "Desglosar"}
+                                    Ver ({d.cantidadDesvios})
                                   </button>
+                                </div>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                  <CheckCircle2 className="w-3 h-3" />
+                                  100% puntual
+                                </span>
+                              )}
+                            </div>
+
+                            <div>
+                              {d.montoDescontado > 0 ? (
+                                <span className="font-bold text-rose-600 text-xs font-mono">
+                                  -$
+                                  {Math.round(d.montoDescontado).toLocaleString(
+                                    "es-AR",
+                                  )}
+                                </span>
+                              ) : (
+                                <span className="text-[11px] text-slate-400 font-mono">
+                                  Sin descuentos
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* LÍNEA 2: BOTONES DE ACCIÓN REDISEÑADOS CON ESPACIO TÁCTIL */}
+                          <div className="flex items-center gap-2 pt-1">
+                            <button
+                              type="button"
+                              onClick={() => toggleFila(d.idDocente)}
+                              className="flex-1 py-2 text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs"
+                            >
+                              {expandido ? (
+                                <>
+                                  <ChevronUp className="w-3.5 h-3.5 text-slate-500" />
+                                  <span>Ocultar</span>
+                                </>
+                              ) : (
+                                <>
+                                  <ChevronDown className="w-3.5 h-3.5 text-slate-500" />
+                                  <span>Desglosar</span>
+                                </>
+                              )}
+                            </button>
+
+                            {puedeVerFicha && (
+                              <button
+                                type="button"
+                                onClick={() => irAFichaDocente(d.idDocente)}
+                                className="flex-1 py-2 text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs"
+                              >
+                                <span>Ver Ficha</span>
+                                <ArrowRight className="w-3.5 h-3.5 text-indigo-600" />
+                              </button>
+                            )}
+                          </div>
+
+                          {/* Sub-tarjetas desglosadas por comisión */}
+                          {expandido && (
+                            <div className="mt-2 space-y-2 pt-2 border-t border-slate-200">
+                              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
+                                Comisiones Asignadas:
+                              </span>
+
+                              {!tieneClasesAsignadas ? (
+                                <div className="py-4 text-center text-xs text-slate-400 italic">
+                                  Sin comisiones registradas en el cronograma.
+                                </div>
+                              ) : (
+                                d.comisiones.map((c) => (
+                                  <div
+                                    key={c.idHorario}
+                                    className="bg-white border border-slate-200 rounded-xl p-3 space-y-1.5 text-xs shadow-2xs"
+                                  >
+                                    <div className="flex items-start justify-between gap-2">
+                                      <span className="font-bold text-slate-800 leading-snug">
+                                        {c.nombreMateria}
+                                      </span>
+                                      <span className="font-black text-slate-900 font-mono shrink-0">
+                                        $
+                                        {Math.round(c.pagoReal).toLocaleString(
+                                          "es-AR",
+                                        )}
+                                      </span>
+                                    </div>
+
+                                    <div className="text-[11px] text-slate-500 font-mono flex flex-wrap items-center gap-1.5">
+                                      <span>Días:</span>
+                                      {c.diasNombres?.map((dia) => (
+                                        <span
+                                          key={dia}
+                                          className="px-1 py-0.2 rounded bg-indigo-50 text-indigo-700 font-semibold text-[10px]"
+                                        >
+                                          {dia}
+                                        </span>
+                                      ))}
+                                      <span>• {c.horarioTexto}</span>
+                                      <span>• {c.aula}</span>
+                                    </div>
+
+                                    <div className="flex items-center justify-between text-[11px] pt-1 border-t border-slate-100">
+                                      <span className="text-slate-600 font-mono">
+                                        Dictadas:{" "}
+                                        <strong className="text-emerald-600">
+                                          {formatearHorasYMinutos(
+                                            c.horasDictadas,
+                                          )}
+                                        </strong>{" "}
+                                        /{" "}
+                                        {formatearHorasYMinutos(
+                                          c.horasProgramadas,
+                                        )}
+                                      </span>
+                                      <span className="font-mono text-slate-600">
+                                        $
+                                        {Math.round(
+                                          c.tarifaHora,
+                                        ).toLocaleString("es-AR")}
+                                        /h
+                                      </span>
+                                    </div>
+
+                                    <div className="flex items-center justify-between pt-1">
+                                      {c.cantidadDesvios > 0 ? (
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setDocenteParaModal(d);
+                                            setMateriaParaModal(c);
+                                          }}
+                                          className="text-[10px] font-bold text-indigo-600 underline"
+                                        >
+                                          Ver {c.cantidadDesvios} desvíos →
+                                        </button>
+                                      ) : (
+                                        <span className="text-[10px] font-bold text-emerald-700">
+                                          Sin desvíos
+                                        </span>
+                                      )}
+
+                                      <span
+                                        className={`px-1.5 py-0.2 rounded text-[10px] font-bold ${
+                                          c.porcentajeCumplimiento >= 95
+                                            ? "bg-emerald-50 text-emerald-700"
+                                            : "bg-amber-50 text-amber-700"
+                                        }`}
+                                      >
+                                        {c.porcentajeCumplimiento}%
+                                      </span>
+                                    </div>
+                                  </div>
+                                ))
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+
+                {/* 4.B VISTA ESCRITORIO (hidden md:block) — TABLA CLÁSICA COMPLETA */}
+                <div className="hidden md:block overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="bg-slate-50/70 border-b border-slate-200/80 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                        <th className="py-3 px-4">Docente</th>
+                        <th className="py-3 px-3 text-center">Clases</th>
+                        <th className="py-3 px-3 text-center">Horas Prog.</th>
+                        <th className="py-3 px-3 text-center">
+                          Horas Dictadas
+                        </th>
+                        <th className="py-3 px-3 text-center">
+                          Horas Descontadas (Motivos)
+                        </th>
+                        <th className="py-3 px-3 text-right">
+                          Pago Ideal (Hasta Hoy)
+                        </th>
+                        <th className="py-3 px-3 text-right">
+                          Pago Real Liquidado
+                        </th>
+                        <th className="py-3 px-3 text-right">Descuento ($)</th>
+                        <th className="py-3 px-3 text-center">
+                          % Cumplimiento
+                        </th>
+                        <th className="py-3 px-4 text-center">Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 text-xs">
+                      {docentesFiltrados.length === 0 ? (
+                        <tr>
+                          <td
+                            colSpan={10}
+                            className="p-12 text-center text-slate-500"
+                          >
+                            <div className="max-w-md mx-auto space-y-2">
+                              <AlertCircle className="w-8 h-8 text-slate-300 mx-auto" />
+                              <h4 className="text-sm font-bold text-slate-700">
+                                Sin actividad registrada en este período
+                              </h4>
+                              <p className="text-xs text-slate-400">
+                                {busqueda
+                                  ? `No hay coincidencias para "${busqueda}".`
+                                  : "No se encontraron marcaciones biométricas ni clases asignadas a docentes en el rango seleccionado."}
+                              </p>
+                            </div>
+                          </td>
+                        </tr>
+                      ) : (
+                        docentesFiltrados.map((d) => {
+                          const expandido = filasExpandidas.has(d.idDocente);
+                          const tieneClasesAsignadas =
+                            d.comisiones && d.comisiones.length > 0;
+                          const tieneHorasProgramadas =
+                            (d.horasProgramadas || 0) > 0;
+
+                          if (!tieneHorasProgramadas) {
+                            return (
+                              <tr
+                                key={d.idDocente}
+                                className="bg-slate-50/50 hover:bg-slate-50 transition-colors"
+                              >
+                                <td className="py-3 px-4">
+                                  <div className="flex items-center gap-3">
+                                    <div
+                                      className={`w-9 h-9 rounded-full border flex items-center justify-center font-bold text-xs select-none shadow-2xs shrink-0 ${obtenerColorIniciales(
+                                        d.nombreDocente,
+                                      )}`}
+                                    >
+                                      {obtenerIniciales(d.nombreDocente)}
+                                    </div>
+                                    <div>
+                                      <div className="font-bold text-slate-700 leading-snug">
+                                        {d.nombreDocente}
+                                      </div>
+                                      <div className="text-[10px] text-slate-400 mt-0.5">
+                                        {d.nroLegajo !== "S/L"
+                                          ? `Leg. ${d.nroLegajo}`
+                                          : "Sin legajo asignado"}
+                                      </div>
+                                    </div>
+                                  </div>
+                                </td>
+
+                                <td
+                                  colSpan={8}
+                                  className="py-3 px-4 text-center"
+                                >
+                                  <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-100 text-slate-500 text-xs font-medium border border-slate-200/60">
+                                    <CalendarX2 className="w-4 h-4 text-slate-400 shrink-0" />
+                                    <span>
+                                      Sin cátedras ni clases programadas para
+                                      este período evaluado.
+                                    </span>
+                                  </div>
+                                </td>
+
+                                <td className="py-3 px-4 text-center">
                                   {puedeVerFicha ? (
                                     <button
                                       type="button"
@@ -1348,219 +1537,397 @@ export default function LiquidacionDocente() {
                                       <Lock className="w-3 h-3" /> Ficha
                                     </span>
                                   )}
-                                </div>
-                              </td>
-                            </tr>
+                                </td>
+                              </tr>
+                            );
+                          }
 
-                            {/* SUBFILAS */}
-                            {expandido && (
-                              <tr className="bg-slate-50/70 border-b border-slate-200">
-                                <td colSpan={10} className="p-4 pl-12">
-                                  <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-2xs space-y-3">
-                                    <div className="flex items-center justify-between text-xs font-bold text-slate-700 border-b border-slate-100 pb-2">
-                                      <div className="flex items-center gap-2">
-                                        <CornerDownRight className="w-4 h-4 text-indigo-600" />
-                                        <span>
-                                          DESGLOSE POR MATERIA Y HORARIO —{" "}
-                                          {d.nombreDocente.toUpperCase()}
-                                        </span>
-                                      </div>
-                                      <span className="text-[11px] text-slate-400 font-normal">
-                                        {d.comisiones.length} comisiones
-                                        asignadas
-                                      </span>
+                          return (
+                            <React.Fragment key={d.idDocente}>
+                              {/* FILA PRINCIPAL */}
+                              <tr
+                                className={`hover:bg-slate-50/80 transition cursor-pointer ${
+                                  expandido ? "bg-slate-50/40" : ""
+                                }`}
+                                onClick={() => toggleFila(d.idDocente)}
+                              >
+                                <td className="py-3.5 px-4">
+                                  <div className="flex items-center gap-3">
+                                    <button
+                                      type="button"
+                                      className="p-1 rounded-md text-slate-400 hover:text-slate-600 transition cursor-pointer"
+                                    >
+                                      {expandido ? (
+                                        <ChevronUp className="w-4 h-4" />
+                                      ) : (
+                                        <ChevronDown className="w-4 h-4" />
+                                      )}
+                                    </button>
+
+                                    <div
+                                      className={`w-9 h-9 rounded-full border flex items-center justify-center font-bold text-xs select-none shadow-2xs shrink-0 ${obtenerColorIniciales(
+                                        d.nombreDocente,
+                                      )}`}
+                                    >
+                                      {obtenerIniciales(d.nombreDocente)}
                                     </div>
 
-                                    {!tieneClasesAsignadas ? (
-                                      <div className="py-6 text-center text-xs text-slate-400 italic">
-                                        Este docente no tiene materias ni
-                                        comisiones registradas en su cronograma.
+                                    <div>
+                                      <div className="font-bold text-slate-800 leading-snug">
+                                        {d.nombreDocente}
                                       </div>
+                                      <div className="flex items-center gap-2 mt-0.5">
+                                        {tieneClasesAsignadas ? (
+                                          <span className="px-1.5 py-0.5 rounded-md bg-indigo-50 text-indigo-700 text-[10px] font-semibold">
+                                            {d.totalMaterias}{" "}
+                                            {d.totalMaterias === 1
+                                              ? "materia"
+                                              : "materias"}
+                                          </span>
+                                        ) : (
+                                          <span className="px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-500 text-[10px] font-semibold">
+                                            Sin materias
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+                                </td>
+
+                                <td className="py-3.5 px-3 text-center font-semibold text-slate-700">
+                                  {d.totalClases}
+                                </td>
+
+                                <td className="py-3.5 px-3 text-center font-mono text-slate-600">
+                                  {formatearHorasYMinutos(d.horasProgramadas)}
+                                </td>
+
+                                <td className="py-3.5 px-3 text-center font-bold font-mono text-emerald-600">
+                                  {formatearHorasYMinutos(d.horasDictadas)}
+                                </td>
+
+                                <td className="py-3.5 px-3 text-center">
+                                  {d.horasDescontadas > 0 ? (
+                                    <div className="flex flex-col items-center gap-1">
+                                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[11px] font-bold font-mono bg-rose-50 text-rose-600 border border-rose-200">
+                                        <ArrowDownRight className="w-3 h-3 stroke-[2.5]" />
+                                        -
+                                        {formatearHorasYMinutos(
+                                          d.horasDescontadas,
+                                        )}
+                                      </span>
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setMateriaParaModal(null);
+                                          setDocenteParaModal(d);
+                                        }}
+                                        className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 hover:underline cursor-pointer"
+                                      >
+                                        Ver ({d.cantidadDesvios}) →
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                      <CheckCircle2 className="w-3 h-3" />
+                                      0h desc. (100% puntual)
+                                    </span>
+                                  )}
+                                </td>
+
+                                <td className="py-3.5 px-3 text-right font-medium font-mono text-slate-500">
+                                  $
+                                  {Math.round(d.pagoIdeal).toLocaleString(
+                                    "es-AR",
+                                  )}
+                                </td>
+
+                                <td className="py-3.5 px-3 text-right font-black font-mono text-slate-900">
+                                  $
+                                  {Math.round(d.pagoReal).toLocaleString(
+                                    "es-AR",
+                                  )}
+                                </td>
+
+                                <td className="py-3.5 px-3 text-right font-mono">
+                                  {d.montoDescontado > 0 ? (
+                                    <span className="font-bold text-rose-600">
+                                      -$
+                                      {Math.round(
+                                        d.montoDescontado,
+                                      ).toLocaleString("es-AR")}
+                                    </span>
+                                  ) : (
+                                    <span className="text-slate-400">$0</span>
+                                  )}
+                                </td>
+
+                                <td className="py-3.5 px-3 text-center">
+                                  <span
+                                    className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
+                                      d.porcentajeCumplimiento >= 95
+                                        ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                                        : d.porcentajeCumplimiento >= 80
+                                          ? "bg-amber-50 text-amber-700 border border-amber-200"
+                                          : "bg-rose-50 text-rose-600 border border-rose-200"
+                                    }`}
+                                  >
+                                    {d.porcentajeCumplimiento}%
+                                  </span>
+                                </td>
+
+                                <td className="py-3.5 px-4 text-center">
+                                  <div
+                                    className="flex items-center justify-center gap-1.5"
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    <button
+                                      type="button"
+                                      onClick={() => toggleFila(d.idDocente)}
+                                      className="px-2.5 py-1 text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 rounded-lg text-[11px] font-bold transition cursor-pointer"
+                                    >
+                                      {expandido ? "Ocultar" : "Desglosar"}
+                                    </button>
+                                    {puedeVerFicha ? (
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          irAFichaDocente(d.idDocente)
+                                        }
+                                        className="px-2.5 py-1 text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 rounded-lg text-[11px] font-bold transition cursor-pointer"
+                                      >
+                                        Ficha
+                                      </button>
                                     ) : (
-                                      <table className="w-full text-left border-collapse text-xs">
-                                        <thead>
-                                          <tr className="text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100">
-                                            <th className="pb-2">
-                                              Materia & Detalle de Horario
-                                            </th>
-                                            <th className="pb-2 text-center">
-                                              Clases
-                                            </th>
-                                            <th className="pb-2 text-center">
-                                              Horas Prog.
-                                            </th>
-                                            <th className="pb-2 text-center">
-                                              Horas Dictadas
-                                            </th>
-                                            <th className="pb-2 text-center">
-                                              Horas Desc.
-                                            </th>
-                                            <th className="pb-2 text-center">
-                                              Detalle
-                                            </th>
-                                            <th className="pb-2 text-right">
-                                              Tarifa
-                                            </th>
-                                            <th className="pb-2 text-right">
-                                              Pago Estimado
-                                            </th>
-                                            <th className="pb-2 text-right">
-                                              Pago Real
-                                            </th>
-                                            <th className="pb-2 text-right">
-                                              Descuento
-                                            </th>
-                                            <th className="pb-2 text-center">
-                                              % Cumpl.
-                                            </th>
-                                          </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-slate-100">
-                                          {d.comisiones.map((c) => (
-                                            <tr
-                                              key={c.idHorario}
-                                              className="hover:bg-slate-50/50"
-                                            >
-                                              <td className="py-2.5">
-                                                <div className="font-bold text-slate-800">
-                                                  {c.nombreMateria}
-                                                </div>
-                                                <div className="text-[10px] text-slate-500 mt-0.5 flex items-center gap-1.5 font-mono flex-wrap">
-                                                  <span>Días:</span>
-                                                  {c.diasNombres?.map((dia) => (
-                                                    <span
-                                                      key={dia}
-                                                      className="px-1.5 py-0.2 rounded bg-indigo-50 text-indigo-700 font-semibold text-[10px]"
-                                                    >
-                                                      {dia}
-                                                    </span>
-                                                  ))}
-                                                  <span>
-                                                    • {c.horarioTexto}
-                                                  </span>
-                                                  <span>•</span>
-                                                  <span className="italic">
-                                                    {c.aula}
-                                                  </span>
-                                                </div>
-                                              </td>
-                                              <td className="py-2.5 text-center font-semibold text-slate-600">
-                                                {c.totalClases}
-                                              </td>
-                                              <td className="py-2.5 text-center font-mono text-slate-600">
-                                                {formatearHorasYMinutos(
-                                                  c.horasProgramadas,
-                                                )}
-                                              </td>
-                                              <td className="py-2.5 text-center font-mono font-bold text-emerald-600">
-                                                {formatearHorasYMinutos(
-                                                  c.horasDictadas,
-                                                )}
-                                              </td>
-                                              <td className="py-2.5 text-center font-mono text-slate-500">
-                                                {c.horasDescontadas > 0 ? (
-                                                  <span className="text-rose-600 font-bold">
-                                                    -
-                                                    {formatearHorasYMinutos(
-                                                      c.horasDescontadas,
-                                                    )}
-                                                  </span>
-                                                ) : (
-                                                  "0h 00m"
-                                                )}
-                                              </td>
-
-                                              <td className="py-2.5 text-center">
-                                                {c.cantidadDesvios > 0 ? (
-                                                  <div className="flex flex-col items-center gap-1">
-                                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-rose-50 text-rose-600 border border-rose-200">
-                                                      <AlertCircle className="w-3 h-3 stroke-[2.5]" />
-                                                      {c.cantidadDesvios}{" "}
-                                                      desvíos
-                                                    </span>
-                                                    <button
-                                                      type="button"
-                                                      onClick={() => {
-                                                        setDocenteParaModal(d);
-                                                        setMateriaParaModal(c);
-                                                      }}
-                                                      className="px-2 py-0.5 text-[10px] font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 rounded-md transition cursor-pointer"
-                                                    >
-                                                      Ver detalle →
-                                                    </button>
-                                                  </div>
-                                                ) : (
-                                                  <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 inline-flex items-center gap-1">
-                                                    <CheckCircle2 className="w-3 h-3" />
-                                                    Sin desvíos (100% puntual)
-                                                  </span>
-                                                )}
-                                              </td>
-
-                                              <td className="py-2.5 text-right font-mono text-slate-600">
-                                                $
-                                                {Math.round(
-                                                  c.tarifaHora,
-                                                ).toLocaleString("es-AR")}
-                                                /h
-                                              </td>
-                                              <td className="py-2.5 text-right font-medium font-mono text-slate-500">
-                                                $
-                                                {Math.round(
-                                                  c.pagoIdeal,
-                                                ).toLocaleString("es-AR")}
-                                              </td>
-                                              <td className="py-2.5 text-right font-bold font-mono text-slate-800">
-                                                $
-                                                {Math.round(
-                                                  c.pagoReal,
-                                                ).toLocaleString("es-AR")}
-                                              </td>
-                                              <td className="py-2.5 text-right font-mono">
-                                                {c.montoDescontado > 0 ? (
-                                                  <span className="font-bold text-rose-600">
-                                                    -$
-                                                    {Math.round(
-                                                      c.montoDescontado,
-                                                    ).toLocaleString("es-AR")}
-                                                  </span>
-                                                ) : (
-                                                  <span className="text-slate-400">
-                                                    $0
-                                                  </span>
-                                                )}
-                                              </td>
-                                              <td className="py-2.5 text-center">
-                                                <span
-                                                  className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
-                                                    c.porcentajeCumplimiento >=
-                                                    95
-                                                      ? "bg-emerald-50 text-emerald-700"
-                                                      : c.porcentajeCumplimiento >=
-                                                          80
-                                                        ? "bg-amber-50 text-amber-700"
-                                                        : "bg-rose-50 text-rose-600"
-                                                  }`}
-                                                >
-                                                  {c.porcentajeCumplimiento}%
-                                                </span>
-                                              </td>
-                                            </tr>
-                                          ))}
-                                        </tbody>
-                                      </table>
+                                      <span
+                                        className="inline-flex items-center gap-1 px-2.5 py-1 text-slate-300 bg-slate-50 border border-slate-200 rounded-lg text-[11px] font-semibold cursor-not-allowed select-none"
+                                        title="Sin permiso para ver ficha de comportamiento"
+                                      >
+                                        <Lock className="w-3 h-3" /> Ficha
+                                      </span>
                                     )}
                                   </div>
                                 </td>
                               </tr>
-                            )}
-                          </React.Fragment>
-                        );
-                      })
-                    )}
-                  </tbody>
-                </table>
-              </div>
+
+                              {/* SUBFILAS */}
+                              {expandido && (
+                                <tr className="bg-slate-50/70 border-b border-slate-200">
+                                  <td colSpan={10} className="p-4 pl-12">
+                                    <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-2xs space-y-3">
+                                      <div className="flex items-center justify-between text-xs font-bold text-slate-700 border-b border-slate-100 pb-2">
+                                        <div className="flex items-center gap-2">
+                                          <CornerDownRight className="w-4 h-4 text-indigo-600" />
+                                          <span>
+                                            DESGLOSE POR MATERIA Y HORARIO —{" "}
+                                            {d.nombreDocente.toUpperCase()}
+                                          </span>
+                                        </div>
+                                        <span className="text-[11px] text-slate-400 font-normal">
+                                          {d.comisiones.length} comisiones
+                                          asignadas
+                                        </span>
+                                      </div>
+
+                                      {!tieneClasesAsignadas ? (
+                                        <div className="py-6 text-center text-xs text-slate-400 italic">
+                                          Este docente no tiene materias ni
+                                          comisiones registradas en su
+                                          cronograma.
+                                        </div>
+                                      ) : (
+                                        <table className="w-full text-left border-collapse text-xs">
+                                          <thead>
+                                            <tr className="text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100">
+                                              <th className="pb-2">
+                                                Materia & Detalle de Horario
+                                              </th>
+                                              <th className="pb-2 text-center">
+                                                Clases
+                                              </th>
+                                              <th className="pb-2 text-center">
+                                                Horas Prog.
+                                              </th>
+                                              <th className="pb-2 text-center">
+                                                Horas Dictadas
+                                              </th>
+                                              <th className="pb-2 text-center">
+                                                Horas Desc.
+                                              </th>
+                                              <th className="pb-2 text-center">
+                                                Detalle
+                                              </th>
+                                              <th className="pb-2 text-right">
+                                                Tarifa
+                                              </th>
+                                              <th className="pb-2 text-right">
+                                                Pago Estimado
+                                              </th>
+                                              <th className="pb-2 text-right">
+                                                Pago Real
+                                              </th>
+                                              <th className="pb-2 text-right">
+                                                Descuento
+                                              </th>
+                                              <th className="pb-2 text-center">
+                                                % Cumpl.
+                                              </th>
+                                            </tr>
+                                          </thead>
+                                          <tbody className="divide-y divide-slate-100">
+                                            {d.comisiones.map((c) => (
+                                              <tr
+                                                key={c.idHorario}
+                                                className="hover:bg-slate-50/50"
+                                              >
+                                                <td className="py-2.5">
+                                                  <div className="font-bold text-slate-800">
+                                                    {c.nombreMateria}
+                                                  </div>
+                                                  <div className="text-[10px] text-slate-500 mt-0.5 flex items-center gap-1.5 font-mono flex-wrap">
+                                                    <span>Días:</span>
+                                                    {c.diasNombres?.map(
+                                                      (dia) => (
+                                                        <span
+                                                          key={dia}
+                                                          className="px-1.5 py-0.2 rounded bg-indigo-50 text-indigo-700 font-semibold text-[10px]"
+                                                        >
+                                                          {dia}
+                                                        </span>
+                                                      ),
+                                                    )}
+                                                    <span>
+                                                      • {c.horarioTexto}
+                                                    </span>
+                                                    <span>•</span>
+                                                    <span className="italic">
+                                                      {c.aula}
+                                                    </span>
+                                                  </div>
+                                                </td>
+                                                <td className="py-2.5 text-center font-semibold text-slate-600">
+                                                  {c.totalClases}
+                                                </td>
+                                                <td className="py-2.5 text-center font-mono text-slate-600">
+                                                  {formatearHorasYMinutos(
+                                                    c.horasProgramadas,
+                                                  )}
+                                                </td>
+                                                <td className="py-2.5 text-center font-mono font-bold text-emerald-600">
+                                                  {formatearHorasYMinutos(
+                                                    c.horasDictadas,
+                                                  )}
+                                                </td>
+                                                <td className="py-2.5 text-center font-mono text-slate-500">
+                                                  {c.horasDescontadas > 0 ? (
+                                                    <span className="text-rose-600 font-bold">
+                                                      -
+                                                      {formatearHorasYMinutos(
+                                                        c.horasDescontadas,
+                                                      )}
+                                                    </span>
+                                                  ) : (
+                                                    "0h 00m"
+                                                  )}
+                                                </td>
+
+                                                <td className="py-2.5 text-center">
+                                                  {c.cantidadDesvios > 0 ? (
+                                                    <div className="flex flex-col items-center gap-1">
+                                                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-rose-50 text-rose-600 border border-rose-200">
+                                                        <AlertCircle className="w-3 h-3 stroke-[2.5]" />
+                                                        {c.cantidadDesvios}{" "}
+                                                        desvíos
+                                                      </span>
+                                                      <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                          setDocenteParaModal(
+                                                            d,
+                                                          );
+                                                          setMateriaParaModal(
+                                                            c,
+                                                          );
+                                                        }}
+                                                        className="px-2 py-0.5 text-[10px] font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 rounded-md transition cursor-pointer"
+                                                      >
+                                                        Ver detalle →
+                                                      </button>
+                                                    </div>
+                                                  ) : (
+                                                    <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 inline-flex items-center gap-1">
+                                                      <CheckCircle2 className="w-3 h-3" />
+                                                      Sin desvíos (100% puntual)
+                                                    </span>
+                                                  )}
+                                                </td>
+
+                                                <td className="py-2.5 text-right font-mono text-slate-600">
+                                                  $
+                                                  {Math.round(
+                                                    c.tarifaHora,
+                                                  ).toLocaleString("es-AR")}
+                                                  /h
+                                                </td>
+                                                <td className="py-2.5 text-right font-medium font-mono text-slate-500">
+                                                  $
+                                                  {Math.round(
+                                                    c.pagoIdeal,
+                                                  ).toLocaleString("es-AR")}
+                                                </td>
+                                                <td className="py-2.5 text-right font-bold font-mono text-slate-800">
+                                                  $
+                                                  {Math.round(
+                                                    c.pagoReal,
+                                                  ).toLocaleString("es-AR")}
+                                                </td>
+                                                <td className="py-2.5 text-right font-mono">
+                                                  {c.montoDescontado > 0 ? (
+                                                    <span className="font-bold text-rose-600">
+                                                      -$
+                                                      {Math.round(
+                                                        c.montoDescontado,
+                                                      ).toLocaleString("es-AR")}
+                                                    </span>
+                                                  ) : (
+                                                    <span className="text-slate-400">
+                                                      $0
+                                                    </span>
+                                                  )}
+                                                </td>
+                                                <td className="py-2.5 text-center">
+                                                  <span
+                                                    className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                                                      c.porcentajeCumplimiento >=
+                                                      95
+                                                        ? "bg-emerald-50 text-emerald-700"
+                                                        : c.porcentajeCumplimiento >=
+                                                            80
+                                                          ? "bg-amber-50 text-amber-700"
+                                                          : "bg-rose-50 text-rose-600"
+                                                    }`}
+                                                  >
+                                                    {c.porcentajeCumplimiento}%
+                                                  </span>
+                                                </td>
+                                              </tr>
+                                            ))}
+                                          </tbody>
+                                        </table>
+                                      )}
+                                    </div>
+                                  </td>
+                                </tr>
+                              )}
+                            </React.Fragment>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </>
             )}
           </div>
         </>

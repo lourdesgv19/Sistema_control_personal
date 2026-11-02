@@ -13,7 +13,6 @@ import { useNavigate } from "react-router-dom";
 import {
   formatearFechaVisual,
   formatearHorasYMinutos,
-  formatearHora24,
 } from "../../utils/fechasFichaUtils";
 
 export default function ModalAuditoriaClase({ isOpen, onClose, clase }) {
@@ -21,7 +20,6 @@ export default function ModalAuditoriaClase({ isOpen, onClose, clase }) {
 
   if (!isOpen || !clase) return null;
 
-  // Minutos exactos a partir de los datos recibidos (sin decimales ni redondeos destructivos)
   const minutosFijados = Math.round(Number(clase.horasProgramadas || 0) * 60);
   const minutosDictados = Math.round(Number(clase.horasEfectivas || 0) * 60);
   const minutosDesvio = Math.max(0, minutosFijados - minutosDictados);
@@ -44,7 +42,7 @@ export default function ModalAuditoriaClase({ isOpen, onClose, clase }) {
   const renderCabeceraSemaforo = () => {
     if (clase.estadoSemaforo === "VERDE") {
       return (
-        <div className="bg-emerald-50/70 border border-emerald-200 rounded-2xl p-4 text-xs">
+        <div className="bg-emerald-50/70 border border-emerald-200 rounded-2xl p-3.5 sm:p-4 text-xs">
           <div className="flex items-center gap-2 font-bold text-emerald-900 mb-1">
             <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
             <span>Semáforo Verde: Cumplimiento del 100% de la Clase</span>
@@ -59,7 +57,7 @@ export default function ModalAuditoriaClase({ isOpen, onClose, clase }) {
 
     if (clase.estadoSemaforo === "AMBAR") {
       return (
-        <div className="bg-amber-50/70 border border-amber-200 rounded-2xl p-4 text-xs">
+        <div className="bg-amber-50/70 border border-amber-200 rounded-2xl p-3.5 sm:p-4 text-xs">
           <div className="flex items-center gap-2 font-bold text-amber-950 mb-1">
             <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
             <span>Semáforo Ámbar: Dictado Parcial con Desvíos</span>
@@ -75,7 +73,7 @@ export default function ModalAuditoriaClase({ isOpen, onClose, clase }) {
 
     if (clase.estadoSemaforo === "PENDIENTE") {
       return (
-        <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 text-xs">
+        <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3.5 sm:p-4 text-xs">
           <div className="flex items-center gap-2 font-bold text-slate-800 mb-1">
             <Clock className="w-4 h-4 text-slate-500 shrink-0" />
             <span>Clase Programada (Pendiente de Dictado)</span>
@@ -89,7 +87,7 @@ export default function ModalAuditoriaClase({ isOpen, onClose, clase }) {
     }
 
     return (
-      <div className="bg-rose-50/70 border border-rose-200 rounded-2xl p-4 text-xs">
+      <div className="bg-rose-50/70 border border-rose-200 rounded-2xl p-3.5 sm:p-4 text-xs">
         <div className="flex items-center gap-2 font-bold text-rose-950 mb-1">
           <XCircle className="w-4 h-4 text-rose-600 shrink-0" />
           <span>Semáforo Rojo: Clase No Dictada / Sin Registro</span>
@@ -111,27 +109,25 @@ export default function ModalAuditoriaClase({ isOpen, onClose, clase }) {
   };
 
   return (
-    /* Fondo con cierre al hacer clic exterior */
     <div
       onClick={onClose}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 animate-in fade-in duration-150 cursor-pointer"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-3 sm:p-4 animate-in fade-in duration-150 cursor-pointer"
     >
-      {/* Contenedor modal con propagación detenida */}
       <div
         onClick={(e) => e.stopPropagation()}
-        className="bg-white rounded-3xl w-full max-w-xl shadow-2xl overflow-hidden border border-slate-100 flex flex-col animate-in zoom-in-95 duration-150 cursor-default"
+        className="bg-white rounded-2xl sm:rounded-3xl w-full max-w-xl shadow-2xl overflow-hidden border border-slate-100 flex flex-col animate-in zoom-in-95 duration-150 cursor-default"
       >
         {/* CABECERA PRINCIPAL */}
-        <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between">
+        <div className="px-5 sm:px-6 py-4 sm:py-5 border-b border-slate-100 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <span
               className={`w-3 h-3 rounded-full shrink-0 ${getPuntoColor()}`}
             />
             <div>
-              <h3 className="text-base font-bold text-slate-900">
+              <h3 className="text-sm sm:text-base font-bold text-slate-900">
                 Auditoría de Dictado de Clase
               </h3>
-              <p className="text-xs text-slate-500 mt-0.5">
+              <p className="text-[11px] sm:text-xs text-slate-500 mt-0.5">
                 {clase.fechaClase
                   ? `${formatearFechaVisual(clase.fechaClase)} • `
                   : ""}
@@ -150,11 +146,11 @@ export default function ModalAuditoriaClase({ isOpen, onClose, clase }) {
         </div>
 
         {/* CUERPO DEL MODAL */}
-        <div className="p-6 space-y-4 text-xs overflow-y-auto max-h-[85vh]">
+        <div className="p-4 sm:p-6 space-y-4 text-xs overflow-y-auto max-h-[85vh]">
           {/* TARJETA DE MATERIA Y AULA */}
-          <div className="bg-white border border-slate-200/80 rounded-2xl p-4 flex items-center justify-between shadow-2xs">
+          <div className="bg-white border border-slate-200/80 rounded-2xl p-3.5 sm:p-4 flex items-center justify-between shadow-2xs gap-3">
             <div>
-              <h4 className="text-sm font-bold text-slate-900 leading-tight">
+              <h4 className="text-xs sm:text-sm font-bold text-slate-900 leading-tight">
                 {clase.nombreMateria}
               </h4>
               <div className="flex items-center gap-1.5 text-xs text-slate-500 mt-1">
@@ -163,11 +159,11 @@ export default function ModalAuditoriaClase({ isOpen, onClose, clase }) {
               </div>
             </div>
 
-            <div className="text-right border-l border-slate-100 pl-4">
+            <div className="text-right border-l border-slate-100 pl-3 sm:pl-4 shrink-0">
               <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
                 Tarifa Asignada
               </span>
-              <span className="text-base font-bold text-slate-900 font-mono mt-0.5 block">
+              <span className="text-sm sm:text-base font-bold text-slate-900 font-mono mt-0.5 block">
                 ${tarifaHora.toLocaleString("es-AR")}/h
               </span>
             </div>
@@ -176,27 +172,25 @@ export default function ModalAuditoriaClase({ isOpen, onClose, clase }) {
           {/* BANNER DINÁMICO DE SEMÁFORO */}
           {renderCabeceraSemaforo()}
 
-          {/* GRILLA DE 4 TARJETAS MÉTRICAS EN FORMATO Xh YYm */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-center">
-            {/* 1. HORAS FIJADAS */}
+          {/* GRILLA DE 4 TARJETAS MÉTRICAS */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3 text-center">
             <div className="bg-slate-50/70 border border-slate-200/80 rounded-2xl p-3 flex flex-col justify-between">
               <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
                 Horas Fijadas
               </span>
-              <div className="text-lg font-bold text-slate-900 mt-1 font-mono">
+              <div className="text-base sm:text-lg font-bold text-slate-900 mt-1 font-mono">
                 {formatearHorasYMinutos(minutosFijados / 60)}
               </div>
               <span className="text-[10px] text-slate-500 mt-0.5 font-medium">
-                {minutosFijados} minutos
+                {minutosFijados} min
               </span>
             </div>
 
-            {/* 2. HORAS DICTADAS */}
             <div className="bg-emerald-50/50 border border-emerald-100 rounded-2xl p-3 flex flex-col justify-between">
               <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
                 Horas Dictadas
               </span>
-              <div className="text-lg font-bold text-emerald-600 mt-1 font-mono">
+              <div className="text-base sm:text-lg font-bold text-emerald-600 mt-1 font-mono">
                 {formatearHorasYMinutos(minutosDictados / 60)}
               </div>
               <span className="text-[10px] text-emerald-700 mt-0.5 font-semibold">
@@ -204,27 +198,23 @@ export default function ModalAuditoriaClase({ isOpen, onClose, clase }) {
               </span>
             </div>
 
-            {/* 3. DESVÍO / PÉRDIDA */}
             <div className="bg-rose-50/50 border border-rose-100 rounded-2xl p-3 flex flex-col justify-between">
               <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
                 Desvío / Pérdida
               </span>
-              <div className="text-lg font-bold text-rose-600 mt-1 font-mono">
+              <div className="text-base sm:text-lg font-bold text-rose-600 mt-1 font-mono">
                 {formatearHorasYMinutos(minutosDesvio / 60)}
               </div>
-              <span className="text-[10px] text-rose-500 mt-0.5 font-medium">
-                {minutosDesvio > 0
-                  ? `${minutosDesvio} min no computados`
-                  : "Sin desvíos"}
+              <span className="text-[10px] text-rose-500 mt-0.5 font-medium truncate">
+                {minutosDesvio > 0 ? `${minutosDesvio} min` : "Sin desvíos"}
               </span>
             </div>
 
-            {/* 4. PAGO LIQUIDABLE */}
             <div className="bg-indigo-50/60 border border-indigo-100 rounded-2xl p-3 flex flex-col justify-between">
               <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-700">
                 Pago Liquidable
               </span>
-              <div className="text-lg font-bold text-indigo-950 mt-1 font-mono">
+              <div className="text-base sm:text-lg font-bold text-indigo-950 mt-1 font-mono">
                 ${pagoLiquidable.toLocaleString("es-AR")}
               </div>
               <span className="text-[10px] text-indigo-600 mt-0.5 font-medium">
@@ -234,7 +224,7 @@ export default function ModalAuditoriaClase({ isOpen, onClose, clase }) {
           </div>
 
           {/* TARJETA DEL DOCENTE */}
-          <div className="bg-white border border-slate-200/80 rounded-2xl p-4 flex items-center justify-between gap-3 shadow-2xs">
+          <div className="bg-white border border-slate-200/80 rounded-2xl p-3.5 sm:p-4 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 shadow-2xs">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold text-xs shrink-0">
                 {clase.nombreDocente ? (
@@ -271,9 +261,9 @@ export default function ModalAuditoriaClase({ isOpen, onClose, clase }) {
                   );
                 }
               }}
-              className="px-4 py-2 bg-[#4b35e6] hover:bg-[#3e2bc0] text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer flex items-center gap-1.5"
+              className="w-full sm:w-auto px-4 py-2 bg-[#4b35e6] hover:bg-[#3e2bc0] text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer flex items-center justify-center gap-1.5"
             >
-              Ver Ficha del Docente
+              <span>Ver Ficha del Docente</span>
               <ArrowUpRight className="w-3.5 h-3.5" />
             </button>
           </div>

@@ -114,7 +114,6 @@ export default function GestionMaterias() {
     }
   }, [location.state]);
 
-  // Sincronización en tiempo real con debounce
   useEffect(() => {
     let timerSync = null;
 
@@ -221,8 +220,8 @@ export default function GestionMaterias() {
 
   if (!puedeVerMaterias) {
     return (
-      <div className="p-8 max-w-7xl mx-auto">
-        <div className="bg-white border border-rose-200 rounded-3xl p-8 text-center space-y-3 shadow-xs">
+      <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto">
+        <div className="bg-white border border-rose-200 rounded-3xl p-6 sm:p-8 text-center space-y-3 shadow-xs">
           <div className="w-12 h-12 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center mx-auto">
             <Lock className="w-6 h-6" />
           </div>
@@ -238,28 +237,29 @@ export default function GestionMaterias() {
   }
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-6">
-      <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <div className="w-12 h-12 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-[#4b35e6] shrink-0">
-            <BookOpen className="w-6 h-6 stroke-[2]" />
+    <div className="p-3.5 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-4 sm:space-y-6">
+      {/* HEADER DE LA SECCIÓN */}
+      <div className="bg-white border border-slate-200 rounded-2xl sm:rounded-3xl p-4 sm:p-5 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex items-center gap-3 sm:gap-4">
+          <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-[#4b35e6] shrink-0">
+            <BookOpen className="w-5 h-5 sm:w-6 sm:h-6 stroke-[2]" />
           </div>
           <div>
-            <h1 className="text-xl font-bold text-slate-900 tracking-tight">
+            <h1 className="text-lg sm:text-xl font-bold text-slate-900 tracking-tight">
               Gestión de Materias
             </h1>
-            <p className="text-xs text-slate-500">
+            <p className="text-[11px] sm:text-xs text-slate-500">
               Calendario semanal, semáforo de horas de clase dictadas y
               cumplimiento de cátedras.
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2.5">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
           <button
             type="button"
             onClick={() => setMostrarResumen(!mostrarResumen)}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition cursor-pointer"
+            className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition cursor-pointer"
           >
             {mostrarResumen ? (
               <ChevronUp className="w-3.5 h-3.5" />
@@ -273,22 +273,23 @@ export default function GestionMaterias() {
             <button
               type="button"
               onClick={handleAbrirCrear}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#4b35e6] hover:bg-[#3f2bc9] text-white text-xs font-semibold shadow-xs transition cursor-pointer"
+              className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-[#4b35e6] hover:bg-[#3f2bc9] text-white text-xs font-semibold shadow-xs transition cursor-pointer"
             >
               <Plus className="w-4 h-4 stroke-[2.5]" />
-              Nueva Materia
+              <span>Nueva Materia</span>
             </button>
           )}
         </div>
       </div>
 
+      {/* KPI METRICS */}
       {mostrarResumen && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 animate-in fade-in duration-200">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 animate-in fade-in duration-200">
           <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs">
             <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
               Horas Dictadas
             </span>
-            <div className="text-2xl font-bold text-slate-900 mt-1 font-mono">
+            <div className="text-xl sm:text-2xl font-bold text-slate-900 mt-1 font-mono">
               {formatearHorasYMinutos(metricas.horasDictadas)}{" "}
               <span className="text-xs font-normal text-slate-400">
                 / {formatearHorasYMinutos(metricas.horasFijadas)} fijadas
@@ -303,7 +304,7 @@ export default function GestionMaterias() {
             <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
               Dictadas al 100%
             </span>
-            <div className="text-2xl font-bold text-slate-900 mt-1">
+            <div className="text-xl sm:text-2xl font-bold text-slate-900 mt-1">
               {metricas.clasesCompletas}{" "}
               <span className="text-xs font-normal text-slate-400">
                 clases completas
@@ -318,7 +319,7 @@ export default function GestionMaterias() {
             <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
               Con Desvíos / Tarde
             </span>
-            <div className="text-2xl font-bold text-amber-600 mt-1">
+            <div className="text-xl sm:text-2xl font-bold text-amber-600 mt-1">
               {metricas.clasesDesvios}{" "}
               <span className="text-xs font-normal text-slate-400">
                 con incidencias
@@ -333,13 +334,13 @@ export default function GestionMaterias() {
             <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
               No Dictadas / Falta
             </span>
-            <div className="text-2xl font-bold text-rose-600 mt-1">
+            <div className="text-xl sm:text-2xl font-bold text-rose-600 mt-1">
               {metricas.clasesFaltas}{" "}
               <span className="text-xs font-normal text-slate-400">
                 sin registro
               </span>
             </div>
-            <span className="text-xs font-medium text-rose-500 mt-2 block">
+            <span className="text-xs font-medium text-rose-500 mt-2 block truncate">
               -{(metricas.horasFijadas - metricas.horasDictadas).toFixed(1)}h no
               computadas
             </span>
@@ -347,34 +348,38 @@ export default function GestionMaterias() {
         </div>
       )}
 
+      {/* SELECTOR DE PESTAÑAS */}
       <div className="bg-white border border-slate-200 rounded-2xl p-1.5 shadow-xs flex items-center justify-between">
-        <div className="flex bg-slate-100 p-1 rounded-xl text-xs font-semibold text-slate-600">
+        <div className="flex w-full sm:w-auto bg-slate-100 p-1 rounded-xl text-xs font-semibold text-slate-600">
           <button
             type="button"
             onClick={() => setTab("calendario")}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg transition cursor-pointer ${
+            className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 px-3 sm:px-4 py-2 rounded-lg transition cursor-pointer ${
               tab === "calendario"
                 ? "bg-white text-indigo-700 shadow-xs"
                 : "hover:text-slate-900"
             }`}
           >
-            <Calendar className="w-4 h-4" /> Calendario Semanal
+            <Calendar className="w-4 h-4 shrink-0" />
+            <span>Calendario Semanal</span>
           </button>
 
           <button
             type="button"
             onClick={() => setTab("catalogo")}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg transition cursor-pointer ${
+            className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 px-3 sm:px-4 py-2 rounded-lg transition cursor-pointer ${
               tab === "catalogo"
                 ? "bg-white text-indigo-700 shadow-xs"
                 : "hover:text-slate-900"
             }`}
           >
-            <BookOpen className="w-4 h-4" /> Catálogo & ABM
+            <BookOpen className="w-4 h-4 shrink-0" />
+            <span>Catálogo & ABM</span>
           </button>
         </div>
       </div>
 
+      {/* CONTENIDO PRINCIPAL */}
       {tab === "calendario" && (
         <CalendarioSemanalMaterias
           onEditarMateriaParam={(clase) => {

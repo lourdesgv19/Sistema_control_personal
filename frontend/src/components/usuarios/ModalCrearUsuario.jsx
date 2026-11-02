@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from "react";
-import { X, ShieldCheck, UserCheck, KeyRound, Info } from "lucide-react";
+import { X, ShieldCheck, UserCheck, KeyRound } from "lucide-react";
 
 const ROLES_SISTEMA = [
   {
@@ -38,7 +38,6 @@ export default function ModalCrearUsuario({
     return empleadosSinUsuario.find((e) => String(e.id) === String(empleadoId));
   }, [empleadosSinUsuario, empleadoId]);
 
-  // Sugerencia de contraseña reactiva
   const passSugerida = useMemo(() => {
     if (!empleadoSeleccionado) return "";
     const ape = (empleadoSeleccionado.apellido || "")
@@ -58,19 +57,25 @@ export default function ModalCrearUsuario({
     e.preventDefault();
     if (!empleadoId) return;
     onSubmit({
-      empleadoId: parseInt(empleadoId),
+      empleadoId: parseInt(empleadoId, 10),
       username: username.trim() || undefined,
       rol,
     });
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-      <div className="bg-white rounded-3xl w-full max-w-xl overflow-hidden shadow-2xl animate-in zoom-in-95 font-sans">
+    <div
+      onClick={onClose}
+      className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 cursor-pointer"
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="bg-white rounded-2xl sm:rounded-3xl w-full max-w-xl overflow-hidden shadow-2xl animate-in zoom-in-95 font-sans cursor-default flex flex-col max-h-[92vh]"
+      >
         {/* Cabecera */}
-        <div className="bg-[#111827] px-6 py-4 text-white flex items-center justify-between">
+        <div className="bg-[#111827] px-5 sm:px-6 py-4 text-white flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-indigo-500/20 flex items-center justify-center text-indigo-400">
+            <div className="w-9 h-9 rounded-xl bg-indigo-500/20 flex items-center justify-center text-indigo-400 shrink-0">
               <ShieldCheck className="w-5 h-5" />
             </div>
             <div>
@@ -82,14 +87,17 @@ export default function ModalCrearUsuario({
           </div>
           <button
             onClick={onClose}
-            className="text-slate-400 hover:text-white cursor-pointer"
+            className="text-slate-400 hover:text-white cursor-pointer p-1"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Formulario */}
-        <form onSubmit={handleSubmit} className="p-6 space-y-4 text-xs">
+        <form
+          onSubmit={handleSubmit}
+          className="p-4 sm:p-6 space-y-4 text-xs overflow-y-auto"
+        >
           {/* Selector de Empleado */}
           <div>
             <label className="block font-semibold text-slate-700 mb-1">
@@ -190,18 +198,18 @@ export default function ModalCrearUsuario({
           )}
 
           {/* Botones de acción */}
-          <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
+          <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2 sm:gap-3 pt-3 border-t border-slate-100">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 font-medium text-slate-600 hover:bg-slate-100 rounded-xl cursor-pointer"
+              className="px-4 py-2 font-medium text-slate-600 hover:bg-slate-100 rounded-xl cursor-pointer text-center"
             >
               Cancelar
             </button>
             <button
               type="submit"
               disabled={!empleadoId}
-              className="px-5 py-2 font-semibold text-white bg-[#4b35e6] hover:bg-[#3e2bc0] disabled:opacity-50 disabled:cursor-not-allowed rounded-xl shadow-md cursor-pointer flex items-center gap-1.5"
+              className="px-5 py-2 font-semibold text-white bg-[#4b35e6] hover:bg-[#3e2bc0] disabled:opacity-50 disabled:cursor-not-allowed rounded-xl shadow-md cursor-pointer flex items-center justify-center gap-1.5"
             >
               <UserCheck className="w-4 h-4" />
               Habilitar Usuario

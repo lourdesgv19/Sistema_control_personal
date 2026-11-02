@@ -40,7 +40,6 @@ function formatearFechaVisual(fechaIso) {
   return soloFecha;
 }
 
-// Cálculo de lunes a domingo para la semana
 function calcularRangoSemana(fechaStr) {
   if (!fechaStr) return { inicio: "", fin: "" };
   const partes = String(fechaStr).split("T")[0].split("-");
@@ -51,7 +50,7 @@ function calcularRangoSemana(fechaStr) {
     parseInt(partes[1], 10) - 1,
     parseInt(partes[2], 10),
   );
-  const diaSemana = d.getDay(); // 0: Dom, 1: Lun, ...
+  const diaSemana = d.getDay();
   const diffLunes = diaSemana === 0 ? -6 : 1 - diaSemana;
 
   const lunes = new Date(d);
@@ -90,7 +89,6 @@ export default function TableroIncidentesDiarios() {
 
   const hoyIso = useMemo(() => new Date().toISOString().split("T")[0], []);
 
-  // Modalidades: DIA | SEMANAL | RANGO | TRIMESTRE | CUATRIMESTRE
   const [modoFiltroFecha, setModoFiltroFecha] = useState(
     () =>
       filtroNavegado?.modoFiltroFecha ||
@@ -336,15 +334,16 @@ export default function TableroIncidentesDiarios() {
   };
 
   return (
-    <div className="p-6 lg:p-8 max-w-7xl mx-auto space-y-6 font-sans">
-      <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div className="p-3.5 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-4 sm:space-y-6 font-sans">
+      {/* 1. CABECERA CON FILTROS Y BOTÓN ACTUALIZAR EN LÍNEA */}
+      <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-3">
-            <h1 className="text-xl font-bold text-slate-900 tracking-tight">
+          <div className="flex items-center gap-2.5 sm:gap-3 flex-wrap">
+            <h1 className="text-lg sm:text-xl font-bold text-slate-900 tracking-tight">
               Tablero de Incidentes
             </h1>
             <div className="flex items-center gap-1.5 px-3 py-1 bg-slate-100 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 tracking-wide font-mono">
-              <Calendar className="w-3.5 h-3.5 text-slate-500" />
+              <Calendar className="w-3.5 h-3.5 text-slate-500 shrink-0" />
               <span>
                 {modoFiltroFecha === "DIA"
                   ? formatearFechaVisual(fechaDesde)
@@ -352,15 +351,16 @@ export default function TableroIncidentesDiarios() {
               </span>
             </div>
           </div>
-          <p className="text-xs text-slate-500 mt-0.5">
+          <p className="text-[11px] sm:text-xs text-slate-500 mt-0.5">
             Monitor consolidado de infracciones, desvíos de asistencia y
             auditoría de justificaciones.
           </p>
         </div>
 
-        <div className="flex items-center gap-3 flex-wrap">
-          {/* BOTONES DE MODO DE FILTRADO */}
-          <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs font-semibold overflow-x-auto">
+        {/* CONTENEDOR FLEXIBLE: SELECTORES + DATEPICKER + ACTUALIZAR EN UNA SOLA HILERA */}
+        <div className="flex items-center gap-2 sm:gap-2.5 flex-wrap sm:flex-nowrap w-full md:w-auto">
+          {/* BOTONES DE MODO DE FILTRADO CON SCROLL TÁCTIL */}
+          <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs font-semibold overflow-x-auto shrink-0">
             {[
               { label: "Un Día", key: "DIA" },
               { label: "Semanal", key: "SEMANAL" },
@@ -396,7 +396,7 @@ export default function TableroIncidentesDiarios() {
                   }
                   setPaginaActual(1);
                 }}
-                className={`px-3 py-1 rounded-lg transition cursor-pointer whitespace-nowrap ${
+                className={`px-2.5 sm:px-3 py-1 rounded-lg transition cursor-pointer whitespace-nowrap shrink-0 ${
                   modoFiltroFecha === key
                     ? "bg-white text-indigo-700 shadow-xs border border-slate-200 font-bold"
                     : "text-slate-600 hover:text-slate-900"
@@ -415,15 +415,15 @@ export default function TableroIncidentesDiarios() {
                 if (input && typeof input.showPicker === "function")
                   input.showPicker();
               }}
-              className="relative flex items-center gap-2 border border-slate-200 rounded-xl px-3 py-1.5 bg-slate-50 hover:bg-white focus-within:bg-white focus-within:border-indigo-500 transition shadow-2xs cursor-pointer"
+              className="relative flex items-center justify-between gap-1.5 border border-slate-200 rounded-xl px-2.5 py-1.5 bg-slate-50 hover:bg-white focus-within:bg-white focus-within:border-indigo-500 transition shadow-2xs cursor-pointer shrink-0"
             >
-              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider shrink-0 pointer-events-none">
+              <span className="text-[10px] sm:text-[11px] font-bold text-slate-500 uppercase tracking-wider shrink-0 pointer-events-none">
                 Fecha:
               </span>
               <span className="text-slate-800 text-xs font-semibold font-mono pointer-events-none">
                 {formatearFechaVisual(fechaDesde)}
               </span>
-              <Calendar className="w-3.5 h-3.5 text-slate-400 pointer-events-none ml-1" />
+              <Calendar className="w-3.5 h-3.5 text-slate-400 pointer-events-none shrink-0" />
               <input
                 type="date"
                 value={fechaDesde}
@@ -447,16 +447,16 @@ export default function TableroIncidentesDiarios() {
                 if (input && typeof input.showPicker === "function")
                   input.showPicker();
               }}
-              className="relative flex items-center gap-2 border border-slate-200 rounded-xl px-3 py-1.5 bg-slate-50 hover:bg-white focus-within:bg-white focus-within:border-indigo-500 transition shadow-2xs cursor-pointer"
+              className="relative flex items-center justify-between gap-1.5 border border-slate-200 rounded-xl px-2.5 py-1.5 bg-slate-50 hover:bg-white focus-within:bg-white focus-within:border-indigo-500 transition shadow-2xs cursor-pointer shrink-0"
             >
-              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider shrink-0 pointer-events-none">
+              <span className="text-[10px] sm:text-[11px] font-bold text-slate-500 uppercase tracking-wider shrink-0 pointer-events-none">
                 Semana:
               </span>
-              <span className="text-slate-800 text-xs font-semibold font-mono pointer-events-none">
+              <span className="text-slate-800 text-xs font-semibold font-mono pointer-events-none truncate max-w-[170px] sm:max-w-none">
                 {formatearFechaVisual(fechaDesde)} →{" "}
                 {formatearFechaVisual(fechaHasta)}
               </span>
-              <Calendar className="w-3.5 h-3.5 text-slate-400 pointer-events-none ml-1" />
+              <Calendar className="w-3.5 h-3.5 text-slate-400 pointer-events-none shrink-0" />
               <input
                 type="date"
                 value={fechaDesde}
@@ -475,22 +475,22 @@ export default function TableroIncidentesDiarios() {
 
           {/* DATEPICKERS RANGO LIBRE */}
           {modoFiltroFecha === "RANGO" && (
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 shrink-0">
               <div
                 onClick={(e) => {
                   const input = e.currentTarget.querySelector("input");
                   if (input && typeof input.showPicker === "function")
                     input.showPicker();
                 }}
-                className="relative flex items-center gap-2 border border-slate-200 rounded-xl px-3 py-1.5 bg-slate-50 hover:bg-white focus-within:bg-white focus-within:border-indigo-500 transition shadow-2xs cursor-pointer"
+                className="relative flex items-center gap-1.5 border border-slate-200 rounded-xl px-2.5 py-1.5 bg-slate-50 hover:bg-white focus-within:bg-white focus-within:border-indigo-500 transition shadow-2xs cursor-pointer"
               >
-                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider shrink-0 pointer-events-none">
+                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider shrink-0 pointer-events-none">
                   Desde:
                 </span>
                 <span className="text-slate-800 text-xs font-semibold font-mono pointer-events-none">
                   {formatearFechaVisual(fechaDesde)}
                 </span>
-                <Calendar className="w-3.5 h-3.5 text-slate-400 pointer-events-none ml-1" />
+                <Calendar className="w-3.5 h-3.5 text-slate-400 pointer-events-none" />
                 <input
                   type="date"
                   value={fechaDesde}
@@ -506,7 +506,7 @@ export default function TableroIncidentesDiarios() {
                 />
               </div>
 
-              <ArrowRight className="w-3 h-3 text-slate-400" />
+              <ArrowRight className="w-3 h-3 text-slate-400 shrink-0" />
 
               <div
                 onClick={(e) => {
@@ -514,15 +514,15 @@ export default function TableroIncidentesDiarios() {
                   if (input && typeof input.showPicker === "function")
                     input.showPicker();
                 }}
-                className="relative flex items-center gap-2 border border-slate-200 rounded-xl px-3 py-1.5 bg-slate-50 hover:bg-white focus-within:bg-white focus-within:border-indigo-500 transition shadow-2xs cursor-pointer"
+                className="relative flex items-center gap-1.5 border border-slate-200 rounded-xl px-2.5 py-1.5 bg-slate-50 hover:bg-white focus-within:bg-white focus-within:border-indigo-500 transition shadow-2xs cursor-pointer"
               >
-                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider shrink-0 pointer-events-none">
+                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider shrink-0 pointer-events-none">
                   Hasta:
                 </span>
                 <span className="text-slate-800 text-xs font-semibold font-mono pointer-events-none">
                   {formatearFechaVisual(fechaHasta)}
                 </span>
-                <Calendar className="w-3.5 h-3.5 text-slate-400 pointer-events-none ml-1" />
+                <Calendar className="w-3.5 h-3.5 text-slate-400 pointer-events-none" />
                 <input
                   type="date"
                   value={fechaHasta}
@@ -539,12 +539,12 @@ export default function TableroIncidentesDiarios() {
             </div>
           )}
 
-          {/* SELECTOR TRIMESTRE / CUATRIMESTRE (ESTILO FICHA DE COMPORTAMIENTO) */}
+          {/* SELECTOR TRIMESTRE / CUATRIMESTRE */}
           {(modoFiltroFecha === "TRIMESTRE" ||
             modoFiltroFecha === "CUATRIMESTRE") && (
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 shrink-0">
               <span className="text-[10px] text-slate-400 font-bold uppercase whitespace-nowrap">
-                Desde Mes:
+                Desde:
               </span>
               <select
                 value={fechaDesde.substring(0, 7)}
@@ -565,12 +565,9 @@ export default function TableroIncidentesDiarios() {
                     setPaginaActual(1);
                   }
                 }}
-                className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 font-semibold text-slate-800 outline-none cursor-pointer text-xs bg-white"
+                className="bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 font-semibold text-slate-800 outline-none cursor-pointer text-xs bg-white"
               >
-                <option value={`${hoyIso.substring(0, 4)}-01`}>
-                  Enero (contar {modoFiltroFecha === "TRIMESTRE" ? "3" : "4"}{" "}
-                  meses)
-                </option>
+                <option value={`${hoyIso.substring(0, 4)}-01`}>Enero</option>
                 <option value={`${hoyIso.substring(0, 4)}-02`}>Febrero</option>
                 <option value={`${hoyIso.substring(0, 4)}-03`}>Marzo</option>
                 <option value={`${hoyIso.substring(0, 4)}-04`}>Abril</option>
@@ -592,23 +589,11 @@ export default function TableroIncidentesDiarios() {
             </div>
           )}
 
-          {modoFiltroFecha === "DIA" && (
-            <div className="flex items-center gap-2 px-3.5 py-1.5 bg-indigo-50/80 border border-indigo-100 rounded-xl text-xs font-semibold text-indigo-950 select-none shadow-2xs">
-              <Users className="w-4 h-4 text-indigo-600 shrink-0" />
-              <span>
-                Presentes:{" "}
-                <strong className="text-indigo-700 font-extrabold text-[13px]">
-                  {tableroData?.presentesActuales || 0}/
-                  {tableroData?.presentesTotales || 0}
-                </strong>
-              </span>
-            </div>
-          )}
-
+          {/* BOTÓN ACTUALIZAR INTEGRADO A LA DERECHA */}
           <button
             onClick={() => cargarDatos(paginaActual - 1, false)}
             disabled={loading}
-            className="p-2 border border-slate-200 rounded-xl hover:bg-slate-50 text-slate-600 transition cursor-pointer"
+            className="p-2 border border-slate-200 rounded-xl hover:bg-slate-50 text-slate-600 transition cursor-pointer shrink-0 ml-auto sm:ml-0"
             title="Actualizar datos"
           >
             <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
@@ -616,15 +601,15 @@ export default function TableroIncidentesDiarios() {
         </div>
       </div>
 
-      {/* TARJETAS KPI */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+      {/* 2. TARJETAS KPI */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2.5 sm:gap-3">
         <div
           onClick={() => {
             setCategoria("SALIDAS_EN_CLASE");
             setFiltroRapido("SALIDAS_EN_CLASE");
             setPaginaActual(1);
           }}
-          className={`p-4 rounded-2xl border transition cursor-pointer ${
+          className={`p-3.5 sm:p-4 rounded-2xl border transition cursor-pointer ${
             categoria === "SALIDAS_EN_CLASE"
               ? "bg-rose-600 text-white border-rose-600 shadow-md"
               : "bg-white text-slate-800 border-slate-200 hover:border-rose-300"
@@ -644,7 +629,7 @@ export default function TableroIncidentesDiarios() {
               className={`w-4 h-4 ${categoria === "SALIDAS_EN_CLASE" ? "text-white" : "text-rose-500"}`}
             />
           </div>
-          <div className="text-2xl font-black mt-2">
+          <div className="text-xl sm:text-2xl font-black mt-2">
             {metricas.salidasEnClase}
           </div>
           <div
@@ -660,7 +645,7 @@ export default function TableroIncidentesDiarios() {
             setFiltroRapido("LLEGADAS_TARDE");
             setPaginaActual(1);
           }}
-          className={`p-4 rounded-2xl border transition cursor-pointer ${
+          className={`p-3.5 sm:p-4 rounded-2xl border transition cursor-pointer ${
             categoria === "LLEGADAS_TARDE"
               ? "bg-amber-600 text-white border-amber-600 shadow-md"
               : "bg-white text-slate-800 border-slate-200 hover:border-amber-300"
@@ -680,7 +665,7 @@ export default function TableroIncidentesDiarios() {
               className={`w-4 h-4 ${categoria === "LLEGADAS_TARDE" ? "text-white" : "text-amber-500"}`}
             />
           </div>
-          <div className="text-2xl font-black mt-2">
+          <div className="text-xl sm:text-2xl font-black mt-2">
             {metricas.llegadasTarde}
           </div>
           <div
@@ -696,7 +681,7 @@ export default function TableroIncidentesDiarios() {
             setFiltroRapido("RETIROS_PREVIOS");
             setPaginaActual(1);
           }}
-          className={`p-4 rounded-2xl border transition cursor-pointer ${
+          className={`p-3.5 sm:p-4 rounded-2xl border transition cursor-pointer ${
             categoria === "RETIROS_PREVIOS"
               ? "bg-amber-800 text-white border-amber-800 shadow-md"
               : "bg-white text-slate-800 border-slate-200 hover:border-amber-600"
@@ -716,7 +701,7 @@ export default function TableroIncidentesDiarios() {
               className={`w-4 h-4 ${categoria === "RETIROS_PREVIOS" ? "text-white" : "text-amber-700"}`}
             />
           </div>
-          <div className="text-2xl font-black mt-2">
+          <div className="text-xl sm:text-2xl font-black mt-2">
             {metricas.retirosPrevios}
           </div>
           <div
@@ -732,7 +717,7 @@ export default function TableroIncidentesDiarios() {
             setFiltroRapido("SALIDAS_EXCESIVAS");
             setPaginaActual(1);
           }}
-          className={`p-4 rounded-2xl border transition cursor-pointer ${
+          className={`p-3.5 sm:p-4 rounded-2xl border transition cursor-pointer ${
             categoria === "SALIDAS_EXCESIVAS"
               ? "bg-sky-600 text-white border-sky-600 shadow-md"
               : "bg-white text-slate-800 border-slate-200 hover:border-sky-300"
@@ -752,7 +737,7 @@ export default function TableroIncidentesDiarios() {
               className={`w-4 h-4 ${categoria === "SALIDAS_EXCESIVAS" ? "text-white" : "text-sky-500"}`}
             />
           </div>
-          <div className="text-2xl font-black mt-2">
+          <div className="text-xl sm:text-2xl font-black mt-2">
             {metricas.salidasExcesivas}
           </div>
           <div
@@ -768,7 +753,7 @@ export default function TableroIncidentesDiarios() {
             setFiltroRapido("AUSENCIAS");
             setPaginaActual(1);
           }}
-          className={`p-4 rounded-2xl border transition cursor-pointer ${
+          className={`p-3.5 sm:p-4 rounded-2xl border transition cursor-pointer ${
             categoria === "AUSENCIAS"
               ? "bg-slate-900 text-white border-slate-900 shadow-md"
               : "bg-white text-slate-800 border-slate-200 hover:border-slate-400"
@@ -788,7 +773,9 @@ export default function TableroIncidentesDiarios() {
               className={`w-4 h-4 ${categoria === "AUSENCIAS" ? "text-white" : "text-slate-600"}`}
             />
           </div>
-          <div className="text-2xl font-black mt-2">{metricas.ausencias}</div>
+          <div className="text-xl sm:text-2xl font-black mt-2">
+            {metricas.ausencias}
+          </div>
           <div
             className={`text-[10px] mt-0.5 ${categoria === "AUSENCIAS" ? "text-slate-300" : "text-slate-400"}`}
           >
@@ -802,7 +789,7 @@ export default function TableroIncidentesDiarios() {
             setFiltroRapido("MARCAS_ABIERTAS");
             setPaginaActual(1);
           }}
-          className={`p-4 rounded-2xl border transition cursor-pointer ${
+          className={`p-3.5 sm:p-4 rounded-2xl border transition cursor-pointer ${
             categoria === "MARCAS_ABIERTAS"
               ? "bg-orange-600 text-white border-orange-600 shadow-md"
               : "bg-white text-slate-800 border-slate-200 hover:border-orange-300"
@@ -822,7 +809,7 @@ export default function TableroIncidentesDiarios() {
               className={`w-4 h-4 ${categoria === "MARCAS_ABIERTAS" ? "text-white" : "text-orange-500"}`}
             />
           </div>
-          <div className="text-2xl font-black mt-2">
+          <div className="text-xl sm:text-2xl font-black mt-2">
             {metricas.marcasAbiertas}
           </div>
           <div
@@ -833,9 +820,9 @@ export default function TableroIncidentesDiarios() {
         </div>
       </div>
 
-      {/* BARRA DE BÚSQUEDA Y FILTROS */}
-      <div className="bg-white p-4 border border-slate-200 rounded-2xl shadow-xs space-y-3">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
+      {/* 3. BARRA DE BÚSQUEDA Y FILTROS */}
+      <div className="bg-white p-3.5 sm:p-4 border border-slate-200 rounded-2xl shadow-xs space-y-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3 text-xs">
           <div className="relative">
             <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
@@ -907,7 +894,7 @@ export default function TableroIncidentesDiarios() {
             {(severidad || categoria || estado || busqueda) && (
               <button
                 onClick={handleResetFiltros}
-                className="text-[11px] font-semibold text-indigo-600 hover:text-indigo-800 whitespace-nowrap cursor-pointer"
+                className="text-[11px] font-semibold text-indigo-600 hover:text-indigo-800 whitespace-nowrap cursor-pointer px-1"
               >
                 Restablecer
               </button>
@@ -916,22 +903,165 @@ export default function TableroIncidentesDiarios() {
         </div>
       </div>
 
-      {/* TABLA DE INCIDENTES */}
+      {/* 4. LISTADO DE INCIDENTES (MÓVIL EN CARDS / ESCRITORIO EN TABLA) */}
       <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-xs">
-        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+        <div className="px-4 sm:px-6 py-3.5 sm:py-4 border-b border-slate-100 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <AlertCircle className="w-4 h-4 text-amber-500" />
             <h2 className="text-xs font-bold uppercase tracking-wider text-slate-800">
               Lista de Incidentes ({totalElementos})
             </h2>
           </div>
-          <span className="text-[11px] text-slate-400">
+          <span className="text-[11px] text-slate-400 hidden sm:inline">
             Información esencial para auditoría
           </span>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
+        {/* 4.A VISTA MÓVIL (md:hidden) — TARJETAS VERTICALES SIN SCROLL LATERAL */}
+        <div className="md:hidden divide-y divide-slate-100">
+          {loading ? (
+            <div className="text-center py-12 text-slate-400 text-xs">
+              <Loader2 className="w-5 h-5 animate-spin mx-auto text-indigo-600 mb-2" />
+              Consultando incidentes del período...
+            </div>
+          ) : incidentes.length === 0 ? (
+            <div className="text-center py-12 text-slate-400 text-xs italic">
+              No se registran incidentes para los filtros aplicados en este
+              período.
+            </div>
+          ) : (
+            incidentes.map((inc) => (
+              <div key={inc.id} className="p-4 space-y-3 bg-white text-xs">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center shrink-0">
+                      {getIconoCargo(inc.empleado?.nroLegajo || "")}
+                    </div>
+                    <div>
+                      <div className="font-bold text-slate-900 leading-snug">
+                        {inc.empleado
+                          ? `${inc.empleado.apellido}, ${inc.empleado.nombre}`
+                          : "Desconocido"}
+                      </div>
+                      <div className="text-[10px] text-slate-400 font-mono mt-0.5">
+                        {inc.empleado?.nroLegajo} •{" "}
+                        {inc.empleado?.rolSistema || "Empleado"}
+                      </div>
+                    </div>
+                  </div>
+
+                  <span
+                    className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wider uppercase border shrink-0 ${
+                      inc.severidad === "CRÍTICA"
+                        ? "bg-rose-50 text-rose-700 border-rose-200"
+                        : inc.severidad === "ALTA"
+                          ? "bg-amber-50 text-amber-700 border-amber-200"
+                          : "bg-sky-50 text-sky-700 border-sky-200"
+                    }`}
+                  >
+                    {inc.severidad}
+                  </span>
+                </div>
+
+                <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 space-y-1">
+                  <div className="font-bold text-slate-800 flex items-center gap-1.5">
+                    <span
+                      className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                        inc.severidad === "CRÍTICA"
+                          ? "bg-rose-500"
+                          : "bg-sky-500"
+                      }`}
+                    />
+                    <span>{inc.tipo}</span>
+                  </div>
+                  <div className="text-[11px] text-slate-600 leading-relaxed">
+                    {inc.detalle}
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between text-xs pt-1">
+                  <div className="font-mono text-slate-600">
+                    <span className="font-bold text-slate-800">
+                      {formatearFechaVisual(inc.fecha)}
+                    </span>
+                    <span className="text-[10px] text-slate-400 ml-1.5">
+                      {inc.hora ? inc.hora.substring(0, 5) : "-"} hs
+                    </span>
+                  </div>
+
+                  <div>
+                    {inc.estado === "JUSTIFICADA" ? (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                        ✓ JUSTIFICADA
+                      </span>
+                    ) : inc.estado === "OBSERVADA" ? (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                        ✓ OBSERVADA
+                      </span>
+                    ) : inc.estado === "RECHAZADA" ? (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                        ✓ RECHAZADA
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                        Pendiente
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {inc.resolucionMotivo && inc.estado === "JUSTIFICADA" && (
+                  <div className="text-[10px] text-slate-500 italic bg-white p-1.5 rounded border border-slate-100">
+                    Motivo: {inc.resolucionMotivo}
+                  </div>
+                )}
+
+                <div className="pt-2 border-t border-slate-100 flex items-center justify-end gap-2">
+                  {puedeJustificar ? (
+                    inc.estado === "PENDIENTE" ? (
+                      <button
+                        type="button"
+                        onClick={() => abrirModalJustificar(inc, false)}
+                        className="flex-1 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl text-xs font-bold transition text-center cursor-pointer"
+                      >
+                        Justificar
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => abrirModalJustificar(inc, false)}
+                        className="flex-1 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold transition text-center cursor-pointer"
+                      >
+                        Editar Resolución
+                      </button>
+                    )
+                  ) : (
+                    <span
+                      className="flex-1 flex items-center justify-center gap-1 py-1.5 bg-slate-100 text-slate-400 border border-slate-200 rounded-xl text-xs font-semibold cursor-not-allowed select-none"
+                      title="Requiere permiso INCIDENTES_JUSTIFICAR"
+                    >
+                      <Lock className="w-3.5 h-3.5 text-slate-400" />
+                      {inc.estado === "PENDIENTE" ? "Justificar" : "Editar"}
+                    </span>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => abrirModalJustificar(inc, true)}
+                    className="p-1.5 text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition cursor-pointer flex items-center justify-center"
+                    title="Ver detalle del incidente"
+                  >
+                    <Eye className="w-4 h-4 text-slate-600" />
+                  </button>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+
+        {/* 4.B VISTA ESCRITORIO (hidden md:block) — TABLA CLÁSICA COMPLETA */}
+        <div className="hidden md:block overflow-x-auto">
+          <table className="w-full text-left text-xs border-collapse">
             <thead className="bg-[#f8fafc] text-slate-500 font-bold uppercase text-[10px] border-b border-slate-100 tracking-wider">
               <tr>
                 <th className="px-6 py-3.5">Fecha y Hora</th>
@@ -1101,9 +1231,9 @@ export default function TableroIncidentesDiarios() {
           </table>
         </div>
 
-        {/* PAGINACIÓN */}
-        <div className="bg-white px-6 py-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
-          <div className="text-slate-500">
+        {/* 5. PAGINACIÓN RESPONSIVE */}
+        <div className="bg-white px-4 sm:px-6 py-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+          <div className="text-slate-500 text-center sm:text-left">
             {incidentes.length === 0 ? (
               <span>
                 Mostrando <span className="font-bold text-slate-800">0</span> de{" "}
@@ -1133,7 +1263,7 @@ export default function TableroIncidentesDiarios() {
             )}
           </div>
 
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1.5 flex-wrap justify-center">
             <button
               onClick={() =>
                 handleCambiarPagina(
