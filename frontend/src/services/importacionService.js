@@ -69,3 +69,13 @@ export const guardarVinculaciones = async (asignaciones) => {
     await apiClient.post("/importacion/guardar-vinculaciones", asignaciones)
   ).data;
 };
+
+export const getHistorialImportacionesDispositivo = async () => {
+  return (await apiClient.get("/dispositivo/historial-diario")).data;
+};
+
+export const getFichajesDelDia = async (fecha, q = "") => {
+  return (
+    await apiClient.get("/dispositivo/fichajes/dia", { params: { fecha, q } })
+  ).data;
+};

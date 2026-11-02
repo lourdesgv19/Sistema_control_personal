@@ -51,6 +51,9 @@ public class EmpleadoFichaje {
     @Column(name = "fecha_baja")
     private LocalDateTime fechaBaja;
 
+    @Column(name = "raw_payload", columnDefinition = "JSON")
+    private String rawPayload;
+
     public EmpleadoFichaje() {}
 
     // Getters y Setters
@@ -80,4 +83,6 @@ public class EmpleadoFichaje {
     public void setActivo(Boolean activo) { this.activo = activo; }
     public LocalDateTime getFechaBaja() { return fechaBaja; }
     public void setFechaBaja(LocalDateTime fechaBaja) { this.fechaBaja = fechaBaja; }
+    public String getRawPayload() {return rawPayload;}
+    public void setRawPayload(String rawPayload) {this.rawPayload = rawPayload;}
 }

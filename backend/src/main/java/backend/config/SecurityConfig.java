@@ -15,7 +15,8 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
-
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import java.util.Arrays;
 import java.util.List;
 
@@ -136,6 +137,10 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.DELETE, "/api/excepciones-licencias/**")
                     .hasAnyAuthority("EXCEPCIONES_ELIMINAR", "PERM_ADMIN_TOTAL")
 
+                // Endpoints del lector de huellas / terminal biométrico
+                .requestMatchers(HttpMethod.POST, "/api/dispositivo/webhook-evento", "/api/dispositivo/sincronizar-lote").permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/dispositivo/**").hasAnyAuthority("FICHAJES_VER", "PERM_ADMIN_TOTAL")
+
                 .anyRequest().authenticated()
             )
             .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
@@ -161,5 +166,12 @@ public class SecurityConfig {
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", config);
         return source;
+    }
+
+    @Bean
+    public ObjectMapper objectMapper() {
+    ObjectMapper mapper = new ObjectMapper();
+    mapper.registerModule(new JavaTimeModule()); // Soporte para LocalDate y LocalDateTime
+    return mapper;
     }
 }

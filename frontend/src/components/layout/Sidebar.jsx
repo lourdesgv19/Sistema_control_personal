@@ -17,6 +17,7 @@ import {
   AlertCircle,
   DollarSign,
   X,
+  Fingerprint,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import ModalAlerta from "../comunes/ModalAlerta";
@@ -103,8 +104,8 @@ export default function Sidebar({ isOpen, onClose }) {
     },
     {
       to: "/fichajes",
-      label: "Fichajes y Biometría",
-      icon: UploadCloud,
+      label: "Fichajes diarios",
+      icon: Fingerprint,
       permiso: "FICHAJES_VER",
     },
     {

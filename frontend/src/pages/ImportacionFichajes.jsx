@@ -27,10 +27,12 @@ import {
   ChevronRight,
   Lock,
   RotateCcw,
+  Clock,
+  CalendarDays,
+  Radio,
 } from "lucide-react";
 import {
   getHistorialImportaciones,
-  getMarcacionesPaginadas,
   getSinVincularCount,
   getPendientesVinculacion,
   getFichajesPorImportacion,
@@ -42,10 +44,21 @@ import {
 } from "../services/importacionService";
 import { getEmpleados, createEmpleado } from "../services/empleadoService";
 import { getCategorias, getCargos } from "../services/configuracionService";
+import apiClient from "../services/api";
 import ModalAlerta from "../components/comunes/ModalAlerta";
 import ModalRegistroEmpleado from "../components/personal/ModalRegistroEmpleado";
 import { useAuth } from "../context/AuthContext";
 
+// Obtener fecha hoy en formato YYYY-MM-DD
+const getHoyIso = () => {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const dia = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${dia}`;
+};
+
+// Formato 24 horas estricto (DD/MM/AAAA, HH:mm:ss)
 const formatearFechaHora24 = (fechaIso) => {
   if (!fechaIso) return "-";
   const d = new Date(fechaIso);
@@ -60,6 +73,34 @@ const formatearFechaHora24 = (fechaIso) => {
     second: "2-digit",
     hour12: false,
   });
+};
+
+// Formateador con nombre de día y fecha legible
+const formatearDiaYFecha = (fechaIso) => {
+  if (!fechaIso)
+    return { diaCapitalizado: "-", fechaCorta: "-", textoCompleto: "-" };
+  const d = new Date(fechaIso);
+  if (isNaN(d.getTime()))
+    return {
+      diaCapitalizado: "-",
+      fechaCorta: fechaIso,
+      textoCompleto: fechaIso,
+    };
+
+  const diaNombre = d.toLocaleDateString("es-AR", { weekday: "long" });
+  const diaCapitalizado =
+    diaNombre.charAt(0).toUpperCase() + diaNombre.slice(1);
+  const fechaCorta = d.toLocaleDateString("es-AR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+
+  return {
+    diaCapitalizado,
+    fechaCorta,
+    textoCompleto: `${diaCapitalizado}, ${fechaCorta}`,
+  };
 };
 
 const esRegistroActivo = (activo) => {
@@ -294,23 +335,29 @@ export default function ImportacionFichajes() {
   const [empleados, setEmpleados] = useState([]);
   const [conteoSinVincular, setConteoSinVincular] = useState(0);
 
-  const [filtroEstadoHistorial, setFiltroEstadoHistorial] = useState("ACTIVOS");
+  // Vistas: 'hoy' (Padrón Diario por Defecto) | 'historial' | 'asistente'
+  const [vistaActual, setVistaActual] = useState("hoy");
 
+  // Filtros de fecha en vista Historial
+  const [filtroEstadoHistorial, setFiltroEstadoHistorial] = useState("ACTIVOS");
+  const [filtroFechaHistorial, setFiltroFechaHistorial] = useState("");
+
+  // Catálogos auxiliares
   const [categoriasActivas, setCategoriasActivas] = useState([]);
   const [cargosActivos, setCargosActivos] = useState([]);
 
-  const [fichajesPaginados, setFichajesPaginados] = useState([]);
-  const [paginaFichajes, setPaginaFichajes] = useState(0);
-  const [totalPaginasFichajes, setTotalPaginasFichajes] = useState(1);
-  const [totalElementosFichajes, setTotalElementosFichajes] = useState(0);
-  const [busquedaFichaje, setBusquedaFichaje] = useState("");
-  const [cargandoFichajes, setCargandoFichajes] = useState(false);
+  // Padrón del Día ("Hoy")
+  const [fechaConsultaHoy, setFechaConsultaHoy] = useState(getHoyIso());
+  const [fichajesHoy, setFichajesHoy] = useState([]);
+  const [busquedaHoy, setBusquedaHoy] = useState("");
+  const [cargandoHoy, setCargandoHoy] = useState(false);
 
+  // Subida de archivos
   const [archivo, setArchivo] = useState(null);
-  const [vistaActual, setVistaActual] = useState("historial");
   const [resultadoSubida, setResultadoSubida] = useState(null);
   const [errorGlobal, setErrorGlobal] = useState("");
 
+  // Modal Detalle de Lote (Ojito)
   const [modalArchivo, setModalArchivo] = useState({
     isOpen: false,
     item: null,
@@ -320,12 +367,15 @@ export default function ImportacionFichajes() {
   const [fichajesLote, setFichajesLote] = useState([]);
   const [cargandoModalFichajes, setCargandoModalFichajes] = useState(false);
 
+  // Asistente de Vinculación
   const [vinculaciones, setVinculaciones] = useState([]);
   const [cargandoAsistente, setCargandoAsistente] = useState(false);
 
+  // Modal Registro Empleado
   const [modalRegistro, setModalRegistro] = useState(false);
   const [formEmpleado, setFormEmpleado] = useState(ESTADO_INICIAL_EMPLEADO);
 
+  // Modal Alerta
   const [modalAlerta, setModalAlerta] = useState({
     isOpen: false,
     tipo: "info",
@@ -349,6 +399,7 @@ export default function ImportacionFichajes() {
     });
   };
 
+  // Cargar datos base
   const cargarDatos = useCallback(async () => {
     setLoading(true);
     setErrorGlobal("");
@@ -396,26 +447,23 @@ export default function ImportacionFichajes() {
     }
   }, []);
 
-  const cargarMarcacionesServidor = useCallback(async (q = "", page = 0) => {
-    setCargandoFichajes(true);
+  // Cargar fichajes del día puntual
+  const cargarMarcacionesDia = useCallback(async (fecha, q = "") => {
+    setCargandoHoy(true);
     try {
-      const data = await getMarcacionesPaginadas(q, page, 25);
-      if (data && data.content) {
-        setFichajesPaginados(data.content);
-        setTotalPaginasFichajes(data.totalPages || 1);
-        setTotalElementosFichajes(data.totalElements || 0);
-        setPaginaFichajes(data.number || 0);
-      } else {
-        setFichajesPaginados(Array.isArray(data) ? data : []);
-      }
+      const res = await apiClient.get("/dispositivo/fichajes/dia", {
+        params: { fecha, q },
+      });
+      setFichajesHoy(Array.isArray(res.data) ? res.data : []);
     } catch (err) {
-      console.error("Error al cargar marcaciones paginadas:", err);
-      setFichajesPaginados([]);
+      console.error("Error cargando fichajes del día:", err);
+      setFichajesHoy([]);
     } finally {
-      setCargandoFichajes(false);
+      setCargandoHoy(false);
     }
   }, []);
 
+  // Consultar fichajes por lote (modal)
   const consultarFichajesDelLote = useCallback(async (id, nombre, fecha) => {
     setCargandoModalFichajes(true);
     try {
@@ -434,25 +482,28 @@ export default function ImportacionFichajes() {
   }, [cargarDatos]);
 
   useEffect(() => {
-    let timerActualizacion = null;
+    if (vistaActual === "hoy") {
+      const timer = setTimeout(() => {
+        cargarMarcacionesDia(fechaConsultaHoy, busquedaHoy);
+      }, 300);
+      return () => clearTimeout(timer);
+    }
+  }, [vistaActual, fechaConsultaHoy, busquedaHoy, cargarMarcacionesDia]);
 
+  // Actualización en tiempo real con debounce
+  useEffect(() => {
+    let timerActualizacion = null;
     const ejecutarActualizacionSilenciosa = () => {
       if (timerActualizacion) clearTimeout(timerActualizacion);
-
-      timerActualizacion = setTimeout(async () => {
+      timerActualizacion = setTimeout(() => {
         cargarDatos();
-
-        if (vistaActual === "marcaciones") {
-          cargarMarcacionesServidor(busquedaFichaje, paginaFichajes);
+        if (vistaActual === "hoy") {
+          cargarMarcacionesDia(fechaConsultaHoy, busquedaHoy);
         } else if (vistaActual === "asistente" && !archivo) {
-          try {
-            const datos = await getPendientesVinculacion();
-            setVinculaciones(Array.isArray(datos) ? datos : []);
-          } catch (err) {
-            console.error("Error refrescando vinculaciones:", err);
-          }
+          getPendientesVinculacion().then((datos) =>
+            setVinculaciones(Array.isArray(datos) ? datos : []),
+          );
         }
-
         if (modalArchivo.isOpen && modalArchivo.item) {
           consultarFichajesDelLote(
             modalArchivo.item.id,
@@ -460,7 +511,7 @@ export default function ImportacionFichajes() {
             filtroModalFecha,
           );
         }
-      }, 150);
+      }, 200);
     };
 
     window.addEventListener(
@@ -485,39 +536,17 @@ export default function ImportacionFichajes() {
     };
   }, [
     cargarDatos,
-    cargarMarcacionesServidor,
+    cargarMarcacionesDia,
     consultarFichajesDelLote,
     vistaActual,
-    busquedaFichaje,
-    paginaFichajes,
+    fechaConsultaHoy,
+    busquedaHoy,
     archivo,
     modalArchivo.isOpen,
     modalArchivo.item,
     filtroModalNombre,
     filtroModalFecha,
   ]);
-
-  useEffect(() => {
-    if (vistaActual !== "marcaciones") return;
-
-    const timer = setTimeout(() => {
-      cargarMarcacionesServidor(busquedaFichaje, paginaFichajes);
-    }, 300);
-
-    return () => clearTimeout(timer);
-  }, [vistaActual, busquedaFichaje, paginaFichajes, cargarMarcacionesServidor]);
-
-  const handleCambioBusqueda = (e) => {
-    setBusquedaFichaje(e.target.value);
-    setPaginaFichajes(0);
-  };
-
-  const handleAbrirModalLote = (item) => {
-    setFiltroModalNombre("");
-    setFiltroModalFecha("");
-    setModalArchivo({ isOpen: true, item });
-    consultarFichajesDelLote(item.id, "", "");
-  };
 
   useEffect(() => {
     if (modalArchivo.isOpen && modalArchivo.item) {
@@ -531,12 +560,33 @@ export default function ImportacionFichajes() {
       return () => clearTimeout(timer);
     }
   }, [
-    filtroModalNombre,
-    filtroModalFecha,
     modalArchivo.isOpen,
     modalArchivo.item,
+    filtroModalNombre,
+    filtroModalFecha,
     consultarFichajesDelLote,
   ]);
+
+  const handleAbrirModalLote = (item) => {
+    setFiltroModalNombre("");
+    setFiltroModalFecha("");
+    setModalArchivo({ isOpen: true, item });
+    consultarFichajesDelLote(item.id, "", "");
+  };
+
+  const moverDia = (delta) => {
+    const partes = fechaConsultaHoy.split("-");
+    const d = new Date(
+      parseInt(partes[0], 10),
+      parseInt(partes[1], 10) - 1,
+      parseInt(partes[2], 10),
+    );
+    d.setDate(d.getDate() + delta);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const dia = String(d.getDate()).padStart(2, "0");
+    setFechaConsultaHoy(`${y}-${m}-${dia}`);
+  };
 
   const handleSeleccionarArchivo = (e) => {
     if (!puedeImportar) return;
@@ -655,8 +705,7 @@ export default function ImportacionFichajes() {
           mostrarAviso(
             "danger",
             "Error",
-            err.response?.data?.message ||
-              "No se pudo reactivar el registro de importación.",
+            err.response?.data?.message || "No se pudo reactivar el registro.",
           );
         }
       },
@@ -666,7 +715,7 @@ export default function ImportacionFichajes() {
   const handleAbrirAsistenteDesdeCabecera = async () => {
     if (!puedeVincular) return;
     if (vistaActual === "asistente") {
-      setVistaActual("historial");
+      setVistaActual("hoy");
       return;
     }
 
@@ -681,7 +730,6 @@ export default function ImportacionFichajes() {
       }
       setVistaActual("asistente");
     } catch (err) {
-      console.error("Error al obtener vinculaciones:", err);
       mostrarAviso(
         "danger",
         "Error",
@@ -732,19 +780,17 @@ export default function ImportacionFichajes() {
       setEmpleados(empsActualizados);
 
       handleCambiarEmpleadoAsignado(formEmpleado.idBiometrico, nuevo.id);
-
       setModalRegistro(false);
       setFormEmpleado(ESTADO_INICIAL_EMPLEADO);
 
       mostrarAviso(
         "success",
         "Empleado Registrado",
-        `Se dio de alta a ${nuevo.nombre} ${nuevo.apellido} y se asignó automáticamente en la fila.`,
+        `Se dio de alta a ${nuevo.nombre} ${nuevo.apellido} y se asignó automáticamente.`,
       );
     } catch (err) {
       const msg =
-        err.response?.data?.message ||
-        "No se pudo registrar el empleado. Verifique que DNI o Legajo no existan previamente.";
+        err.response?.data?.message || "No se pudo registrar el empleado.";
       mostrarAviso("danger", "Error de Registro", msg);
     }
   };
@@ -775,28 +821,36 @@ export default function ImportacionFichajes() {
       mostrarAviso(
         "success",
         "Vinculaciones Guardadas",
-        "Los IDs biométricos fueron asignados correctamente a los empleados y marcas históricas.",
+        "Los IDs biométricos fueron asignados correctamente.",
       );
       cargarDatos();
-      setVistaActual("historial");
+      setVistaActual("hoy");
     } catch (err) {
       mostrarAviso(
         "danger",
         "Error",
         err.response?.data?.message ||
-          "Ocurrió un error al intentar guardar las vinculaciones.",
+          "Ocurrió un error al guardar vinculaciones.",
       );
     }
   };
 
+  // Historial filtrado
   const historialFiltrado = useMemo(() => {
     return historial.filter((h) => {
       const activo = esRegistroActivo(h.activo);
-      if (filtroEstadoHistorial === "ACTIVOS") return activo;
-      if (filtroEstadoHistorial === "INACTIVOS") return !activo;
-      return true;
+      const coincideEstado =
+        filtroEstadoHistorial === "TODOS" ||
+        (filtroEstadoHistorial === "ACTIVOS" && activo) ||
+        (filtroEstadoHistorial === "INACTIVOS" && !activo);
+
+      const fStr = h.fechaImportacion ? h.fechaImportacion.split("T")[0] : "";
+      const coincideFecha =
+        !filtroFechaHistorial || fStr === filtroFechaHistorial;
+
+      return coincideEstado && coincideFecha;
     });
-  }, [historial, filtroEstadoHistorial]);
+  }, [historial, filtroEstadoHistorial, filtroFechaHistorial]);
 
   const vinculacionesOrdenadas = useMemo(() => {
     return [...vinculaciones].sort((a, b) => {
@@ -812,9 +866,79 @@ export default function ImportacionFichajes() {
     [vinculaciones],
   );
 
+  const hoyInfo = useMemo(() => {
+    return formatearDiaYFecha(fechaConsultaHoy + "T12:00:00");
+  }, [fechaConsultaHoy]);
+
+  // Cálculo del último fichaje registrado (en las marcaciones de la jornada o en el historial)
+  const ultimoFichaje = useMemo(() => {
+    if (fichajesHoy && fichajesHoy.length > 0) {
+      const ordenados = [...fichajesHoy].sort(
+        (a, b) => new Date(b.horaFichaje) - new Date(a.horaFichaje),
+      );
+      return ordenados[0];
+    }
+    if (historial && historial.length > 0) {
+      const ordenadosHistorial = [...historial].sort(
+        (a, b) => new Date(b.fechaImportacion) - new Date(a.fechaImportacion),
+      );
+      return {
+        horaFichaje: ordenadosHistorial[0].fechaImportacion,
+        nombreReloj: ordenadosHistorial[0].nombreArchivo,
+        empleado: null,
+      };
+    }
+    return null;
+  }, [fichajesHoy, historial]);
+
   return (
     <div className="p-3.5 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-4 sm:space-y-6 font-sans">
-      {/* 1. HEADER */}
+      {/* 0. BARRA SUPERIOR: ÚLTIMO FICHAJE REGISTRADO */}
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-3 sm:px-5 sm:py-3 shadow-md flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 text-white animate-in fade-in duration-200">
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-xl bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center text-indigo-400 shrink-0">
+            <Radio className="w-4 h-4 animate-pulse text-emerald-400" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                Último Fichaje Registrado
+              </span>
+              <span className="inline-flex items-center px-1.5 py-0.2 rounded text-[9px] font-bold uppercase bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
+                En línea
+              </span>
+            </div>
+            <div className="text-xs sm:text-sm font-black font-mono tracking-tight text-white mt-0.5">
+              {ultimoFichaje?.horaFichaje
+                ? formatearFechaHora24(ultimoFichaje.horaFichaje)
+                : "Sin registros recientes"}
+            </div>
+          </div>
+        </div>
+
+        {ultimoFichaje && (
+          <div className="text-left sm:text-right border-t sm:border-t-0 pt-1.5 sm:pt-0 border-slate-800 w-full sm:w-auto">
+            <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">
+              Colaborador / Terminal
+            </span>
+            <div className="text-xs font-semibold text-slate-200 flex items-center sm:justify-end gap-1.5 mt-0.5 truncate max-w-xs sm:max-w-md">
+              {ultimoFichaje.empleado ? (
+                <span className="text-emerald-400 font-bold truncate">
+                  {ultimoFichaje.empleado.nombre}{" "}
+                  {ultimoFichaje.empleado.apellido}
+                </span>
+              ) : (
+                <span className="text-slate-300 font-medium truncate">
+                  {ultimoFichaje.nombreReloj ||
+                    `ID: ${ultimoFichaje.idBiometrico || "-"}`}
+                </span>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* 1. HEADER CON TOGGLE Y ACCESO A ASISTENTE */}
       <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-3 sm:gap-4">
           <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 shadow-xs shrink-0">
@@ -822,41 +946,41 @@ export default function ImportacionFichajes() {
           </div>
           <div>
             <h1 className="text-lg sm:text-xl font-bold text-slate-900 tracking-tight">
-              Ingesta & Carga de Marcaciones Biométricas
+              Control & Carga de Marcaciones Biométricas
             </h1>
             <p className="text-[11px] sm:text-xs text-slate-500">
-              Procesamiento y almacenamiento de marcaciones válidas del reloj de
-              asistencia.
+              Padrón de fichadas en vivo por día, ingesta de lotes y auditoría
+              histórica.
             </p>
           </div>
         </div>
 
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+          {/* Botón para alternar vista Principal (Hoy) e Historial */}
           <button
             onClick={() =>
-              setVistaActual(
-                vistaActual === "historial" ? "marcaciones" : "historial",
-              )
+              setVistaActual(vistaActual === "hoy" ? "historial" : "hoy")
             }
-            className={`flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold border transition cursor-pointer ${
+            className={`flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold border transition cursor-pointer shadow-xs ${
               vistaActual === "historial"
-                ? "bg-white border-slate-200 text-slate-700 hover:bg-slate-50 shadow-xs"
-                : "bg-indigo-600 text-white border-indigo-600 shadow-md shadow-indigo-100"
+                ? "bg-indigo-600 text-white border-indigo-600"
+                : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50"
             }`}
           >
             {vistaActual === "historial" ? (
               <>
-                <Eye className="w-4 h-4 text-indigo-600" />
-                <span>Ver Padrón de Fichadas</span>
+                <Clock className="w-4 h-4 text-white shrink-0" />
+                <span>Ver Padrón del Día (Hoy)</span>
               </>
             ) : (
               <>
-                <List className="w-4 h-4 text-white" />
+                <List className="w-4 h-4 text-indigo-600 shrink-0" />
                 <span>Ver Lista de Importaciones</span>
               </>
             )}
           </button>
 
+          {/* Botón Empleados sin vincular */}
           {puedeVincular ? (
             (conteoSinVincular > 0 || vistaActual === "asistente") && (
               <button
@@ -864,7 +988,7 @@ export default function ImportacionFichajes() {
                 disabled={cargandoAsistente}
                 className={`flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold border transition cursor-pointer ${
                   vistaActual === "asistente"
-                    ? "bg-slate-100 border-slate-300 text-slate-700"
+                    ? "bg-slate-100 border-slate-300 text-slate-700 font-bold"
                     : "bg-amber-500 hover:bg-amber-600 text-white border-amber-600 shadow-md shadow-amber-100 font-bold"
                 }`}
               >
@@ -877,7 +1001,7 @@ export default function ImportacionFichajes() {
                 )}
                 <span>
                   {vistaActual === "asistente"
-                    ? "Volver a Importaciones"
+                    ? "Volver a Marcaciones"
                     : `Empleados sin vincular (${conteoSinVincular})`}
                 </span>
               </button>
@@ -894,7 +1018,7 @@ export default function ImportacionFichajes() {
         </div>
       </div>
 
-      {/* 2. ZONA DE CARGA */}
+      {/* 2. ZONA DE CARGA DE ARCHIVO */}
       <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-6 shadow-xs">
         {puedeImportar ? (
           <div className="flex flex-col md:flex-row items-center justify-between gap-4 sm:gap-6">
@@ -963,7 +1087,7 @@ export default function ImportacionFichajes() {
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3 text-center pt-2">
               <div className="bg-white border border-slate-200 p-2 sm:p-2.5 rounded-xl">
                 <div className="text-[10px] text-slate-400 font-bold uppercase">
-                  Total Filas Archivo
+                  Total Filas
                 </div>
                 <div className="text-sm sm:text-base font-black text-slate-800">
                   {resultadoSubida.totalFilas}
@@ -971,7 +1095,7 @@ export default function ImportacionFichajes() {
               </div>
               <div className="bg-emerald-50 border border-emerald-200 p-2 sm:p-2.5 rounded-xl">
                 <div className="text-[10px] text-emerald-700 font-bold uppercase">
-                  Guardadas con Éxito
+                  Guardadas OK
                 </div>
                 <div className="text-sm sm:text-base font-black text-emerald-800">
                   {resultadoSubida.procesadasOk}
@@ -1000,6 +1124,7 @@ export default function ImportacionFichajes() {
 
       {/* 3. VISTAS CONDICIONALES */}
       {vistaActual === "asistente" ? (
+        /* VISTA 1: ASISTENTE DE VINCULACIÓN */
         <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-6 shadow-xs space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
@@ -1018,7 +1143,6 @@ export default function ImportacionFichajes() {
                 )}
               </div>
               <p className="text-[11px] sm:text-xs text-slate-500 mt-0.5">
-                Los registros pendientes y sugeridos se ubican al inicio.
                 Escribe en el buscador para asociar o dar de alta al empleado y
                 pulsa guardar.
               </p>
@@ -1033,7 +1157,7 @@ export default function ImportacionFichajes() {
             )}
           </div>
 
-          {/* VISTA MÓVIL ASISTENTE (md:hidden) — Tarjetas verticales */}
+          {/* VISTA MÓVIL ASISTENTE (md:hidden) */}
           <div className="md:hidden divide-y divide-slate-100">
             {vinculacionesOrdenadas.length === 0 ? (
               <div className="text-center py-8 text-slate-400 text-xs italic">
@@ -1106,7 +1230,7 @@ export default function ImportacionFichajes() {
             )}
           </div>
 
-          {/* VISTA ESCRITORIO ASISTENTE (hidden md:block) — Tabla */}
+          {/* VISTA ESCRITORIO ASISTENTE (hidden md:block) */}
           <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-left text-xs">
               <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase tracking-wider text-[10px]">
@@ -1182,43 +1306,88 @@ export default function ImportacionFichajes() {
             </table>
           </div>
         </div>
-      ) : vistaActual === "marcaciones" ? (
+      ) : vistaActual === "hoy" ? (
+        /* VISTA 2 (PRINCIPAL): PADRÓN DEL DÍA CON DATOS DE TABLA DE FICHAJES */
         <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-6 shadow-xs space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
             <div>
-              <h2 className="text-xs sm:text-sm font-bold text-slate-900">
-                Padrón Completo de Marcaciones Almacenadas en BD
-              </h2>
-              <p className="text-[11px] sm:text-xs text-slate-500">
-                Total de {totalElementosFichajes} registros guardados en la base
-                de datos.
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs sm:text-sm font-bold text-slate-900">
+                  Padrón de Marcaciones:
+                </span>
+                <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-indigo-50 border border-indigo-200 text-indigo-700">
+                  {hoyInfo.textoCompleto}
+                </span>
+              </div>
+              <p className="text-[11px] sm:text-xs text-slate-500 mt-0.5">
+                Total de {fichajesHoy.length} marcaciones registradas para esta
+                jornada.
               </p>
             </div>
-            <div className="relative w-full sm:w-64">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
-              <input
-                type="text"
-                placeholder="Buscar por nombre, ID o Serial..."
-                value={busquedaFichaje}
-                onChange={handleCambioBusqueda}
-                className="w-full pl-9 pr-3 py-1.5 border border-slate-200 rounded-xl text-xs outline-none focus:border-indigo-500"
-              />
+
+            {/* Navegación de día y buscador */}
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+              <div className="flex items-center border border-slate-200 rounded-xl bg-slate-50 p-1">
+                <button
+                  type="button"
+                  onClick={() => moverDia(-1)}
+                  className="p-1 hover:bg-white rounded-lg text-slate-600 transition cursor-pointer"
+                  title="Día anterior"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+                <input
+                  type="date"
+                  value={fechaConsultaHoy}
+                  onChange={(e) => setFechaConsultaHoy(e.target.value)}
+                  className="bg-transparent text-xs text-slate-800 font-semibold px-2 outline-none cursor-pointer"
+                />
+                <button
+                  type="button"
+                  onClick={() => moverDia(1)}
+                  className="p-1 hover:bg-white rounded-lg text-slate-600 transition cursor-pointer"
+                  title="Día siguiente"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+
+              {fechaConsultaHoy !== getHoyIso() && (
+                <button
+                  type="button"
+                  onClick={() => setFechaConsultaHoy(getHoyIso())}
+                  className="px-2.5 py-1.5 text-xs font-semibold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-xl transition cursor-pointer text-center"
+                >
+                  Ir a Hoy
+                </button>
+              )}
+
+              <div className="relative w-full sm:w-56">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                <input
+                  type="text"
+                  placeholder="Buscar colaborador o ID..."
+                  value={busquedaHoy}
+                  onChange={(e) => setBusquedaHoy(e.target.value)}
+                  className="w-full pl-9 pr-3 py-1.5 border border-slate-200 rounded-xl text-xs outline-none focus:border-indigo-500"
+                />
+              </div>
             </div>
           </div>
 
-          {/* VISTA MÓVIL PADRÓN (md:hidden) — Tarjetas verticales */}
+          {/* VISTA MÓVIL DEL PADRÓN DEL DÍA (md:hidden) */}
           <div className="md:hidden divide-y divide-slate-100 max-h-[500px] overflow-y-auto">
-            {cargandoFichajes ? (
-              <div className="text-center py-10 text-slate-400 text-xs">
+            {cargandoHoy ? (
+              <div className="text-center py-12 text-slate-400 text-xs">
                 <Loader2 className="w-5 h-5 animate-spin mx-auto text-indigo-600 mb-2" />
-                Cargando marcaciones desde el servidor...
+                Cargando marcaciones de la jornada...
               </div>
-            ) : fichajesPaginados.length === 0 ? (
-              <div className="text-center py-10 text-slate-400 text-xs italic">
-                No se encontraron registros de marcaciones.
+            ) : fichajesHoy.length === 0 ? (
+              <div className="text-center py-12 text-slate-400 text-xs italic">
+                No se registran fichajes para el {hoyInfo.textoCompleto}.
               </div>
             ) : (
-              fichajesPaginados.map((f) => (
+              fichajesHoy.map((f) => (
                 <div key={f.id} className="p-3.5 space-y-2 bg-white text-xs">
                   <div className="flex items-center justify-between">
                     <span className="font-mono font-bold text-indigo-600">
@@ -1230,13 +1399,13 @@ export default function ImportacionFichajes() {
                   </div>
 
                   <div>
-                    <div className="font-semibold text-slate-800">
+                    <div className="font-semibold text-slate-800 text-xs">
                       {f.empleado ? (
                         <span className="text-emerald-700 font-semibold">
                           {f.empleado.nombre} {f.empleado.apellido}
                         </span>
                       ) : (
-                        <span className="text-slate-400 italic">
+                        <span className="text-amber-600 font-medium italic">
                           Sin vincular
                         </span>
                       )}
@@ -1248,8 +1417,9 @@ export default function ImportacionFichajes() {
                   </div>
 
                   <div className="flex items-center justify-between pt-1 border-t border-slate-100 text-[11px]">
-                    <span className="text-slate-700 font-mono">
-                      {formatearFechaHora24(f.horaFichaje)}
+                    <span className="text-slate-700 font-mono font-bold">
+                      Hora:{" "}
+                      {formatearFechaHora24(f.horaFichaje).split(",")[1] || "-"}
                     </span>
                     <span className="font-mono text-indigo-600 font-bold">
                       {f.tipoEvento}
@@ -1260,70 +1430,71 @@ export default function ImportacionFichajes() {
             )}
           </div>
 
-          {/* VISTA ESCRITORIO PADRÓN (hidden md:block) — Tabla */}
+          {/* VISTA ESCRITORIO DEL PADRÓN DEL DÍA (hidden md:block) */}
           <div className="hidden md:block overflow-x-auto max-h-[500px]">
-            <table className="w-full text-left text-xs">
+            <table className="w-full text-left text-xs border-collapse">
               <thead className="bg-slate-50 sticky top-0 border-b border-slate-200 text-slate-500 uppercase tracking-wider text-[10px]">
                 <tr>
-                  <th className="py-3 px-4">Serial</th>
+                  <th className="py-3 px-4">Hora</th>
                   <th className="py-3 px-4">ID Biométrico</th>
-                  <th className="py-3 px-4">Nombre Reloj</th>
                   <th className="py-3 px-4">Colaborador Vinculado</th>
-                  <th className="py-3 px-4">Fecha y Hora</th>
+                  <th className="py-3 px-4">Nombre en Reloj</th>
                   <th className="py-3 px-4">Tipo Evento</th>
-                  <th className="py-3 px-4">Estado</th>
+                  <th className="py-3 px-4">Serial</th>
+                  <th className="py-3 px-4 text-right">Estado</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {cargandoFichajes ? (
+                {cargandoHoy ? (
                   <tr>
                     <td
                       colSpan="7"
-                      className="text-center py-10 text-slate-400"
+                      className="text-center py-12 text-slate-400"
                     >
                       <Loader2 className="w-5 h-5 animate-spin mx-auto text-indigo-600 mb-2" />
-                      Cargando marcaciones desde el servidor...
+                      Cargando marcaciones de la jornada...
                     </td>
                   </tr>
-                ) : fichajesPaginados.length === 0 ? (
+                ) : fichajesHoy.length === 0 ? (
                   <tr>
                     <td
                       colSpan="7"
-                      className="text-center py-10 text-slate-400 italic"
+                      className="text-center py-12 text-slate-400 italic"
                     >
-                      No se encontraron registros de marcaciones.
+                      No se registran fichajes para el {hoyInfo.textoCompleto}.
                     </td>
                   </tr>
                 ) : (
-                  fichajesPaginados.map((f) => (
-                    <tr key={f.id} className="hover:bg-slate-50">
-                      <td className="py-2.5 px-4 font-mono text-slate-500">
-                        {f.serialNo || "-"}
+                  fichajesHoy.map((f) => (
+                    <tr key={f.id} className="hover:bg-slate-50/70 transition">
+                      <td className="py-2.5 px-4 font-mono font-bold text-slate-800 text-xs">
+                        {formatearFechaHora24(f.horaFichaje).split(",")[1] ||
+                          "-"}
                       </td>
                       <td className="py-2.5 px-4 font-mono font-bold text-indigo-600">
                         {f.idBiometrico}
                       </td>
-                      <td className="py-2.5 px-4 font-medium text-slate-800">
-                        {f.nombreReloj || "-"}
-                      </td>
                       <td className="py-2.5 px-4">
                         {f.empleado ? (
-                          <span className="text-emerald-700 font-semibold">
+                          <span className="text-slate-800 font-semibold">
                             {f.empleado.nombre} {f.empleado.apellido}
                           </span>
                         ) : (
-                          <span className="text-slate-400 italic">
+                          <span className="text-amber-600 font-medium italic">
                             Sin vincular
                           </span>
                         )}
                       </td>
-                      <td className="py-2.5 px-4 text-slate-700 font-mono font-medium">
-                        {formatearFechaHora24(f.horaFichaje)}
+                      <td className="py-2.5 px-4 text-slate-600">
+                        {f.nombreReloj || "-"}
                       </td>
-                      <td className="py-2.5 px-4 font-mono text-[11px] text-indigo-600">
+                      <td className="py-2.5 px-4 font-mono text-indigo-600 font-medium">
                         {f.tipoEvento}
                       </td>
-                      <td className="py-2.5 px-4">
+                      <td className="py-2.5 px-4 font-mono text-slate-400">
+                        {f.serialNo || "-"}
+                      </td>
+                      <td className="py-2.5 px-4 text-right">
                         <span className="bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded text-[10px] font-bold">
                           {f.estadoFichaje}
                         </span>
@@ -1334,58 +1505,28 @@ export default function ImportacionFichajes() {
               </tbody>
             </table>
           </div>
-
-          <div className="flex items-center justify-between pt-3 border-t border-slate-100 text-xs text-slate-500">
-            <span>
-              Página{" "}
-              <strong className="text-slate-800">{paginaFichajes + 1}</strong>{" "}
-              de{" "}
-              <strong className="text-slate-800">{totalPaginasFichajes}</strong>
-            </span>
-            <div className="flex items-center gap-1.5">
-              <button
-                onClick={() => setPaginaFichajes((p) => Math.max(0, p - 1))}
-                disabled={paginaFichajes === 0 || cargandoFichajes}
-                className="p-1.5 border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </button>
-              <button
-                onClick={() =>
-                  setPaginaFichajes((p) =>
-                    Math.min(totalPaginasFichajes - 1, p + 1),
-                  )
-                }
-                disabled={
-                  paginaFichajes >= totalPaginasFichajes - 1 || cargandoFichajes
-                }
-                className="p-1.5 border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
         </div>
       ) : (
+        /* VISTA 3: HISTORIAL DE IMPORTACIONES POR DÍA */
         <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-6 shadow-xs space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <h2 className="text-xs sm:text-sm font-bold text-slate-900">
-                Historial de Importaciones
+                Historial de Importaciones por Fecha
               </h2>
               <p className="text-[11px] sm:text-xs text-slate-500">
-                Auditoría de lotes procesados, ordenados de forma descendente
-                por fecha de carga.
+                Auditoría de lotes procesados organizados por fecha y día de
+                semana.
               </p>
             </div>
 
-            <div className="flex items-center justify-between sm:justify-end gap-2.5">
-              <div className="flex items-center gap-2 text-xs flex-1 sm:flex-initial">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+              <div className="flex items-center gap-2 text-xs">
                 <span className="text-slate-500 font-medium">Estado:</span>
                 <select
                   value={filtroEstadoHistorial}
                   onChange={(e) => setFiltroEstadoHistorial(e.target.value)}
-                  className="bg-white border border-slate-200 text-slate-700 font-semibold rounded-xl px-2.5 py-1.5 text-xs outline-none focus:border-indigo-600 transition shadow-xs cursor-pointer flex-1 sm:flex-initial"
+                  className="bg-white border border-slate-200 text-slate-700 font-semibold rounded-xl px-2.5 py-1.5 text-xs outline-none focus:border-indigo-600 transition shadow-xs cursor-pointer"
                 >
                   <option value="ACTIVOS">Solo Activos</option>
                   <option value="TODOS">Todos los lotes</option>
@@ -1393,7 +1534,27 @@ export default function ImportacionFichajes() {
                 </select>
               </div>
 
+              <div className="flex items-center gap-1.5 bg-slate-50 px-2.5 py-1.5 rounded-xl border border-slate-200">
+                <CalendarDays className="w-3.5 h-3.5 text-slate-400" />
+                <input
+                  type="date"
+                  value={filtroFechaHistorial}
+                  onChange={(e) => setFiltroFechaHistorial(e.target.value)}
+                  className="bg-transparent text-xs text-slate-700 font-medium outline-none cursor-pointer"
+                />
+                {filtroFechaHistorial && (
+                  <button
+                    type="button"
+                    onClick={() => setFiltroFechaHistorial("")}
+                    className="text-slate-400 hover:text-slate-600 text-xs px-1 cursor-pointer"
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
+
               <button
+                type="button"
                 onClick={cargarDatos}
                 disabled={loading}
                 className="p-2 border border-slate-200 hover:bg-slate-50 rounded-xl text-slate-600 transition disabled:opacity-50 cursor-pointer"
@@ -1406,7 +1567,7 @@ export default function ImportacionFichajes() {
             </div>
           </div>
 
-          {/* VISTA MÓVIL HISTORIAL (md:hidden) — Tarjetas verticales sin scroll lateral */}
+          {/* VISTA MÓVIL HISTORIAL (md:hidden) */}
           <div className="md:hidden divide-y divide-slate-100">
             {historialFiltrado.length === 0 ? (
               <div className="text-center py-8 text-slate-400 text-xs italic">
@@ -1417,6 +1578,7 @@ export default function ImportacionFichajes() {
             ) : (
               historialFiltrado.map((h) => {
                 const estaActivo = esRegistroActivo(h.activo);
+                const diaInfo = formatearDiaYFecha(h.fechaImportacion);
                 return (
                   <div
                     key={h.id}
@@ -1429,14 +1591,10 @@ export default function ImportacionFichajes() {
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex items-center gap-1.5 font-medium text-slate-800 text-xs">
                         <FileText
-                          className={`w-4 h-4 shrink-0 ${
-                            estaActivo ? "text-indigo-500" : "text-slate-400"
-                          }`}
+                          className={`w-4 h-4 shrink-0 ${estaActivo ? "text-indigo-500" : "text-slate-400"}`}
                         />
                         <span
-                          className={`break-all ${
-                            !estaActivo ? "line-through text-slate-500" : ""
-                          }`}
+                          className={`break-all ${!estaActivo ? "line-through text-slate-500" : ""}`}
                         >
                           {h.nombreArchivo}
                         </span>
@@ -1444,12 +1602,22 @@ export default function ImportacionFichajes() {
                       <StatusBadge activo={h.activo} />
                     </div>
 
-                    <div className="flex items-center gap-1.5 text-[11px] text-slate-500 font-mono">
-                      <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                      <span>{formatearFechaHora24(h.fechaImportacion)}</span>
+                    <div className="flex items-center gap-2 text-[11px] text-slate-600 font-mono">
+                      <Calendar className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+                      <span className="font-bold text-slate-800">
+                        {diaInfo.diaCapitalizado}
+                      </span>
+                      <span>•</span>
+                      <span>{diaInfo.fechaCorta}</span>
+                      <span className="text-slate-400">
+                        (
+                        {formatearFechaHora24(h.fechaImportacion)
+                          .split(",")[1]
+                          ?.trim() || "-"}
+                        )
+                      </span>
                     </div>
 
-                    {/* Grilla de contadores compactos */}
                     <div className="grid grid-cols-4 gap-1.5 text-center text-xs pt-1">
                       <div className="bg-slate-50 p-1.5 rounded-lg border border-slate-100">
                         <span className="text-[9px] text-slate-400 font-bold uppercase block">
@@ -1492,6 +1660,7 @@ export default function ImportacionFichajes() {
 
                       <div className="flex items-center gap-1.5">
                         <button
+                          type="button"
                           onClick={() => handleAbrirModalLote(h)}
                           className="px-2.5 py-1 text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-lg text-xs font-semibold flex items-center gap-1 transition cursor-pointer"
                         >
@@ -1502,6 +1671,7 @@ export default function ImportacionFichajes() {
                         {puedeEliminarLote ? (
                           estaActivo ? (
                             <button
+                              type="button"
                               onClick={() =>
                                 handleEliminarHistorial(h.id, h.nombreArchivo)
                               }
@@ -1512,6 +1682,7 @@ export default function ImportacionFichajes() {
                             </button>
                           ) : (
                             <button
+                              type="button"
                               onClick={() =>
                                 handleReactivarHistorial(h.id, h.nombreArchivo)
                               }
@@ -1530,17 +1701,18 @@ export default function ImportacionFichajes() {
             )}
           </div>
 
-          {/* VISTA ESCRITORIO HISTORIAL (hidden md:block) — Tabla tradicional */}
+          {/* VISTA ESCRITORIO HISTORIAL (hidden md:block) */}
           <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-left text-xs border-collapse">
               <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase tracking-wider text-[10px]">
                 <tr>
-                  <th className="py-3 px-4">Fecha y Hora</th>
-                  <th className="py-3 px-4">Archivo</th>
-                  <th className="py-3 px-4">Total</th>
-                  <th className="py-3 px-4">Procesadas</th>
-                  <th className="py-3 px-4">Nulos/Omitidos</th>
-                  <th className="py-3 px-4">Errores</th>
+                  <th className="py-3 px-4">Día de Semana y Fecha</th>
+                  <th className="py-3 px-4">Hora Carga</th>
+                  <th className="py-3 px-4">Archivo / Dispositivo</th>
+                  <th className="py-3 px-4 text-center">Total</th>
+                  <th className="py-3 px-4 text-center">Procesadas</th>
+                  <th className="py-3 px-4 text-center">Nulos/Omitidos</th>
+                  <th className="py-3 px-4 text-center">Errores</th>
                   <th className="py-3 px-4">Estado</th>
                   <th className="py-3 px-4">Usuario</th>
                   <th className="py-3 px-4 text-right">Acciones</th>
@@ -1550,7 +1722,7 @@ export default function ImportacionFichajes() {
                 {historialFiltrado.length === 0 ? (
                   <tr>
                     <td
-                      colSpan="9"
+                      colSpan="10"
                       className="text-center py-8 text-slate-400 italic"
                     >
                       {loading
@@ -1561,29 +1733,33 @@ export default function ImportacionFichajes() {
                 ) : (
                   historialFiltrado.map((h) => {
                     const estaActivo = esRegistroActivo(h.activo);
+                    const diaInfo = formatearDiaYFecha(h.fechaImportacion);
                     return (
                       <tr
                         key={h.id}
-                        className={`transition group ${
-                          !estaActivo
-                            ? "bg-slate-50/75 opacity-75"
-                            : "hover:bg-slate-50/60"
-                        }`}
+                        className={`transition group ${!estaActivo ? "bg-slate-50/75 opacity-75" : "hover:bg-slate-50/60"}`}
                       >
-                        <td className="py-3.5 px-4 font-semibold text-slate-700 whitespace-nowrap font-mono">
+                        <td className="py-3.5 px-4 font-semibold text-slate-700 whitespace-nowrap">
                           <div className="flex items-center gap-2">
-                            <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                            {formatearFechaHora24(h.fechaImportacion)}
+                            <Calendar className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+                            <span className="font-bold text-slate-800">
+                              {diaInfo.diaCapitalizado}
+                            </span>
+                            <span className="text-slate-400">•</span>
+                            <span className="font-mono text-slate-600">
+                              {diaInfo.fechaCorta}
+                            </span>
                           </div>
                         </td>
-                        <td className="py-3.5 px-4">
-                          <div className="flex items-center gap-1.5 font-medium text-slate-800">
+                        <td className="py-3.5 px-4 font-mono text-slate-500 text-[11px]">
+                          {formatearFechaHora24(h.fechaImportacion)
+                            .split(",")[1]
+                            ?.trim() || "-"}
+                        </td>
+                        <td className="py-3.5 px-4 font-medium text-slate-800">
+                          <div className="flex items-center gap-1.5">
                             <FileText
-                              className={`w-3.5 h-3.5 shrink-0 ${
-                                estaActivo
-                                  ? "text-indigo-500"
-                                  : "text-slate-400"
-                              }`}
+                              className={`w-3.5 h-3.5 shrink-0 ${estaActivo ? "text-indigo-500" : "text-slate-400"}`}
                             />
                             <span
                               className={
@@ -1594,26 +1770,22 @@ export default function ImportacionFichajes() {
                             </span>
                           </div>
                         </td>
-                        <td className="py-3.5 px-4 font-bold text-slate-700">
+                        <td className="py-3.5 px-4 text-center font-bold text-slate-700">
                           {h.totalFilas}
                         </td>
-                        <td className="py-3.5 px-4">
+                        <td className="py-3.5 px-4 text-center">
                           <span className="bg-emerald-50 text-emerald-700 font-bold px-2 py-0.5 rounded-md">
                             {h.procesadasOk}
                           </span>
                         </td>
-                        <td className="py-3.5 px-4">
+                        <td className="py-3.5 px-4 text-center">
                           <span className="bg-amber-50 text-amber-700 font-bold px-2 py-0.5 rounded-md">
                             {h.registrosNulos || 0}
                           </span>
                         </td>
-                        <td className="py-3.5 px-4">
+                        <td className="py-3.5 px-4 text-center">
                           <span
-                            className={`font-bold px-2 py-0.5 rounded-md ${
-                              h.errores > 0
-                                ? "bg-rose-50 text-rose-700 border border-rose-200"
-                                : "text-slate-400"
-                            }`}
+                            className={`font-bold px-2 py-0.5 rounded-md ${h.errores > 0 ? "bg-rose-50 text-rose-700 border border-rose-200" : "text-slate-400"}`}
                           >
                             {h.errores}
                           </span>
@@ -1627,6 +1799,7 @@ export default function ImportacionFichajes() {
                         <td className="py-3.5 px-4 text-right">
                           <div className="flex items-center justify-end gap-1 text-slate-400">
                             <button
+                              type="button"
                               onClick={() => handleAbrirModalLote(h)}
                               className="p-1.5 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition cursor-pointer"
                               title="Ver filas y detalle de esta importación"
@@ -1637,6 +1810,7 @@ export default function ImportacionFichajes() {
                             {puedeEliminarLote ? (
                               estaActivo ? (
                                 <button
+                                  type="button"
                                   onClick={() =>
                                     handleEliminarHistorial(
                                       h.id,
@@ -1644,12 +1818,13 @@ export default function ImportacionFichajes() {
                                     )
                                   }
                                   className="p-1.5 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer"
-                                  title="Dar de baja este registro de importación"
+                                  title="Dar de baja este registro"
                                 >
                                   <Trash2 className="w-4 h-4 text-rose-500" />
                                 </button>
                               ) : (
                                 <button
+                                  type="button"
                                   onClick={() =>
                                     handleReactivarHistorial(
                                       h.id,
@@ -1657,19 +1832,12 @@ export default function ImportacionFichajes() {
                                     )
                                   }
                                   className="p-1.5 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition cursor-pointer"
-                                  title="Reactivar importación y sus fichajes"
+                                  title="Reactivar importación"
                                 >
                                   <RotateCcw className="w-4 h-4 text-emerald-600" />
                                 </button>
                               )
-                            ) : (
-                              <span
-                                className="p-1.5 text-slate-200 cursor-not-allowed"
-                                title="Requiere permiso FICHAJES_ELIMINAR_LOTE"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </span>
-                            )}
+                            ) : null}
                           </div>
                         </td>
                       </tr>
@@ -1700,6 +1868,7 @@ export default function ImportacionFichajes() {
                 </span>
               </div>
               <button
+                type="button"
                 onClick={() => setModalArchivo({ isOpen: false, item: null })}
                 className="text-slate-400 hover:text-white cursor-pointer p-1"
               >
@@ -1711,7 +1880,7 @@ export default function ImportacionFichajes() {
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3 bg-slate-50 p-3 sm:p-4 rounded-xl border border-slate-100">
                 <div>
                   <span className="text-slate-400 block text-[10px] uppercase font-bold">
-                    Fecha de Carga
+                    Fecha Carga
                   </span>
                   <span className="font-semibold text-slate-800 font-mono text-[11px] sm:text-xs">
                     {formatearFechaHora24(modalArchivo.item.fechaImportacion)}
@@ -1786,6 +1955,7 @@ export default function ImportacionFichajes() {
 
                   {(filtroModalNombre || filtroModalFecha) && (
                     <button
+                      type="button"
                       onClick={() => {
                         setFiltroModalNombre("");
                         setFiltroModalFecha("");
@@ -1891,17 +2061,9 @@ export default function ImportacionFichajes() {
                 </table>
               </div>
 
-              <div className="flex flex-col-reverse sm:flex-row justify-between items-center gap-2 pt-2 border-t border-slate-100">
+              <div className="flex justify-end pt-2 border-t border-slate-100">
                 <button
-                  onClick={() => {
-                    setModalArchivo({ isOpen: false, item: null });
-                    setVistaActual("marcaciones");
-                  }}
-                  className="text-indigo-600 font-semibold hover:underline cursor-pointer text-xs"
-                >
-                  Abrir vista completa general &rarr;
-                </button>
-                <button
+                  type="button"
                   onClick={() => setModalArchivo({ isOpen: false, item: null })}
                   className="w-full sm:w-auto px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-xl font-medium cursor-pointer transition text-center"
                 >

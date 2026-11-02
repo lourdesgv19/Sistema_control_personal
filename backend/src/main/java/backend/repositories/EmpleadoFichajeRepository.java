@@ -101,4 +101,23 @@ public interface EmpleadoFichajeRepository extends JpaRepository<EmpleadoFichaje
         @Param("inicio") LocalDateTime inicio,
         @Param("fin") LocalDateTime fin
     );
+
+    @Query("""
+    SELECT f FROM EmpleadoFichaje f
+    WHERE f.activo = true
+      AND f.horaFichaje BETWEEN :inicio AND :fin
+      AND (:q IS NULL OR :q = '' OR 
+           LOWER(f.nombreReloj) LIKE LOWER(CONCAT('%', :q, '%')) OR 
+           f.idBiometrico LIKE CONCAT('%', :q, '%') OR 
+           (f.empleado IS NOT NULL AND (
+               LOWER(f.empleado.nombre) LIKE LOWER(CONCAT('%', :q, '%')) OR 
+               LOWER(f.empleado.apellido) LIKE LOWER(CONCAT('%', :q, '%'))
+           )))
+    ORDER BY f.horaFichaje DESC
+""")
+List<EmpleadoFichaje> findFichajesPorRangoYBusqueda(
+    @Param("inicio") LocalDateTime inicio,
+    @Param("fin") LocalDateTime fin,
+    @Param("q") String q
+);
 }

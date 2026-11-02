@@ -88,7 +88,6 @@ export default function App() {
               </ProtectedRoute>
             }
           />
-
           {/* 3. Configuración: Requiere CONFIG_VER */}
           <Route
             path="/configuracion"
