@@ -61,7 +61,6 @@ export default function GestionHorarios() {
   const [horariosEmpleadoModal, setHorariosEmpleadoModal] = useState([]);
   const [metricasEmpleadoModal, setMetricasEmpleadoModal] = useState(null);
 
-  // Estados del modal de asignación
   const [modalAsignarTurno, setModalAsignarTurno] = useState(false);
   const [tipoAsignacionTurno, setTipoAsignacionTurno] =
     useState("PREESTABLECIDO");
@@ -83,7 +82,6 @@ export default function GestionHorarios() {
   const [repeticionesPeriodoTurno, setRepeticionesPeriodoTurno] = useState(1);
   const [semanaAlternaTurno, setSemanaAlternaTurno] = useState("PAR");
 
-  // Nuevos estados para bolsa de horas flexibles
   const [horasObjetivoTurno, setHorasObjetivoTurno] = useState(4);
   const [etiquetaFlexibleTurno, setEtiquetaFlexibleTurno] = useState(
     "Bolsa de Horas Flexible",
@@ -112,63 +110,59 @@ export default function GestionHorarios() {
     });
   };
 
-  const cargarCatalogos = useCallback(async () => {
-    setLoading(true);
-    try {
-      const [empRes, catRes, horRes] = await Promise.all([
-        getEmpleadosActivos(),
-        getCategorias(),
-        getHorarios(),
-      ]);
+  const cargarCatalogos = useCallback(
+    async (forzar = false) => {
+      setLoading(true);
+      try {
+        const [empRes, catRes, horRes] = await Promise.all([
+          getEmpleadosActivos(forzar),
+          getCategorias(),
+          getHorarios(),
+        ]);
 
-      const emps = Array.isArray(empRes) ? empRes : [];
-      setEmpleados(emps);
+        const emps = Array.isArray(empRes) ? empRes : [];
+        setEmpleados(emps);
 
-      const cats = Array.isArray(catRes) ? catRes : [];
-      setCategorias(cats);
-      setHorariosPreestablecidos(Array.isArray(horRes) ? horRes : []);
+        const cats = Array.isArray(catRes) ? catRes : [];
+        setCategorias(cats);
+        setHorariosPreestablecidos(Array.isArray(horRes) ? horRes : []);
 
-      if (
-        cats.length > 0 &&
-        !cats.some(
-          (c) => c.nombre.toLowerCase() === categoriaActiva.toLowerCase(),
-        )
-      ) {
-        setCategoriaActiva(cats[0].nombre);
+        if (
+          cats.length > 0 &&
+          !cats.some(
+            (c) => c.nombre.toLowerCase() === categoriaActiva.toLowerCase(),
+          )
+        ) {
+          setCategoriaActiva(cats[0].nombre);
+        }
+      } catch (err) {
+        console.error("Error al cargar datos de horarios:", err);
+      } finally {
+        setLoading(false);
       }
-    } catch (err) {
-      console.error("Error al cargar datos de horarios:", err);
-    } finally {
-      setLoading(false);
-    }
-  }, [categoriaActiva]);
+    },
+    [categoriaActiva],
+  );
 
   useEffect(() => {
-    cargarCatalogos();
+    cargarCatalogos(false);
   }, [cargarCatalogos]);
 
-  // Sincronización en tiempo real con debounce
   useEffect(() => {
     let debounceTimer = null;
 
     const handleSincronizacionGlobal = () => {
       if (debounceTimer) clearTimeout(debounceTimer);
       debounceTimer = setTimeout(() => {
-        cargarCatalogos();
-      }, 250);
+        cargarCatalogos(false);
+      }, 600);
     };
 
     window.addEventListener("datos:actualizados", handleSincronizacionGlobal);
-    window.addEventListener("conexion:restaurada", handleSincronizacionGlobal);
-
     return () => {
       if (debounceTimer) clearTimeout(debounceTimer);
       window.removeEventListener(
         "datos:actualizados",
-        handleSincronizacionGlobal,
-      );
-      window.removeEventListener(
-        "conexion:restaurada",
         handleSincronizacionGlobal,
       );
     };
@@ -337,8 +331,7 @@ export default function GestionHorarios() {
       }
 
       setModalAsignarTurno(false);
-      await cargarCatalogos();
-      window.dispatchEvent(new CustomEvent("datos:actualizados"));
+      await cargarCatalogos(true);
       mostrarAviso("success", "Éxito", "Horario registrado correctamente.");
     } catch (err) {
       const msg = err.response?.data?.message || "";
@@ -395,8 +388,7 @@ export default function GestionHorarios() {
           ]);
           setHorariosEmpleadoModal(hRes || []);
           setMetricasEmpleadoModal(mRes);
-          await cargarCatalogos();
-          window.dispatchEvent(new CustomEvent("datos:actualizados"));
+          await cargarCatalogos(true);
           mostrarAviso(
             "success",
             "Éxito",
@@ -411,7 +403,6 @@ export default function GestionHorarios() {
 
   return (
     <div className="p-3 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-4 sm:space-y-5 font-sans">
-      {/* HEADER DE LA SECCIÓN */}
       <div className="bg-white border border-slate-200 rounded-2xl sm:rounded-3xl p-4 sm:p-5 shadow-xs flex items-center justify-between">
         <div className="flex items-center gap-3 sm:gap-4">
           <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-purple-50 border border-purple-100 flex items-center justify-center text-purple-600 shadow-xs shrink-0">
@@ -429,7 +420,6 @@ export default function GestionHorarios() {
         </div>
       </div>
 
-      {/* FILTRO DE CATEGORÍAS */}
       <div className="bg-white border border-slate-200 rounded-2xl p-3 sm:p-3.5 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3">
         <div className="flex items-center gap-2 text-xs font-bold text-slate-500 uppercase tracking-wider shrink-0">
           <Filter className="w-3.5 h-3.5 text-indigo-600" />
@@ -469,7 +459,6 @@ export default function GestionHorarios() {
         </div>
       </div>
 
-      {/* BUSCADOR Y TOTAL */}
       <div className="bg-white p-3 sm:p-3.5 border border-slate-200 rounded-2xl shadow-xs flex flex-col sm:flex-row items-center justify-between gap-3">
         <div className="relative w-full sm:w-80">
           <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -494,7 +483,6 @@ export default function GestionHorarios() {
         </div>
       </div>
 
-      {/* CONTENEDOR PRINCIPAL: TABLA (DESKTOP) Y TARJETAS (MÓVIL) */}
       <div className="bg-white border border-slate-200 rounded-2xl shadow-xs overflow-hidden">
         {loading ? (
           <div className="text-center py-12 text-slate-400">
@@ -510,7 +498,6 @@ export default function GestionHorarios() {
           </div>
         ) : (
           <>
-            {/* 1. VISTA MÓVIL (md:hidden): TARJETAS COMPACTAS SIN SCROLL LATERAL */}
             <div className="md:hidden divide-y divide-slate-100">
               {empleadosPaginados.map((emp) => {
                 const cargosStr =
@@ -522,7 +509,6 @@ export default function GestionHorarios() {
                     key={emp.id}
                     className="p-4 flex flex-col gap-3 hover:bg-slate-50/60 transition-colors"
                   >
-                    {/* Encabezado del Agente */}
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex items-start gap-2.5">
                         <div className="w-8 h-8 rounded-lg bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 shrink-0 mt-0.5">
@@ -543,7 +529,6 @@ export default function GestionHorarios() {
                       </div>
                     </div>
 
-                    {/* Cargo / Puesto */}
                     <div className="flex items-center gap-1.5 text-xs text-slate-600">
                       <span className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">
                         Cargo:
@@ -553,7 +538,6 @@ export default function GestionHorarios() {
                       </span>
                     </div>
 
-                    {/* Botones de Acción Táctiles */}
                     <div className="grid grid-cols-2 gap-2 pt-1 border-t border-slate-100/80">
                       <button
                         type="button"
@@ -570,10 +554,7 @@ export default function GestionHorarios() {
                             type="button"
                             onClick={() =>
                               navigate("/materias", {
-                                state: {
-                                  tab: "catalogo",
-                                  docenteId: emp.id,
-                                },
+                                state: { tab: "catalogo", docenteId: emp.id },
                               })
                             }
                             className="flex items-center justify-center gap-1.5 px-3 py-2 bg-purple-50 hover:bg-purple-100 active:bg-purple-200 text-purple-700 font-bold rounded-xl text-xs transition cursor-pointer border border-purple-200"
@@ -603,7 +584,6 @@ export default function GestionHorarios() {
               })}
             </div>
 
-            {/* 2. VISTA ESCRITORIO (hidden md:block): TABLA TRADICIONAL COMPLETA */}
             <div className="hidden md:block overflow-x-auto">
               <table className="w-full text-left text-xs">
                 <thead className="bg-[#f8fafc] text-slate-500 font-bold uppercase text-[10px] border-b border-slate-100">
@@ -703,7 +683,6 @@ export default function GestionHorarios() {
           </>
         )}
 
-        {/* PAGINACIÓN RESPONSIVE */}
         <div className="bg-white px-4 sm:px-6 py-3.5 sm:py-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
           <div className="text-slate-500 text-center sm:text-left">
             Mostrando{" "}
@@ -768,7 +747,6 @@ export default function GestionHorarios() {
         </div>
       </div>
 
-      {/* MODALES */}
       <ModalDetalleCronograma
         isOpen={modalDetalle}
         onClose={() => setModalDetalle(false)}

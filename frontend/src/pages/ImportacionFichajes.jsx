@@ -41,13 +41,20 @@ import {
   reactivarHistorialImportacion,
   previsualizarVinculaciones,
   guardarVinculaciones,
+  getFichajesDelDia,
 } from "../services/importacionService";
-import { getEmpleados, createEmpleado } from "../services/empleadoService";
+import {
+  getEmpleadosPaginados,
+  createEmpleado,
+} from "../services/empleadoService";
 import { getCategorias, getCargos } from "../services/configuracionService";
 import apiClient from "../services/api";
 import ModalAlerta from "../components/comunes/ModalAlerta";
 import ModalRegistroEmpleado from "../components/personal/ModalRegistroEmpleado";
 import { useAuth } from "../context/AuthContext";
+
+// Constantes de paginación
+const ITEMS_POR_PAGINA = 25;
 
 // Obtener fecha hoy en formato YYYY-MM-DD
 const getHoyIso = () => {
@@ -407,7 +414,7 @@ export default function ImportacionFichajes() {
       const [histRes, empRes, sinVincularRes, catRes, cargoRes] =
         await Promise.allSettled([
           getHistorialImportaciones(),
-          getEmpleados(),
+          getEmpleadosPaginados({ page: 0, size: 1000 }),
           getSinVincularCount(),
           getCategorias(),
           getCargos(),
@@ -451,10 +458,16 @@ export default function ImportacionFichajes() {
   const cargarMarcacionesDia = useCallback(async (fecha, q = "") => {
     setCargandoHoy(true);
     try {
-      const res = await apiClient.get("/dispositivo/fichajes/dia", {
-        params: { fecha, q },
-      });
-      setFichajesHoy(Array.isArray(res.data) ? res.data : []);
+      let data = [];
+      if (typeof getFichajesDelDia === "function") {
+        data = await getFichajesDelDia(fecha, q);
+      } else {
+        const res = await apiClient.get("/dispositivo/fichajes/dia", {
+          params: { fecha, q },
+        });
+        data = res.data;
+      }
+      setFichajesHoy(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error("Error cargando fichajes del día:", err);
       setFichajesHoy([]);
@@ -776,7 +789,10 @@ export default function ImportacionFichajes() {
     e.preventDefault();
     try {
       const nuevo = await createEmpleado(formEmpleado);
-      const empsActualizados = await getEmpleados();
+      const empsActualizados = await getEmpleadosPaginados({
+        page: 0,
+        size: 1000,
+      });
       setEmpleados(empsActualizados);
 
       handleCambiarEmpleadoAsignado(formEmpleado.idBiometrico, nuevo.id);
@@ -870,7 +886,7 @@ export default function ImportacionFichajes() {
     return formatearDiaYFecha(fechaConsultaHoy + "T12:00:00");
   }, [fechaConsultaHoy]);
 
-  // Cálculo del último fichaje registrado (en las marcaciones de la jornada o en el historial)
+  // Cálculo del último fichaje registrado
   const ultimoFichaje = useMemo(() => {
     if (fichajesHoy && fichajesHoy.length > 0) {
       const ordenados = [...fichajesHoy].sort(
@@ -956,7 +972,6 @@ export default function ImportacionFichajes() {
         </div>
 
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-          {/* Botón para alternar vista Principal (Hoy) e Historial */}
           <button
             onClick={() =>
               setVistaActual(vistaActual === "hoy" ? "historial" : "hoy")
@@ -980,7 +995,6 @@ export default function ImportacionFichajes() {
             )}
           </button>
 
-          {/* Botón Empleados sin vincular */}
           {puedeVincular ? (
             (conteoSinVincular > 0 || vistaActual === "asistente") && (
               <button

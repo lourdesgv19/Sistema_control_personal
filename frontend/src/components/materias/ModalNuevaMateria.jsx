@@ -87,7 +87,7 @@ export default function ModalNuevaMateria({
   useEffect(() => {
     const cargarEmpleados = async () => {
       try {
-        const data = await getEmpleadosActivos();
+        const data = await getEmpleadosActivos(false);
         setTodosLosEmpleados(Array.isArray(data) ? data : []);
       } catch (e) {
         mostrarAviso(
@@ -229,7 +229,6 @@ export default function ModalNuevaMateria({
       };
 
       await postNuevaMateria(payload);
-      window.dispatchEvent(new CustomEvent("datos:actualizados"));
       onCreado();
       onClose();
     } catch (err) {
@@ -409,7 +408,6 @@ export default function ModalNuevaMateria({
               </div>
             </div>
 
-            {/* FRECUENCIA DE DICTADO */}
             <div className="space-y-2 pt-2 border-t border-slate-100">
               <div className="flex items-center justify-between">
                 <label className="font-bold text-slate-700 flex items-center gap-1.5">
@@ -476,7 +474,6 @@ export default function ModalNuevaMateria({
               )}
             </div>
 
-            {/* ASIGNACIÓN DE DOCENTES */}
             <div className="space-y-3 bg-slate-50 p-3.5 rounded-2xl border border-slate-200">
               <div className="flex items-center justify-between">
                 <span className="font-bold text-slate-800 flex items-center gap-1.5">
@@ -557,7 +554,6 @@ export default function ModalNuevaMateria({
               )}
             </div>
 
-            {/* TARIFA FLEXIBLE */}
             <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-3.5 space-y-3">
               <div className="flex items-center justify-between">
                 <span className="font-bold text-slate-800 flex items-center gap-1.5">

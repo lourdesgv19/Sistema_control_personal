@@ -36,7 +36,7 @@ import {
   deleteExcepcion,
   reactivarExcepcion,
 } from "../services/excepcionLicenciaService";
-import { getEmpleados } from "../services/empleadoService";
+import { getEmpleadosPaginados } from "../services/empleadoService";
 import { getCategorias } from "../services/configuracionService";
 import { useAuth } from "../context/AuthContext";
 import ModalCrearExcepcion from "../components/excepciones/ModalCrearExcepcion";
@@ -204,7 +204,7 @@ export default function ExcepcionesLicencias() {
 
   useEffect(() => {
     cargarMetricas();
-    getEmpleados()
+    getEmpleadosPaginados(1, ITEMS_POR_PAGINA)
       .then((res) => setEmpleados(Array.isArray(res) ? res : []))
       .catch(() => setEmpleados([]));
     getCategorias()

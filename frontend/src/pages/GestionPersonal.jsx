@@ -27,7 +27,6 @@ import {
 } from "lucide-react";
 import {
   getEmpleadosPaginados,
-  getEmpleados,
   createEmpleado,
   updateEmpleado,
   deleteEmpleado,
@@ -207,7 +206,7 @@ export default function GestionPersonal() {
     try {
       const data = await getPersonalResumen();
       if (data) setResumenGlobal(data);
-      const todos = await getEmpleados();
+      const todos = await getEmpleadosPaginados();
       if (Array.isArray(todos)) setTodosLosEmpleados(todos);
     } catch (err) {
       console.error("Error al cargar resumen global:", err);

@@ -22,7 +22,6 @@ export default function ListaEmpleadosSidebar({
   const [busqueda, setBusqueda] = useState("");
   const [loading, setLoading] = useState(true);
 
-  // Referencias para evitar re-ejecuciones por cambio de props
   const callbackSeleccionarRef = useRef(onSeleccionarEmpleado);
   callbackSeleccionarRef.current = onSeleccionarEmpleado;
 
@@ -31,12 +30,10 @@ export default function ListaEmpleadosSidebar({
 
   const yaInicializadoRef = useRef(false);
 
-  // 1. Cargar nómina y categorías (Solo consulta API una sola vez o ante cambios reales)
-  const cargarDatos = useCallback(async () => {
-    setLoading(true);
+  const cargarDatos = useCallback(async (forzar = false) => {
     try {
       const [empData, catData] = await Promise.all([
-        getEmpleadosActivos(),
+        getEmpleadosActivos(forzar),
         getCategorias(),
       ]);
 
@@ -48,7 +45,6 @@ export default function ListaEmpleadosSidebar({
       setEmpleados(listaEmp);
       setCategorias(listaCat);
 
-      // Selección inicial única: solo si no hay empleado seleccionado previamente
       if (!yaInicializadoRef.current && listaEmp.length > 0) {
         if (
           !idSeleccionadoRef.current ||
@@ -63,35 +59,29 @@ export default function ListaEmpleadosSidebar({
     } finally {
       setLoading(false);
     }
-  }, []); // Sin dependencias que cambien con cada click
+  }, []);
 
-  // Carga inicial
   useEffect(() => {
-    cargarDatos();
+    cargarDatos(false);
   }, [cargarDatos]);
 
-  // Sincronización en tiempo real protegida con Debounce (solo si hay cambios en BD o reconexión)
   useEffect(() => {
     let timerSync = null;
 
     const handleSincronizacion = () => {
       if (timerSync) clearTimeout(timerSync);
       timerSync = setTimeout(() => {
-        cargarDatos();
-      }, 300);
+        cargarDatos(false);
+      }, 500);
     };
 
     window.addEventListener("datos:actualizados", handleSincronizacion);
-    window.addEventListener("conexion:restaurada", handleSincronizacion);
-
     return () => {
       if (timerSync) clearTimeout(timerSync);
       window.removeEventListener("datos:actualizados", handleSincronizacion);
-      window.removeEventListener("conexion:restaurada", handleSincronizacion);
     };
   }, [cargarDatos]);
 
-  // 2. Filtro dinámico en memoria (0 consultas HTTP)
   const empleadosFiltrados = useMemo(() => {
     return empleados.filter((emp) => {
       const coincideCategoria =
@@ -125,7 +115,6 @@ export default function ListaEmpleadosSidebar({
 
   return (
     <>
-      {/* OVERLAY PARA MÓVILES (< lg) */}
       <div
         onClick={onClose}
         className={`fixed inset-0 z-40 bg-slate-900/50 backdrop-blur-xs transition-opacity lg:hidden ${
@@ -135,7 +124,6 @@ export default function ListaEmpleadosSidebar({
         }`}
       />
 
-      {/* CONTENEDOR PRINCIPAL */}
       <aside
         className={`
           fixed lg:static top-0 left-0 z-50 h-full lg:h-auto w-80 sm:w-88 lg:w-full
@@ -150,7 +138,6 @@ export default function ListaEmpleadosSidebar({
         `}
       >
         <div className="space-y-3 flex-1 flex flex-col min-h-0">
-          {/* Cabecera con Botón de Cierre */}
           <div className="flex items-center justify-between pb-2 border-b border-slate-100 shrink-0">
             <div className="flex items-center gap-2 font-bold text-xs uppercase tracking-wider text-slate-800">
               <Users className="w-4 h-4 text-indigo-600" />
@@ -171,7 +158,6 @@ export default function ListaEmpleadosSidebar({
             </button>
           </div>
 
-          {/* Buscador */}
           <div className="relative shrink-0">
             <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
@@ -183,7 +169,6 @@ export default function ListaEmpleadosSidebar({
             />
           </div>
 
-          {/* Filtros de Categorías */}
           <div className="flex flex-wrap gap-1 text-[11px] font-bold shrink-0">
             <button
               type="button"
@@ -224,7 +209,6 @@ export default function ListaEmpleadosSidebar({
             })}
           </div>
 
-          {/* Lista de empleados con scroll */}
           <div className="space-y-1.5 flex-1 overflow-y-auto pr-1 select-none">
             {loading ? (
               <div className="py-12 text-center text-slate-400 text-xs">

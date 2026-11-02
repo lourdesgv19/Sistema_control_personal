@@ -5,11 +5,51 @@ export const getPersonalResumen = async () =>
   (await apiClient.get("/empleados/resumen-metricas")).data;
 
 // 2. Selectores y listados generales de empleados
-export const getEmpleados = async () =>
-  (await apiClient.get("/empleados/activos")).data;
+let cacheEmpleadosActivos = null;
+let ultimaCargaEmpleados = 0;
+let promesaEnVuelo = null;
+const TIEMPO_CACHE_MS = 60000; // 60 segundos de gracia
 
-export const getEmpleadosActivos = async () =>
-  (await apiClient.get("/empleados/activos")).data;
+export const getEmpleadosActivos = async (forzarRefresco = false) => {
+  const ahora = Date.now();
+
+  // Si hay datos en caché válidos y no se pide forzar, retornamos la caché
+  if (
+    !forzarRefresco &&
+    cacheEmpleadosActivos &&
+    ahora - ultimaCargaEmpleados < TIEMPO_CACHE_MS
+  ) {
+    return cacheEmpleadosActivos;
+  }
+
+  // Si ya hay una petición HTTP en curso, nos sumamos a la misma sin duplicar
+  if (promesaEnVuelo) {
+    return promesaEnVuelo;
+  }
+
+  promesaEnVuelo = apiClient
+    .get("/empleados/activos")
+    .then((res) => {
+      cacheEmpleadosActivos = Array.isArray(res.data) ? res.data : [];
+      ultimaCargaEmpleados = Date.now();
+      return cacheEmpleadosActivos;
+    })
+    .catch((err) => {
+      console.error("Error al obtener empleados activos:", err);
+      return cacheEmpleadosActivos || [];
+    })
+    .finally(() => {
+      promesaEnVuelo = null;
+    });
+
+  return promesaEnVuelo;
+};
+
+// Limpiar la caché únicamente cuando se crea, edita o elimina un empleado
+export const invalidarCacheEmpleados = () => {
+  cacheEmpleadosActivos = null;
+  ultimaCargaEmpleados = 0;
+};
 
 // 3. Paginación de empleados
 export const getEmpleadosPaginados = async (

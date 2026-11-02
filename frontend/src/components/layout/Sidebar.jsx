@@ -1,13 +1,11 @@
 import React, { useState, useEffect } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import {
-  UploadCloud,
   Users,
   LayoutDashboard,
   ClipboardList,
   Clock,
   AlertTriangle,
-  FileBarChart2,
   CalendarCheck,
   Settings,
   ShieldCheck,
@@ -21,7 +19,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import ModalAlerta from "../comunes/ModalAlerta";
-import { getEmpleados } from "../../services/empleadoService";
+import { getEmpleadosActivos } from "../../services/empleadoService";
 
 export default function Sidebar({ isOpen, onClose }) {
   const { user, logout, tienePermiso } = useAuth();
@@ -29,12 +27,14 @@ export default function Sidebar({ isOpen, onClose }) {
   const [incompletosCount, setIncompletosCount] = useState(0);
   const navigate = useNavigate();
 
-  // Consultar colaboradores con datos faltantes para mostrar la alerta
+  // Consultar colaboradores con datos faltantes solo al montar o ante cambios reales
   useEffect(() => {
     let montado = true;
+    let timerSync = null;
+
     const verificarIncompletos = async () => {
       try {
-        const emps = await getEmpleados();
+        const emps = await getEmpleadosActivos();
         if (montado && Array.isArray(emps)) {
           const faltanDatos = emps.filter(
             (e) =>
@@ -51,17 +51,27 @@ export default function Sidebar({ isOpen, onClose }) {
       }
     };
 
+    // 1. Verificación inicial única al montar la aplicación
     if (tienePermiso("PERSONAL_VER")) {
       verificarIncompletos();
     }
 
-    const interval = setInterval(() => {
-      if (tienePermiso("PERSONAL_VER")) verificarIncompletos();
-    }, 45000);
+    // 2. Solo se re-verifica cuando ocurre un evento real en el sistema (sin polling)
+    const handleActualizacion = () => {
+      if (timerSync) clearTimeout(timerSync);
+      timerSync = setTimeout(() => {
+        if (tienePermiso("PERSONAL_VER")) {
+          verificarIncompletos();
+        }
+      }, 500);
+    };
+
+    window.addEventListener("datos:actualizados", handleActualizacion);
 
     return () => {
       montado = false;
-      clearInterval(interval);
+      if (timerSync) clearTimeout(timerSync);
+      window.removeEventListener("datos:actualizados", handleActualizacion);
     };
   }, [tienePermiso]);
 
@@ -181,7 +191,6 @@ export default function Sidebar({ isOpen, onClose }) {
                   key={item.to}
                   to={item.to}
                   onClick={() => {
-                    // Cierra el drawer automáticamente en móvil al hacer clic
                     if (window.innerWidth < 768 && onClose) {
                       onClose();
                     }
@@ -239,7 +248,7 @@ export default function Sidebar({ isOpen, onClose }) {
 
             {user?.debeCambiarPassword && (
               <span className="flex items-center gap-1 text-[10px] font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full animate-pulse">
-                <AlertCircle className="w-3 h-3" />
+                <AlertCircle className="w-3.5 h-3.5" />
                 Clave
               </span>
             )}

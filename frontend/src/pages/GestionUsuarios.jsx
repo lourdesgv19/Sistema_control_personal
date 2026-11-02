@@ -20,7 +20,7 @@ import {
   toggleEstadoUsuario,
   getUsuarioResumen,
 } from "../services/usuarioService";
-import { getEmpleados } from "../services/empleadoService";
+import { getEmpleadosPaginados } from "../services/empleadoService";
 import ModalAlerta from "../components/comunes/ModalAlerta";
 import ModalCrearUsuario from "../components/usuarios/ModalCrearUsuario";
 import ModalMatrizPermisos from "../components/usuarios/ModalMatrizPermisos";
@@ -101,7 +101,7 @@ export default function GestionUsuarios() {
 
   const cargarEmpleadosCatalogo = useCallback(async () => {
     try {
-      const emps = await getEmpleados();
+      const emps = await getEmpleadosPaginados(1, ITEMS_POR_PAGINA);
       setEmpleados(Array.isArray(emps) ? emps : []);
     } catch (err) {
       console.error("Error al cargar nómina de empleados:", err);
