@@ -52,9 +52,10 @@ import apiClient from "../services/api";
 import ModalAlerta from "../components/comunes/ModalAlerta";
 import ModalRegistroEmpleado from "../components/personal/ModalRegistroEmpleado";
 import { useAuth } from "../context/AuthContext";
-
-// Constantes de paginación
-const ITEMS_POR_PAGINA = 25;
+import {
+  obtenerNombreDia,
+  formatearFechaVisual,
+} from "../utils/fechasFichaUtils";
 
 // Obtener fecha hoy en formato YYYY-MM-DD
 const getHoyIso = () => {
@@ -65,16 +66,34 @@ const getHoyIso = () => {
   return `${y}-${m}-${dia}`;
 };
 
-// Formato 24 horas estricto (DD/MM/AAAA, HH:mm:ss)
-const formatearFechaHora24 = (fechaIso) => {
-  if (!fechaIso) return "-";
-  const d = new Date(fechaIso);
-  if (isNaN(d.getTime())) return fechaIso;
+// Utilidad que aprovecha las funciones centrales de utils
+const obtenerInfoDiaYFecha = (fechaIso) => {
+  if (!fechaIso)
+    return { diaCapitalizado: "-", fechaCorta: "-", textoCompleto: "-" };
+  const strIso = String(fechaIso).split("T")[0].split(" ")[0].trim();
+  const nombre = obtenerNombreDia(strIso);
+  const diaCapitalizado = nombre
+    ? nombre.charAt(0).toUpperCase() + nombre.slice(1)
+    : "-";
+  const fechaCorta = formatearFechaVisual(strIso);
 
-  return d.toLocaleString("es-AR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
+  return {
+    diaCapitalizado,
+    fechaCorta,
+    textoCompleto: `${diaCapitalizado}, ${fechaCorta}`,
+  };
+};
+
+// Extractor de hora HH:mm:ss o HH:mm en 24 horas
+const extraerHora24 = (fechaIso) => {
+  if (!fechaIso) return "--:--";
+  if (typeof fechaIso === "string" && fechaIso.includes("T")) {
+    const parte = fechaIso.split("T")[1];
+    return parte ? parte.split(".")[0].substring(0, 8) : "--:--";
+  }
+  const d = new Date(fechaIso);
+  if (isNaN(d.getTime())) return "--:--";
+  return d.toLocaleTimeString("es-AR", {
     hour: "2-digit",
     minute: "2-digit",
     second: "2-digit",
@@ -82,32 +101,12 @@ const formatearFechaHora24 = (fechaIso) => {
   });
 };
 
-// Formateador con nombre de día y fecha legible
-const formatearDiaYFecha = (fechaIso) => {
-  if (!fechaIso)
-    return { diaCapitalizado: "-", fechaCorta: "-", textoCompleto: "-" };
-  const d = new Date(fechaIso);
-  if (isNaN(d.getTime()))
-    return {
-      diaCapitalizado: "-",
-      fechaCorta: fechaIso,
-      textoCompleto: fechaIso,
-    };
-
-  const diaNombre = d.toLocaleDateString("es-AR", { weekday: "long" });
-  const diaCapitalizado =
-    diaNombre.charAt(0).toUpperCase() + diaNombre.slice(1);
-  const fechaCorta = d.toLocaleDateString("es-AR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  });
-
-  return {
-    diaCapitalizado,
-    fechaCorta,
-    textoCompleto: `${diaCapitalizado}, ${fechaCorta}`,
-  };
+const formatearFechaHora24 = (fechaIso) => {
+  if (!fechaIso) return "-";
+  const strIso = String(fechaIso).split("T")[0];
+  const fecha = formatearFechaVisual(strIso);
+  const hora = extraerHora24(fechaIso);
+  return `${fecha}, ${hora}`;
 };
 
 const esRegistroActivo = (activo) => {
@@ -163,21 +162,29 @@ function BuscadorEmpleadoSelect({
   const [busqueda, setBusqueda] = useState("");
   const dropdownRef = useRef(null);
 
+  const listaSeguraEmpleados = useMemo(() => {
+    if (Array.isArray(empleados)) return empleados;
+    if (empleados && Array.isArray(empleados.content)) return empleados.content;
+    return [];
+  }, [empleados]);
+
   const empActual = useMemo(() => {
-    return empleados.find((e) => String(e.id) === String(valorSeleccionado));
-  }, [empleados, valorSeleccionado]);
+    return listaSeguraEmpleados.find(
+      (e) => String(e.id) === String(valorSeleccionado),
+    );
+  }, [listaSeguraEmpleados, valorSeleccionado]);
 
   const filtrados = useMemo(() => {
-    if (!busqueda.trim()) return empleados;
+    if (!busqueda.trim()) return listaSeguraEmpleados;
     const q = busqueda.toLowerCase();
-    return empleados.filter(
+    return listaSeguraEmpleados.filter(
       (e) =>
         e.nombre?.toLowerCase().includes(q) ||
         e.apellido?.toLowerCase().includes(q) ||
         e.nroLegajo?.toLowerCase().includes(q) ||
         (e.dni && String(e.dni).includes(q)),
     );
-  }, [empleados, busqueda]);
+  }, [listaSeguraEmpleados, busqueda]);
 
   useEffect(() => {
     const handleClickFuera = (e) => {
@@ -883,7 +890,7 @@ export default function ImportacionFichajes() {
   );
 
   const hoyInfo = useMemo(() => {
-    return formatearDiaYFecha(fechaConsultaHoy + "T12:00:00");
+    return obtenerInfoDiaYFecha(fechaConsultaHoy);
   }, [fechaConsultaHoy]);
 
   // Cálculo del último fichaje registrado
@@ -1432,8 +1439,7 @@ export default function ImportacionFichajes() {
 
                   <div className="flex items-center justify-between pt-1 border-t border-slate-100 text-[11px]">
                     <span className="text-slate-700 font-mono font-bold">
-                      Hora:{" "}
-                      {formatearFechaHora24(f.horaFichaje).split(",")[1] || "-"}
+                      Hora: {extraerHora24(f.horaFichaje)}
                     </span>
                     <span className="font-mono text-indigo-600 font-bold">
                       {f.tipoEvento}
@@ -1482,8 +1488,7 @@ export default function ImportacionFichajes() {
                   fichajesHoy.map((f) => (
                     <tr key={f.id} className="hover:bg-slate-50/70 transition">
                       <td className="py-2.5 px-4 font-mono font-bold text-slate-800 text-xs">
-                        {formatearFechaHora24(f.horaFichaje).split(",")[1] ||
-                          "-"}
+                        {extraerHora24(f.horaFichaje)}
                       </td>
                       <td className="py-2.5 px-4 font-mono font-bold text-indigo-600">
                         {f.idBiometrico}
@@ -1592,7 +1597,7 @@ export default function ImportacionFichajes() {
             ) : (
               historialFiltrado.map((h) => {
                 const estaActivo = esRegistroActivo(h.activo);
-                const diaInfo = formatearDiaYFecha(h.fechaImportacion);
+                const diaInfo = obtenerInfoDiaYFecha(h.fechaImportacion);
                 return (
                   <div
                     key={h.id}
@@ -1624,11 +1629,7 @@ export default function ImportacionFichajes() {
                       <span>•</span>
                       <span>{diaInfo.fechaCorta}</span>
                       <span className="text-slate-400">
-                        (
-                        {formatearFechaHora24(h.fechaImportacion)
-                          .split(",")[1]
-                          ?.trim() || "-"}
-                        )
+                        ({extraerHora24(h.fechaImportacion)})
                       </span>
                     </div>
 
@@ -1747,7 +1748,7 @@ export default function ImportacionFichajes() {
                 ) : (
                   historialFiltrado.map((h) => {
                     const estaActivo = esRegistroActivo(h.activo);
-                    const diaInfo = formatearDiaYFecha(h.fechaImportacion);
+                    const diaInfo = obtenerInfoDiaYFecha(h.fechaImportacion);
                     return (
                       <tr
                         key={h.id}
@@ -1766,9 +1767,7 @@ export default function ImportacionFichajes() {
                           </div>
                         </td>
                         <td className="py-3.5 px-4 font-mono text-slate-500 text-[11px]">
-                          {formatearFechaHora24(h.fechaImportacion)
-                            .split(",")[1]
-                            ?.trim() || "-"}
+                          {extraerHora24(h.fechaImportacion)}
                         </td>
                         <td className="py-3.5 px-4 font-medium text-slate-800">
                           <div className="flex items-center gap-1.5">

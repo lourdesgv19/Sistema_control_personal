@@ -55,6 +55,7 @@ import {
   calcularRangoSemana,
   calcularRangoMes,
   calcularOffsetPrimerDia,
+  formatearMinutosVisuales,
 } from "../utils/fechasFichaUtils";
 
 export default function FichaComportamiento() {
@@ -2134,6 +2135,10 @@ export default function FichaComportamiento() {
                               : r.tipo === "INFRACCION"
                                 ? "bg-rose-500"
                                 : "bg-amber-400";
+                          const textoDuracion = r.duracionMinutos
+                            ? formatearMinutosVisuales(r.duracionMinutos)
+                            : r.etiqueta;
+
                           return (
                             <div
                               key={idx}
@@ -2141,9 +2146,10 @@ export default function FichaComportamiento() {
                                 left: `${Math.max(0, leftPct)}%`,
                                 width: `${widthPct}%`,
                               }}
-                              className={`absolute top-1 bottom-1 ${bg} text-white rounded-lg px-2 flex items-center justify-center text-[10px] font-bold shadow-xs`}
+                              title={`${r.tipo}: ${textoDuracion}`}
+                              className={`absolute top-1 bottom-1 ${bg} text-white rounded-lg px-2 flex items-center justify-center text-[10px] font-bold shadow-xs truncate`}
                             >
-                              {r.etiqueta}
+                              {textoDuracion}
                             </div>
                           );
                         })}

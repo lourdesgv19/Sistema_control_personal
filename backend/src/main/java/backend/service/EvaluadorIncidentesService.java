@@ -53,22 +53,21 @@ public class EvaluadorIncidentesService {
     @org.springframework.scheduling.annotation.Scheduled(cron = "0 55 23 * * *")
     @Transactional
     public void cierreDiarioAutomatico() {
-       LocalDate hoy = LocalDate.now();
-    
-    // 1. Audita los días fijos de turnos regulares (tardanzas, ausencias fijas, retiros)
-    evaluarFecha(hoy);
-    
-    // 2. Si hoy coincide con el fin de semana/mes, audita el saldo de horas flexibles
-    evaluarCumplimientoHorariosFlexibles(hoy);
+        LocalDate hoy = LocalDate.now();
+        // 1. Audita la jornada completa (inasistencias consolidadas, marcas abiertas y desvíos)
+        evaluarFecha(hoy);
+        // 2. Audita bolsa de horas flexibles
+        evaluarCumplimientoHorariosFlexibles(hoy);
     }
 
-@Transactional
+    @Transactional
     public void evaluarFecha(LocalDate fecha) {
         int diaSemana = fecha.getDayOfWeek().getValue();
         LocalDateTime inicioDelDia = fecha.atStartOfDay();
         LocalDateTime finDelDia = fecha.atTime(LocalTime.MAX);
+        LocalDate hoy = LocalDate.now();
+        LocalTime horaActual = LocalTime.now();
 
-        // Franjas con día fijo que estaban VIGENTES en esa fecha
         List<EmpleadoHorario> horariosDelDia = horarioRepo.findAll().stream()
                 .filter(h -> h.getDiaSemana() != null && h.getDiaSemana() == diaSemana)
                 .filter(h -> h.getHoraEntrada() != null && h.getHoraSalida() != null)
@@ -109,7 +108,6 @@ public class EvaluadorIncidentesService {
                     .sorted(Comparator.comparing(EmpleadoFichaje::getHoraFichaje))
                     .toList();
 
-            // Construir detalle textual congelando el estado del horario
             StringBuilder descHorarios = new StringBuilder();
             for (EmpleadoHorario fh : franjas) {
                 boolean inactivo = Boolean.FALSE.equals(fh.getActivo()) || fh.getFechaBaja() != null;
@@ -121,27 +119,51 @@ public class EvaluadorIncidentesService {
                         tag));
             }
 
-            // REGLA 1: Ausencia
+            LocalTime inicioTurnoGeneral = franjas.stream()
+                    .map(EmpleadoHorario::getHoraEntrada)
+                    .filter(Objects::nonNull)
+                    .min(LocalTime::compareTo)
+                    .orElse(LocalTime.of(8, 0));
+
+            LocalTime finTurnoGeneral = franjas.stream()
+                    .map(EmpleadoHorario::getHoraSalida)
+                    .filter(Objects::nonNull)
+                    .max(LocalTime::compareTo)
+                    .orElse(LocalTime.of(17, 0));
+
+            int tolIngreso = empleado.getToleranciaIngresoMin() != null ? empleado.getToleranciaIngresoMin() : 15;
+            LocalTime limiteTolerancia = inicioTurnoGeneral.plusMinutes(tolIngreso);
+
+            // =========================================================================
+            // CASO A: NO REGISTRÓ FICHAJES
+            // =========================================================================
             if (fichajes.isEmpty()) {
-                if (!existeIncidente(fecha, empleado.getId(), "AUSENCIAS")) {
+                // Si es hoy, NO se marca a las 00:00 hs; solo se evalúa si ya pasó la hora de entrada + tolerancia
+                boolean vencioTolerancia = !fecha.isEqual(hoy) || horaActual.isAfter(limiteTolerancia);
+
+                if (vencioTolerancia && !existeIncidente(fecha, empleado.getId(), "AUSENCIAS")) {
                     boolean algunInactivo = franjas.stream().anyMatch(f -> Boolean.FALSE.equals(f.getActivo()) || f.getFechaBaja() != null);
                     IncidenteAsistencia inc = new IncidenteAsistencia();
                     inc.setFecha(fecha);
-                    inc.setHora(LocalTime.MIDNIGHT);
+                    inc.setHora(limiteTolerancia);
                     inc.setEmpleado(empleado);
                     inc.setSeveridad("CRÍTICA");
                     inc.setCategoriaRegla("AUSENCIAS");
                     inc.setTipo("Inasistencia injustificada en jornada obligatoria" + (algunInactivo ? " [Horario Histórico / Inactivo]" : ""));
-                    inc.setDetalle("El colaborador no registró fichajes. Pautado ese día: " + descHorarios);
+                    inc.setDetalle("El colaborador no registró fichajes superado el margen de tolerancia (" + limiteTolerancia.toString().substring(0, 5) + " hs). Pautado ese día: " + descHorarios);
                     inc.setEstado("PENDIENTE");
                     inc.setIdEventoAgrupador("AUSENCIA_" + fecha + "_" + empleado.getId());
                     incidentesAGuardar.add(inc);
                 }
                 continue;
             } else {
+                // Si el empleado fichó (en tiempo real o diferido), se remueve cualquier inasistencia previa
                 eliminarFalsasInasistencias(fecha, empleado.getId());
             }
 
+            // =========================================================================
+            // CASO B: EL EMPLEADO SÍ TIENE FICHADAS
+            // =========================================================================
             EmpleadoFichaje primerIngreso = fichajes.stream()
                     .filter(f -> esTipoIngreso(f.getTipoEvento()))
                     .findFirst()
@@ -152,19 +174,47 @@ public class EvaluadorIncidentesService {
                     .reduce((first, second) -> second)
                     .orElse(null);
 
-            LocalTime inicioTurnoGeneral = franjas.stream()
-                    .map(EmpleadoHorario::getHoraEntrada)
-                    .filter(Objects::nonNull)
-                    .min(LocalTime::compareTo)
-                    .orElse(LocalTime.of(8, 0));
-
             LocalTime horaPrimerIngreso = primerIngreso.getHoraFichaje().toLocalTime();
 
-            // REGLA 2: Tardanza
-            int tolIngreso = empleado.getToleranciaIngresoMin() != null ? empleado.getToleranciaIngresoMin() : 15;
-            LocalTime limiteTolerancia = inicioTurnoGeneral.plusMinutes(tolIngreso);
+            // Tiempo trabajado efectivo del día
+            long minutosPresencia = 0;
+            for (int i = 0; i < fichajes.size() - 1; i++) {
+                EmpleadoFichaje act = fichajes.get(i);
+                EmpleadoFichaje sig = fichajes.get(i + 1);
+                long lapso = Duration.between(act.getHoraFichaje(), sig.getHoraFichaje()).toMinutes();
+                if (lapso > 0 && !esTipoSalida(act.getTipoEvento())) {
+                    minutosPresencia += lapso;
+                }
+            }
 
-            if (horaPrimerIngreso.isAfter(limiteTolerancia)) {
+            long minutosTeoricos = 0;
+            for (EmpleadoHorario fh : franjas) {
+                if (fh.getHoraEntrada() != null && fh.getHoraSalida() != null) {
+                    minutosTeoricos += Duration.between(fh.getHoraEntrada(), fh.getHoraSalida()).toMinutes();
+                }
+            }
+
+            // REGLA 1: CUMPLIÓ HORAS EN OTRO HORARIO (CAMBIO DE HORARIO)
+            if (minutosPresencia >= (minutosTeoricos - 15) && horaPrimerIngreso.isAfter(finTurnoGeneral)) {
+                if (!existeIncidente(fecha, empleado.getId(), "DESVIO_TURNO")) {
+                    IncidenteAsistencia inc = new IncidenteAsistencia();
+                    inc.setFecha(fecha);
+                    inc.setHora(horaPrimerIngreso);
+                    inc.setEmpleado(empleado);
+                    inc.setSeveridad("MEDIA");
+                    inc.setCategoriaRegla("DESVIO_TURNO");
+                    inc.setTipo("Cambio de horario / Cumplimiento en turno alternativo");
+                    inc.setDetalle(String.format("Cumplió %s de labor en turno alternativo (ingresó %s hs, pautado: %s a %s hs).",
+                            formatearMinutosAHoras(minutosPresencia),
+                            horaPrimerIngreso.toString().substring(0, 5),
+                            inicioTurnoGeneral.toString().substring(0, 5),
+                            finTurnoGeneral.toString().substring(0, 5)));
+                    inc.setEstado("PENDIENTE");
+                    inc.setIdEventoAgrupador("DESVIO_" + fecha + "_" + empleado.getId());
+                    incidentesAGuardar.add(inc);
+                }
+            } else if (horaPrimerIngreso.isAfter(limiteTolerancia)) {
+                // REGLA 2: LLEGADA TARDE
                 long minutosTarde = Duration.between(inicioTurnoGeneral, horaPrimerIngreso).toMinutes();
                 if (!existeIncidente(fecha, empleado.getId(), "LLEGADAS_TARDE")) {
                     boolean algunInactivo = franjas.stream().anyMatch(f -> Boolean.FALSE.equals(f.getActivo()) || f.getFechaBaja() != null);
@@ -177,7 +227,7 @@ public class EvaluadorIncidentesService {
                     inc.setSeveridad(minutosTarde > 30 ? "ALTA" : "MEDIA");
                     inc.setCategoriaRegla("LLEGADAS_TARDE");
                     inc.setTipo(String.format("Llegada tarde (+%d min)%s", minutosTarde, tagInactivo));
-                    inc.setDetalle(String.format("Horario pautado ese día: %s hs (tolerancia: %d min)%s. Ingresó a las %s hs.",
+                    inc.setDetalle(String.format("Horario pautado: %s hs (tolerancia: %d min)%s. Ingresó a las %s hs.",
                             inicioTurnoGeneral.toString().substring(0, 5), tolIngreso, tagInactivo, horaPrimerIngreso.toString().substring(0, 5)));
                     inc.setEstado("PENDIENTE");
                     inc.setIdEventoAgrupador("TARDE_" + fecha + "_" + empleado.getId());
@@ -185,35 +235,59 @@ public class EvaluadorIncidentesService {
                 }
             }
 
-            // REGLA 3: Retiro anticipado
-            for (EmpleadoHorario franja : franjas) {
-                LocalTime salidaEsperada = franja.getHoraSalida();
-                int tolEgreso = empleado.getToleranciaEgresoMin() != null ? empleado.getToleranciaEgresoMin() : 10;
+            // REGLA 3: RETIRO ANTICIPADO
+// REGLA 3: Retiro anticipado
+for (EmpleadoHorario franja : franjas) {
+    LocalTime salidaEsperada = franja.getHoraSalida();
+    int tolEgreso = empleado.getToleranciaEgresoMin() != null ? empleado.getToleranciaEgresoMin() : 10;
 
-                if (ultimoEgreso != null && salidaEsperada != null) {
-                    LocalTime horaEgresoReal = ultimoEgreso.getHoraFichaje().toLocalTime();
-                    LocalTime limiteSalida = salidaEsperada.minusMinutes(tolEgreso);
+    if (ultimoEgreso != null && salidaEsperada != null) {
+        LocalTime horaEgresoReal = ultimoEgreso.getHoraFichaje().toLocalTime();
+        LocalTime limiteSalida = salidaEsperada.minusMinutes(tolEgreso);
 
-                    if (horaEgresoReal.isBefore(limiteSalida)) {
-                        long minutosAntes = Duration.between(horaEgresoReal, salidaEsperada).toMinutes();
-                        if (!existeIncidente(fecha, empleado.getId(), "RETIROS_PREVIOS")) {
-                            boolean esInactivo = Boolean.FALSE.equals(franja.getActivo()) || franja.getFechaBaja() != null;
-                            String tagInactivo = esInactivo ? " [Horario Histórico / Inactivo]" : "";
+        if (horaEgresoReal.isBefore(limiteSalida)) {
+            // Sigue siendo retiro anticipado
+            long minutosAntes = Duration.between(horaEgresoReal, salidaEsperada).toMinutes();
+            if (!existeIncidente(fecha, empleado.getId(), "RETIROS_PREVIOS")) {
+                boolean esInactivo = Boolean.FALSE.equals(franja.getActivo()) || franja.getFechaBaja() != null;
+                String tagInactivo = esInactivo ? " [Horario Histórico / Inactivo]" : "";
 
-                            IncidenteAsistencia inc = new IncidenteAsistencia();
-                            inc.setFecha(fecha);
-                            inc.setHora(horaEgresoReal);
-                            inc.setEmpleado(empleado);
-                            inc.setSeveridad("ALTA");
-                            inc.setCategoriaRegla("RETIROS_PREVIOS");
-                            inc.setTipo(String.format("Retiro anticipado (-%d min)%s", minutosAntes, tagInactivo));
-                            inc.setDetalle(String.format("Salida pautada ese día: %s hs (tolerancia: %d min)%s. Fichó egreso a las %s hs.",
-                                    salidaEsperada.toString().substring(0, 5), tolEgreso, tagInactivo, horaEgresoReal.toString().substring(0, 5)));
-                            inc.setEstado("PENDIENTE");
-                            inc.setIdEventoAgrupador("RETIRO_" + fecha + "_" + empleado.getId());
-                            incidentesAGuardar.add(inc);
-                        }
-                    }
+                IncidenteAsistencia inc = new IncidenteAsistencia();
+                inc.setFecha(fecha);
+                inc.setHora(horaEgresoReal);
+                inc.setEmpleado(empleado);
+                inc.setSeveridad("ALTA");
+                inc.setCategoriaRegla("RETIROS_PREVIOS");
+                inc.setTipo(String.format("Retiro anticipado (-%d min)%s", minutosAntes, tagInactivo));
+                inc.setDetalle(String.format("Salida pautada ese día: %s hs (tolerancia: %d min)%s. Fichó egreso a las %s hs.",
+                        salidaEsperada.toString().substring(0, 5), tolEgreso, tagInactivo, horaEgresoReal.toString().substring(0, 5)));
+                inc.setEstado("PENDIENTE");
+                inc.setIdEventoAgrupador("RETIRO_" + fecha + "_" + empleado.getId());
+                incidentesAGuardar.add(inc);
+            }
+        } else {
+            eliminarFalsosRetirosAnticipados(fecha, empleado.getId());
+        }
+    }
+}
+
+            // REGLA 4: MARCAS ABIERTAS (Fichó entrada pero no registró salida)
+            // Se evalúa si es una fecha anterior o si es hoy y ya pasaron 30 min del horario de salida esperado
+            boolean finJornadaSuperado = !fecha.isEqual(hoy) || horaActual.isAfter(finTurnoGeneral.plusMinutes(30));
+            if (primerIngreso != null && ultimoEgreso == null && finJornadaSuperado) {
+                if (!existeIncidente(fecha, empleado.getId(), "MARCAS_ABIERTAS")) {
+                    IncidenteAsistencia inc = new IncidenteAsistencia();
+                    inc.setFecha(fecha);
+                    inc.setHora(horaPrimerIngreso);
+                    inc.setEmpleado(empleado);
+                    inc.setSeveridad("MEDIA");
+                    inc.setCategoriaRegla("MARCAS_ABIERTAS");
+                    inc.setTipo("Fichada abierta: sin egreso registrado");
+                    inc.setDetalle(String.format("Ingresó a las %s hs y no registró salida concluida la jornada (salida esperada: %s hs).",
+                            horaPrimerIngreso.toString().substring(0, 5), finTurnoGeneral.toString().substring(0, 5)));
+                    inc.setEstado("PENDIENTE");
+                    inc.setIdEventoAgrupador("ABIERTA_" + fecha + "_" + empleado.getId());
+                    incidentesAGuardar.add(inc);
                 }
             }
         }
@@ -224,115 +298,18 @@ public class EvaluadorIncidentesService {
         }
     }
 
-
-/**
- * Evalúa el balance al cierre del período para agentes con Bolsa de Horas Flexible.
- * Se ejecuta en el cierre automático o al concluir la semana/mes.
- */
 @Transactional
-public void evaluarCumplimientoHorariosFlexibles(LocalDate fechaCierre) {
-    // 1. Obtener todas las franjas flexibles activas
-    List<EmpleadoHorario> flexibles = horarioRepo.findAll().stream()
-            .filter(h -> Boolean.TRUE.equals(h.getActivo()))
-            .filter(h -> h.getDiaSemana() == null && h.getHorasObjetivo() != null && h.getHorasObjetivo() > 0)
-            .filter(h -> h.getEmpleado() != null && Boolean.TRUE.equals(h.getEmpleado().getActivo()))
-            .toList();
-
-    for (EmpleadoHorario fh : flexibles) {
-        Empleado emp = fh.getEmpleado();
-        String frec = fh.getTipoFrecuencia() != null ? fh.getTipoFrecuencia().toUpperCase() : "MENSUAL";
-
-        LocalDate fechaInicioPeriodo = null;
-        LocalDate fechaFinPeriodo = null;
-        boolean correspondeEvaluarCierre = false;
-
-        // 2. Determinar si fechaCierre coincide con el fin del período
-        switch (frec) {
-            case "SEMANAL" -> {
-                // Domingo es el fin de la semana (valor 7)
-                if (fechaCierre.getDayOfWeek().getValue() == 7) {
-                    fechaInicioPeriodo = fechaCierre.minusDays(6);
-                    fechaFinPeriodo = fechaCierre;
-                    correspondeEvaluarCierre = true;
-                }
-            }
-            case "SEMANA_POR_MEDIO" -> {
-                if (fechaCierre.getDayOfWeek().getValue() == 7) {
-                    fechaInicioPeriodo = fechaCierre.minusDays(13);
-                    fechaFinPeriodo = fechaCierre;
-                    correspondeEvaluarCierre = true;
-                }
-            }
-            case "MENSUAL" -> {
-                // Último día del mes corriente
-                if (fechaCierre.equals(fechaCierre.withDayOfMonth(fechaCierre.lengthOfMonth()))) {
-                    fechaInicioPeriodo = fechaCierre.withDayOfMonth(1);
-                    fechaFinPeriodo = fechaCierre;
-                    correspondeEvaluarCierre = true;
-                }
-            }
-            case "ANUAL" -> {
-                // 31 de Diciembre
-                if (fechaCierre.getMonthValue() == 12 && fechaCierre.getDayOfMonth() == 31) {
-                    fechaInicioPeriodo = fechaCierre.withDayOfYear(1);
-                    fechaFinPeriodo = fechaCierre;
-                    correspondeEvaluarCierre = true;
-                }
-            }
-        }
-
-        // Si no es el día de cierre del ciclo para esa frecuencia, no se juzga aún
-        if (!correspondeEvaluarCierre) continue;
-
-        // 3. Calcular las horas netas realmente trabajadas en el ciclo
-        ResumenPresenciaFichajesDTO presencia = calcularHorasRealesRango(emp.getId(), fechaInicioPeriodo, fechaFinPeriodo);
-        double horasReales = presencia.horasNetasTrabajadas();
-        double horasMeta = fh.getHorasObjetivo();
-
-        // 4. Si no llegó al objetivo de la bolsa de horas, se genera el incidente
-        if (horasReales < horasMeta) {
-            double deficitHoras = Math.round((horasMeta - horasReales) * 100.0) / 100.0;
-            String agrupador = "DEFICIT_FLEX_" + frec + "_" + fechaFinPeriodo + "_" + emp.getId();
-
-            if (!existeIncidente(fechaFinPeriodo, emp.getId(), "DEFICIT_HORAS")) {
-                IncidenteAsistencia inc = new IncidenteAsistencia();
-                inc.setFecha(fechaFinPeriodo);
-                inc.setHora(LocalTime.of(23, 59));
-                inc.setEmpleado(emp);
-                inc.setSeveridad("ALTA");
-                inc.setCategoriaRegla("DEFICIT_HORAS");
-                inc.setTipo(String.format("Incumplimiento de Carga Flexible (%s)", frec.toLowerCase()));
-                inc.setDetalle(String.format(
-                    "El colaborador debía cumplir %.1f hs en el período (%s al %s) y acumuló %.1f hs netas. Déficit registrado: -%.1f hs.",
-                    horasMeta, fechaInicioPeriodo, fechaFinPeriodo, horasReales, deficitHoras
-                ));
-                inc.setEstado("PENDIENTE");
-                inc.setIdEventoAgrupador(agrupador);
-
-                incidenteRepo.save(inc);
-                log.info(">>> Déficit horario flexible registrado para {} (Legajo {}): -{} hs.",
-                        emp.getNombre(), emp.getNroLegajo(), deficitHoras);
-            }
-        }
-    }
-}
-
-    @Transactional
     public void asegurarAusenciasEmpleadoRango(Empleado emp, List<EmpleadoHorario> horariosActivos,
                                                List<EmpleadoFichaje> fichajesPeriodo,
                                                LocalDate desde, LocalDate hasta) {
         if (horariosActivos == null || horariosActivos.isEmpty()) return;
 
-        // Omitir franjas que tengan diaSemana en NULL (bolsa de horas flexible sin días fijos)
         Set<Integer> diasConHorario = horariosActivos.stream()
                 .map(EmpleadoHorario::getDiaSemana)
                 .filter(Objects::nonNull)
                 .collect(Collectors.toSet());
 
-        // Si el empleado solo tiene franjas flexibles, no debe exigírsele asistencia en ningún día específico
-        if (diasConHorario.isEmpty()) {
-            return;
-        }
+        if (diasConHorario.isEmpty()) return;
 
         Set<LocalDate> diasConFichaje = fichajesPeriodo.stream()
                 .filter(f -> f.getHoraFichaje() != null)
@@ -343,11 +320,13 @@ public void evaluarCumplimientoHorariosFlexibles(LocalDate fechaCierre) {
 
         List<IncidenteAsistencia> nuevasAusencias = new ArrayList<>();
         LocalDate hoy = LocalDate.now();
+        LocalTime horaActual = LocalTime.now();
+
         LocalDate limite = hasta.isAfter(hoy) ? hoy : hasta;
 
         LocalDate cur = desde;
         while (!cur.isAfter(limite)) {
-            final LocalDate fActual = cur;
+            final LocalDate fActual = cur; // Variable efectivamente final para usar dentro de lambdas
 
             boolean tieneLicenciaOAsueto = excepcionesRango.stream().anyMatch(e ->
                 !fActual.isBefore(e.getFechaInicio()) && !fActual.isAfter(e.getFechaFin())
@@ -355,28 +334,120 @@ public void evaluarCumplimientoHorariosFlexibles(LocalDate fechaCierre) {
 
             if (tieneLicenciaOAsueto) {
                 eliminarIncidentesDeFecha(fActual, emp.getId());
-            } else if (diasConHorario.contains(cur.getDayOfWeek().getValue()) && !diasConFichaje.contains(cur)) {
-                if (!existeIncidente(cur, emp.getId(), "AUSENCIAS")) {
+            } else if (diasConFichaje.contains(fActual)) {
+                eliminarFalsasInasistencias(fActual, emp.getId());
+            } else if (diasConHorario.contains(fActual.getDayOfWeek().getValue())) {
+                boolean correspondeMarcar;
+                if (fActual.isEqual(hoy)) {
+                    int tol = emp.getToleranciaIngresoMin() != null ? emp.getToleranciaIngresoMin() : 15;
+                    LocalTime minEntrada = horariosActivos.stream()
+                            .filter(h -> h.getDiaSemana() != null && h.getDiaSemana() == fActual.getDayOfWeek().getValue())
+                            .map(EmpleadoHorario::getHoraEntrada)
+                            .filter(Objects::nonNull)
+                            .min(LocalTime::compareTo)
+                            .orElse(LocalTime.of(8, 0));
+                    correspondeMarcar = horaActual.isAfter(minEntrada.plusMinutes(tol));
+                } else {
+                    correspondeMarcar = true;
+                }
+
+                if (correspondeMarcar && !existeIncidente(fActual, emp.getId(), "AUSENCIAS")) {
                     IncidenteAsistencia inc = new IncidenteAsistencia();
-                    inc.setFecha(cur);
-                    inc.setHora(LocalTime.MIDNIGHT);
+                    inc.setFecha(fActual);
+                    inc.setHora(LocalTime.of(23, 59));
                     inc.setEmpleado(emp);
                     inc.setSeveridad("CRÍTICA");
                     inc.setCategoriaRegla("AUSENCIAS");
                     inc.setTipo("Inasistencia injustificada en jornada obligatoria");
-                    inc.setDetalle("El empleado no registró ninguna marcación durante su día asignado.");
+                    inc.setDetalle("El empleado no registró marcaciones superado el margen de tolerancia de su horario de ingreso.");
                     inc.setEstado("PENDIENTE");
-                    inc.setIdEventoAgrupador("AUSENCIA_" + cur + "_" + emp.getId());
+                    inc.setIdEventoAgrupador("AUSENCIA_" + fActual + "_" + emp.getId());
                     nuevasAusencias.add(inc);
                 }
-            } else if (diasConFichaje.contains(cur)) {
-                eliminarFalsasInasistencias(cur, emp.getId());
             }
             cur = cur.plusDays(1);
         }
 
         if (!nuevasAusencias.isEmpty()) {
             incidenteRepo.saveAll(nuevasAusencias);
+        }
+    }
+
+    @Transactional
+    public void evaluarCumplimientoHorariosFlexibles(LocalDate fechaCierre) {
+        List<EmpleadoHorario> flexibles = horarioRepo.findAll().stream()
+                .filter(h -> Boolean.TRUE.equals(h.getActivo()))
+                .filter(h -> h.getDiaSemana() == null && h.getHorasObjetivo() != null && h.getHorasObjetivo() > 0)
+                .filter(h -> h.getEmpleado() != null && Boolean.TRUE.equals(h.getEmpleado().getActivo()))
+                .toList();
+
+        for (EmpleadoHorario fh : flexibles) {
+            Empleado emp = fh.getEmpleado();
+            String frec = fh.getTipoFrecuencia() != null ? fh.getTipoFrecuencia().toUpperCase() : "MENSUAL";
+
+            LocalDate fechaInicioPeriodo = null;
+            LocalDate fechaFinPeriodo = null;
+            boolean correspondeEvaluarCierre = false;
+
+            switch (frec) {
+                case "SEMANAL" -> {
+                    if (fechaCierre.getDayOfWeek().getValue() == 7) {
+                        fechaInicioPeriodo = fechaCierre.minusDays(6);
+                        fechaFinPeriodo = fechaCierre;
+                        correspondeEvaluarCierre = true;
+                    }
+                }
+                case "SEMANA_POR_MEDIO" -> {
+                    if (fechaCierre.getDayOfWeek().getValue() == 7) {
+                        fechaInicioPeriodo = fechaCierre.minusDays(13);
+                        fechaFinPeriodo = fechaCierre;
+                        correspondeEvaluarCierre = true;
+                    }
+                }
+                case "MENSUAL" -> {
+                    if (fechaCierre.equals(fechaCierre.withDayOfMonth(fechaCierre.lengthOfMonth()))) {
+                        fechaInicioPeriodo = fechaCierre.withDayOfMonth(1);
+                        fechaFinPeriodo = fechaCierre;
+                        correspondeEvaluarCierre = true;
+                    }
+                }
+                case "ANUAL" -> {
+                    if (fechaCierre.getMonthValue() == 12 && fechaCierre.getDayOfMonth() == 31) {
+                        fechaInicioPeriodo = fechaCierre.withDayOfYear(1);
+                        fechaFinPeriodo = fechaCierre;
+                        correspondeEvaluarCierre = true;
+                    }
+                }
+            }
+
+            if (!correspondeEvaluarCierre) continue;
+
+            ResumenPresenciaFichajesDTO presencia = calcularHorasRealesRango(emp.getId(), fechaInicioPeriodo, fechaFinPeriodo);
+            double horasReales = presencia.horasNetasTrabajadas();
+            double horasMeta = fh.getHorasObjetivo();
+
+            if (horasReales < horasMeta) {
+                double deficitHoras = Math.round((horasMeta - horasReales) * 100.0) / 100.0;
+                String agrupador = "DEFICIT_FLEX_" + frec + "_" + fechaFinPeriodo + "_" + emp.getId();
+
+                if (!existeIncidente(fechaFinPeriodo, emp.getId(), "DEFICIT_HORAS")) {
+                    IncidenteAsistencia inc = new IncidenteAsistencia();
+                    inc.setFecha(fechaFinPeriodo);
+                    inc.setHora(LocalTime.of(23, 59));
+                    inc.setEmpleado(emp);
+                    inc.setSeveridad("ALTA");
+                    inc.setCategoriaRegla("DEFICIT_HORAS");
+                    inc.setTipo(String.format("Incumplimiento de Carga Flexible (%s)", frec.toLowerCase()));
+                    inc.setDetalle(String.format(
+                        "El colaborador debía cumplir %.1f hs en el período (%s al %s) y acumuló %.1f hs netas. Déficit registrado: -%.1f hs.",
+                        horasMeta, fechaInicioPeriodo, fechaFinPeriodo, horasReales, deficitHoras
+                    ));
+                    inc.setEstado("PENDIENTE");
+                    inc.setIdEventoAgrupador(agrupador);
+
+                    incidenteRepo.save(inc);
+                }
+            }
         }
     }
 
@@ -403,6 +474,19 @@ public void evaluarCumplimientoHorariosFlexibles(LocalDate fechaCierre) {
             incidenteRepo.deleteAll(falsas);
         }
     }
+
+    private void eliminarFalsosRetirosAnticipados(LocalDate fecha, Long idEmpleado) {
+    List<IncidenteAsistencia> falsos = incidenteRepo.findAll().stream()
+            .filter(i -> i.getEmpleado() != null && i.getEmpleado().getId().equals(idEmpleado))
+            .filter(i -> i.getFecha() != null && i.getFecha().equals(fecha))
+            .filter(i -> "RETIROS_PREVIOS".equalsIgnoreCase(i.getCategoriaRegla()))
+            .toList();
+
+    if (!falsos.isEmpty()) {
+        incidenteRepo.deleteAll(falsos);
+        log.info(">>> Limpieza: eliminado retiro anticipado previo del empleado {} en la fecha {} por fichaje posterior.", idEmpleado, fecha);
+    }
+}
 
     private boolean existeIncidente(LocalDate fecha, Long idEmpleado, String categoria) {
         return incidenteRepo.existeIncidentePorFechaEmpleadoYCategoria(fecha, idEmpleado, categoria);

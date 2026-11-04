@@ -8,6 +8,29 @@ import React, {
 import { Users, Search, Loader2, X, ChevronLeft } from "lucide-react";
 import { getEmpleadosActivos } from "../../services/empleadoService";
 import { getCategorias } from "../../services/configuracionService";
+import {
+  getPestanaBgClass,
+  getBadgeColorClasses,
+} from "../../utils/categoriasHorariosUtils";
+
+// Helper para obtener estilo de botón no seleccionado según color configurado
+const getBotonInactivoClasses = (color) => {
+  switch (color?.toLowerCase()) {
+    case "emerald":
+      return "bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100";
+    case "amber":
+      return "bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100";
+    case "purple":
+      return "bg-purple-50 text-purple-800 border-purple-200 hover:bg-purple-100";
+    case "cyan":
+      return "bg-cyan-50 text-cyan-800 border-cyan-200 hover:bg-cyan-100";
+    case "rose":
+      return "bg-rose-50 text-rose-800 border-rose-200 hover:bg-rose-100";
+    case "indigo":
+    default:
+      return "bg-indigo-50 text-indigo-800 border-indigo-200 hover:bg-indigo-100";
+  }
+};
 
 export default function ListaEmpleadosSidebar({
   empleadoSeleccionadoId,
@@ -81,6 +104,16 @@ export default function ListaEmpleadosSidebar({
       window.removeEventListener("datos:actualizados", handleSincronizacion);
     };
   }, [cargarDatos]);
+
+  // Mapa rápido de ID/Nombre de categoría a objeto categoría (para colores)
+  const mapaCategorias = useMemo(() => {
+    const mapa = new Map();
+    categorias.forEach((c) => {
+      mapa.set(String(c.id), c);
+      if (c.nombre) mapa.set(c.nombre.toLowerCase().trim(), c);
+    });
+    return mapa;
+  }, [categorias]);
 
   const empleadosFiltrados = useMemo(() => {
     return empleados.filter((emp) => {
@@ -169,6 +202,7 @@ export default function ListaEmpleadosSidebar({
             />
           </div>
 
+          {/* BOTONES DE FILTRO CON EL COLOR DE CONFIGURACIÓN */}
           <div className="flex flex-wrap gap-1 text-[11px] font-bold shrink-0">
             <button
               type="button"
@@ -184,9 +218,7 @@ export default function ListaEmpleadosSidebar({
 
             {categorias.map((cat) => {
               const seleccionada = categoriaFiltro === cat.id;
-              const esDoc = (cat.nombre || "")
-                .toLowerCase()
-                .includes("docente");
+              const colorId = cat.colorIdentificacion || "indigo";
 
               return (
                 <button
@@ -195,12 +227,8 @@ export default function ListaEmpleadosSidebar({
                   onClick={() => setCategoriaFiltro(cat.id)}
                   className={`px-2.5 py-1 rounded-xl border transition cursor-pointer ${
                     seleccionada
-                      ? esDoc
-                        ? "bg-purple-600 text-white border-purple-600 shadow-xs"
-                        : "bg-indigo-600 text-white border-indigo-600 shadow-xs"
-                      : esDoc
-                        ? "bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100"
-                        : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
+                      ? `${getPestanaBgClass(colorId)} border-transparent`
+                      : getBotonInactivoClasses(colorId)
                   }`}
                 >
                   {cat.nombre}
@@ -226,6 +254,15 @@ export default function ListaEmpleadosSidebar({
                   (emp.cargos || []).map((c) => c.nombre || c).join(", ") ||
                   "Empleado";
 
+                // Obtener color de categoría del empleado para su badge
+                const catEmp =
+                  (emp.categorias && emp.categorias[0]) || emp.categoria;
+                const catObj = catEmp
+                  ? mapaCategorias.get(String(catEmp.id)) ||
+                    mapaCategorias.get(catEmp.nombre?.toLowerCase()?.trim())
+                  : null;
+                const colorCat = catObj?.colorIdentificacion || "indigo";
+
                 return (
                   <div
                     key={emp.id}
@@ -236,19 +273,32 @@ export default function ListaEmpleadosSidebar({
                         : "bg-white border-slate-200/80 hover:border-slate-300 hover:bg-slate-50/70"
                     }`}
                   >
-                    <div className="flex items-center justify-between">
-                      <span className="font-bold text-xs leading-tight">
+                    <div className="flex items-center justify-between gap-1">
+                      <span className="font-bold text-xs leading-tight truncate">
                         {emp.apellido}, {emp.nombre}
                       </span>
-                      <span
-                        className={`text-[9px] font-bold px-1.5 py-0.2 rounded-full uppercase ${
-                          esSeleccionado
-                            ? "bg-emerald-400 text-emerald-950"
-                            : "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                        }`}
-                      >
-                        Activo
-                      </span>
+                      <div className="flex items-center gap-1 shrink-0">
+                        {catObj && (
+                          <span
+                            className={`text-[9px] font-bold px-1.5 py-0.2 rounded-full uppercase border ${
+                              esSeleccionado
+                                ? "bg-white/20 text-white border-white/30"
+                                : getBadgeColorClasses(colorCat)
+                            }`}
+                          >
+                            {catObj.codigoTag?.toUpperCase() || catObj.nombre}
+                          </span>
+                        )}
+                        <span
+                          className={`text-[9px] font-bold px-1.5 py-0.2 rounded-full uppercase ${
+                            esSeleccionado
+                              ? "bg-emerald-400 text-emerald-950"
+                              : "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                          }`}
+                        >
+                          Activo
+                        </span>
+                      </div>
                     </div>
                     <div
                       className={`text-[10px] mt-0.5 truncate ${
