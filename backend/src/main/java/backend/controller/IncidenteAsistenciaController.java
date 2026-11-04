@@ -12,7 +12,6 @@ import java.time.LocalDate;
 
 @RestController
 @RequestMapping("/api/incidentes")
-@CrossOrigin(origins = "http://localhost:5173")
 public class IncidenteAsistenciaController {
 
     private final IncidenteAsistenciaService incidenteService;

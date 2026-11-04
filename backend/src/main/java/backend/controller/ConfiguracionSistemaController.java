@@ -9,12 +9,10 @@ import backend.repositories.HorarioRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
 import java.util.List;
 
 @RestController
 @RequestMapping("/api/configuracion")
-@CrossOrigin(origins = "http://localhost:5173")
 public class ConfiguracionSistemaController {
 
     private final CategoriaRepository categoriaRepo;

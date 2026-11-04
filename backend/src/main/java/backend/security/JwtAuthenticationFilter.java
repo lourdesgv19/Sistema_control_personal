@@ -6,6 +6,8 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -21,6 +23,8 @@ import java.util.List;
 @Component
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
+    private static final Logger log = LoggerFactory.getLogger(JwtAuthenticationFilter.class);
+
     private final JwtService jwtService;
     private final UsuarioRepository usuarioRepo;
 
@@ -29,34 +33,27 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         this.usuarioRepo = usuarioRepo;
     }
 
-    /**
-     * Omite la ejecución de este filtro para endpoints públicos y de autenticación.
-     */
-@Override
-protected boolean shouldNotFilter(HttpServletRequest request) {
-    String path = request.getServletPath();
-    boolean omitir = path.startsWith("/api/auth/") || path.startsWith("/auth/") 
-                  || path.startsWith("/api/public/") || path.startsWith("/public/");
-    System.out.println(">>> [FILTRO JWT] shouldNotFilter? " + omitir + " para ruta: " + path);
-    return omitir;
-}
-
-@Override
-protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
-        throws ServletException, IOException {
-
-    System.out.println(">>> [FILTRO JWT] Procesando request: " + request.getMethod() + " " + request.getServletPath());
-    final String token = getTokenFromRequest(request);
-    System.out.println(">>> [FILTRO JWT] Token recibido: " + (token != null ? "PRESENTE" : "NULL"));
-
-    if (token == null) {
-        filterChain.doFilter(request, response);
-        return;
+    @Override
+    protected boolean shouldNotFilter(HttpServletRequest request) {
+        String path = request.getServletPath();
+        return path.startsWith("/api/auth/") || path.startsWith("/auth/") 
+            || path.startsWith("/api/public/") || path.startsWith("/public/")
+            || path.startsWith("/api/stream/");
     }
 
-    try {
-        String username = jwtService.getUsernameFromToken(token);
-        System.out.println(">>> [FILTRO JWT] Username en token: " + username);
+    @Override
+    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
+            throws ServletException, IOException {
+
+        final String token = getTokenFromRequest(request);
+
+        if (token == null) {
+            filterChain.doFilter(request, response);
+            return;
+        }
+
+        try {
+            String username = jwtService.getUsernameFromToken(token);
 
             if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
                 Usuario usuario = usuarioRepo.findByUsername(username).orElse(null);
@@ -78,9 +75,8 @@ protected void doFilterInternal(HttpServletRequest request, HttpServletResponse 
                 }
             }
         } catch (Exception e) {
-           System.err.println(">>> [FILTRO JWT] Error procesando token: " + e.getMessage());
+            log.warn("No se pudo autenticar el token JWT: {}", e.getMessage());
             SecurityContextHolder.clearContext();
-            System.err.println("Error procesando JWT: " + e.getMessage());
         }
 
         filterChain.doFilter(request, response);
@@ -90,7 +86,6 @@ protected void doFilterInternal(HttpServletRequest request, HttpServletResponse 
         final String authHeader = request.getHeader(HttpHeaders.AUTHORIZATION);
         if (StringUtils.hasText(authHeader) && authHeader.startsWith("Bearer ")) {
             String rawToken = authHeader.substring(7).trim();
-            // Evita procesar valores de token vacíos o serializaciones erróneas del frontend
             if (!rawToken.isEmpty() && !"null".equalsIgnoreCase(rawToken) && !"undefined".equalsIgnoreCase(rawToken)) {
                 return rawToken;
             }

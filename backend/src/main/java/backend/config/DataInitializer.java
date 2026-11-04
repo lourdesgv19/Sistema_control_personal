@@ -2,15 +2,20 @@ package backend.config;
 
 import backend.model.Permiso;
 import backend.repositories.PermisoRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
 @Component
 public class DataInitializer implements CommandLineRunner {
+
+    private static final Logger log = LoggerFactory.getLogger(DataInitializer.class);
 
     private final PermisoRepository permisoRepo;
     private final JdbcTemplate jdbcTemplate;
@@ -23,6 +28,7 @@ public class DataInitializer implements CommandLineRunner {
     }
 
     @Override
+    @Transactional
     public void run(String... args) {
         inicializarCatalogo();
         inicializarAdminSiNoExiste();
@@ -76,7 +82,7 @@ public class DataInitializer implements CommandLineRunner {
             new Permiso("MATERIAS_ELIMINAR", "MATERIAS", "Dar de baja lógica o reactivar cátedras del catálogo institucional"),
             new Permiso("LIQUIDACION_DOCENTE", "MATERIAS", "Consultar y exportar planillas de liquidación y montos acumulados por docente"),
 
-            // Excepciones y Licencias (Nuevo Módulo)
+            // Excepciones y Licencias
             new Permiso("EXCEPCIONES_VER", "EXCEPCIONES", "Visualizar módulo de excepciones, licencias vigentes y desglose por agente"),
             new Permiso("EXCEPCIONES_CREAR", "EXCEPCIONES", "Registrar licencias particulares y asuetos/feriados institucionales"),
             new Permiso("EXCEPCIONES_DICTAMINAR", "EXCEPCIONES", "Auditar, dictaminar, aprobar o rechazar solicitudes de licencias"),
@@ -86,14 +92,14 @@ public class DataInitializer implements CommandLineRunner {
         for (Permiso p : catalogo) {
             jdbcTemplate.update("""
                 INSERT INTO permisos (codigo, modulo, descripcion)
-                VALUES (?, ?, ?)
+                VALUES (?, ?, ?) AS nuevo
                 ON DUPLICATE KEY UPDATE 
-                    modulo = VALUES(modulo),
-                    descripcion = VALUES(descripcion)
+                    modulo = nuevo.modulo,
+                    descripcion = nuevo.descripcion
             """, p.getCodigo(), p.getModulo(), p.getDescripcion());
         }
 
-        System.out.println(">>> Catálogo maestro de " + catalogo.size() + " permisos sincronizado en base de datos.");
+        log.info(">>> Catálogo maestro de {} permisos sincronizado en base de datos.", catalogo.size());
     }
 
     private void inicializarAdminSiNoExiste() {
@@ -112,9 +118,9 @@ public class DataInitializer implements CommandLineRunner {
                 VALUES ('admin', ?, 'ADMINISTRADOR', 1, 1, NULL, NOW(), NOW())
             """, hash);
 
-            System.out.println(">>> Usuario 'admin' inicial creado con éxito.");
+            log.info(">>> Usuario 'admin' inicial creado exitosamente con clave temporal y cambio forzado.");
         } catch (Exception e) {
-            System.err.println("Error al inicializar usuario administrador: " + e.getMessage());
+            log.error("Error al inicializar usuario administrador: {}", e.getMessage(), e);
         }
     }
 
@@ -135,10 +141,9 @@ public class DataInitializer implements CommandLineRunner {
                     ON DUPLICATE KEY UPDATE activo = 1
                 """, idAdmin, cod);
             }
-
-            System.out.println(">>> Permisos actualizados para usuario 'admin' (" + codigos.size() + " permisos en total).");
+            log.info(">>> Matriz de accesos del administrador raíz actualizada con {} permisos.", codigos.size());
         } catch (Exception e) {
-            System.err.println("Aviso al actualizar permisos de admin: " + e.getMessage());
+            log.warn("Aviso al actualizar permisos de admin: {}", e.getMessage());
         }
     }
 }

@@ -10,7 +10,6 @@ import backend.service.DispositivoImportacionService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -19,7 +18,6 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/dispositivo")
-@CrossOrigin(origins = "http://localhost:5173")
 public class DispositivoImportacionController {
 
     private final DispositivoImportacionService dispositivoService;

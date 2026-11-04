@@ -13,7 +13,6 @@ import java.time.LocalDate;
 
 @RestController
 @RequestMapping("/api/ficha-comportamiento")
-@CrossOrigin(origins = "http://localhost:5173")
 public class FichaComportamientoController {
 
     private static final Logger log = LoggerFactory.getLogger(FichaComportamientoController.class);

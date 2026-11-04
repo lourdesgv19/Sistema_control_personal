@@ -1,6 +1,7 @@
 package backend.config;
 
 import backend.security.JwtAuthenticationFilter;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -15,8 +16,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+
 import java.util.Arrays;
 import java.util.List;
 
@@ -26,6 +26,9 @@ import java.util.List;
 public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtFilter;
+
+    @Value("${cors.allowed-origins:http://localhost:5173,http://127.0.0.1:5173}")
+    private String allowedOrigins;
 
     public SecurityConfig(JwtAuthenticationFilter jwtFilter) {
         this.jwtFilter = jwtFilter;
@@ -44,7 +47,7 @@ public class SecurityConfig {
                 .requestMatchers("/api/auth/**", "/auth/**", "/api/public/**", "/public/**", "/error").permitAll()
                 .requestMatchers("/api/stream/**").permitAll()
 
-                // 2. Perfil Propio
+                // 2. Perfil Propio y Primer Cambio de Clave
                 .requestMatchers(HttpMethod.GET, "/api/usuarios/mi-perfil").authenticated()
                 .requestMatchers(HttpMethod.PUT, "/api/usuarios/mi-perfil/**").authenticated()
                 .requestMatchers(HttpMethod.PUT, "/api/usuarios/*/primer-cambio-password").authenticated()
@@ -66,7 +69,7 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.PUT, "/api/configuracion/horarios/**").hasAnyAuthority("CONFIG_EDITAR_TURNOS", "PERM_ADMIN_TOTAL")
                 .requestMatchers(HttpMethod.DELETE, "/api/configuracion/horarios/**").hasAnyAuthority("CONFIG_EDITAR_TURNOS", "PERM_ADMIN_TOTAL")
                 
-                // 5. Horarios
+                // 5. Horarios (Se incluye HORARIOS_EDITAR en PUT)
                 .requestMatchers(HttpMethod.GET, "/api/horarios/**", "/api/empleados/*/horarios/**", "/api/empleados/*/horarios")
                     .hasAnyAuthority("HORARIOS_VER", "PERSONAL_VER", "PERM_ADMIN_TOTAL")
                 .requestMatchers(HttpMethod.GET, "/api/empleados/*/metricas")
@@ -74,7 +77,7 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.POST, "/api/horarios/**", "/api/empleados/*/horarios/**", "/api/empleados/*/horarios")
                     .hasAnyAuthority("HORARIOS_GESTIONAR", "PERM_ADMIN_TOTAL")
                 .requestMatchers(HttpMethod.PUT, "/api/horarios/**", "/api/empleados/*/horarios/**", "/api/empleados/*/horarios")
-                    .hasAnyAuthority("HORARIOS_GESTIONAR", "PERM_ADMIN_TOTAL")
+                    .hasAnyAuthority("HORARIOS_GESTIONAR", "HORARIOS_EDITAR", "PERM_ADMIN_TOTAL")
                 .requestMatchers(HttpMethod.DELETE, "/api/horarios/**", "/api/empleados/*/horarios/**", "/api/empleados/horarios/**")
                     .hasAnyAuthority("HORARIOS_ELIMINAR", "PERM_ADMIN_TOTAL")
 
@@ -94,10 +97,11 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.POST, "/api/fichajes/vincular").hasAnyAuthority("FICHAJES_VINCULAR", "PERM_ADMIN_TOTAL")
                 .requestMatchers(HttpMethod.DELETE, "/api/fichajes/lotes/**").hasAnyAuthority("FICHAJES_ELIMINAR_LOTE", "PERM_ADMIN_TOTAL")
 
-                // 8. Usuarios
+                // 8. Usuarios (Sincronizado: reset-password admite POST y PUT)
                 .requestMatchers(HttpMethod.GET, "/api/usuarios/**").hasAnyAuthority("USUARIOS_VER", "PERM_ADMIN_TOTAL")
-                .requestMatchers(HttpMethod.POST, "/api/usuarios/**").hasAnyAuthority("USUARIOS_GESTIONAR_ACCESOS", "PERM_ADMIN_TOTAL")
+                .requestMatchers(HttpMethod.POST, "/api/usuarios/*/reset-password").hasAnyAuthority("USUARIOS_RESET_PASSWORD", "PERM_ADMIN_TOTAL")
                 .requestMatchers(HttpMethod.PUT, "/api/usuarios/*/reset-password").hasAnyAuthority("USUARIOS_RESET_PASSWORD", "PERM_ADMIN_TOTAL")
+                .requestMatchers(HttpMethod.POST, "/api/usuarios/**").hasAnyAuthority("USUARIOS_GESTIONAR_ACCESOS", "PERM_ADMIN_TOTAL")
                 .requestMatchers(HttpMethod.PATCH, "/api/usuarios/*/estado").hasAnyAuthority("USUARIOS_SUSPENDER", "PERM_ADMIN_TOTAL")
                 .requestMatchers("/api/seguridad/usuarios/*/permisos/**").hasAnyAuthority("USUARIOS_GESTIONAR_ACCESOS", "PERM_ADMIN_TOTAL")
 
@@ -123,7 +127,6 @@ public class SecurityConfig {
                     .hasAnyAuthority("MATERIAS_ELIMINAR", "PERM_ADMIN_TOTAL")
 
                 // 12. Excepciones y Licencias
-
                 .requestMatchers(HttpMethod.GET, "/api/excepciones-licencias/**")
                     .hasAnyAuthority("EXCEPCIONES_VER", "PERM_ADMIN_TOTAL")
                 .requestMatchers(HttpMethod.POST, "/api/excepciones-licencias/**")
@@ -137,7 +140,7 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.DELETE, "/api/excepciones-licencias/**")
                     .hasAnyAuthority("EXCEPCIONES_ELIMINAR", "PERM_ADMIN_TOTAL")
 
-                // Endpoints del lector de huellas / terminal biométrico
+                // 13. Terminal Biométrica / Webhook
                 .requestMatchers(HttpMethod.POST, "/api/dispositivo/webhook-evento", "/api/dispositivo/sincronizar-lote").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/dispositivo/**").hasAnyAuthority("FICHAJES_VER", "PERM_ADMIN_TOTAL")
 
@@ -156,7 +159,14 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOrigins(List.of("http://localhost:5173", "http://127.0.0.1:5173")); 
+        
+        // Lee los orígenes configurados separados por coma (ej. en application-prod.properties)
+        List<String> origins = Arrays.stream(allowedOrigins.split(","))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .toList();
+
+        config.setAllowedOrigins(origins);
         config.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"));
         config.setAllowedHeaders(Arrays.asList("Authorization", "Content-Type", "Cache-Control", "Accept", "X-Requested-With", "Origin"));
         config.setExposedHeaders(List.of("Authorization"));
@@ -166,12 +176,5 @@ public class SecurityConfig {
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", config);
         return source;
-    }
-
-    @Bean
-    public ObjectMapper objectMapper() {
-    ObjectMapper mapper = new ObjectMapper();
-    mapper.registerModule(new JavaTimeModule()); // Soporte para LocalDate y LocalDateTime
-    return mapper;
     }
 }

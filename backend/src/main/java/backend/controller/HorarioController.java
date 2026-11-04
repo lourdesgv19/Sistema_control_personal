@@ -14,7 +14,6 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/horarios")
-@CrossOrigin(origins = "http://localhost:5173")
 public class HorarioController {
 
     private final HorarioService horarioService;

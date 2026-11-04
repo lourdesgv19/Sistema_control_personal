@@ -16,7 +16,6 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/seguridad")
-@CrossOrigin(origins = "*")
 public class PermisosYAuditoriaController {
 
     private final AuditoriaYPermisosService permisosService;
