@@ -9,6 +9,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 
@@ -50,7 +52,8 @@ public class HorarioController {
         Integer repeticionesPeriodo,
         String semanaAlterna,
         Double horasObjetivo,
-        Boolean forzarGuardado
+        Boolean forzarGuardado,
+        LocalDate fechaDesde
     ) {}
 
     @PostMapping("/empleado/{empleadoId}")
@@ -75,7 +78,8 @@ public class HorarioController {
                     req.repeticionesPeriodo(),
                     req.semanaAlterna(),
                     req.horasObjetivo(),
-                    Boolean.TRUE.equals(req.forzarGuardado())
+                    Boolean.TRUE.equals(req.forzarGuardado()),
+                    req.fechaDesde()
             );
             return ResponseEntity.status(HttpStatus.CREATED).body(creados);
         } catch (IllegalArgumentException | IllegalStateException e) {

@@ -24,9 +24,6 @@ public class Materia {
     @Column(name = "aula_predeterminada", length = 80)
     private String aulaPredeterminada;
 
-    @Column(name = "tarifa_hora_catedra", precision = 10, scale = 2)
-    private BigDecimal tarifaHoraCatedra = BigDecimal.ZERO;
-
     @Column(columnDefinition = "TEXT")
     private String observaciones;
 
@@ -50,9 +47,6 @@ public class Materia {
 
     public String getAulaPredeterminada() { return aulaPredeterminada; }
     public void setAulaPredeterminada(String aulaPredeterminada) { this.aulaPredeterminada = aulaPredeterminada; }
-
-    public BigDecimal getTarifaHoraCatedra() { return tarifaHoraCatedra; }
-    public void setTarifaHoraCatedra(BigDecimal tarifaHoraCatedra) { this.tarifaHoraCatedra = tarifaHoraCatedra; }
 
     public String getObservaciones() { return observaciones; }
     public void setObservaciones(String observaciones) { this.observaciones = observaciones; }

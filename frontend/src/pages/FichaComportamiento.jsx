@@ -56,6 +56,8 @@ import {
   calcularRangoMes,
   calcularOffsetPrimerDia,
   formatearMinutosVisuales,
+  formatearHorasYMinutos,
+  formatearHora24,
 } from "../utils/fechasFichaUtils";
 
 export default function FichaComportamiento() {
@@ -198,56 +200,7 @@ export default function FichaComportamiento() {
     }
   }, [empleadoSeleccionado?.id]);
 
-  const mapaHorariosPorDiaSemana = useMemo(() => {
-    const mapa = { 1: [], 2: [], 3: [], 4: [], 5: [], 6: [], 7: [] };
-    const aliasDias = {
-      lunes: 1,
-      lun: 1,
-      martes: 2,
-      mar: 2,
-      miercoles: 3,
-      miércoles: 3,
-      mié: 3,
-      mie: 3,
-      jueves: 4,
-      jue: 4,
-      viernes: 5,
-      vie: 5,
-      sabado: 6,
-      sábado: 6,
-      sáb: 6,
-      sab: 6,
-      domingo: 7,
-      dom: 7,
-    };
-
-    horariosConfigurados.forEach((h) => {
-      if (h.activo === false) return;
-      if (h.diaSemana == null) return;
-
-      let diaNum = null;
-      if (typeof h.diaSemana === "number") {
-        diaNum = h.diaSemana;
-      } else if (typeof h.diaSemana === "string") {
-        diaNum = aliasDias[h.diaSemana.toLowerCase().trim()] || null;
-      }
-
-      if (diaNum && mapa[diaNum]) {
-        mapa[diaNum].push({
-          nombre:
-            h.materia?.nombre ||
-            h.etiqueta ||
-            h.nombreTurno ||
-            "Turno Programado",
-          entrada: (h.horaEntrada || "00:00").substring(0, 5),
-          salida: (h.horaSalida || h.horaEgreso || "00:00").substring(0, 5),
-        });
-      }
-    });
-
-    return mapa;
-  }, [horariosConfigurados]);
-
+  // Obtiene los horarios activos verificando estrictamente fechaAlta y fechaBaja
   const obtenerHorariosDeFecha = useCallback(
     (fechaStr) => {
       if (!fechaStr) return [];
@@ -259,9 +212,69 @@ export default function FichaComportamiento() {
         parseInt(partes[2], 10),
       );
       const diaNum = d.getDay() === 0 ? 7 : d.getDay();
-      return mapaHorariosPorDiaSemana[diaNum] || [];
+      const fechaLimpia = String(fechaStr).split("T")[0];
+
+      const aliasDias = {
+        lunes: 1,
+        lun: 1,
+        martes: 2,
+        mar: 2,
+        miercoles: 3,
+        miércoles: 3,
+        mié: 3,
+        mie: 3,
+        jueves: 4,
+        jue: 4,
+        viernes: 5,
+        vie: 5,
+        sabado: 6,
+        sábado: 6,
+        sáb: 6,
+        sab: 6,
+        domingo: 7,
+        dom: 7,
+      };
+
+      return horariosConfigurados
+        .filter((h) => {
+          if (h.activo === false) return false;
+          if (h.diaSemana == null) return false;
+
+          let hDiaNum =
+            typeof h.diaSemana === "number"
+              ? h.diaSemana
+              : aliasDias[String(h.diaSemana).toLowerCase().trim()] || null;
+
+          if (hDiaNum !== diaNum) return false;
+
+          // No computar horarios en fechas anteriores a su alta
+          if (h.fechaAlta) {
+            const fechaAltaStr = String(h.fechaAlta).split("T")[0];
+            if (fechaLimpia < fechaAltaStr) return false;
+          }
+
+          // No computar horarios en fechas posteriores a su baja
+          if (h.fechaBaja) {
+            const fechaBajaStr = String(h.fechaBaja).split("T")[0];
+            if (fechaLimpia > fechaBajaStr) return false;
+          }
+
+          return true;
+        })
+        .map((h) => ({
+          id: h.id,
+          nombre:
+            h.materia?.nombre ||
+            h.etiqueta ||
+            h.nombreTurno ||
+            "Turno Programado",
+          entrada: (h.horaEntrada || "00:00").substring(0, 5),
+          salida: (h.horaSalida || h.horaEgreso || "00:00").substring(0, 5),
+          fechaAlta: h.fechaAlta,
+          fechaBaja: h.fechaBaja,
+        }));
     },
-    [mapaHorariosPorDiaSemana],
+    [horariosConfigurados],
   );
 
   const mesesDelRango = useMemo(() => {
@@ -708,7 +721,7 @@ export default function FichaComportamiento() {
               inc.hora !== "00:00" &&
               inc.hora !== "00:00:00" && (
                 <span className="font-mono font-bold text-slate-700 bg-white/70 border border-slate-200 px-2 py-0.5 rounded-md text-[11px]">
-                  {inc.hora.substring(0, 5)} hs
+                  {formatearHora24(inc.hora)}
                 </span>
               )}
 
@@ -1093,12 +1106,21 @@ export default function FichaComportamiento() {
               inc.tipo?.toLowerCase().includes("clase"),
           );
 
+          const tieneIncidenteAusenciaReal = incidentesValidos.some(
+            (inc) =>
+              (inc.tipo || "").toLowerCase().includes("inasistencia") ||
+              (inc.tipo || "").toLowerCase().includes("ausencia") ||
+              (inc.categoriaRegla || "").toUpperCase() === "AUSENCIAS",
+          );
+
+          // Solo se marca sin registro si tenía horario vigente E incidente real de falta
           const esSinRegistro =
             !esFuturo &&
             !esLicencia &&
             !esFlexible &&
-            (dia.estadoGeneral === "SIN_REGISTRO" ||
-              (tieneHorarioAsignado && !huboPresencia));
+            tieneHorarioAsignado &&
+            !huboPresencia &&
+            tieneIncidenteAusenciaReal;
 
           const esCritica =
             !esFuturo &&
@@ -1160,7 +1182,6 @@ export default function FichaComportamiento() {
               }}
               className={`border rounded-xl sm:rounded-2xl p-1.5 sm:p-2.5 min-h-[50px] sm:min-h-[105px] h-full flex flex-col justify-between hover:shadow-xs transition cursor-pointer overflow-hidden ${cardBgClasses}`}
             >
-              {/* FILA SUPERIOR: NÚMERO Y BADGE HOY / INDICADOR */}
               <div className="flex items-center justify-between leading-none">
                 <span
                   className={`text-[11px] sm:text-sm font-black ${
@@ -1191,7 +1212,6 @@ export default function FichaComportamiento() {
                 </div>
               </div>
 
-              {/* CUERPO CENTRAL: OCULTO EN MÓVIL (sm:hidden), VISIBLE EN ESCRITORIO (sm:block) */}
               <div className="hidden sm:block my-1 space-y-1">
                 {esDocente &&
                   dia.clasesDictadasTexto &&
@@ -1257,12 +1277,11 @@ export default function FichaComportamiento() {
                   </div>
                 ) : (
                   <span className="text-[10px] text-slate-400 italic block leading-none">
-                    {esSinRegistro ? "Ausencia" : "Franco"}
+                    Franco
                   </span>
                 )}
               </div>
 
-              {/* PIE EN MÓVIL: MINI PUNTO / PASTILLA COMPACTA PARA SEÑALAR ESTADO */}
               <div className="sm:hidden flex items-center justify-center mt-1">
                 {dia.presenciaNetaMinutos > 0 ? (
                   <span className="text-[8px] font-mono font-bold text-emerald-800 bg-emerald-100/90 px-1 py-0.2 rounded">
@@ -1283,7 +1302,6 @@ export default function FichaComportamiento() {
                 )}
               </div>
 
-              {/* PIE EN ESCRITORIO: CONTADOR DETALLADO */}
               <div className="hidden sm:block leading-none pt-0.5">
                 {incidentesValidos.length > 0 && !esLicencia ? (
                   <span
@@ -2135,6 +2153,7 @@ export default function FichaComportamiento() {
                               : r.tipo === "INFRACCION"
                                 ? "bg-rose-500"
                                 : "bg-amber-400";
+
                           const textoDuracion = r.duracionMinutos
                             ? formatearMinutosVisuales(r.duracionMinutos)
                             : r.etiqueta;
@@ -2238,8 +2257,13 @@ export default function FichaComportamiento() {
                                   <td className="py-3 font-mono">
                                     {it.horaFin}
                                   </td>
-                                  <td className="py-3 font-bold">
-                                    {it.duracionTexto}
+                                  <td className="py-3 font-bold font-mono">
+                                    {typeof it.duracionMinutos === "number"
+                                      ? formatearMinutosVisuales(
+                                          it.duracionMinutos,
+                                        )
+                                      : it.duracionTexto ||
+                                        formatearMinutosVisuales(it.duracion)}
                                   </td>
                                   <td
                                     className={`py-3 ${it.esInfraccion ? "text-rose-600 font-bold" : "text-slate-500"}`}
@@ -2395,11 +2419,49 @@ export default function FichaComportamiento() {
                           dia.presenciaNetaMinutos > 0 ||
                           (dia.primeraEntrada &&
                             dia.primeraEntrada !== "--:--");
+
+                        const tieneIncidenteAusenciaReal = (
+                          fichaData?.incidentes || []
+                        ).some(
+                          (inc) =>
+                            String(inc.fecha || "").split("T")[0] ===
+                              dia.fecha &&
+                            ((inc.tipo || "")
+                              .toLowerCase()
+                              .includes("inasistencia") ||
+                              (inc.tipo || "")
+                                .toLowerCase()
+                                .includes("ausencia") ||
+                              (inc.categoriaRegla || "").toUpperCase() ===
+                                "AUSENCIAS"),
+                        );
+
                         const esFalta =
                           tieneHorario &&
                           !huboActividad &&
                           !esFuturo &&
-                          !esFlexible;
+                          !esFlexible &&
+                          tieneIncidenteAusenciaReal;
+
+                        const esSinHorarioSinActividad =
+                          !tieneHorario && !huboActividad && !esLicencia;
+
+                        if (esSinHorarioSinActividad) {
+                          return (
+                            <div
+                              key={dia.fecha}
+                              className="p-3 rounded-2xl border border-slate-200/70 bg-slate-50/60 text-xs flex items-center justify-between"
+                            >
+                              <span className="font-mono font-bold text-slate-500">
+                                {formatearFechaVisual(dia.fecha)} (
+                                {dia.diaSemana})
+                              </span>
+                              <span className="text-[11px] text-slate-400 italic">
+                                Sin horario asignado / Sin actividad registrada
+                              </span>
+                            </div>
+                          );
+                        }
 
                         return (
                           <div
@@ -2568,11 +2630,58 @@ export default function FichaComportamiento() {
                               );
                             }
 
+                            const tieneIncidenteAusenciaReal = (
+                              fichaData?.incidentes || []
+                            ).some(
+                              (inc) =>
+                                String(inc.fecha || "").split("T")[0] ===
+                                  dia.fecha &&
+                                ((inc.tipo || "")
+                                  .toLowerCase()
+                                  .includes("inasistencia") ||
+                                  (inc.tipo || "")
+                                    .toLowerCase()
+                                    .includes("ausencia") ||
+                                  (inc.categoriaRegla || "").toUpperCase() ===
+                                    "AUSENCIAS"),
+                            );
+
                             const esFalta =
                               tieneHorario &&
                               !huboActividad &&
                               !esFuturo &&
-                              !esFlexible;
+                              !esFlexible &&
+                              tieneIncidenteAusenciaReal;
+
+                            const esSinHorarioSinActividad =
+                              !tieneHorario && !huboActividad;
+
+                            if (esSinHorarioSinActividad) {
+                              return (
+                                <tr
+                                  key={dia.fecha}
+                                  className={`transition ${
+                                    estaInspeccionado
+                                      ? "bg-slate-200/70"
+                                      : "bg-slate-50/60 hover:bg-slate-100/60"
+                                  }`}
+                                >
+                                  <td className="px-4 py-3 font-mono font-bold text-slate-500">
+                                    {formatearFechaVisual(dia.fecha)}
+                                  </td>
+                                  <td className="px-4 py-3 font-semibold text-slate-500">
+                                    {dia.diaSemana}
+                                  </td>
+                                  <td
+                                    colSpan={7}
+                                    className="px-4 py-3 text-center text-slate-400 italic text-[11px]"
+                                  >
+                                    Sin horario asignado para este día / Sin
+                                    actividad registrada
+                                  </td>
+                                </tr>
+                              );
+                            }
 
                             return (
                               <tr

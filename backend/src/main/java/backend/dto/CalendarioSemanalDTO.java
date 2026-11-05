@@ -21,9 +21,7 @@ public class CalendarioSemanalDTO {
         String motivoDesvio,        // Ej: "0h / No dada", "2.7h / 3.0h", "Ingreso 09:22"
         Long idDocente,
         String nombreDocente,
-        String apellidoDocente,
-        double tarifaHora,
-        double montoLiquidado
+        String apellidoDocente
     ) {}
 
     public record DiaCalendarioDTO(

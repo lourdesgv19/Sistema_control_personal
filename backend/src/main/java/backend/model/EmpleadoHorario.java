@@ -4,6 +4,8 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import org.hibernate.annotations.SQLDelete;
 import org.hibernate.annotations.SQLRestriction;
+
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 
@@ -58,7 +60,7 @@ public class EmpleadoHorario {
     private LocalDateTime fechaBaja;
 
     @Column(name = "fecha_alta", nullable = false)
-    private LocalDateTime fechaAlta = LocalDateTime.now();
+    private LocalDateTime fechaAlta = LocalDate.now().atStartOfDay();
 
     @Column(name = "tipo_frecuencia", nullable = false, length = 30)
     private String tipoFrecuencia = "SEMANAL";

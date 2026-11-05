@@ -116,7 +116,7 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.GET, "/api/materias", "/api/materias/*", "/api/materias/catalogo-agrupado", "/api/materias/calendario-semanal")
                     .hasAnyAuthority("MATERIAS_VER", "PERM_ADMIN_TOTAL")
                 .requestMatchers(HttpMethod.GET, "/api/materias/resumen")
-                    .hasAnyAuthority("LIQUIDACION_DOCENTE", "MATERIAS_VER", "PERM_ADMIN_TOTAL")
+                    .hasAnyAuthority("MATERIAS_VER", "PERM_ADMIN_TOTAL")
                 .requestMatchers(HttpMethod.GET, "/api/materias/*/impacto-baja")
                     .hasAnyAuthority("MATERIAS_ELIMINAR", "PERM_ADMIN_TOTAL")
                 .requestMatchers(HttpMethod.POST, "/api/materias", "/api/materias/**")

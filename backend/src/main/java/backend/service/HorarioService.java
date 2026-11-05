@@ -15,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.temporal.IsoFields;
 import java.util.*;
@@ -73,7 +74,7 @@ public class HorarioService {
         return horarioRepo.findByEmpleadoId(empleadoId);
     }
 
-    @Transactional
+@Transactional
     public List<EmpleadoHorario> agregarHorariosMultiples(Long empleadoId,
                                                          List<Integer> diasSemana,
                                                          String horaEntradaStr,
@@ -85,10 +86,12 @@ public class HorarioService {
                                                          Integer repeticionesPeriodo,
                                                          String semanaAlterna,
                                                          Double horasObjetivo,
-                                                         Boolean forzarGuardado) {
+                                                         Boolean forzarGuardado,
+                                                         LocalDate fechaDesde) {
         Empleado emp = empleadoRepo.findById(empleadoId)
                 .orElseThrow(() -> new RuntimeException("Empleado no encontrado con ID: " + empleadoId));
 
+        LocalDateTime fechaAltaFinal = (fechaDesde != null ? fechaDesde : LocalDate.now()).atStartOfDay();
         String frecFinal = (tipoFrecuencia != null && !tipoFrecuencia.isBlank()) ? tipoFrecuencia.toUpperCase() : "SEMANAL";
         int repsFinal = (repeticionesPeriodo != null && repeticionesPeriodo > 0) ? repeticionesPeriodo : 1;
 
@@ -105,6 +108,7 @@ public class HorarioService {
             flexible.setRepeticionesPeriodo(repsFinal);
             flexible.setSemanaAlterna(null);
             flexible.setActivo(true);
+            flexible.setFechaAlta(fechaAltaFinal);
             flexible.setToleranciaIngresoMin(0);
             flexible.setToleranciaEgresoMin(0);
 
@@ -173,6 +177,7 @@ public class HorarioService {
             nuevo.setToleranciaIngresoMin(emp.getToleranciaIngresoMin() != null ? emp.getToleranciaIngresoMin() : 15);
             nuevo.setToleranciaEgresoMin(emp.getToleranciaEgresoMin() != null ? emp.getToleranciaEgresoMin() : 10);
             nuevo.setActivo(true);
+            nuevo.setFechaAlta(fechaAltaFinal);
             nuevo.setTipoFrecuencia(frecFinal);
             nuevo.setRepeticionesPeriodo(repsFinal);
             nuevo.setSemanaAlterna(semanaAlterna != null && !semanaAlterna.isBlank() ? semanaAlterna.toUpperCase() : null);

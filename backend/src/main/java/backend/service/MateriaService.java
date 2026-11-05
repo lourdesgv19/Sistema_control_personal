@@ -97,17 +97,11 @@ public class MateriaService {
         long completas = 0;
         long desvios = 0;
         long faltas = 0;
-        double totalLiquidar = 0.0;
-        double totalDeduccion = 0.0;
 
         for (var dia : calendario.dias()) {
             for (BloqueClaseDTO clase : dia.clases()) {
                 horasFijadas += clase.horasProgramadas();
                 horasDictadas += clase.horasEfectivas();
-                totalLiquidar += clase.montoLiquidado();
-
-                double perdidaClase = Math.max(0, (clase.horasProgramadas() - clase.horasEfectivas()) * clase.tarifaHora());
-                totalDeduccion += perdidaClase;
 
                 switch (clase.estadoSemaforo()) {
                     case "VERDE" -> completas++;
@@ -128,9 +122,7 @@ public class MateriaService {
             cumplimiento,
             completas,
             desvios,
-            faltas,
-            Math.round(totalLiquidar),
-            Math.round(totalDeduccion)
+            faltas
         );
     }
 
@@ -257,8 +249,8 @@ public class MateriaService {
                                 throw new IllegalStateException(String.format(
                                     "SOLAPAMIENTO_AULA: El aula '%s' ya se encuentra ocupada el día %s de %s a %s hs por %s (%s).",
                                     aulaFinal, nombreDia,
-                                    exInicio.toString().substring(0, 5), exFin.toString().substring(0, 5)
-                                    , materiaOcupante, ocupante
+                                    exInicio.toString().substring(0, 5), exFin.toString().substring(0, 5),
+                                    materiaOcupante, ocupante
                                 ));
                             }
                         }
@@ -278,7 +270,6 @@ public class MateriaService {
         materia.setNombre(req.nombre().trim());
         if (req.codigo() != null) materia.setCodigo(req.codigo().trim());
         materia.setAulaPredeterminada(!aulaFinal.isBlank() ? aulaFinal : null);
-        materia.setTarifaHoraCatedra(req.tarifaHora() != null ? BigDecimal.valueOf(req.tarifaHora()) : BigDecimal.ZERO);
         if (req.observaciones() != null) materia.setObservaciones(req.observaciones());
         materia.setActivo(true);
         Materia guardada = materiaRepo.saveAndFlush(materia);
@@ -297,7 +288,7 @@ public class MateriaService {
             materiaDocenteRepo.save(vinculo);
         }
 
-        // 4. Actualizar o crear horarios en empleado_horarios
+        // 4. Actualizar o crear horarios en empleado_horarios fijando fechaAlta
         if (nuevaInicio != null && nuevaFin != null && req.diasSemana() != null && !req.diasSemana().isEmpty()) {
             String frecFinal = (req.tipoFrecuencia() != null && !req.tipoFrecuencia().isBlank()) 
                     ? req.tipoFrecuencia().toUpperCase() 
@@ -308,6 +299,10 @@ public class MateriaService {
             String semAltFinal = "SEMANA_POR_MEDIO".equals(frecFinal) 
                     ? (req.semanaAlterna() != null ? req.semanaAlterna().toUpperCase() : "PAR") 
                     : null;
+
+            // Determinar vigencia: fechaDesde elegida o hoy a las 00:00:00
+            LocalDate fDesde = req.fechaDesde() != null ? req.fechaDesde() : LocalDate.now();
+            LocalDateTime fechaAltaFinal = fDesde.atStartOfDay();
 
             if (req.idHorario() != null) {
                 EmpleadoHorario hExistente = horarioRepo.findById(req.idHorario()).orElse(null);
@@ -323,6 +318,9 @@ public class MateriaService {
                     hExistente.setRepeticionesPeriodo(repsFinal);
                     hExistente.setSemanaAlterna(semAltFinal);
                     hExistente.setActivo(true);
+                    if (req.fechaDesde() != null) {
+                        hExistente.setFechaAlta(fechaAltaFinal);
+                    }
                     horarioRepo.saveAndFlush(hExistente);
                     return guardada;
                 }
@@ -343,6 +341,7 @@ public class MateriaService {
                 nuevoH.setRepeticionesPeriodo(repsFinal);
                 nuevoH.setSemanaAlterna(semAltFinal);
                 nuevoH.setActivo(true);
+                nuevoH.setFechaAlta(fechaAltaFinal);
                 horarioRepo.saveAndFlush(nuevoH);
             }
         }
@@ -378,12 +377,10 @@ public class MateriaService {
                             .thenComparing(h -> h.getHoraEntrada() != null ? h.getHoraEntrada() : LocalTime.MIDNIGHT))
                     .toList();
 
-            double tarifa = m.getTarifaHoraCatedra() != null ? m.getTarifaHoraCatedra().doubleValue() : 5200.0;
             double horasTotales = 0.0;
             Set<String> diasUnicos = new LinkedHashSet<>();
             List<HorarioDesgloseDTO> desgloses = new ArrayList<>();
 
-            // Buscar en tabla intermedia si hay relación titular/auxiliar
             Optional<MateriaDocente> vinculoOpt = materiaDocenteRepo.findByMateriaActiva(m.getId());
 
             Long titularId = null;
@@ -413,7 +410,6 @@ public class MateriaService {
                         : 0;
                 double horasClase = Math.round((minutos / 60.0) * 10.0) / 10.0;
                 horasTotales += horasClase;
-                double totalClase = Math.round(horasClase * tarifa);
 
                 String turno = (h.getHoraEntrada() != null && h.getHoraEntrada().isBefore(LocalTime.of(13, 0)))
                         ? "Turno Mañana" : "Turno Tarde";
@@ -443,8 +439,6 @@ public class MateriaService {
                     h.getEmpleado() != null ? h.getEmpleado().getId() : null,
                     docNombre,
                     docLegajo,
-                    tarifa,
-                    totalClase,
                     h.getTipoFrecuencia() != null ? h.getTipoFrecuencia() : "SEMANAL",
                     h.getRepeticionesPeriodo() != null ? h.getRepeticionesPeriodo() : 1,
                     h.getSemanaAlterna()
@@ -459,7 +453,6 @@ public class MateriaService {
                 m.getNombre(),
                 m.getCodigo(),
                 m.getAulaPredeterminada() != null ? m.getAulaPredeterminada() : "Aula sin asignar",
-                tarifa,
                 horariosDeMateria.size(),
                 new ArrayList<>(diasUnicos),
                 Math.round(horasTotales * 10.0) / 10.0,

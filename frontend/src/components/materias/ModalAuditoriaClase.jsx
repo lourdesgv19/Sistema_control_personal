@@ -29,11 +29,6 @@ export default function ModalAuditoriaClase({ isOpen, onClose, clase }) {
       ? Math.min(100, Math.round((minutosDictados / minutosFijados) * 100))
       : 0;
 
-  const tarifaHora = Number(clase.tarifaHora || 5200);
-  const pagoLiquidable = Number(
-    clase.montoLiquidado || Math.round((minutosDictados / 60) * tarifaHora),
-  );
-
   const horaInicioFormateada = clase.horaInicio
     ? clase.horaInicio.slice(0, 5)
     : "--:--";
@@ -64,8 +59,7 @@ export default function ModalAuditoriaClase({ isOpen, onClose, clase }) {
           </div>
           <p className="text-amber-800 leading-relaxed text-[11px]">
             El docente registró llegada tardía, retiro anticipado o salida
-            intermedia durante el período de clase. Solo se computan los minutos
-            netos efectivamente dictados para el pago.
+            intermedia durante el período de clase.
           </p>
         </div>
       );
@@ -79,8 +73,7 @@ export default function ModalAuditoriaClase({ isOpen, onClose, clase }) {
             <span>Clase Programada (Pendiente de Dictado)</span>
           </div>
           <p className="text-slate-500 leading-relaxed text-[11px]">
-            Esta jornada aún no ha transcurrido. Las horas efectivas se
-            liquidarán tras procesar los fichajes biométricos.
+            Esta jornada aún no ha transcurrido.
           </p>
         </div>
       );
@@ -158,15 +151,6 @@ export default function ModalAuditoriaClase({ isOpen, onClose, clase }) {
                 <span>{clase.aula || "Aula sin asignar"}</span>
               </div>
             </div>
-
-            <div className="text-right border-l border-slate-100 pl-3 sm:pl-4 shrink-0">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
-                Tarifa Asignada
-              </span>
-              <span className="text-sm sm:text-base font-bold text-slate-900 font-mono mt-0.5 block">
-                ${tarifaHora.toLocaleString("es-AR")}/h
-              </span>
-            </div>
           </div>
 
           {/* BANNER DINÁMICO DE SEMÁFORO */}
@@ -207,18 +191,6 @@ export default function ModalAuditoriaClase({ isOpen, onClose, clase }) {
               </div>
               <span className="text-[10px] text-rose-500 mt-0.5 font-medium truncate">
                 {minutosDesvio > 0 ? `${minutosDesvio} min` : "Sin desvíos"}
-              </span>
-            </div>
-
-            <div className="bg-indigo-50/60 border border-indigo-100 rounded-2xl p-3 flex flex-col justify-between">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-700">
-                Pago Liquidable
-              </span>
-              <div className="text-base sm:text-lg font-bold text-indigo-950 mt-1 font-mono">
-                ${pagoLiquidable.toLocaleString("es-AR")}
-              </div>
-              <span className="text-[10px] text-indigo-600 mt-0.5 font-medium">
-                Por esta clase
               </span>
             </div>
           </div>

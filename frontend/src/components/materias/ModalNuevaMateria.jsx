@@ -1,12 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
-import {
-  X,
-  Users,
-  Loader2,
-  DollarSign,
-  Calculator,
-  CalendarCheck,
-} from "lucide-react";
+import { X, Users, Loader2, CalendarCheck } from "lucide-react";
 import { postNuevaMateria } from "../../services/gestionMateriasService";
 import { getEmpleadosActivos } from "../../services/empleadoService";
 import ModalAlerta from "../comunes/ModalAlerta";
@@ -33,8 +26,7 @@ export default function ModalNuevaMateria({
     useState(false);
   const [guardando, setGuardando] = useState(false);
 
-  const [tipoIngresoTarifa, setTipoIngresoTarifa] = useState("HORA");
-  const [tarifaClaseInput, setTarifaClaseInput] = useState("");
+  const hoyIso = new Date().toISOString().split("T")[0];
 
   const [form, setForm] = useState({
     nombre: "",
@@ -45,12 +37,12 @@ export default function ModalNuevaMateria({
     horaFin: "12:30",
     idDocenteTitular: "",
     idDocenteAuxiliar: "",
-    tarifaHora: 5200,
     observaciones: "",
     forzarGuardado: false,
     tipoFrecuencia: "SEMANAL",
     repeticionesPeriodo: 1,
     semanaAlterna: "PAR",
+    fechaDesde: hoyIso,
   });
 
   const [modalAlerta, setModalAlerta] = useState({
@@ -139,23 +131,14 @@ export default function ModalNuevaMateria({
         idDocenteTitular:
           materiaAEditar.idDocenteTitular || materiaAEditar.idDocente || "",
         idDocenteAuxiliar: materiaAEditar.idDocenteAuxiliar || "",
-        tarifaHora: tarifaBase,
         observaciones: materiaAEditar.observaciones || "",
         forzarGuardado: false,
         tipoFrecuencia: materiaAEditar.tipoFrecuencia || "SEMANAL",
         repeticionesPeriodo: materiaAEditar.repeticionesPeriodo || 1,
         semanaAlterna: materiaAEditar.semanaAlterna || "PAR",
       });
-
-      setTarifaClaseInput(Math.round(tarifaBase * duracionHoras));
     }
   }, [materiaAEditar, duracionHoras]);
-
-  useEffect(() => {
-    if (tipoIngresoTarifa === "HORA") {
-      setTarifaClaseInput(Math.round(form.tarifaHora * duracionHoras));
-    }
-  }, [form.tarifaHora, duracionHoras, tipoIngresoTarifa]);
 
   const toggleDia = (id) => {
     setForm((prev) => ({
@@ -164,23 +147,6 @@ export default function ModalNuevaMateria({
         ? prev.diasSemana.filter((d) => d !== id)
         : [...prev.diasSemana, id].sort((a, b) => a - b),
     }));
-  };
-
-  const handleCambioTarifaHora = (valorHora) => {
-    const num = Number(valorHora);
-    setForm((prev) => ({ ...prev, tarifaHora: num }));
-    setTarifaClaseInput(Math.round(num * duracionHoras));
-  };
-
-  const handleCambioTarifaClase = (valorClase) => {
-    setTarifaClaseInput(valorClase);
-    const numClase = Number(valorClase);
-    if (numClase >= 0 && duracionHoras > 0) {
-      setForm((prev) => ({
-        ...prev,
-        tarifaHora: Math.round(numClase / duracionHoras),
-      }));
-    }
   };
 
   const handleGuardar = async (forzar = false) => {
@@ -214,7 +180,6 @@ export default function ModalNuevaMateria({
           : null,
         rolTitular: "TITULAR",
         rolAuxiliar: "AUXILIAR",
-        tarifaHora: Number(form.tarifaHora || 5200),
         observaciones: form.observaciones,
         forzarGuardado: forzar,
         tipoFrecuencia: form.tipoFrecuencia || "SEMANAL",
@@ -226,6 +191,7 @@ export default function ModalNuevaMateria({
           form.tipoFrecuencia === "SEMANA_POR_MEDIO"
             ? form.semanaAlterna || "PAR"
             : null,
+        fechaDesde: form.fechaDesde || hoyIso,
       };
 
       await postNuevaMateria(payload);
@@ -554,100 +520,22 @@ export default function ModalNuevaMateria({
               )}
             </div>
 
-            <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-3.5 space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="font-bold text-slate-800 flex items-center gap-1.5">
-                  <DollarSign className="w-3.5 h-3.5 text-indigo-600" />
-                  Liquidación de Cátedra
-                </span>
-                <span className="text-[10px] text-slate-400 font-mono">
-                  {duracionHoras.toFixed(1)}h / jornada
-                </span>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2 bg-slate-200/60 p-1 rounded-xl">
-                <button
-                  type="button"
-                  onClick={() => setTipoIngresoTarifa("HORA")}
-                  className={`py-1 text-center font-bold rounded-lg transition cursor-pointer text-[11px] ${
-                    tipoIngresoTarifa === "HORA"
-                      ? "bg-white text-indigo-700 shadow-xs"
-                      : "text-slate-600 hover:text-slate-900"
-                  }`}
-                >
-                  Tarifa por Hora ($/h)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setTipoIngresoTarifa("CLASE")}
-                  className={`py-1 text-center font-bold rounded-lg transition cursor-pointer text-[11px] ${
-                    tipoIngresoTarifa === "CLASE"
-                      ? "bg-white text-indigo-700 shadow-xs"
-                      : "text-slate-600 hover:text-slate-900"
-                  }`}
-                >
-                  Tarifa por Clase ($ total)
-                </button>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-center">
-                <div>
-                  <label className="text-[10px] font-semibold text-slate-600 block mb-1">
-                    Valor por Hora Cátedra *
-                  </label>
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-slate-400">
-                      $
-                    </span>
-                    <input
-                      type="number"
-                      min="0"
-                      step="50"
-                      required
-                      disabled={tipoIngresoTarifa === "CLASE"}
-                      value={form.tarifaHora}
-                      onChange={(e) => handleCambioTarifaHora(e.target.value)}
-                      className={`w-full pl-7 pr-3 py-1.5 border rounded-xl font-bold font-mono outline-none ${
-                        tipoIngresoTarifa === "HORA"
-                          ? "bg-white border-indigo-400 text-indigo-950 focus:border-indigo-600"
-                          : "bg-slate-100 border-slate-200 text-slate-600 cursor-not-allowed"
-                      }`}
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="text-[10px] font-semibold text-slate-600 block mb-1">
-                    Valor Total por Clase *
-                  </label>
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-slate-400">
-                      $
-                    </span>
-                    <input
-                      type="number"
-                      min="0"
-                      step="100"
-                      required
-                      disabled={tipoIngresoTarifa === "HORA"}
-                      value={tarifaClaseInput}
-                      onChange={(e) => handleCambioTarifaClase(e.target.value)}
-                      className={`w-full pl-7 pr-3 py-1.5 border rounded-xl font-bold font-mono outline-none ${
-                        tipoIngresoTarifa === "CLASE"
-                          ? "bg-white border-indigo-400 text-indigo-950 focus:border-indigo-600"
-                          : "bg-slate-100 border-slate-200 text-slate-600 cursor-not-allowed"
-                      }`}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-1.5 text-[10px] text-slate-500 bg-white p-2 rounded-xl border border-slate-200/60">
-                <Calculator className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
-                <span>
-                  {tipoIngresoTarifa === "CLASE"
-                    ? `Calculado: $${tarifaClaseInput || 0} ÷ ${duracionHoras.toFixed(1)}h = $${form.tarifaHora.toLocaleString("es-AR")}/h`
-                    : `Cálculo por clase: $${form.tarifaHora.toLocaleString("es-AR")}/h × ${duracionHoras.toFixed(1)}h = $${tarifaClaseInput || 0}`}
+            <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200">
+              <label className="font-semibold text-slate-700 block mb-1">
+                Vigencia del Horario (Control de Desvíos)
+              </label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="date"
+                  value={form.fechaDesde}
+                  onChange={(e) =>
+                    setForm({ ...form, fechaDesde: e.target.value })
+                  }
+                  className="px-3 py-1.5 border border-slate-200 rounded-xl bg-white outline-none focus:border-indigo-600 font-medium text-xs text-slate-800"
+                />
+                <span className="text-[11px] text-slate-400">
+                  Rige a partir de esta fecha. No se auditarán faltas ni desvíos
+                  previos.
                 </span>
               </div>
             </div>

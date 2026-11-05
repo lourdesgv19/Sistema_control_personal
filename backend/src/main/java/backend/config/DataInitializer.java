@@ -80,8 +80,7 @@ public class DataInitializer implements CommandLineRunner {
             new Permiso("MATERIAS_CREAR", "MATERIAS", "Crear materias y registrar comisiones en el sistema"),
             new Permiso("MATERIAS_EDITAR", "MATERIAS", "Modificar datos de cátedras, tarifas por hora y aulas predeterminadas"),
             new Permiso("MATERIAS_ELIMINAR", "MATERIAS", "Dar de baja lógica o reactivar cátedras del catálogo institucional"),
-            new Permiso("LIQUIDACION_DOCENTE", "MATERIAS", "Consultar y exportar planillas de liquidación y montos acumulados por docente"),
-
+           
             // Excepciones y Licencias
             new Permiso("EXCEPCIONES_VER", "EXCEPCIONES", "Visualizar módulo de excepciones, licencias vigentes y desglose por agente"),
             new Permiso("EXCEPCIONES_CREAR", "EXCEPCIONES", "Registrar licencias particulares y asuetos/feriados institucionales"),

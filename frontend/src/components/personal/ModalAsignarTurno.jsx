@@ -6,6 +6,7 @@ import {
   Plus,
   Trash2,
   CalendarCheck,
+  Calendar,
   UserCheck,
   CheckCircle2,
 } from "lucide-react";
@@ -44,6 +45,8 @@ export default function ModalAsignarTurno({
   setHorasObjetivo,
   etiquetaFlexible = "Bolsa de Horas Flexible",
   setEtiquetaFlexible,
+  fechaDesde,
+  setFechaDesde,
 }) {
   if (!isOpen) return null;
 
@@ -103,6 +106,26 @@ export default function ModalAsignarTurno({
               </select>
             </div>
           )}
+
+          {/* VIGENCIA DEL HORARIO (CONTROL DE DESVÍOS) */}
+          <div className="p-3 sm:p-3.5 bg-slate-50 border border-slate-200 rounded-2xl space-y-1.5">
+            <label className="font-bold text-slate-700 text-xs flex items-center gap-1.5">
+              <Calendar className="w-4 h-4 text-indigo-600 shrink-0" />
+              <span>Fecha de Inicio de Vigencia (Control de Desvíos)</span>
+            </label>
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+              <input
+                type="date"
+                value={fechaDesde || ""}
+                onChange={(e) => setFechaDesde(e.target.value)}
+                className="w-full sm:w-auto bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-semibold text-slate-800 outline-none focus:border-indigo-600 cursor-pointer"
+              />
+              <span className="text-[11px] text-slate-400">
+                Rige desde esta fecha. No se auditarán inasistencias ni desvíos
+                previos.
+              </span>
+            </div>
+          </div>
 
           <div className="text-[10px] font-bold uppercase text-slate-400">
             Modalidad de Carga de Horario

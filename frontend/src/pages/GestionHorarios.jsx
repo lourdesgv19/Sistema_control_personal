@@ -14,6 +14,7 @@ import {
   Filter,
   ArrowRight,
   User,
+  Users,
 } from "lucide-react";
 import {
   getEmpleadosActivos,
@@ -32,6 +33,7 @@ import {
   DIAS_MAP,
   MAPA_DIAS_NUMERO,
   getPestanaBgClass,
+  getBadgeColorClasses,
 } from "../utils/categoriasHorariosUtils";
 
 const ITEMS_POR_PAGINA = 12;
@@ -54,12 +56,15 @@ export default function GestionHorarios() {
 
   const [paginaActual, setPaginaActual] = useState(1);
   const [searchEmpleado, setSearchEmpleado] = useState("");
-  const [categoriaActiva, setCategoriaActiva] = useState("Docentes");
+  const [categoriaActiva, setCategoriaActiva] = useState("TODAS");
 
   const [modalDetalle, setModalDetalle] = useState(false);
   const [empleadoEnModal, setEmpleadoEnModal] = useState(null);
   const [horariosEmpleadoModal, setHorariosEmpleadoModal] = useState([]);
   const [metricasEmpleadoModal, setMetricasEmpleadoModal] = useState(null);
+
+  const hoyIso = new Date().toISOString().split("T")[0];
+  const [fechaDesdeTurno, setFechaDesdeTurno] = useState(hoyIso);
 
   const [modalAsignarTurno, setModalAsignarTurno] = useState(false);
   const [tipoAsignacionTurno, setTipoAsignacionTurno] =
@@ -110,39 +115,27 @@ export default function GestionHorarios() {
     });
   };
 
-  const cargarCatalogos = useCallback(
-    async (forzar = false) => {
-      setLoading(true);
-      try {
-        const [empRes, catRes, horRes] = await Promise.all([
-          getEmpleadosActivos(forzar),
-          getCategorias(),
-          getHorarios(),
-        ]);
+  const cargarCatalogos = useCallback(async (forzar = false) => {
+    setLoading(true);
+    try {
+      const [empRes, catRes, horRes] = await Promise.all([
+        getEmpleadosActivos(forzar),
+        getCategorias(),
+        getHorarios(),
+      ]);
 
-        const emps = Array.isArray(empRes) ? empRes : [];
-        setEmpleados(emps);
+      const emps = Array.isArray(empRes) ? empRes : [];
+      setEmpleados(emps);
 
-        const cats = Array.isArray(catRes) ? catRes : [];
-        setCategorias(cats);
-        setHorariosPreestablecidos(Array.isArray(horRes) ? horRes : []);
-
-        if (
-          cats.length > 0 &&
-          !cats.some(
-            (c) => c.nombre.toLowerCase() === categoriaActiva.toLowerCase(),
-          )
-        ) {
-          setCategoriaActiva(cats[0].nombre);
-        }
-      } catch (err) {
-        console.error("Error al cargar datos de horarios:", err);
-      } finally {
-        setLoading(false);
-      }
-    },
-    [categoriaActiva],
-  );
+      const cats = Array.isArray(catRes) ? catRes : [];
+      setCategorias(cats);
+      setHorariosPreestablecidos(Array.isArray(horRes) ? horRes : []);
+    } catch (err) {
+      console.error("Error al cargar datos de horarios:", err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     cargarCatalogos(false);
@@ -168,13 +161,17 @@ export default function GestionHorarios() {
     };
   }, [cargarCatalogos]);
 
-  const esVistaDocente = useMemo(() => {
-    return categoriaActiva.toLowerCase().includes("docente");
+  const esVistaDocentePura = useMemo(() => {
+    return (
+      categoriaActiva.toLowerCase() === "docentes" ||
+      categoriaActiva.toLowerCase() === "docente"
+    );
   }, [categoriaActiva]);
 
   const empleadosFiltrados = useMemo(() => {
     return empleados.filter((emp) => {
       const perteneceCat =
+        categoriaActiva === "TODAS" ||
         (emp.categorias || []).some(
           (c) => c.nombre?.toLowerCase() === categoriaActiva.toLowerCase(),
         ) ||
@@ -225,6 +222,7 @@ export default function GestionHorarios() {
     setSemanaAlternaTurno("PAR");
     setHorasObjetivoTurno(4);
     setEtiquetaFlexibleTurno("Bolsa de Horas Flexible");
+    setFechaDesdeTurno(hoyIso);
     setModalAsignarTurno(true);
   };
 
@@ -261,6 +259,7 @@ export default function GestionHorarios() {
             tipoFrecuenciaTurno === "SEMANA_POR_MEDIO"
               ? semanaAlternaTurno
               : null,
+          fechaDesde: fechaDesdeTurno || hoyIso,
         });
       } else if (tipoAsignacionTurno === "PREESTABLECIDO") {
         const plantilla = horariosPreestablecidos.find(
@@ -299,6 +298,7 @@ export default function GestionHorarios() {
             tipoFrecuenciaTurno === "SEMANA_POR_MEDIO"
               ? semanaAlternaTurno
               : null,
+          fechaDesde: fechaDesdeTurno || hoyIso,
         });
       } else {
         const diasNumericos = diasEspecificos.map(
@@ -326,6 +326,7 @@ export default function GestionHorarios() {
               tipoFrecuenciaTurno === "SEMANA_POR_MEDIO"
                 ? semanaAlternaTurno
                 : null,
+            fechaDesde: fechaDesdeTurno || hoyIso,
           });
         }
       }
@@ -420,6 +421,7 @@ export default function GestionHorarios() {
         </div>
       </div>
 
+      {/* SELECTOR DE CATEGORÍA DE PERSONAL */}
       <div className="bg-white border border-slate-200 rounded-2xl p-3 sm:p-3.5 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3">
         <div className="flex items-center gap-2 text-xs font-bold text-slate-500 uppercase tracking-wider shrink-0">
           <Filter className="w-3.5 h-3.5 text-indigo-600" />
@@ -427,6 +429,23 @@ export default function GestionHorarios() {
         </div>
 
         <div className="flex items-center gap-2 overflow-x-auto pb-1 md:pb-0 scrollbar-none">
+          {/* BOTÓN TODAS LAS CATEGORÍAS */}
+          <button
+            type="button"
+            onClick={() => {
+              setCategoriaActiva("TODAS");
+              setPaginaActual(1);
+            }}
+            className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+              categoriaActiva === "TODAS"
+                ? "bg-[#111827] text-white shadow-xs"
+                : "bg-slate-100/90 hover:bg-slate-200/80 text-slate-700 border border-slate-200/60"
+            }`}
+          >
+            <Users className="w-3.5 h-3.5 shrink-0" />
+            <span>Todas las Categorías</span>
+          </button>
+
           {categorias.map((cat) => {
             const activa =
               categoriaActiva.toLowerCase() === cat.nombre.toLowerCase();
@@ -477,7 +496,9 @@ export default function GestionHorarios() {
         <div className="text-xs text-slate-500 font-medium self-end sm:self-auto">
           Total en{" "}
           <strong className="text-slate-800 font-bold">
-            {categoriaActiva}
+            {categoriaActiva === "TODAS"
+              ? "Todas las Categorías"
+              : categoriaActiva}
           </strong>
           : {empleadosFiltrados.length} empleados
         </div>
@@ -493,16 +514,34 @@ export default function GestionHorarios() {
           </div>
         ) : empleadosPaginados.length === 0 ? (
           <div className="text-center py-12 text-slate-400 text-xs italic">
-            No se encontraron empleados registrados en la categoría{" "}
-            {categoriaActiva}.
+            No se encontraron empleados registrados en{" "}
+            {categoriaActiva === "TODAS"
+              ? "el sistema"
+              : `la categoría ${categoriaActiva}`}
+            .
           </div>
         ) : (
           <>
+            {/* VISTA MÓVIL */}
             <div className="md:hidden divide-y divide-slate-100">
               {empleadosPaginados.map((emp) => {
-                const cargosStr =
-                  (emp.cargos || []).map((c) => c.nombre || c).join(", ") ||
-                  "General";
+                const cargosList = emp.cargos || [];
+                const esDocente =
+                  (emp.categorias || []).some((c) =>
+                    (c.nombre || c.codigoTag || "")
+                      .toLowerCase()
+                      .includes("docente"),
+                  ) ||
+                  (emp.categoria?.nombre || "")
+                    .toLowerCase()
+                    .includes("docente");
+
+                const categoriasEmp =
+                  emp.categorias && emp.categorias.length > 0
+                    ? emp.categorias
+                    : emp.categoria
+                      ? [emp.categoria]
+                      : [];
 
                 return (
                   <div
@@ -529,13 +568,47 @@ export default function GestionHorarios() {
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-1.5 text-xs text-slate-600">
-                      <span className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">
-                        Cargo:
-                      </span>
-                      <span className="px-2 py-0.5 rounded-md bg-slate-100 border border-slate-200 text-slate-700 text-[11px] font-medium">
-                        {cargosStr}
-                      </span>
+                    {/* COLUMNA CARGO / PUESTOS + BADGE CATEGORÍA EN FILTRO TODAS */}
+                    <div className="flex flex-col gap-1 text-xs text-slate-600">
+                      {categoriaActiva === "TODAS" && (
+                        <div className="flex flex-wrap gap-1 mb-0.5">
+                          {categoriasEmp.length > 0 ? (
+                            categoriasEmp.map((cat, idx) => (
+                              <span
+                                key={cat.id || idx}
+                                className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wider uppercase border ${getBadgeColorClasses(
+                                  cat.colorIdentificacion,
+                                )}`}
+                              >
+                                {cat.nombre || "General"}
+                              </span>
+                            ))
+                          ) : (
+                            <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wider uppercase border bg-slate-50 text-slate-600 border-slate-200">
+                              General
+                            </span>
+                          )}
+                        </div>
+                      )}
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">
+                          Cargo:
+                        </span>
+                        {cargosList.length > 0 ? (
+                          cargosList.map((c, i) => (
+                            <span
+                              key={c.id || i}
+                              className="px-2 py-0.5 rounded-md bg-slate-100 border border-slate-200 text-slate-700 text-[11px] font-medium"
+                            >
+                              {c.nombre || c}
+                            </span>
+                          ))
+                        ) : (
+                          <span className="text-slate-400 text-xs italic">
+                            Sin cargos asignados
+                          </span>
+                        )}
+                      </div>
                     </div>
 
                     <div className="grid grid-cols-2 gap-2 pt-1 border-t border-slate-100/80">
@@ -549,7 +622,7 @@ export default function GestionHorarios() {
                       </button>
 
                       {puedeCrear || puedeEditar ? (
-                        esVistaDocente ? (
+                        esVistaDocentePura ? (
                           <button
                             type="button"
                             onClick={() =>
@@ -563,14 +636,33 @@ export default function GestionHorarios() {
                             <ArrowRight className="w-3.5 h-3.5 shrink-0" />
                           </button>
                         ) : (
-                          <button
-                            type="button"
-                            onClick={() => abrirTurno(emp)}
-                            className="flex items-center justify-center gap-1.5 px-3 py-2 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white font-bold rounded-xl text-xs transition cursor-pointer shadow-xs"
-                          >
-                            <Sliders className="w-3.5 h-3.5 shrink-0" />
-                            <span>Asignar Horario</span>
-                          </button>
+                          <div className="flex flex-col gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => abrirTurno(emp)}
+                              className="flex items-center justify-center gap-1.5 px-3 py-2 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white font-bold rounded-xl text-xs transition cursor-pointer shadow-xs"
+                            >
+                              <Sliders className="w-3.5 h-3.5 shrink-0" />
+                              <span>Asignar Horario</span>
+                            </button>
+                            {categoriaActiva === "TODAS" && esDocente && (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  navigate("/materias", {
+                                    state: {
+                                      tab: "catalogo",
+                                      docenteId: emp.id,
+                                    },
+                                  })
+                                }
+                                className="flex items-center justify-center gap-1.5 px-3 py-1.5 bg-purple-50 hover:bg-purple-100 text-purple-700 font-bold rounded-xl text-xs transition cursor-pointer border border-purple-200"
+                              >
+                                <span>Materias</span>
+                                <ArrowRight className="w-3 h-3 shrink-0" />
+                              </button>
+                            )}
+                          </div>
                         )
                       ) : (
                         <div className="flex items-center justify-center gap-1 px-3 py-2 bg-slate-50 border border-slate-200 text-slate-400 font-bold rounded-xl text-xs">
@@ -584,6 +676,7 @@ export default function GestionHorarios() {
               })}
             </div>
 
+            {/* VISTA ESCRITORIO */}
             <div className="hidden md:block overflow-x-auto">
               <table className="w-full text-left text-xs">
                 <thead className="bg-[#f8fafc] text-slate-500 font-bold uppercase text-[10px] border-b border-slate-100">
@@ -602,9 +695,23 @@ export default function GestionHorarios() {
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-slate-800">
                   {empleadosPaginados.map((emp) => {
-                    const cargosStr =
-                      (emp.cargos || []).map((c) => c.nombre || c).join(", ") ||
-                      "General";
+                    const cargosList = emp.cargos || [];
+                    const esDocente =
+                      (emp.categorias || []).some((c) =>
+                        (c.nombre || c.codigoTag || "")
+                          .toLowerCase()
+                          .includes("docente"),
+                      ) ||
+                      (emp.categoria?.nombre || "")
+                        .toLowerCase()
+                        .includes("docente");
+
+                    const categoriasEmp =
+                      emp.categorias && emp.categorias.length > 0
+                        ? emp.categorias
+                        : emp.categoria
+                          ? [emp.categoria]
+                          : [];
 
                     return (
                       <tr
@@ -621,10 +728,45 @@ export default function GestionHorarios() {
                           </div>
                         </td>
 
+                        {/* COLUMNA CARGOS / PUESTOS + BADGE DE CATEGORÍA SI ESTÁ EN "TODAS" */}
                         <td className="px-6 py-4">
-                          <span className="inline-block px-2.5 py-1 rounded-lg bg-slate-100 border border-slate-200 text-slate-700 text-xs font-medium">
-                            {cargosStr}
-                          </span>
+                          {categoriaActiva === "TODAS" && (
+                            <div className="flex flex-wrap gap-1 mb-1.5">
+                              {categoriasEmp.length > 0 ? (
+                                categoriasEmp.map((cat, idx) => (
+                                  <span
+                                    key={cat.id || idx}
+                                    className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-wider uppercase border ${getBadgeColorClasses(
+                                      cat.colorIdentificacion,
+                                    )}`}
+                                  >
+                                    {cat.nombre || "General"}
+                                  </span>
+                                ))
+                              ) : (
+                                <span className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-wider uppercase border bg-slate-50 text-slate-600 border-slate-200">
+                                  General
+                                </span>
+                              )}
+                            </div>
+                          )}
+
+                          <div className="flex flex-wrap gap-1 mt-0.5">
+                            {cargosList.length > 0 ? (
+                              cargosList.map((cg, i) => (
+                                <span
+                                  key={cg.id || i}
+                                  className="inline-block px-2.5 py-1 rounded-lg bg-slate-100 border border-slate-200 text-slate-700 text-xs font-medium"
+                                >
+                                  {cg.nombre || cg}
+                                </span>
+                              ))
+                            ) : (
+                              <span className="text-slate-400 text-xs italic">
+                                Sin cargos asignados
+                              </span>
+                            )}
+                          </div>
                         </td>
 
                         <td className="px-6 py-4">
@@ -641,7 +783,7 @@ export default function GestionHorarios() {
                         <td className="px-6 py-4 text-right whitespace-nowrap">
                           <div className="flex items-center justify-end gap-2 text-slate-400">
                             {puedeCrear || puedeEditar ? (
-                              esVistaDocente ? (
+                              esVistaDocentePura ? (
                                 <button
                                   type="button"
                                   onClick={() =>
@@ -658,14 +800,34 @@ export default function GestionHorarios() {
                                   <ArrowRight className="w-3.5 h-3.5" />
                                 </button>
                               ) : (
-                                <button
-                                  type="button"
-                                  onClick={() => abrirTurno(emp)}
-                                  className="flex items-center gap-1 px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold rounded-lg text-xs transition cursor-pointer"
-                                >
-                                  <Sliders className="w-3.5 h-3.5" />
-                                  <span>Asignar Horario</span>
-                                </button>
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={() => abrirTurno(emp)}
+                                    className="flex items-center gap-1 px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold rounded-lg text-xs transition cursor-pointer"
+                                  >
+                                    <Sliders className="w-3.5 h-3.5" />
+                                    <span>Asignar Horario</span>
+                                  </button>
+
+                                  {categoriaActiva === "TODAS" && esDocente && (
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        navigate("/materias", {
+                                          state: {
+                                            tab: "catalogo",
+                                            docenteId: emp.id,
+                                          },
+                                        })
+                                      }
+                                      className="flex items-center gap-1 px-2.5 py-1 bg-purple-50 hover:bg-purple-100 text-purple-700 font-bold rounded-lg text-xs transition cursor-pointer border border-purple-200"
+                                    >
+                                      <span>Materias</span>
+                                      <ArrowRight className="w-3.5 h-3.5" />
+                                    </button>
+                                  )}
+                                </>
                               )
                             ) : (
                               <span className="p-1 text-slate-300 cursor-not-allowed">
@@ -819,6 +981,8 @@ export default function GestionHorarios() {
         setHorasObjetivo={setHorasObjetivoTurno}
         etiquetaFlexible={etiquetaFlexibleTurno}
         setEtiquetaFlexible={setEtiquetaFlexibleTurno}
+        fechaDesde={fechaDesdeTurno}
+        setFechaDesde={setFechaDesdeTurno}
       />
 
       <ModalAlerta

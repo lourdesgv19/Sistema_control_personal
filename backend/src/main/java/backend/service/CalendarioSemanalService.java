@@ -117,9 +117,6 @@ public RespuestaCalendarioDTO obtenerCalendarioSemanal(
 
         for (EmpleadoHorario h : horariosDia) {
             Empleado doc = h.getEmpleado();
-            double tarifaHora = (h.getMateria().getTarifaHoraCatedra() != null) 
-                    ? h.getMateria().getTarifaHoraCatedra().doubleValue() 
-                    : 5200.0;
 
             long minutosTeoricos = (h.getHoraEntrada() != null && h.getHoraSalida() != null)
                     ? Duration.between(h.getHoraEntrada(), h.getHoraSalida()).toMinutes()
@@ -165,8 +162,6 @@ public RespuestaCalendarioDTO obtenerCalendarioSemanal(
                     motivoDesvio = horasEfectivas + "h (100%)";
                 }
             }
-
-            double monto = Math.round(horasEfectivas * tarifaHora);
             String aulaFinal = (h.getAula() != null && !h.getAula().isBlank()) 
                     ? h.getAula() 
                     : (h.getMateria().getAulaPredeterminada() != null ? h.getMateria().getAulaPredeterminada() : "Aula Sin Asignar");
@@ -186,9 +181,7 @@ public RespuestaCalendarioDTO obtenerCalendarioSemanal(
                     motivoDesvio,
                     doc.getId(),
                     doc.getNombre(),
-                    doc.getApellido(),
-                    tarifaHora,
-                    monto
+                    doc.getApellido()
             ));
         }
 

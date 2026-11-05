@@ -442,15 +442,6 @@ export default function CatalogoMateriasABM({
                         </span>
                       </div>
                     </div>
-
-                    <div className="text-right">
-                      <span className="text-[10px] text-slate-400 font-semibold block uppercase">
-                        Tarifa Cátedra
-                      </span>
-                      <span className="font-bold text-slate-900 font-mono mt-0.5 block">
-                        ${materia.tarifaHora.toLocaleString("es-AR")}/h
-                      </span>
-                    </div>
                   </div>
 
                   <div className="mt-2.5">
@@ -595,9 +586,6 @@ export default function CatalogoMateriasABM({
                             {horario.horaInicio} - {horario.horaFin} (
                             {horario.horasClase.toFixed(1)}h)
                           </span>
-                          <span className="font-bold text-slate-900">
-                            ${horario.tarifaHora.toLocaleString("es-AR")}/h
-                          </span>
                         </div>
 
                         <div className="flex items-center gap-1.5 text-slate-500 text-[11px]">
@@ -686,7 +674,6 @@ export default function CatalogoMateriasABM({
               <th className="py-3 px-4">Aula(s)</th>
               <th className="py-3 px-4">Días & Carga Semanal</th>
               <th className="py-3 px-4">Cuerpo Docente (Titular & Auxiliar)</th>
-              <th className="py-3 px-4 text-right">Tarifa / Hora</th>
               <th className="py-3 px-4 text-center">Acciones</th>
             </tr>
           </thead>
@@ -847,15 +834,6 @@ export default function CatalogoMateriasABM({
                         )}
                       </td>
 
-                      <td className="py-4 px-4 text-right">
-                        <div className="font-bold text-slate-900 text-xs font-mono">
-                          ${materia.tarifaHora.toLocaleString("es-AR")}/h
-                        </div>
-                        <span className="text-[10px] text-slate-400">
-                          Tarifa cátedra
-                        </span>
-                      </td>
-
                       <td
                         className="py-4 px-4 text-center"
                         onClick={(e) => e.stopPropagation()}
@@ -1003,16 +981,6 @@ export default function CatalogoMateriasABM({
                                 </span>
                               )}
                             </div>
-                          </td>
-
-                          <td className="py-3 px-4 text-right">
-                            <div className="font-bold text-slate-900 font-mono">
-                              ${horario.tarifaHora.toLocaleString("es-AR")}/h
-                            </div>
-                            <span className="text-[10px] text-slate-400 font-mono">
-                              ${horario.totalPorClase.toLocaleString("es-AR")}{" "}
-                              por clase
-                            </span>
                           </td>
 
                           <td className="py-3 px-4 text-center">

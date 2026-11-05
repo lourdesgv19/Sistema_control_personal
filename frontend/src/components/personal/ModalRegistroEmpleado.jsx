@@ -36,7 +36,7 @@ export default function ModalRegistroEmpleado({
   isOpen,
   onClose,
   onSubmit,
-  formEmpleado,
+  formEmpleado = {},
   setFormEmpleado,
   editandoEmpleadoId,
   categoriasActivas = [],
@@ -47,25 +47,34 @@ export default function ModalRegistroEmpleado({
 
   const [textoDebounced, setTextoDebounced] = useState("");
 
+  // Normalización segura de la lista de empleados ante arrays, objetos paginados ({ content: [...] }) o valores nulos
+  const listaEmpleadosSegura = useMemo(() => {
+    if (Array.isArray(empleadosExistentes)) return empleadosExistentes;
+    if (empleadosExistentes && Array.isArray(empleadosExistentes.content)) {
+      return empleadosExistentes.content;
+    }
+    return [];
+  }, [empleadosExistentes]);
+
   useEffect(() => {
     const handler = setTimeout(() => {
       setTextoDebounced(
-        `${formEmpleado.nombre || ""} ${formEmpleado.apellido || ""}`
+        `${formEmpleado?.nombre || ""} ${formEmpleado?.apellido || ""}`
           .trim()
           .toLowerCase(),
       );
     }, 250);
 
     return () => clearTimeout(handler);
-  }, [formEmpleado.nombre, formEmpleado.apellido]);
+  }, [formEmpleado?.nombre, formEmpleado?.apellido]);
 
   const coincidenciasSimilares = useMemo(() => {
     if (textoDebounced.length < 3) return [];
 
-    return empleadosExistentes
-      .filter((emp) => String(emp.id) !== String(editandoEmpleadoId))
+    return listaEmpleadosSegura
+      .filter((emp) => String(emp?.id) !== String(editandoEmpleadoId))
       .map((emp) => {
-        const nombreEmp = `${emp.nombre || ""} ${emp.apellido || ""}`
+        const nombreEmp = `${emp?.nombre || ""} ${emp?.apellido || ""}`
           .trim()
           .toLowerCase();
         const similitud = calcularSimilitudOptimizada(
@@ -84,7 +93,7 @@ export default function ModalRegistroEmpleado({
         };
       })
       .filter((item) => item.esExacto || item.esParecido);
-  }, [textoDebounced, empleadosExistentes, editandoEmpleadoId]);
+  }, [textoDebounced, listaEmpleadosSegura, editandoEmpleadoId]);
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4">
@@ -103,6 +112,7 @@ export default function ModalRegistroEmpleado({
           </div>
           <button
             onClick={onClose}
+            type="button"
             className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition cursor-pointer shrink-0"
             aria-label="Cerrar modal"
           >
@@ -151,7 +161,7 @@ export default function ModalRegistroEmpleado({
                 type="text"
                 required
                 placeholder="Ej: Carlos"
-                value={formEmpleado.nombre}
+                value={formEmpleado.nombre || ""}
                 onChange={(e) =>
                   setFormEmpleado({ ...formEmpleado, nombre: e.target.value })
                 }
@@ -166,7 +176,7 @@ export default function ModalRegistroEmpleado({
                 type="text"
                 required
                 placeholder="Ej: Benítez"
-                value={formEmpleado.apellido}
+                value={formEmpleado.apellido || ""}
                 onChange={(e) =>
                   setFormEmpleado({ ...formEmpleado, apellido: e.target.value })
                 }
@@ -284,7 +294,7 @@ export default function ModalRegistroEmpleado({
             }
           />
 
-          {/* Parámetros de Auditoría y Tolerancias (Rejilla de 2 en móvil, 4 en PC) */}
+          {/* Parámetros de Auditoría y Tolerancias */}
           <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-3.5 space-y-3">
             <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-500">
               Parámetros de Auditoría y Tolerancias
@@ -297,7 +307,7 @@ export default function ModalRegistroEmpleado({
                 <input
                   type="number"
                   min="0"
-                  value={formEmpleado.toleranciaIngresoMin}
+                  value={formEmpleado.toleranciaIngresoMin ?? 15}
                   onChange={(e) =>
                     setFormEmpleado({
                       ...formEmpleado,
@@ -315,7 +325,7 @@ export default function ModalRegistroEmpleado({
                 <input
                   type="number"
                   min="0"
-                  value={formEmpleado.toleranciaEgresoMin}
+                  value={formEmpleado.toleranciaEgresoMin ?? 10}
                   onChange={(e) =>
                     setFormEmpleado({
                       ...formEmpleado,
@@ -334,7 +344,7 @@ export default function ModalRegistroEmpleado({
                   type="number"
                   min="0"
                   placeholder="45"
-                  value={formEmpleado.tiempoMaxFueraMin}
+                  value={formEmpleado.tiempoMaxFueraMin ?? 45}
                   onChange={(e) =>
                     setFormEmpleado({
                       ...formEmpleado,
@@ -353,7 +363,7 @@ export default function ModalRegistroEmpleado({
                   type="number"
                   min="0"
                   placeholder="2"
-                  value={formEmpleado.maxSalidasIntermedias}
+                  value={formEmpleado.maxSalidasIntermedias ?? 2}
                   onChange={(e) =>
                     setFormEmpleado({
                       ...formEmpleado,

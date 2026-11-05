@@ -32,12 +32,12 @@ export default function ModalDetalleCronograma({
   const puedeEditar =
     typeof puedeEditarProp === "boolean"
       ? puedeEditarProp
-      : tienePermiso("HORARIOS_GESTIONAR");
+      : tienePermiso("HORARIOS_GESTIONAR") || tienePermiso("PERM_ADMIN_TOTAL");
 
   const puedeEliminar =
     typeof puedeEliminarProp === "boolean"
       ? puedeEliminarProp
-      : tienePermiso("HORARIOS_ELIMINAR");
+      : tienePermiso("HORARIOS_ELIMINAR") || tienePermiso("PERM_ADMIN_TOTAL");
 
   if (!isOpen || !empleado) return null;
 
@@ -47,7 +47,9 @@ export default function ModalDetalleCronograma({
     (empleado.categorias || []).some((c) =>
       (c.codigoTag || c.nombre || "").toLowerCase().includes("docente"),
     ) ||
-    (empleado.categoria?.codigoTag || "").toLowerCase().includes("docente");
+    (empleado.categoria?.codigoTag || empleado.categoria?.nombre || "")
+      .toLowerCase()
+      .includes("docente");
 
   // Identificar si existen franjas con esquema flexible (sin día fijo o con horas objetivo)
   const franjasFlexibles = clases.filter(
@@ -148,7 +150,7 @@ export default function ModalDetalleCronograma({
                 </span>
               </div>
               <div className="text-[11px] text-slate-400 mt-0.5 truncate">
-                {(empleado.cargos || []).map((c) => c.nombre).join(", ") ||
+                {(empleado.cargos || []).map((c) => c.nombre || c).join(", ") ||
                   "Sin cargo"}{" "}
                 • DNI: {empleado.dni || "Sin DNI"}
               </div>
@@ -218,7 +220,6 @@ export default function ModalDetalleCronograma({
                   </div>
                 </div>
 
-                {/* Tarjetas de las franjas flexibles asignadas */}
                 <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto w-full sm:w-auto">
                   {franjasFlexibles.map((flx) => (
                     <div
@@ -256,9 +257,8 @@ export default function ModalDetalleCronograma({
             </div>
           )}
 
-          {/* Métricas calculadas adaptables a rejilla móvil */}
+          {/* MÉTRICAS CALCULADAS */}
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 text-xs">
-            {/* 1. Carga Semanal */}
             <div className="bg-slate-50 border border-slate-200 p-3 sm:p-3.5 rounded-2xl flex flex-col justify-between">
               <div className="text-[10px] font-bold uppercase text-slate-400">
                 Carga Semanal
@@ -273,7 +273,6 @@ export default function ModalDetalleCronograma({
               </div>
             </div>
 
-            {/* 2. Régimen Horario */}
             <div
               className={`border p-3 sm:p-3.5 rounded-2xl flex flex-col justify-between ${
                 tieneEsquemaFlexible
@@ -310,7 +309,6 @@ export default function ModalDetalleCronograma({
               </div>
             </div>
 
-            {/* 3. Días con Asistencia */}
             <div className="bg-blue-50/60 border border-blue-100 p-3 sm:p-3.5 rounded-2xl flex flex-col justify-between">
               <div className="text-[10px] font-bold uppercase text-blue-700">
                 Días con Asistencia
@@ -336,7 +334,6 @@ export default function ModalDetalleCronograma({
               </div>
             </div>
 
-            {/* 4. Tolerancias Fichaje */}
             <div className="bg-emerald-50/60 border border-emerald-100 p-3 sm:p-3.5 rounded-2xl flex flex-col justify-between">
               <div className="flex items-center justify-between text-[10px] font-bold uppercase text-emerald-700">
                 <span>Tolerancias Fichaje</span>
@@ -374,7 +371,6 @@ export default function ModalDetalleCronograma({
               )}
             </div>
 
-            {/* 5. Pausas Intermedias */}
             <div className="bg-amber-50/70 border border-amber-200/80 p-3 sm:p-3.5 rounded-2xl flex flex-col justify-between sm:col-span-2 md:col-span-3 lg:col-span-1">
               <div className="flex items-center justify-between text-[10px] font-bold uppercase text-amber-800">
                 <span>Pausas Intermedias</span>
@@ -390,7 +386,7 @@ export default function ModalDetalleCronograma({
             </div>
           </div>
 
-          {/* Grilla Semanal Adaptativa */}
+          {/* GRILLA SEMANAL */}
           <div>
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 mb-3">
               <div className="flex items-center gap-2 text-xs font-bold text-slate-900">
@@ -398,6 +394,7 @@ export default function ModalDetalleCronograma({
                 <span>Cronograma de Jornadas por Día:</span>
               </div>
 
+              {/* GESTIÓN DE MATERIAS SOLO A DOCENTES */}
               {esDocente &&
                 (puedeEditar ? (
                   <button
@@ -423,7 +420,6 @@ export default function ModalDetalleCronograma({
                 ))}
             </div>
 
-            {/* Rejilla: 1 columna en móvil, 2 en intermedio, 4 en tablet y 7 en escritorio */}
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-2.5">
               {diasMap.map(({ nombre, diaNumero }) => {
                 const franjasDia = clases.filter(
@@ -471,7 +467,6 @@ export default function ModalDetalleCronograma({
                                   : "bg-indigo-50/70 border-indigo-100"
                               }`}
                             >
-                              {/* Botón de baja visible siempre en táctil, hover en pantallas sm+ */}
                               {isActivo && puedeEliminar && (
                                 <button
                                   type="button"
@@ -545,7 +540,8 @@ export default function ModalDetalleCronograma({
             Cerrar
           </button>
 
-          {!esDocente && puedeEditar && (
+          {/* MODIFICAR / ASIGNAR TURNO DISPONIBLE PARA TODOS LOS QUE NO SEAN EXCLUSIVAMENTE DOCENTES */}
+          {puedeEditar && (
             <button
               type="button"
               disabled={!isActivo}

@@ -107,12 +107,6 @@ export default function Sidebar({ isOpen, onClose }) {
       permiso: "EXCEPCIONES_VER",
     },
     {
-      to: "/liquidacion-docente",
-      label: "Liquidación Docente",
-      icon: DollarSign,
-      permiso: "LIQUIDACION_DOCENTE",
-    },
-    {
       to: "/fichajes",
       label: "Fichajes diarios",
       icon: Fingerprint,

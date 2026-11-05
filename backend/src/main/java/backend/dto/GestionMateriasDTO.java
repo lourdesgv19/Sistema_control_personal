@@ -1,5 +1,6 @@
 package backend.dto;
 
+import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.List;
 
@@ -11,9 +12,7 @@ public class GestionMateriasDTO {
         double porcentajeCumplimiento,
         long clasesCompletas,
         long clasesDesvios,
-        long clasesFaltas,
-        double totalLiquidar,
-        double totalDeduccion
+        long clasesFaltas
     ) {}
 
     public record NuevaMateriaRequest(
@@ -30,12 +29,12 @@ public class GestionMateriasDTO {
         Long idDocenteAuxiliar,
         String rolTitular,
         String rolAuxiliar,
-        Double tarifaHora,
         String observaciones,
         Boolean forzarGuardado,
         String tipoFrecuencia,
         Integer repeticionesPeriodo,
-        String semanaAlterna
+        String semanaAlterna,
+        LocalDate fechaDesde
     ) {}
 
     public record MateriaCatalogoDTO(
@@ -43,7 +42,6 @@ public class GestionMateriasDTO {
         String nombre,
         String codigo,
         String aulaPredeterminada,
-        double tarifaHora,
         int totalHorarios,
         List<String> diasResumen,
         double totalHorasSemanales,
@@ -68,8 +66,6 @@ public class GestionMateriasDTO {
         Long idDocente,
         String nombreDocente,
         String legajoDocente,
-        double tarifaHora,
-        double totalPorClase,
         String tipoFrecuencia,
         Integer repeticionesPeriodo,
         String semanaAlterna

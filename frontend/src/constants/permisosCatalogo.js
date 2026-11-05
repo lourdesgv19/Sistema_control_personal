@@ -104,11 +104,6 @@ export const MODULOS_PERMISOS = [
         label: "Baja lógica y reactivación de materias",
         critico: true,
       },
-      {
-        codigo: "LIQUIDACION_DOCENTE",
-        label: "Visualizar y exportar liquidaciones a docentes",
-        critico: true,
-      },
     ],
   },
   {
