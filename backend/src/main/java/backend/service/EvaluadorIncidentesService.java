@@ -74,9 +74,8 @@ public class EvaluadorIncidentesService {
                     LocalDateTime alta = h.getFechaAlta() != null ? h.getFechaAlta() : LocalDateTime.MIN;
                     LocalDateTime baja = h.getFechaBaja();
                     boolean yaHabiaIniciado = !alta.isAfter(finDelDia);
-                    boolean noHabiaSidoDadoDeBaja = (Boolean.TRUE.equals(h.getActivo()) && baja == null)
-                            || (baja != null && baja.isAfter(inicioDelDia));
-                    return yaHabiaIniciado && noHabiaSidoDadoDeBaja;
+                    boolean noHabiaFinalizado = (baja == null) || !baja.isBefore(inicioDelDia);
+                    return yaHabiaIniciado && noHabiaFinalizado;
                 })
                 .toList();
 
@@ -106,7 +105,6 @@ public class EvaluadorIncidentesService {
                     .sorted(Comparator.comparing(EmpleadoFichaje::getHoraFichaje))
                     .toList();
 
-            // EVALUACIÓN FRANJA POR FRANJA
             for (EmpleadoHorario franja : franjas) {
                 String nombreFranja = franja.getMateria() != null ? franja.getMateria().getNombre()
                         : (franja.getEtiqueta() != null ? franja.getEtiqueta() : "Turno");
@@ -117,7 +115,6 @@ public class EvaluadorIncidentesService {
                 int tolIngreso = empleado.getToleranciaIngresoMin() != null ? empleado.getToleranciaIngresoMin() : 15;
                 int tolEgreso = empleado.getToleranciaEgresoMin() != null ? empleado.getToleranciaEgresoMin() : 10;
 
-                // Fichajes que intersectan con esta franja
                 List<EmpleadoFichaje> fichajesFranja = fichajes.stream()
                         .filter(f -> {
                             LocalTime hf = f.getHoraFichaje().toLocalTime();
@@ -151,7 +148,6 @@ public class EvaluadorIncidentesService {
                 } else {
                     eliminarIncidentePorAgrupador(idAgrupador);
 
-                    // Tardanza en esta franja
                     EmpleadoFichaje prim = fichajesFranja.stream().filter(f -> esTipoIngreso(f.getTipoEvento())).findFirst().orElse(fichajesFranja.get(0));
                     LocalTime horaIng = prim.getHoraFichaje().toLocalTime();
                     LocalTime limEntrada = inicioFranja.plusMinutes(tolIngreso);
@@ -175,7 +171,6 @@ public class EvaluadorIncidentesService {
                         }
                     }
 
-                    // Retiro anticipado en esta franja
                     EmpleadoFichaje ult = fichajesFranja.stream().filter(f -> esTipoSalida(f.getTipoEvento())).reduce((a, b) -> b).orElse(null);
                     if (ult != null) {
                         LocalTime horaEg = ult.getHoraFichaje().toLocalTime();
@@ -210,10 +205,17 @@ public class EvaluadorIncidentesService {
     }
 
     @Transactional
-    public void asegurarAusenciasEmpleadoRango(Empleado emp, List<EmpleadoHorario> horariosActivos,
+    public void asegurarAusenciasEmpleadoRango(Empleado emp, List<EmpleadoHorario> horariosCandidatos,
                                                List<EmpleadoFichaje> fichajesPeriodo,
                                                LocalDate desde, LocalDate hasta) {
-        if (horariosActivos == null || horariosActivos.isEmpty()) return;
+        log.info("--------------------------------------------------------------------------------");
+        log.info(">>> [AUDITORÍA-RANGO] Evaluando ausencias para Empleado: {} ({}) desde {} hasta {}",
+                emp.getApellido() + ", " + emp.getNombre(), emp.getId(), desde, hasta);
+
+        if (horariosCandidatos == null || horariosCandidatos.isEmpty()) {
+            log.warn(">>> [AUDITORÍA-RANGO] Lista de horarios candidatos vacía para empleado {}", emp.getId());
+            return;
+        }
 
         List<ExcepcionLicencia> excepcionesRango = excepcionRepo.buscarExcepcionesVigentesEnRango(emp.getId(), desde, hasta);
         List<IncidenteAsistencia> nuevasAusencias = new ArrayList<>();
@@ -226,17 +228,19 @@ public class EvaluadorIncidentesService {
             final LocalDate fActual = cur;
             LocalDateTime inicioDelDia = fActual.atStartOfDay();
             LocalDateTime finDelDia = fActual.atTime(LocalTime.MAX);
+            int diaSemanaNum = fActual.getDayOfWeek().getValue();
 
-            List<EmpleadoHorario> horariosVigentesEnFecha = horariosActivos.stream()
+            // Filtrar horarios que estuvieran vigentes ese día en particular
+            List<EmpleadoHorario> horariosVigentesEnFecha = horariosCandidatos.stream()
+                    .filter(h -> h.getDiaSemana() != null && h.getDiaSemana() == diaSemanaNum)
                     .filter(h -> {
                         LocalDateTime alta = h.getFechaAlta() != null ? h.getFechaAlta() : LocalDateTime.MIN;
                         LocalDateTime baja = h.getFechaBaja();
                         boolean yaHabiaIniciado = !alta.isAfter(finDelDia);
-                        boolean noHabiaSidoDadoDeBaja = (Boolean.TRUE.equals(h.getActivo()) && baja == null)
-                                || (baja != null && baja.isAfter(inicioDelDia));
-                        return yaHabiaIniciado && noHabiaSidoDadoDeBaja;
+                        // Vigente si no tiene fecha de baja O si la fecha de baja es igual o posterior al inicio del día
+                        boolean noHabiaFinalizado = (baja == null) || !baja.isBefore(inicioDelDia);
+                        return yaHabiaIniciado && noHabiaFinalizado;
                     })
-                    .filter(h -> h.getDiaSemana() != null && h.getDiaSemana() == fActual.getDayOfWeek().getValue())
                     .toList();
 
             boolean tieneLicenciaOAsueto = excepcionesRango.stream().anyMatch(e ->
@@ -244,14 +248,14 @@ public class EvaluadorIncidentesService {
             );
 
             if (tieneLicenciaOAsueto) {
+                log.info(">>> [AUDITORÍA-RANGO] Fecha {} amparada por Licencia/Asueto. Descartando faltas.", fActual);
                 eliminarIncidentesDeFecha(fActual, emp.getId());
-            } else {
+            } else if (!horariosVigentesEnFecha.isEmpty()) {
                 List<EmpleadoFichaje> fichajesDia = fichajesPeriodo.stream()
                         .filter(f -> f.getHoraFichaje() != null && f.getHoraFichaje().toLocalDate().equals(fActual))
                         .sorted(Comparator.comparing(EmpleadoFichaje::getHoraFichaje))
                         .toList();
 
-                // EVALUACIÓN POR CADA FRANJA INDIVIDUAL DEL DÍA
                 for (EmpleadoHorario franja : horariosVigentesEnFecha) {
                     LocalTime ini = franja.getHoraEntrada();
                     LocalTime fin = franja.getHoraSalida();
@@ -274,19 +278,26 @@ public class EvaluadorIncidentesService {
                         correspondeMarcar = !tieneFichajeEnFranja;
                     }
 
-                    if (correspondeMarcar && !existeIncidenteConAgrupador(idAgrupador)) {
-                        IncidenteAsistencia inc = new IncidenteAsistencia();
-                        inc.setFecha(fActual);
-                        inc.setHora(fin);
-                        inc.setEmpleado(emp);
-                        inc.setSeveridad("CRÍTICA");
-                        inc.setCategoriaRegla("AUSENCIAS");
-                        inc.setTipo("Inasistencia: " + nombreTurno);
-                        inc.setDetalle(String.format("El colaborador no registró marcaciones en el horario pautado de %s a %s hs (%s).",
-                                ini.toString().substring(0, 5), fin.toString().substring(0, 5), nombreTurno));
-                        inc.setEstado("PENDIENTE");
-                        inc.setIdEventoAgrupador(idAgrupador);
-                        nuevasAusencias.add(inc);
+                    if (correspondeMarcar) {
+                        if (!existeIncidenteConAgrupador(idAgrupador)) {
+                            IncidenteAsistencia inc = new IncidenteAsistencia();
+                            inc.setFecha(fActual);
+                            inc.setHora(fin);
+                            inc.setEmpleado(emp);
+                            inc.setSeveridad("CRÍTICA");
+                            inc.setCategoriaRegla("AUSENCIAS");
+                            inc.setTipo("Inasistencia: " + nombreTurno);
+                            inc.setDetalle(String.format("El colaborador no registró marcaciones en el horario pautado de %s a %s hs (%s).",
+                                    ini.toString().substring(0, 5), fin.toString().substring(0, 5), nombreTurno));
+                            inc.setEstado("PENDIENTE");
+                            inc.setIdEventoAgrupador(idAgrupador);
+                            nuevasAusencias.add(inc);
+
+                            log.info("    -> [NUEVA AUSENCIA DETECTADA] Fecha: {}, Horario: {}-{} ({}) | Agrupador: {}",
+                                    fActual, ini, fin, nombreTurno, idAgrupador);
+                        }
+                    } else {
+                        eliminarIncidentePorAgrupador(idAgrupador);
                     }
                 }
             }
@@ -295,7 +306,11 @@ public class EvaluadorIncidentesService {
 
         if (!nuevasAusencias.isEmpty()) {
             incidenteRepo.saveAll(nuevasAusencias);
+            log.info(">>> [AUDITORÍA-RANGO] Se guardaron {} nuevas ausencias en la base de datos.", nuevasAusencias.size());
+        } else {
+            log.info(">>> [AUDITORÍA-RANGO] No se requirió insertar nuevas ausencias en este rango.");
         }
+        log.info("--------------------------------------------------------------------------------");
     }
 
     @Transactional
@@ -382,6 +397,7 @@ public class EvaluadorIncidentesService {
 
         if (!incs.isEmpty()) {
             incidenteRepo.deleteAll(incs);
+            log.info(">>> Eliminados {} incidentes para la fecha {}", incs.size(), fecha);
         }
     }
 
@@ -392,6 +408,7 @@ public class EvaluadorIncidentesService {
                 .toList();
         if (!encontrados.isEmpty()) {
             incidenteRepo.deleteAll(encontrados);
+            log.info(">>> Eliminado incidente agrupador: {}", agrupador);
         }
     }
 
@@ -399,31 +416,6 @@ public class EvaluadorIncidentesService {
         if (agrupador == null) return false;
         return incidenteRepo.findAll().stream()
                 .anyMatch(i -> agrupador.equals(i.getIdEventoAgrupador()));
-    }
-
-    private void eliminarFalsasInasistencias(LocalDate fecha, Long idEmpleado) {
-        List<IncidenteAsistencia> falsas = incidenteRepo.findAll().stream()
-                .filter(i -> i.getEmpleado() != null && i.getEmpleado().getId().equals(idEmpleado))
-                .filter(i -> i.getFecha() != null && i.getFecha().equals(fecha))
-                .filter(i -> "AUSENCIAS".equalsIgnoreCase(i.getCategoriaRegla()) ||
-                             (i.getTipo() != null && i.getTipo().toLowerCase().contains("inasistencia")))
-                .toList();
-
-        if (!falsas.isEmpty()) {
-            incidenteRepo.deleteAll(falsas);
-        }
-    }
-
-    private void eliminarFalsosRetirosAnticipados(LocalDate fecha, Long idEmpleado) {
-        List<IncidenteAsistencia> falsos = incidenteRepo.findAll().stream()
-                .filter(i -> i.getEmpleado() != null && i.getEmpleado().getId().equals(idEmpleado))
-                .filter(i -> i.getFecha() != null && i.getFecha().equals(fecha))
-                .filter(i -> "RETIROS_PREVIOS".equalsIgnoreCase(i.getCategoriaRegla()))
-                .toList();
-
-        if (!falsos.isEmpty()) {
-            incidenteRepo.deleteAll(falsos);
-        }
     }
 
     public long calcularMinutosClaseTeoricos(List<EmpleadoHorario> franjasDia) {

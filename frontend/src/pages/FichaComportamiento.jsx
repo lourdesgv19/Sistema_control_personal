@@ -2443,10 +2443,17 @@ export default function FichaComportamiento() {
                           !esFlexible &&
                           tieneIncidenteAusenciaReal;
 
+                        const esSinHorarioConActividad =
+                          !tieneHorario && huboActividad && !esLicencia;
+
                         const esSinHorarioSinActividad =
                           !tieneHorario && !huboActividad && !esLicencia;
 
-                        if (esSinHorarioSinActividad) {
+                        // 1. Día futuro sin horario o día pasado sin horario ni actividad
+                        if (
+                          (esFuturo && !tieneHorario) ||
+                          esSinHorarioSinActividad
+                        ) {
                           return (
                             <div
                               key={dia.fecha}
@@ -2457,8 +2464,47 @@ export default function FichaComportamiento() {
                                 {dia.diaSemana})
                               </span>
                               <span className="text-[11px] text-slate-400 italic">
-                                Sin horario asignado / Sin actividad registrada
+                                Sin horario asignado para este día / Sin
+                                actividad registrada
                               </span>
+                            </div>
+                          );
+                        }
+
+                        // 2. Día futuro CON horario asignado (Fondo medio azul)
+                        if (esFuturo && tieneHorario) {
+                          return (
+                            <div
+                              key={dia.fecha}
+                              className={`p-3 rounded-2xl border text-xs space-y-2 bg-indigo-50/50 border-indigo-200/80 ${
+                                estaInspeccionado
+                                  ? "ring-2 ring-indigo-400"
+                                  : ""
+                              }`}
+                            >
+                              <div className="flex items-center justify-between">
+                                <span className="font-mono font-bold text-indigo-950">
+                                  {formatearFechaVisual(dia.fecha)} (
+                                  {dia.diaSemana})
+                                </span>
+                                <span className="px-2 py-0.5 rounded-md bg-indigo-100 text-indigo-800 text-[10px] font-bold">
+                                  Programado
+                                </span>
+                              </div>
+                              <div className="space-y-1">
+                                {horariosProgramados.map((h, idx) => (
+                                  <div
+                                    key={idx}
+                                    className="flex items-center gap-1.5 text-indigo-900 text-[11px] font-medium"
+                                  >
+                                    <Clock className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                                    <span>
+                                      <strong>{h.nombre}:</strong> {h.entrada}{" "}
+                                      hs → {h.salida} hs
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
                             </div>
                           );
                         }
@@ -2473,7 +2519,9 @@ export default function FichaComportamiento() {
                                   ? "bg-sky-50/50 border-sky-200"
                                   : esFalta
                                     ? "bg-rose-50/50 border-rose-200"
-                                    : "bg-white border-slate-200"
+                                    : esSinHorarioConActividad
+                                      ? "bg-emerald-50/40 border-emerald-200/70"
+                                      : "bg-white border-slate-200"
                             }`}
                           >
                             <div className="flex items-center justify-between">
@@ -2483,12 +2531,22 @@ export default function FichaComportamiento() {
                               </span>
                               <button
                                 type="button"
+                                disabled={esFuturo && !estaInspeccionado}
                                 onClick={() => {
                                   if (diaInspeccionado?.fecha === dia.fecha)
                                     setDiaInspeccionado(null);
-                                  else setDiaInspeccionado(dia);
+                                  else if (!esFuturo) setDiaInspeccionado(dia);
                                 }}
-                                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold bg-white border border-slate-200 text-slate-700 shadow-2xs"
+                                title={
+                                  esFuturo
+                                    ? "No disponible para fechas futuras"
+                                    : undefined
+                                }
+                                className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold ${
+                                  esFuturo && !estaInspeccionado
+                                    ? "bg-slate-100 text-slate-400 cursor-not-allowed select-none opacity-60 border border-slate-200"
+                                    : "bg-white border border-slate-200 text-slate-700 shadow-2xs cursor-pointer hover:bg-slate-50"
+                                }`}
                               >
                                 <Eye className="w-3.5 h-3.5" />
                                 <span>
@@ -2511,13 +2569,21 @@ export default function FichaComportamiento() {
                                 )
                               </div>
                             ) : (
-                              <div className="flex items-center justify-between text-slate-600">
-                                <span className="font-mono">
-                                  {dia.primeraEntrada} → {dia.ultimoEgreso}
-                                </span>
-                                <span className="font-bold text-emerald-700">
-                                  {dia.presenciaNetaTexto}
-                                </span>
+                              <div className="space-y-1">
+                                <div className="flex items-center justify-between text-slate-600">
+                                  <span className="font-mono">
+                                    {dia.primeraEntrada} → {dia.ultimoEgreso}
+                                  </span>
+                                  <span className="font-bold text-emerald-700">
+                                    {dia.presenciaNetaTexto}
+                                  </span>
+                                </div>
+                                {esSinHorarioConActividad && (
+                                  <div className="text-[10px] text-emerald-800 bg-emerald-100/60 border border-emerald-200/80 px-2 py-0.5 rounded-md italic">
+                                    Sin jornada obligatoria registrada para este
+                                    día
+                                  </div>
+                                )}
                               </div>
                             )}
                           </div>
@@ -2574,6 +2640,7 @@ export default function FichaComportamiento() {
                               (dia.primeraEntrada &&
                                 dia.primeraEntrada !== "--:--");
 
+                            // CASO 1: Licencia / Asueto
                             if (esLicencia) {
                               return (
                                 <tr
@@ -2630,6 +2697,63 @@ export default function FichaComportamiento() {
                               );
                             }
 
+                            // CASO 2: Día futuro CON horario programado (Fondo medio azul y botón bloqueado)
+                            if (esFuturo && tieneHorario) {
+                              return (
+                                <tr
+                                  key={dia.fecha}
+                                  className={`transition ${
+                                    estaInspeccionado
+                                      ? "bg-indigo-100/70 font-semibold"
+                                      : "bg-indigo-50/45 hover:bg-indigo-50/70"
+                                  }`}
+                                >
+                                  <td className="px-4 py-3 font-mono font-bold text-indigo-950">
+                                    {formatearFechaVisual(dia.fecha)}
+                                  </td>
+                                  <td className="px-4 py-3 font-semibold text-indigo-900">
+                                    {dia.diaSemana}
+                                  </td>
+                                  <td colSpan={6} className="px-4 py-3">
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-indigo-600 text-white text-[10px] font-bold uppercase tracking-wider shadow-2xs">
+                                        Programado
+                                      </span>
+                                      {horariosProgramados.map((h, hIdx) => (
+                                        <span
+                                          key={hIdx}
+                                          className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg bg-white border border-indigo-200 text-indigo-900 font-medium text-[11px] shadow-2xs"
+                                        >
+                                          <Clock className="w-3.5 h-3.5 text-indigo-600" />
+                                          <strong>{h.nombre}:</strong>{" "}
+                                          {h.entrada} hs → {h.salida} hs
+                                        </span>
+                                      ))}
+                                    </div>
+                                  </td>
+                                  <td className="px-4 py-3 text-right no-print">
+                                    <button
+                                      type="button"
+                                      disabled={!estaInspeccionado}
+                                      onClick={() => {
+                                        if (estaInspeccionado)
+                                          setDiaInspeccionado(null);
+                                      }}
+                                      title="No disponible para fechas futuras"
+                                      className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold ${
+                                        estaInspeccionado
+                                          ? "bg-indigo-700 text-white shadow-xs cursor-pointer"
+                                          : "bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed select-none opacity-60"
+                                      }`}
+                                    >
+                                      <Eye className="w-3.5 h-3.5" />
+                                      {estaInspeccionado ? "Cerrar" : "Ver Día"}
+                                    </button>
+                                  </td>
+                                </tr>
+                              );
+                            }
+
                             const tieneIncidenteAusenciaReal = (
                               fichaData?.incidentes || []
                             ).some(
@@ -2653,10 +2777,17 @@ export default function FichaComportamiento() {
                               !esFlexible &&
                               tieneIncidenteAusenciaReal;
 
-                            const esSinHorarioSinActividad =
-                              !tieneHorario && !huboActividad;
+                            const esSinHorarioConActividad =
+                              !tieneHorario && huboActividad && !esLicencia;
 
-                            if (esSinHorarioSinActividad) {
+                            const esSinHorarioSinActividad =
+                              !tieneHorario && !huboActividad && !esLicencia;
+
+                            // CASO 3: Sin horario asignado y sin actividad registrada (o futuro sin horario)
+                            if (
+                              (esFuturo && !tieneHorario) ||
+                              esSinHorarioSinActividad
+                            ) {
                               return (
                                 <tr
                                   key={dia.fecha}
@@ -2673,16 +2804,85 @@ export default function FichaComportamiento() {
                                     {dia.diaSemana}
                                   </td>
                                   <td
-                                    colSpan={7}
+                                    colSpan={6}
                                     className="px-4 py-3 text-center text-slate-400 italic text-[11px]"
                                   >
                                     Sin horario asignado para este día / Sin
                                     actividad registrada
                                   </td>
+                                  <td className="px-4 py-3 text-right no-print">
+                                    <button
+                                      type="button"
+                                      disabled
+                                      title="Sin datos para inspeccionar"
+                                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed select-none opacity-50"
+                                    >
+                                      <Eye className="w-3.5 h-3.5" />
+                                      Ver Día
+                                    </button>
+                                  </td>
                                 </tr>
                               );
                             }
 
+                            // CASO 4: Sin horario asignado pero CON actividad registrada
+                            if (esSinHorarioConActividad) {
+                              return (
+                                <tr
+                                  key={dia.fecha}
+                                  className={`transition ${
+                                    estaInspeccionado
+                                      ? "bg-indigo-50/70 font-semibold"
+                                      : "hover:bg-slate-50/70"
+                                  }`}
+                                >
+                                  <td className="px-4 py-3 font-mono font-bold text-slate-900">
+                                    {formatearFechaVisual(dia.fecha)}
+                                  </td>
+                                  <td className="px-4 py-3 font-semibold">
+                                    {dia.diaSemana}
+                                  </td>
+                                  <td className="px-4 py-3 font-mono">
+                                    {dia.primeraEntrada}
+                                  </td>
+                                  <td className="px-4 py-3 font-mono">
+                                    {dia.ultimoEgreso}
+                                  </td>
+                                  <td className="px-4 py-3 font-bold text-emerald-700">
+                                    {dia.presenciaNetaTexto}
+                                  </td>
+                                  <td
+                                    colSpan={3}
+                                    className="px-4 py-3 text-slate-400 italic text-[11px]"
+                                  >
+                                    Sin jornada obligatoria registrada para este
+                                    día
+                                  </td>
+                                  <td className="px-4 py-3 text-right no-print">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        if (
+                                          diaInspeccionado?.fecha === dia.fecha
+                                        )
+                                          setDiaInspeccionado(null);
+                                        else setDiaInspeccionado(dia);
+                                      }}
+                                      className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold cursor-pointer transition ${
+                                        estaInspeccionado
+                                          ? "bg-indigo-600 text-white shadow-xs"
+                                          : "bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200"
+                                      }`}
+                                    >
+                                      <Eye className="w-3.5 h-3.5" />
+                                      {estaInspeccionado ? "Cerrar" : "Ver Día"}
+                                    </button>
+                                  </td>
+                                </tr>
+                              );
+                            }
+
+                            // CASO 5: Jornadas regulares pasadas o con inasistencia
                             return (
                               <tr
                                 key={dia.fecha}
@@ -2768,17 +2968,26 @@ export default function FichaComportamiento() {
                                 <td className="px-4 py-3 text-right no-print">
                                   <button
                                     type="button"
+                                    disabled={esFuturo && !estaInspeccionado}
                                     onClick={() => {
                                       if (diaInspeccionado?.fecha === dia.fecha)
                                         setDiaInspeccionado(null);
-                                      else setDiaInspeccionado(dia);
+                                      else if (!esFuturo)
+                                        setDiaInspeccionado(dia);
                                     }}
-                                    className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold cursor-pointer transition ${
-                                      estaInspeccionado
-                                        ? "bg-indigo-600 text-white shadow-xs"
-                                        : esFalta
-                                          ? "bg-rose-100 hover:bg-rose-200 text-rose-800 font-bold"
-                                          : "bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200"
+                                    title={
+                                      esFuturo
+                                        ? "No disponible para fechas futuras"
+                                        : undefined
+                                    }
+                                    className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold transition ${
+                                      esFuturo && !estaInspeccionado
+                                        ? "bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed select-none opacity-60"
+                                        : estaInspeccionado
+                                          ? "bg-indigo-600 text-white shadow-xs cursor-pointer"
+                                          : esFalta
+                                            ? "bg-rose-100 hover:bg-rose-200 text-rose-800 font-bold cursor-pointer"
+                                            : "bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 cursor-pointer"
                                     }`}
                                   >
                                     <Eye className="w-3.5 h-3.5" />

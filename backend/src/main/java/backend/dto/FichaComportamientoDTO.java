@@ -9,7 +9,6 @@ public record FichaComportamientoDTO(
     String nroLegajo,
     String dni,
     String rolOArea,
-    String departamento,
     boolean activo,
     String etiquetaTurno,
     String modalidad,
@@ -69,14 +68,17 @@ public record FichaComportamientoDTO(
         List<DiaDesgloseDTO> diasPeriodo
     ) {}
 
-    public record IntervaloLineaTiempoDTO(
-        String etiqueta,
-        String horaInicio,
-        String horaFin,
-        double inicioMinutos,
-        double duracionMinutos,
-        String tipo
-    ) {}
+public record IntervaloLineaTiempoDTO(
+    String etiqueta,
+    String horaInicio,
+    String horaFin,
+    double inicioMinutos,
+    double duracionMinutos,
+    String tipo,
+    boolean esHistorico,       
+    LocalDate fechaAlta,      
+    LocalDate fechaBaja
+    ) {}        
 
     public record DesgloseIntervaloDTO(
         String tipo,

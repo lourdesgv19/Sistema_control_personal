@@ -22,9 +22,10 @@ function sanitizarTextoParaPdf(texto) {
 
 /**
  * Compacta las jornadas del período:
- * 1. OMITIR TOTALMENTE los días en los que NO tenía horario asignado y NO asistió (francos / libres).
- * 2. Agrupar ausencias consecutivas de días que SÍ tenían horario en un solo rango usando colSpan.
- * 3. En Ausencias y Licencias se omiten las columnas de ingreso, egreso y horas vacías.
+ * 1. OMITIR TOTALMENTE los días sin horario asignado y sin actividad (francos/futuros sin turno).
+ * 2. Mostrar días sin horario pero CON actividad registrada indicando que fue jornada libre.
+ * 3. Agrupar ausencias consecutivas de días que sí tenían horario obligatorio en un solo rango con colSpan.
+ * 4. Fila especial para Licencias con colSpan.
  */
 function compactarDiasPeriodo(dias, esColor) {
   if (!Array.isArray(dias) || dias.length === 0) return [];
@@ -44,11 +45,13 @@ function compactarDiasPeriodo(dias, esColor) {
       dia.estadoGeneral === "LICENCIA" ||
       dia.estadoGeneral === "ASUETO";
 
-    // Si NO tenía horario programado y NO asistió -> SE OMITE POR COMPLETO
+    // Si NO tenía horario programado y NO asistió -> Se omite por completo
     const esFrancoSinHorarioNiPresencia =
       !tienePresencia &&
       !esLicencia &&
-      (dia.estadoGeneral === "FRANCO" || dia.estadoGeneral === "FUTURO");
+      (dia.estadoGeneral === "FRANCO" ||
+        dia.estadoGeneral === "FUTURO" ||
+        (dia.horasClaseTeoricas === 0 && !dia.totalIncidentes));
 
     if (esFrancoSinHorarioNiPresencia) {
       if (grupoAusencia) {
@@ -58,8 +61,13 @@ function compactarDiasPeriodo(dias, esColor) {
       continue;
     }
 
-    // Es ausencia REAL (tenía horario pautado obligatorio pero no asistió)
-    const esAusenciaObligatoria = !tienePresencia && !esLicencia;
+    // Caso de Ausencia Real: sin presencia, sin licencia, con falta computada
+    const esAusenciaObligatoria =
+      !tienePresencia &&
+      !esLicencia &&
+      (dia.estadoGeneral === "INFRACCION" ||
+        dia.estadoGeneral === "SIN_REGISTRO" ||
+        (dia.totalIncidentes && dia.totalIncidentes > 0));
 
     if (esAusenciaObligatoria) {
       if (!grupoAusencia) {
@@ -84,10 +92,16 @@ function compactarDiasPeriodo(dias, esColor) {
       }
 
       if (esLicencia && !tienePresencia) {
-        // Fila de Licencia con colSpan (omite columnas de horas vacías)
+        // Fila de Licencia con colSpan
         resultado.push(formatearFilaLicencia(dia, esColor));
+      } else if (
+        tienePresencia &&
+        (dia.estadoGeneral === "EXTRA" || dia.horasClaseTeoricas === 0)
+      ) {
+        // Día trabajado pero SIN jornada obligatoria asignada
+        resultado.push(formatearFilaDiaSinHorarioConActividad(dia, esColor));
       } else {
-        // Día con presencia normal
+        // Día con presencia normal y horario asignado
         resultado.push(formatearFilaDiaRegular(dia));
       }
     }
@@ -101,8 +115,7 @@ function compactarDiasPeriodo(dias, esColor) {
 }
 
 /**
- * Fila de Ausencia agrupada:
- * Columnas: [Fecha, Día, DETALLE FUSIONADO (colSpan: 5), Incidentes, Cumpl.]
+ * Fila de Ausencia agrupada (fusiona columnas vacías)
  */
 function formatearFilaAusenciaAgrupada(grupo, esColor) {
   const rangoFechas =
@@ -117,15 +130,15 @@ function formatearFilaAusenciaAgrupada(grupo, esColor) {
 
   const textoAusencia =
     grupo.cantidad === 1
-      ? "[!] Inasistencia sin registro en jornada obligatoria"
-      : `[!] Inasistencia sin registro (${grupo.cantidad} días hábiles consecutivos)`;
+      ? "[!] Inasistencia en jornada obligatoria"
+      : `[!] Inasistencias consecutivas en jornada obligatoria (${grupo.cantidad} días)`;
 
   return [
     { content: rangoFechas, styles: { fontStyle: "bold" } },
     rangoDias,
     {
       content: textoAusencia,
-      colSpan: 5, // Omite columnas: 1ra Entrada, Último Egreso, Presencia, Saldo, Salidas Int.
+      colSpan: 5,
       styles: {
         halign: "center",
         fontStyle: "bold",
@@ -145,8 +158,7 @@ function formatearFilaAusenciaAgrupada(grupo, esColor) {
 }
 
 /**
- * Fila de Licencia:
- * Columnas: [Fecha, Día, DETALLE FUSIONADO (colSpan: 5), Incidentes, Cumpl.]
+ * Fila de Licencia / Asueto
  */
 function formatearFilaLicencia(dia, esColor) {
   const etiqueta =
@@ -157,7 +169,7 @@ function formatearFilaLicencia(dia, esColor) {
     dia.diaSemana || "-",
     {
       content: `[OK] ${etiqueta} - Jornada eximida de asistencia`,
-      colSpan: 5, // Omite columnas de horas vacías
+      colSpan: 5,
       styles: {
         halign: "center",
         fontStyle: "bold",
@@ -177,7 +189,38 @@ function formatearFilaLicencia(dia, esColor) {
 }
 
 /**
- * Fila regular con presencia efectiva (muestra todas las columnas completas).
+ * Fila para días trabajados sin horario obligatorio asignado
+ */
+function formatearFilaDiaSinHorarioConActividad(dia, esColor) {
+  const presencia =
+    dia.presenciaNetaTexto &&
+    dia.presenciaNetaTexto !== "0h 0m" &&
+    dia.presenciaNetaTexto !== "0h 00m"
+      ? dia.presenciaNetaTexto
+      : "-";
+
+  return [
+    formatearFecha(dia.fecha),
+    dia.diaSemana || "-",
+    dia.primeraEntrada && dia.primeraEntrada !== "--:--"
+      ? dia.primeraEntrada
+      : "-",
+    dia.ultimoEgreso && dia.ultimoEgreso !== "--:--" ? dia.ultimoEgreso : "-",
+    presencia,
+    {
+      content: "Sin jornada obligatoria pautada para este día",
+      colSpan: 3,
+      styles: {
+        fontStyle: "italic",
+        textColor: [100, 116, 139],
+      },
+    },
+    "-",
+  ];
+}
+
+/**
+ * Fila regular con jornada y presencia efectiva
  */
 function formatearFilaDiaRegular(dia) {
   const dif = dia.minutosDiferencia || 0;
@@ -219,7 +262,7 @@ function formatearFilaDiaRegular(dia) {
 }
 
 /**
- * Agrupa incidentes continuos idénticos en un rango de fechas.
+ * Agrupa incidentes continuos idénticos en un rango de fechas
  */
 function compactarIncidentes(incidentes) {
   if (!Array.isArray(incidentes) || incidentes.length === 0) return [];
@@ -363,33 +406,33 @@ export function generarPdfFichaComportamiento({
   };
 
   // 1. Encabezado institucional
-  doc.setFillColor(...theme.primary);
+  doc.setFillColor(theme.primary[0], theme.primary[1], theme.primary[2]);
   doc.rect(0, 0, 210, 5, "F");
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(14);
-  doc.setTextColor(...theme.primary);
+  doc.setTextColor(theme.primary[0], theme.primary[1], theme.primary[2]);
   doc.text("INFORME DE COMPORTAMIENTO Y ASISTENCIA LABORAL", 14, 16);
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8);
-  doc.setTextColor(...theme.subText);
+  doc.setTextColor(theme.subText[0], theme.subText[1], theme.subText[2]);
   doc.text("SISTEMA DE CONTROL HORARIO Y AUDITORÍA INSTITUCIONAL", 14, 21);
   doc.text(`Emisión: ${formatearFecha(hoyIso)}`, 196, 21, { align: "right" });
 
-  doc.setDrawColor(...theme.primary);
+  doc.setDrawColor(theme.primary[0], theme.primary[1], theme.primary[2]);
   doc.setLineWidth(0.6);
   doc.line(14, 24, 196, 24);
 
-  // 2. Ficha Técnica
-  doc.setDrawColor(...theme.border);
+  // 2. Ficha Técnica del Colaborador
+  doc.setDrawColor(theme.border[0], theme.border[1], theme.border[2]);
   doc.setLineWidth(0.3);
-  doc.setFillColor(...theme.cardBg);
+  doc.setFillColor(theme.cardBg[0], theme.cardBg[1], theme.cardBg[2]);
   doc.roundedRect(14, 27, 182, 32, 2, 2, "FD");
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(11);
-  doc.setTextColor(...theme.darkText);
+  doc.setTextColor(theme.darkText[0], theme.darkText[1], theme.darkText[2]);
   doc.text(
     String(fichaData.nombreCompleto || "Personal Institucional"),
     18,
@@ -398,64 +441,76 @@ export function generarPdfFichaComportamiento({
 
   doc.setFontSize(8.5);
   doc.setFont("helvetica", "normal");
-  doc.setTextColor(...theme.subText);
+  doc.setTextColor(theme.subText[0], theme.subText[1], theme.subText[2]);
   doc.text("LEGAJO: ", 18, 40);
   doc.setFont("helvetica", "bold");
-  doc.setTextColor(...theme.darkText);
+  doc.setTextColor(theme.darkText[0], theme.darkText[1], theme.darkText[2]);
   doc.text(`${fichaData.nroLegajo || "-"}`, 33, 40);
 
   doc.setFont("helvetica", "normal");
-  doc.setTextColor(...theme.subText);
+  doc.setTextColor(theme.subText[0], theme.subText[1], theme.subText[2]);
   doc.text("DNI: ", 70, 40);
   doc.setFont("helvetica", "bold");
-  doc.setTextColor(...theme.darkText);
+  doc.setTextColor(theme.darkText[0], theme.darkText[1], theme.darkText[2]);
   doc.text(`${fichaData.dni || "-"}`, 78, 40);
 
   doc.setFont("helvetica", "normal");
-  doc.setTextColor(...theme.subText);
+  doc.setTextColor(theme.subText[0], theme.subText[1], theme.subText[2]);
   doc.text("ESTADO: ", 120, 40);
   doc.setFont("helvetica", "bold");
-  doc.setTextColor(...theme.darkText);
+  doc.setTextColor(theme.darkText[0], theme.darkText[1], theme.darkText[2]);
   doc.text(fichaData.activo ? "ACTIVO" : "INACTIVO", 135, 40);
 
   doc.setFont("helvetica", "normal");
-  doc.setTextColor(...theme.subText);
+  doc.setTextColor(theme.subText[0], theme.subText[1], theme.subText[2]);
   doc.text("CARGO / ROL: ", 18, 47);
   doc.setFont("helvetica", "bold");
-  doc.setTextColor(...theme.darkText);
-  doc.text(
-    `${fichaData.rolOArea || "Personal"} - ${fichaData.departamento || "Dpto."}`,
-    42,
-    47,
-  );
+  doc.setTextColor(theme.darkText[0], theme.darkText[1], theme.darkText[2]);
+  doc.text(`${fichaData.rolOArea || "Personal"}`, 42, 47);
 
   doc.setFont("helvetica", "normal");
-  doc.setTextColor(...theme.subText);
+  doc.setTextColor(theme.subText[0], theme.subText[1], theme.subText[2]);
   doc.text("RÉGIMEN / TURNO: ", 18, 54);
   doc.setFont("helvetica", "bold");
-  doc.setTextColor(...theme.darkText);
+  doc.setTextColor(theme.darkText[0], theme.darkText[1], theme.darkText[2]);
   doc.text(`${fichaData.etiquetaTurno || "Jornada Regular"}`, 48, 54);
 
   // Cumplimiento
-  doc.setDrawColor(...theme.badgeBorder);
+  doc.setDrawColor(
+    theme.badgeBorder[0],
+    theme.badgeBorder[1],
+    theme.badgeBorder[2],
+  );
   doc.setLineWidth(0.5);
-  doc.setFillColor(...theme.primaryLight);
+  doc.setFillColor(
+    theme.primaryLight[0],
+    theme.primaryLight[1],
+    theme.primaryLight[2],
+  );
   doc.roundedRect(152, 30, 39, 26, 1.5, 1.5, "FD");
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(7);
-  doc.setTextColor(...(esColor ? theme.primary : theme.subText));
+  doc.setTextColor(
+    esColor ? theme.primary[0] : theme.subText[0],
+    esColor ? theme.primary[1] : theme.subText[1],
+    esColor ? theme.primary[2] : theme.subText[2],
+  );
   doc.text("CUMPLIMIENTO", 171.5, 36, { align: "center" });
 
   doc.setFontSize(16);
-  doc.setTextColor(...(esColor ? [17, 24, 39] : theme.darkText));
+  doc.setTextColor(
+    esColor ? 17 : theme.darkText[0],
+    esColor ? 24 : theme.darkText[1],
+    esColor ? 39 : theme.darkText[2],
+  );
   doc.text(`${fichaData.porcentajeCumplimiento || 0}%`, 171.5, 47, {
     align: "center",
   });
 
   doc.setFontSize(6.5);
   doc.setFont("helvetica", "normal");
-  doc.setTextColor(...theme.subText);
+  doc.setTextColor(theme.subText[0], theme.subText[1], theme.subText[2]);
   doc.text("de cronograma útil", 171.5, 52, { align: "center" });
 
   // 3. Resumen Ejecutivo
@@ -471,7 +526,7 @@ export function generarPdfFichaComportamiento({
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(9);
-  doc.setTextColor(...theme.darkText);
+  doc.setTextColor(theme.darkText[0], theme.darkText[1], theme.darkText[2]);
   doc.text(`RESUMEN EJECUTIVO - PERÍODO: ${periodoTextoVisual}`, 14, 66);
 
   autoTable(doc, {
@@ -527,13 +582,73 @@ export function generarPdfFichaComportamiento({
     ],
   });
 
+  // Espaciado generoso tras la tabla de resumen
   let posY = doc.lastAutoTable.finalY + 7;
 
-  // 4. Detalle de Jornada o Desglose
+  // 4. DETECCIÓN DE HORARIO HISTÓRICO Y NOTA ACLARATORIA EN EL PDF
+  const listaPlanificados = Array.isArray(fichaData.planificado)
+    ? fichaData.planificado
+    : Array.isArray(fichaData.planificados)
+      ? fichaData.planificados
+      : [];
+
+  const horarioHistoricoDetectado = listaPlanificados.find((p) =>
+    Boolean(p && p.esHistorico),
+  );
+
+  if (horarioHistoricoDetectado) {
+    const bgHist = esColor ? [254, 243, 199] : [248, 250, 252];
+    const borderHist = esColor ? [245, 158, 11] : [203, 213, 225];
+    const textHist = esColor ? [146, 64, 14] : [30, 41, 59];
+
+    // Limpiar etiquetas redundantes para que no duplique "(Histórico)"
+    const nombreTurno = (
+      horarioHistoricoDetectado.etiqueta || "Turno Programado"
+    )
+      .replace(/\s*\(Histórico\)\s*/gi, "")
+      .trim();
+    const hIni = horarioHistoricoDetectado.horaInicio || "--:--";
+    const hFin = horarioHistoricoDetectado.horaFin || "--:--";
+    const fAlta = formatearFecha(horarioHistoricoDetectado.fechaAlta);
+    const fBaja = horarioHistoricoDetectado.fechaBaja
+      ? ` hasta el ${formatearFecha(horarioHistoricoDetectado.fechaBaja)}`
+      : "";
+
+    const textoVigencia = `Durante este período rigió un esquema horario anterior (${nombreTurno} de ${hIni} a ${hFin} hs) vigente desde el ${fAlta}${fBaja}. Las marcas y posibles ausencias se auditan conforme a dicho régimen.`;
+
+    // Ajuste dinámico de texto al ancho útil de la caja (172 mm)
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7.3);
+    const lineasTexto = doc.splitTextToSize(textoVigencia, 172);
+
+    // Altura calculada dinámicamente según la cantidad de líneas
+    const altoCaja = 8 + lineasTexto.length * 3.6;
+
+    doc.setFillColor(bgHist[0], bgHist[1], bgHist[2]);
+    doc.setDrawColor(borderHist[0], borderHist[1], borderHist[2]);
+    doc.setLineWidth(0.3);
+    doc.roundedRect(14, posY, 182, altoCaja, 1.5, 1.5, "FD");
+
+    // Título en negrita
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(7.5);
+    doc.setTextColor(textHist[0], textHist[1], textHist[2]);
+    doc.text("[!] RÉGIMEN HORARIO HISTÓRICO APLICABLE", 18, posY + 4.8);
+
+    // Párrafo con salto automático contenido dentro de los bordes
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7.3);
+    doc.text(lineasTexto, 18, posY + 8.8);
+
+    // Separación adecuada hacia el título de la siguiente sección
+    posY += altoCaja + 7;
+  }
+
+  // 5. Detalle de Jornada o Desglose
   if (modalidad === "DIARIO") {
     doc.setFont("helvetica", "bold");
     doc.setFontSize(9);
-    doc.setTextColor(...theme.darkText);
+    doc.setTextColor(theme.darkText[0], theme.darkText[1], theme.darkText[2]);
     doc.text(
       `INTERVALOS RECONSTRUIDOS DEL DÍA (${fichaData.intervalosDetalle?.length || 0})`,
       14,
@@ -587,7 +702,6 @@ export function generarPdfFichaComportamiento({
 
     posY = doc.lastAutoTable.finalY + 7;
   } else {
-    // Procesa y compacta con colSpan para omitir columnas vacías en ausencias y licencias
     const filasDiasCompactadas = compactarDiasPeriodo(
       fichaData.diasPeriodo,
       esColor,
@@ -595,7 +709,7 @@ export function generarPdfFichaComportamiento({
 
     doc.setFont("helvetica", "bold");
     doc.setFontSize(9);
-    doc.setTextColor(...theme.darkText);
+    doc.setTextColor(theme.darkText[0], theme.darkText[1], theme.darkText[2]);
     doc.text(
       `DESGLOSE DE JORNADAS OBLIGATORIAS Y ACTIVIDAD (${filasDiasCompactadas.length} REGISTROS)`,
       14,
@@ -656,7 +770,7 @@ export function generarPdfFichaComportamiento({
     posY = doc.lastAutoTable.finalY + 7;
   }
 
-  // 5. Listado de Incidentes Agrupados
+  // 6. Listado de Incidentes Agrupados
   if (fichaData.incidentes && fichaData.incidentes.length > 0) {
     if (posY > 215) {
       doc.addPage();
@@ -667,7 +781,11 @@ export function generarPdfFichaComportamiento({
 
     doc.setFont("helvetica", "bold");
     doc.setFontSize(9);
-    doc.setTextColor(...(esColor ? [190, 18, 60] : theme.darkText));
+    doc.setTextColor(
+      esColor ? 190 : theme.darkText[0],
+      esColor ? 18 : theme.darkText[1],
+      esColor ? 60 : theme.darkText[2],
+    );
     doc.text(
       `INCIDENCIAS Y DESVÍOS CONSOLIDADOS (${filasIncsCompactadas.length})`,
       14,
@@ -710,7 +828,7 @@ export function generarPdfFichaComportamiento({
     posY = doc.lastAutoTable.finalY + 10;
   }
 
-  // 6. Firmas Institucionales
+  // 7. Firmas Institucionales
   if (posY > 245) {
     doc.addPage();
     posY = 25;
@@ -718,32 +836,32 @@ export function generarPdfFichaComportamiento({
     posY = Math.max(posY, 250);
   }
 
-  doc.setDrawColor(...theme.darkText);
+  doc.setDrawColor(theme.darkText[0], theme.darkText[1], theme.darkText[2]);
   doc.setLineWidth(0.4);
 
   // Firma empleado
   doc.line(25, posY + 15, 85, posY + 15);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(7.5);
-  doc.setTextColor(...theme.darkText);
+  doc.setTextColor(theme.darkText[0], theme.darkText[1], theme.darkText[2]);
   doc.text("Firma del Colaborador", 55, posY + 19, { align: "center" });
   doc.setFont("helvetica", "normal");
   doc.setFontSize(6.5);
-  doc.setTextColor(...theme.subText);
+  doc.setTextColor(theme.subText[0], theme.subText[1], theme.subText[2]);
   doc.text("Aclaración y DNI", 55, posY + 23, { align: "center" });
 
   // Firma RRHH
   doc.line(125, posY + 15, 185, posY + 15);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(7.5);
-  doc.setTextColor(...theme.darkText);
+  doc.setTextColor(theme.darkText[0], theme.darkText[1], theme.darkText[2]);
   doc.text("Responsable RRHH / Autoridad", 155, posY + 19, { align: "center" });
   doc.setFont("helvetica", "normal");
   doc.setFontSize(6.5);
-  doc.setTextColor(...theme.subText);
+  doc.setTextColor(theme.subText[0], theme.subText[1], theme.subText[2]);
   doc.text("Firma y Sello Institucional", 155, posY + 23, { align: "center" });
 
-  // 7. Pie de Página y Numeración
+  // 8. Pie de Página y Numeración
   const totalPages = doc.internal.getNumberOfPages();
   for (let i = 1; i <= totalPages; i++) {
     doc.setPage(i);
@@ -751,7 +869,7 @@ export function generarPdfFichaComportamiento({
     doc.setFontSize(7);
     doc.setTextColor(148, 163, 184);
 
-    doc.setDrawColor(...theme.border);
+    doc.setDrawColor(theme.border[0], theme.border[1], theme.border[2]);
     doc.setLineWidth(0.2);
     doc.line(14, 285, 196, 285);
 

@@ -63,6 +63,9 @@ public class FichaComportamientoService {
             LocalDate fechaDesdeParam,
             LocalDate fechaHastaParam) {
 
+        log.info("================================================================================");
+        log.info(">>> [FICHA] Solicitando ficha para Empleado ID: {} | Modalidad: {} | Fecha: {}", empleadoId, modalidad, fechaConsulta);
+
         Empleado emp = empleadoRepo.findById(empleadoId)
                 .orElseThrow(() -> new RuntimeException("Empleado no encontrado con ID: " + empleadoId));
 
@@ -114,9 +117,23 @@ public class FichaComportamientoService {
             }
         }
 
-        // 1. Horarios activos del empleado
-        List<EmpleadoHorario> horarios = horarioRepo.findByEmpleadoId(emp.getId()).stream()
-                .filter(h -> Boolean.TRUE.equals(h.getActivo()))
+        LocalDateTime inicioT = fechaInicio.atStartOfDay();
+        LocalDateTime finT = fechaFin.atTime(LocalTime.MAX);
+
+        log.info(">>> [FICHA] Período evaluado: {} hasta {}", inicioT, finT);
+
+        // 1. Obtener todos los horarios del empleado
+        List<EmpleadoHorario> todosHorarios = horarioRepo.findByEmpleadoId(emp.getId());
+
+        // Horarios que intersectan con el período total consultado
+        List<EmpleadoHorario> horarios = todosHorarios.stream()
+                .filter(h -> {
+                    LocalDateTime alta = h.getFechaAlta() != null ? h.getFechaAlta() : LocalDateTime.MIN;
+                    LocalDateTime baja = h.getFechaBaja();
+                    boolean yaHabiaIniciado = !alta.isAfter(finT);
+                    boolean noHabiaFinalizado = (baja == null) || !baja.isBefore(inicioT);
+                    return yaHabiaIniciado && noHabiaFinalizado;
+                })
                 .toList();
 
         boolean esDocente = horarios.stream().anyMatch(h -> h.getMateria() != null);
@@ -134,9 +151,6 @@ public class FichaComportamientoService {
         }
 
         // 2. Fichajes válidos del período
-        LocalDateTime inicioT = fechaInicio.atStartOfDay();
-        LocalDateTime finT = fechaFin.atTime(LocalTime.MAX);
-
         List<EmpleadoFichaje> fichajesPeriodo = fichajeRepo.findAll().stream()
                 .filter(f -> f.getEmpleado() != null && f.getEmpleado().getId().equals(emp.getId()))
                 .filter(f -> Boolean.TRUE.equals(f.getActivo()))
@@ -147,11 +161,11 @@ public class FichaComportamientoService {
                 .sorted(Comparator.comparing(EmpleadoFichaje::getHoraFichaje))
                 .toList();
 
-        // 3. Verificación de ausencias considerando licencias vigentes (ejecuta INSERT si detecta faltas)
+        // 3. Verificación y persistencia de ausencias para los horarios que estuvieron vigentes
         try {
             evaluadorService.asegurarAusenciasEmpleadoRango(emp, horarios, fichajesPeriodo, fechaInicio, fechaFin);
         } catch (Exception e) {
-            log.warn("Error al asegurar ausencias en rango para empleado {}: {}", emp.getId(), e.getMessage());
+            log.error(">>> [FICHA] Error al asegurar ausencias en rango para empleado {}: {}", emp.getId(), e.getMessage(), e);
         }
 
         // 4. Incidentes del período
@@ -166,7 +180,7 @@ public class FichaComportamientoService {
                 emp.getId(), fechaInicio, fechaFin
         );
 
-        // 6. Línea de tiempo diaria específica
+        // 6. Planificados específicos para el día base consultado
         List<FichaComportamientoDTO.IntervaloLineaTiempoDTO> planificados = new ArrayList<>();
         List<FichaComportamientoDTO.IntervaloLineaTiempoDTO> presencias = new ArrayList<>();
         List<FichaComportamientoDTO.DesgloseIntervaloDTO> desglose = new ArrayList<>();
@@ -180,19 +194,40 @@ public class FichaComportamientoService {
                 .sorted(Comparator.comparing(EmpleadoFichaje::getHoraFichaje))
                 .toList();
 
+        LocalDateTime inicioDiaConsulta = fechaBase.atStartOfDay();
+        LocalDateTime finDiaConsulta = fechaBase.atTime(LocalTime.MAX);
         int diaSemanaConsulta = fechaBase.getDayOfWeek().getValue();
-        for (EmpleadoHorario h : horarios) {
-            if (h.getDiaSemana() != null && h.getDiaSemana() == diaSemanaConsulta) {
+
+        for (EmpleadoHorario h : todosHorarios) {
+            LocalDateTime alta = h.getFechaAlta() != null ? h.getFechaAlta() : LocalDateTime.MIN;
+            LocalDateTime baja = h.getFechaBaja();
+            boolean vigenteEnFecha = !alta.isAfter(finDiaConsulta) && (baja == null || !baja.isBefore(inicioDiaConsulta));
+
+            if (vigenteEnFecha && h.getDiaSemana() != null && h.getDiaSemana() == diaSemanaConsulta) {
                 if (h.getHoraEntrada() != null && h.getHoraSalida() != null) {
                     double ini = h.getHoraEntrada().getHour() * 60.0 + h.getHoraEntrada().getMinute();
                     double fin = h.getHoraSalida().getHour() * 60.0 + h.getHoraSalida().getMinute();
+                    String etiqueta = h.getMateria() != null ? h.getMateria().getNombre()
+                            : (h.getEtiqueta() != null ? h.getEtiqueta() : "Planificado");
+                    
+                    boolean esHistorico = h.getFechaBaja() != null || Boolean.FALSE.equals(h.getActivo());
+                    if (esHistorico) {
+                        etiqueta += " (Histórico)";
+                    }
+
+                    LocalDate fAlta = h.getFechaAlta() != null ? h.getFechaAlta().toLocalDate() : null;
+                    LocalDate fBaja = h.getFechaBaja() != null ? h.getFechaBaja().toLocalDate() : null;
+
                     planificados.add(new FichaComportamientoDTO.IntervaloLineaTiempoDTO(
-                            h.getMateria() != null ? h.getMateria().getNombre() : (h.getEtiqueta() != null ? h.getEtiqueta() : "Planificado"),
+                            etiqueta,
                             h.getHoraEntrada().toString().substring(0, 5),
                             h.getHoraSalida().toString().substring(0, 5),
                             ini,
                             fin - ini,
-                            "PLANIFICADO"
+                            "PLANIFICADO",
+                            esHistorico,
+                            fAlta,
+                            fBaja
                     ));
                 }
             }
@@ -228,7 +263,8 @@ public class FichaComportamientoService {
                     presencias.add(new FichaComportamientoDTO.IntervaloLineaTiempoDTO(
                             dur + "m", act.getHoraFichaje().toLocalTime().toString().substring(0, 5),
                             sig.getHoraFichaje().toLocalTime().toString().substring(0, 5),
-                            iniMinutos, (double) dur, "PRESENCIA"
+                            iniMinutos, (double) dur, "PRESENCIA",
+                            false, null, null
                     ));
                     desglose.add(new FichaComportamientoDTO.DesgloseIntervaloDTO(
                             "Presencia", act.getHoraFichaje().toLocalTime().toString().substring(0, 5) + " hs",
@@ -240,7 +276,8 @@ public class FichaComportamientoService {
                     presencias.add(new FichaComportamientoDTO.IntervaloLineaTiempoDTO(
                             dur + "m", act.getHoraFichaje().toLocalTime().toString().substring(0, 5),
                             sig.getHoraFichaje().toLocalTime().toString().substring(0, 5),
-                            iniMinutos, (double) dur, excede ? "INFRACCION" : "SALIDA_INTERMEDIA"
+                            iniMinutos, (double) dur, excede ? "INFRACCION" : "SALIDA_INTERMEDIA",
+                            false, null, null
                     ));
                     desglose.add(new FichaComportamientoDTO.DesgloseIntervaloDTO(
                             "Salida Intermedia", act.getHoraFichaje().toLocalTime().toString().substring(0, 5) + " hs",
@@ -259,7 +296,7 @@ public class FichaComportamientoService {
                         i.getResolucionMotivo(), i.getResolucionObservaciones()
                 )).toList();
 
-        // 7. Desglose día por día y acumuladores de licencias y cumplimiento
+        // 7. Desglose día por día: EVALUACIÓN ESTRICTA DE HORARIOS VIGENTES POR FECHA
         List<FichaComportamientoDTO.DiaDesgloseDTO> diasDesglose = new ArrayList<>();
         LocalDate cur = fechaInicio;
         LocalDate hoy = LocalDate.now();
@@ -281,7 +318,6 @@ public class FichaComportamientoService {
         long totalMinutosFueraAcumulado = 0;
         int totalSalidasIntermediasAcumuladas = 0;
 
-        // Variables para el KPI de Licencias
         int diasLicenciaAcumulados = 0;
         long minutosLicenciaAcumulados = 0;
 
@@ -289,6 +325,7 @@ public class FichaComportamientoService {
             LocalDate d = cur;
             boolean esFuturo = d.isAfter(hoy);
 
+            // Horas teóricas del día calculadas estrictamente con horarios vigentes para "d"
             double horasTeoricasDia = horarioService.calcularHorasTeoricasDia(emp.getId(), d);
             long minutosTeoricosDia = Math.round(horasTeoricasDia * 60.0);
 
@@ -319,7 +356,6 @@ public class FichaComportamientoService {
                     .distinct()
                     .count();
 
-            // Verificación de Licencia / Asueto institucional para el día
             Optional<ExcepcionLicencia> licOpt = excepcionesPeriodo.stream()
                     .filter(e -> !d.isBefore(e.getFechaInicio()) && !d.isAfter(e.getFechaFin()))
                     .findFirst();
@@ -348,13 +384,10 @@ public class FichaComportamientoService {
                 minutosDiferencia = 0;
                 estadoDia = (minutosTeoricosDia == 0) ? "FRANCO" : "FUTURO";
             } else if (tieneLicencia && !huboPresencia) {
-                // Día amparado por licencia médica, vacaciones o asueto
                 diasEvaluadosHastaHoy++;
-                cumplimientoDia = 100; // Día justificado sin sanción
-                minutosDiferencia = 0; // Sin deuda ni horas en contra
+                cumplimientoDia = 100;
+                minutosDiferencia = 0;
                 estadoDia = Boolean.TRUE.equals(licOpt.get().getEsInstitucional()) ? "ASUETO" : "LICENCIA";
-
-                // REGLA: No suma horas ficticias al numerador ni al denominador exigible
             } else {
                 diasEvaluadosHastaHoy++;
                 totalHorasTeoricasPeriodo += horasTeoricasDia;
@@ -402,8 +435,17 @@ public class FichaComportamientoService {
             String entDia = fDia.isEmpty() ? "--:--" : fDia.get(0).getHoraFichaje().toLocalTime().toString().substring(0, 5);
             String salDia = fDia.size() < 2 ? "--:--" : fDia.get(fDia.size() - 1).getHoraFichaje().toLocalTime().toString().substring(0, 5);
 
-            List<EmpleadoHorario> clasesDelDia = horarios.stream()
-                    .filter(h -> h.getMateria() != null && h.getDiaSemana() != null && h.getDiaSemana() == d.getDayOfWeek().getValue())
+            final LocalDate fActualDia = d;
+            LocalDateTime iniDia = fActualDia.atStartOfDay();
+            LocalDateTime finDia = fActualDia.atTime(LocalTime.MAX);
+
+            List<EmpleadoHorario> clasesDelDia = todosHorarios.stream()
+                    .filter(h -> h.getMateria() != null && h.getDiaSemana() != null && h.getDiaSemana() == fActualDia.getDayOfWeek().getValue())
+                    .filter(h -> {
+                        LocalDateTime alta = h.getFechaAlta() != null ? h.getFechaAlta() : LocalDateTime.MIN;
+                        LocalDateTime baja = h.getFechaBaja();
+                        return !alta.isAfter(finDia) && (baja == null || !baja.isBefore(iniDia));
+                    })
                     .toList();
 
             long minClaseTeoricos = 0;
@@ -477,7 +519,7 @@ public class FichaComportamientoService {
                 .map(i -> i.getIdEventoAgrupador() != null ? i.getIdEventoAgrupador() : ("ID_" + i.getId()))
                 .distinct().count();
 
-        // 8. Cálculo de resoluciones y top de justificaciones en backend
+        // 8. Conteo de resoluciones
         int pendientes = 0;
         int justificados = 0;
         int observados = 0;
@@ -500,8 +542,6 @@ public class FichaComportamientoService {
             if (esAuditableParaTop) {
                 String motivoRaw = null;
                 if (inc.getResolucionMotivo() != null && !inc.getResolucionMotivo().isBlank()) {
-                    motivoRaw = inc.getResolucionMotivo().trim();
-                } else if (inc.getResolucionMotivo() != null && !inc.getResolucionMotivo().isBlank()) {
                     motivoRaw = inc.getResolucionMotivo().trim();
                 }
 
@@ -542,7 +582,7 @@ public class FichaComportamientoService {
                 diasLicenciaAcumulados, formatearMinutosAHoras(minutosLicenciaAcumulados), minutosLicenciaAcumulados
         );
 
-        // Agrupación de meses para Trimestre y Cuatrimestre
+        // Agrupación de meses
         List<FichaComportamientoDTO.MesResumenDTO> mesesPeriodo = new ArrayList<>();
         if (mod.equals("TRIMESTRE") || mod.equals("CUATRIMESTRE")) {
             Map<String, List<FichaComportamientoDTO.DiaDesgloseDTO>> diasPorMes = new LinkedHashMap<>();
@@ -582,9 +622,12 @@ public class FichaComportamientoService {
         String rolOArea = (emp.getCargos() != null && !emp.getCargos().isEmpty())
                 ? emp.getCargos().get(0).getNombre() : "Personal Institucional";
 
+        log.info(">>> [FICHA] Finalizada generación de Ficha DTO para empleado {} con éxito.", emp.getId());
+        log.info("================================================================================");
+
         return new FichaComportamientoDTO(
                 emp.getId(), emp.getApellido() + ", " + emp.getNombre(),
-                emp.getNroLegajo(), emp.getDni(), rolOArea, "Departamento de Ciencias Básicas",
+                emp.getNroLegajo(), emp.getDni(), rolOArea,
                 Boolean.TRUE.equals(emp.getActivo()), etiquetaTurno, mod, periodoTexto,
                 porcentajeCumplimiento, metricasDTO, planificados, presencias,
                 desglose, incidentesList, brutos, diasDesglose, mesesPeriodo

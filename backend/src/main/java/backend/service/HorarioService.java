@@ -74,7 +74,7 @@ public class HorarioService {
         return horarioRepo.findByEmpleadoId(empleadoId);
     }
 
-@Transactional
+    @Transactional
     public List<EmpleadoHorario> agregarHorariosMultiples(Long empleadoId,
                                                          List<Integer> diasSemana,
                                                          String horaEntradaStr,
@@ -95,7 +95,7 @@ public class HorarioService {
         String frecFinal = (tipoFrecuencia != null && !tipoFrecuencia.isBlank()) ? tipoFrecuencia.toUpperCase() : "SEMANAL";
         int repsFinal = (repeticionesPeriodo != null && repeticionesPeriodo > 0) ? repeticionesPeriodo : 1;
 
-        // CASO 1: BOLSA DE HORAS / CUMPLIMIENTO FLEXIBLE (Sin días fijos)
+        // CASO 1: BOLSA DE HORAS / CUMPLIMIENTO FLEXIBLE
         if (horasObjetivo != null && horasObjetivo > 0 && (diasSemana == null || diasSemana.isEmpty())) {
             EmpleadoHorario flexible = new EmpleadoHorario();
             flexible.setEmpleado(emp);
@@ -142,7 +142,10 @@ public class HorarioService {
         if (!Boolean.TRUE.equals(forzarGuardado)) {
             for (Integer dia : diasSemana) {
                 for (EmpleadoHorario h : existentes) {
-                    if (h.getDiaSemana() != null && h.getDiaSemana().equals(dia) && h.getHoraEntrada() != null && h.getHoraSalida() != null) {
+                    if (Boolean.TRUE.equals(h.getActivo()) && h.getFechaBaja() == null &&
+                        h.getDiaSemana() != null && h.getDiaSemana().equals(dia) &&
+                        h.getHoraEntrada() != null && h.getHoraSalida() != null) {
+                        
                         LocalTime exEntrada = h.getHoraEntrada();
                         LocalTime exSalida = h.getHoraSalida();
 
@@ -207,7 +210,7 @@ public class HorarioService {
                 .orElseThrow(() -> new RuntimeException("Horario no encontrado con ID: " + horarioId));
 
         h.setActivo(false);
-        h.setFechaBaja(java.time.LocalDateTime.now());
+        h.setFechaBaja(LocalDateTime.now());
         horarioRepo.save(h);
 
         Empleado emp = h.getEmpleado();
@@ -232,8 +235,12 @@ public class HorarioService {
         Empleado emp = empleadoRepo.findById(empleadoId)
                 .orElseThrow(() -> new RuntimeException("Empleado no encontrado con ID: " + empleadoId));
 
+        LocalDateTime ahora = LocalDateTime.now();
+
+        // Se consideran únicamente franjas actualmente vigentes
         List<EmpleadoHorario> franjas = horarioRepo.findByEmpleadoId(empleadoId).stream()
                 .filter(h -> Boolean.TRUE.equals(h.getActivo()))
+                .filter(h -> h.getFechaBaja() == null || !h.getFechaBaja().isBefore(ahora))
                 .toList();
 
         double totalHorasSemana = 0.0;
@@ -256,7 +263,6 @@ public class HorarioService {
                 etiquetaDetectada = f.getEtiqueta().trim();
             }
 
-            // Régimen flexible por bolsa de horas
             if (f.getDiaSemana() == null && f.getHorasObjetivo() != null) {
                 tieneFlexible = true;
                 horasFlexiblesTotal += f.getHorasObjetivo();
@@ -271,7 +277,6 @@ public class HorarioService {
                 continue;
             }
 
-            // Régimen tradicional por días
             if (f.getDiaSemana() != null) {
                 diasSet.add(diaNumeroANombre(f.getDiaSemana()));
             }
@@ -371,38 +376,49 @@ public class HorarioService {
         return String.join(", ", dias);
     }
 
+    /**
+     * Calcula las horas teóricas del día considerando fechaAlta y fechaBaja.
+     */
     @Transactional(readOnly = true)
     public double calcularHorasTeoricasDia(Long empleadoId, LocalDate fecha) {
         if (fecha == null || empleadoId == null) return 0.0;
 
-        List<EmpleadoHorario> franjas = horarioRepo.findByEmpleadoId(empleadoId).stream()
-                .filter(h -> Boolean.TRUE.equals(h.getActivo()))
-                .toList();
-
+        LocalDateTime inicioDia = fecha.atStartOfDay();
+        LocalDateTime finDia = fecha.atTime(LocalTime.MAX);
         int diaSemana = fecha.getDayOfWeek().getValue();
         int numeroSemana = fecha.get(IsoFields.WEEK_OF_WEEK_BASED_YEAR);
         boolean esSemanaPar = (numeroSemana % 2 == 0);
 
+        List<EmpleadoHorario> franjasVigentes = horarioRepo.findByEmpleadoId(empleadoId).stream()
+                .filter(h -> {
+                    if (h.getDiaSemana() == null) return false;
+                    if (h.getDiaSemana() != diaSemana) return false;
+
+                    LocalDateTime alta = h.getFechaAlta() != null ? h.getFechaAlta() : LocalDateTime.MIN;
+                    LocalDateTime baja = h.getFechaBaja();
+
+                    boolean yaHabiaIniciado = !alta.isAfter(finDia);
+                    boolean noHabiaFinalizado = (baja == null) || !baja.isBefore(inicioDia);
+
+                    return yaHabiaIniciado && noHabiaFinalizado;
+                })
+                .toList();
+
         double minutosTotales = 0.0;
 
-        for (EmpleadoHorario h : franjas) {
-            // Franjas sin día fijo asignado (bolsa de horas): no imponen horas teóricas fijas en una fecha puntual
-            if (h.getDiaSemana() == null) continue;
+        for (EmpleadoHorario h : franjasVigentes) {
+            String frec = h.getTipoFrecuencia() != null ? h.getTipoFrecuencia().toUpperCase() : "SEMANAL";
 
-            if (h.getDiaSemana() == diaSemana) {
-                String frec = h.getTipoFrecuencia() != null ? h.getTipoFrecuencia().toUpperCase() : "SEMANAL";
+            if ("SEMANA_POR_MEDIO".equals(frec)) {
+                String alterna = h.getSemanaAlterna() != null ? h.getSemanaAlterna().toUpperCase() : "PAR";
+                if ("PAR".equals(alterna) && !esSemanaPar) continue;
+                if ("IMPAR".equals(alterna) && esSemanaPar) continue;
+            }
 
-                if ("SEMANA_POR_MEDIO".equals(frec)) {
-                    String alterna = h.getSemanaAlterna() != null ? h.getSemanaAlterna().toUpperCase() : "PAR";
-                    if ("PAR".equals(alterna) && !esSemanaPar) continue;
-                    if ("IMPAR".equals(alterna) && esSemanaPar) continue;
-                }
-
-                if (h.getHoraEntrada() != null && h.getHoraSalida() != null) {
-                    long duracion = Duration.between(h.getHoraEntrada(), h.getHoraSalida()).toMinutes();
-                    if (duracion > 0) {
-                        minutosTotales += duracion;
-                    }
+            if (h.getHoraEntrada() != null && h.getHoraSalida() != null) {
+                long duracion = Duration.between(h.getHoraEntrada(), h.getHoraSalida()).toMinutes();
+                if (duracion > 0) {
+                    minutosTotales += duracion;
                 }
             }
         }
@@ -412,10 +428,28 @@ public class HorarioService {
 
     @Transactional(readOnly = true)
     public double calcularHorasTeoricasSemanal(Long empleadoId) {
+        return calcularHorasTeoricasSemanal(empleadoId, LocalDate.now());
+    }
+
+    /**
+     * Calcula las horas teóricas semanales de acuerdo a la vigencia en la fecha de referencia.
+     */
+    @Transactional(readOnly = true)
+    public double calcularHorasTeoricasSemanal(Long empleadoId, LocalDate fechaReferencia) {
         if (empleadoId == null) return 0.0;
+        final LocalDate ref = (fechaReferencia != null) ? fechaReferencia : LocalDate.now();
+
+        LocalDateTime inicioSemana = ref.minusDays(ref.getDayOfWeek().getValue() - 1).atStartOfDay();
+        LocalDateTime finSemana = inicioSemana.toLocalDate().plusDays(6).atTime(LocalTime.MAX);
 
         List<EmpleadoHorario> franjas = horarioRepo.findByEmpleadoId(empleadoId).stream()
-                .filter(h -> Boolean.TRUE.equals(h.getActivo()))
+                .filter(h -> {
+                    LocalDateTime alta = h.getFechaAlta() != null ? h.getFechaAlta() : LocalDateTime.MIN;
+                    LocalDateTime baja = h.getFechaBaja();
+                    boolean yaHabiaIniciado = !alta.isAfter(finSemana);
+                    boolean noHabiaFinalizado = (baja == null) || !baja.isBefore(inicioSemana);
+                    return yaHabiaIniciado && noHabiaFinalizado;
+                })
                 .toList();
 
         double totalHoras = 0.0;
@@ -464,15 +498,23 @@ public class HorarioService {
         if (empleadoId == null || desde == null || hasta == null) return 0.0;
         if (hasta.isBefore(desde)) return 0.0;
 
+        LocalDateTime inicioRango = desde.atStartOfDay();
+        LocalDateTime finRango = hasta.atTime(LocalTime.MAX);
+
         List<EmpleadoHorario> franjas = horarioRepo.findByEmpleadoId(empleadoId).stream()
-                .filter(h -> Boolean.TRUE.equals(h.getActivo()))
+                .filter(h -> {
+                    LocalDateTime alta = h.getFechaAlta() != null ? h.getFechaAlta() : LocalDateTime.MIN;
+                    LocalDateTime baja = h.getFechaBaja();
+                    boolean yaHabiaIniciado = !alta.isAfter(finRango);
+                    boolean noHabiaFinalizado = (baja == null) || !baja.isBefore(inicioRango);
+                    return yaHabiaIniciado && noHabiaFinalizado;
+                })
                 .toList();
 
-        // Si solo tiene esquema flexible, se prorratea el objetivo al rango de días
         boolean soloFlexible = !franjas.isEmpty() && franjas.stream().allMatch(h -> h.getDiaSemana() == null);
         if (soloFlexible) {
             double acumuladorFlexible = 0.0;
-            long diasRango = Duration.between(desde.atStartOfDay(), hasta.plusDays(1).atStartOfDay()).toDays();
+            long diasRango = Duration.between(inicioRango, hasta.plusDays(1).atStartOfDay()).toDays();
             for (EmpleadoHorario f : franjas) {
                 if (f.getHorasObjetivo() != null) {
                     String frec = f.getTipoFrecuencia() != null ? f.getTipoFrecuencia().toUpperCase() : "MENSUAL";

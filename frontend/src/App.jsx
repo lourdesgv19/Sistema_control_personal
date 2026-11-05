@@ -14,6 +14,7 @@ import TableroIncidentesDiarios from "./pages/TableroIncidentesDiarios";
 import GestionMaterias from "./pages/GestionMaterias";
 import Perfil from "./pages/Perfil";
 import FichaComportamiento from "./pages/FichaComportamiento";
+import FichaComportamiento2 from "./pages/FichaComportamiento2";
 import ExcepcionesLicencias from "./pages/ExcepcionesLicencias";
 
 export default function App() {
@@ -121,7 +122,7 @@ export default function App() {
             path="/fichas-comportamiento"
             element={
               <ProtectedRoute permisoRequerido="FICHAS_COMPORTAMIENTO_VER">
-                <FichaComportamiento />
+                <FichaComportamiento2 />
               </ProtectedRoute>
             }
           />
