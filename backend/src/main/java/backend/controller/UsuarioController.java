@@ -4,6 +4,7 @@ import backend.dto.CambioPasswordRequest;
 import backend.dto.CrearUsuarioRequest;
 import backend.dto.UsuarioDTO;
 import backend.dto.UsuarioResumenDTO;
+import backend.model.Empleado;
 import backend.model.Usuario;
 import backend.repositories.UsuarioRepository;
 import backend.service.UsuarioService;
@@ -13,6 +14,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.data.domain.Page;
 import org.springframework.security.core.Authentication;
 import java.util.Map;
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/usuarios")
@@ -45,6 +47,11 @@ public class UsuarioController {
     public ResponseEntity<UsuarioDTO> obtenerPorEmpleado(@PathVariable Long empleadoId) {
         UsuarioDTO dto = usuarioService.obtenerPorEmpleadoId(empleadoId);
         return dto != null ? ResponseEntity.ok(dto) : ResponseEntity.notFound().build();
+    }
+
+    @GetMapping("/empleados-disponibles")
+    public ResponseEntity<List<Empleado>> obtenerEmpleadosSinUsuario() {
+        return ResponseEntity.ok(usuarioService.listarEmpleadosDisponiblesParaUsuario());
     }
 
     @PostMapping

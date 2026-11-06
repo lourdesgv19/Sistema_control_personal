@@ -78,6 +78,11 @@ public class UsuarioService {
         );
     }
 
+    @Transactional(readOnly = true)
+    public List<Empleado> listarEmpleadosDisponiblesParaUsuario() {
+        return empleadoRepo.findEmpleadosSinUsuarioActivos();
+    }
+
     /**
      * Genera la contraseña inicial: apellido en minúscula + primeros 2 dígitos del DNI.
      */

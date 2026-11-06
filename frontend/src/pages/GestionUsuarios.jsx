@@ -19,8 +19,8 @@ import {
   resetPasswordUsuario,
   toggleEstadoUsuario,
   getUsuarioResumen,
+  getEmpleadosSinUsuario,
 } from "../services/usuarioService";
-import { getEmpleadosPaginados } from "../services/empleadoService";
 import ModalAlerta from "../components/comunes/ModalAlerta";
 import ModalCrearUsuario from "../components/usuarios/ModalCrearUsuario";
 import ModalMatrizPermisos from "../components/usuarios/ModalMatrizPermisos";
@@ -101,10 +101,11 @@ export default function GestionUsuarios() {
 
   const cargarEmpleadosCatalogo = useCallback(async () => {
     try {
-      const emps = await getEmpleadosPaginados(1, ITEMS_POR_PAGINA);
+      const emps = await getEmpleadosSinUsuario();
       setEmpleados(Array.isArray(emps) ? emps : []);
     } catch (err) {
-      console.error("Error al cargar nómina de empleados:", err);
+      console.error("Error al cargar empleados sin usuario:", err);
+      setEmpleados([]);
     }
   }, []);
 
@@ -157,13 +158,8 @@ export default function GestionUsuarios() {
   }, [cargarUsuariosServidor, paginaActual]);
 
   const empleadosSinUsuario = useMemo(() => {
-    const idsConUsuario = new Set(
-      usuarios.map((u) => u.empleadoId).filter(Boolean),
-    );
-    return empleados.filter(
-      (e) => e.activo !== false && !idsConUsuario.has(e.id),
-    );
-  }, [empleados, usuarios]);
+    return empleados.filter((e) => e.activo !== false);
+  }, [empleados]);
 
   const handleCrearUsuario = async (payload) => {
     if (!puedeGestionarAccesos) return;
@@ -173,6 +169,7 @@ export default function GestionUsuarios() {
       await Promise.all([
         cargarUsuariosServidor(paginaActual - 1),
         cargarResumenGlobal(),
+        cargarEmpleadosCatalogo(),
       ]);
       mostrarAviso(
         "success",

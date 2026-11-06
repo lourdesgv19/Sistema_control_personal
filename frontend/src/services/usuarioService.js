@@ -18,6 +18,11 @@ export const getUsuariosPaginados = async (
   return (await apiClient.get(`/usuarios?${params.toString()}`)).data;
 };
 
+// Empleados disponibles para asignación de cuenta
+export const getEmpleadosSinUsuario = async () => {
+  return (await apiClient.get("/usuarios/empleados-disponibles")).data;
+};
+
 // Resumen de métricas
 export const getUsuarioResumen = async () => {
   return (await apiClient.get("/usuarios/resumen-metricas")).data;
