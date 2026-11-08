@@ -69,15 +69,15 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.PUT, "/api/configuracion/horarios/**").hasAnyAuthority("CONFIG_EDITAR_TURNOS", "PERM_ADMIN_TOTAL")
                 .requestMatchers(HttpMethod.DELETE, "/api/configuracion/horarios/**").hasAnyAuthority("CONFIG_EDITAR_TURNOS", "PERM_ADMIN_TOTAL")
                 
-                // 5. Horarios (Se incluye HORARIOS_EDITAR en PUT)
+                // 5. Horarios (Compatible con lectura, alta, edición y baja granular)
                 .requestMatchers(HttpMethod.GET, "/api/horarios/**", "/api/empleados/*/horarios/**", "/api/empleados/*/horarios")
                     .hasAnyAuthority("HORARIOS_VER", "PERSONAL_VER", "PERM_ADMIN_TOTAL")
                 .requestMatchers(HttpMethod.GET, "/api/empleados/*/metricas")
                     .hasAnyAuthority("HORARIOS_VER", "PERSONAL_VER", "FICHAS_COMPORTAMIENTO_VER", "PERM_ADMIN_TOTAL")
                 .requestMatchers(HttpMethod.POST, "/api/horarios/**", "/api/empleados/*/horarios/**", "/api/empleados/*/horarios")
-                    .hasAnyAuthority("HORARIOS_GESTIONAR", "PERM_ADMIN_TOTAL")
+                    .hasAnyAuthority("HORARIOS_GESTIONAR", "HORARIOS_CREAR", "PERM_ADMIN_TOTAL")
                 .requestMatchers(HttpMethod.PUT, "/api/horarios/**", "/api/empleados/*/horarios/**", "/api/empleados/*/horarios")
-                    .hasAnyAuthority("HORARIOS_GESTIONAR", "HORARIOS_EDITAR", "PERM_ADMIN_TOTAL")
+                    .hasAnyAuthority("HORARIOS_GESTIONAR", "HORARIOS_EDITAR", "HORARIOS_CREAR", "PERM_ADMIN_TOTAL")
                 .requestMatchers(HttpMethod.DELETE, "/api/horarios/**", "/api/empleados/*/horarios/**", "/api/empleados/horarios/**")
                     .hasAnyAuthority("HORARIOS_ELIMINAR", "PERM_ADMIN_TOTAL")
 
@@ -111,20 +111,31 @@ public class SecurityConfig {
                 // 10. Incidentes
                 .requestMatchers(HttpMethod.GET, "/api/incidentes/**").hasAnyAuthority("INCIDENTES_VER", "PERM_ADMIN_TOTAL")
                 .requestMatchers(HttpMethod.PUT, "/api/incidentes/*/resolver").hasAnyAuthority("INCIDENTES_JUSTIFICAR", "PERM_ADMIN_TOTAL")
+                
+                // 11. Materias & Calendario Semanal
+                // Consulta del calendario semanal y sus métricas asociadas
+                .requestMatchers(HttpMethod.GET, "/api/materias/calendario-semanal", "/api/materias/resumen")
+                    .hasAnyAuthority("MATERIAS_CALENDARIO_VER", "MATERIAS_VER", "HORARIOS_VER", "HORARIOS_GESTIONAR", "HORARIOS_CREAR", "HORARIOS_EDITAR", "PERM_ADMIN_TOTAL")
 
-                // 11. Materias & Liquidación Docente
-                .requestMatchers(HttpMethod.GET, "/api/materias", "/api/materias/*", "/api/materias/catalogo-agrupado", "/api/materias/calendario-semanal")
-                    .hasAnyAuthority("MATERIAS_VER", "PERM_ADMIN_TOTAL")
-                .requestMatchers(HttpMethod.GET, "/api/materias/resumen")
-                    .hasAnyAuthority("MATERIAS_VER", "PERM_ADMIN_TOTAL")
-                .requestMatchers(HttpMethod.GET, "/api/materias/*/impacto-baja")
-                    .hasAnyAuthority("MATERIAS_ELIMINAR", "PERM_ADMIN_TOTAL")
+                // Catálogo general de asignaturas y consultas individuales
+                .requestMatchers(HttpMethod.GET, "/api/materias", "/api/materias/*", "/api/materias/catalogo-agrupado")
+                    .hasAnyAuthority("MATERIAS_VER", "HORARIOS_VER", "HORARIOS_GESTIONAR", "HORARIOS_CREAR", "HORARIOS_EDITAR", "PERM_ADMIN_TOTAL")
+
+                // Alta de materias y registro de comisiones
                 .requestMatchers(HttpMethod.POST, "/api/materias", "/api/materias/**")
-                    .hasAnyAuthority("MATERIAS_CREAR", "MATERIAS_EDITAR", "PERM_ADMIN_TOTAL")
+                    .hasAnyAuthority("MATERIAS_CREAR", "HORARIOS_GESTIONAR", "HORARIOS_CREAR", "PERM_ADMIN_TOTAL")
+
+                // Modificación de materias, aulas y comisiones
                 .requestMatchers(HttpMethod.PUT, "/api/materias/**")
-                    .hasAnyAuthority("MATERIAS_EDITAR", "PERM_ADMIN_TOTAL")
+                    .hasAnyAuthority("MATERIAS_EDITAR", "HORARIOS_GESTIONAR", "HORARIOS_EDITAR", "HORARIOS_CREAR", "PERM_ADMIN_TOTAL")
+
+                // Impacto de baja y desvinculación de franjas horarias
+                .requestMatchers(HttpMethod.GET, "/api/materias/*/impacto-baja")
+                    .hasAnyAuthority("MATERIAS_ELIMINAR", "HORARIOS_ELIMINAR", "PERM_ADMIN_TOTAL")
+
+                // Eliminación definitiva o lógica de materias y comisiones
                 .requestMatchers(HttpMethod.DELETE, "/api/materias/**")
-                    .hasAnyAuthority("MATERIAS_ELIMINAR", "PERM_ADMIN_TOTAL")
+                    .hasAnyAuthority("MATERIAS_ELIMINAR", "HORARIOS_ELIMINAR", "PERM_ADMIN_TOTAL")
 
                 // 12. Excepciones y Licencias
                 .requestMatchers(HttpMethod.GET, "/api/excepciones-licencias/**")
@@ -160,7 +171,6 @@ public class SecurityConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
         
-        // Lee los orígenes configurados separados por coma (ej. en application-prod.properties)
         List<String> origins = Arrays.stream(allowedOrigins.split(","))
                 .map(String::trim)
                 .filter(s -> !s.isEmpty())

@@ -87,8 +87,7 @@ export default function ModalAuditoriaClase({ isOpen, onClose, clase }) {
         </div>
         <p className="text-rose-800 leading-relaxed text-[11px]">
           No se registraron marcaciones biométricas válidas en el horario
-          asignado. Se computa ausencia y no se liquidan honorarios por esta
-          clase.
+          asignado.
         </p>
       </div>
     );

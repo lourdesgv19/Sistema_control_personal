@@ -66,14 +66,44 @@ export default function ModalMatrizPermisos({
     }
   };
 
-  const togglePermiso = (codigo) => {
+  /**
+   * REGLA DE DEPENDENCIAS:
+   * Al seleccionar CREAR, EDITAR, ELIMINAR (u otra acción que no sea VER),
+   * se activa automáticamente el permiso VER de ese módulo.
+   * La acción inversa NO ocurre (seleccionar VER no activa las demás).
+   */
+  const togglePermiso = (codigo, modulo) => {
     setPermisosSeleccionados((prev) => {
       const nuevo = { ...prev };
-      if (nuevo[codigo]) {
+      const yaMarcado = !!nuevo[codigo];
+
+      if (yaMarcado) {
+        // Al desmarcar, solo quitamos este permiso específico
         delete nuevo[codigo];
       } else {
+        // Marcamos el permiso solicitado
         nuevo[codigo] = { esTemporal: esTemporalGlobal };
+
+        // Buscamos el permiso de visualización principal del módulo (ej: PERSONAL_VER, HORARIOS_VER)
+        const permisoVer =
+          modulo.permisos.find(
+            (p) =>
+              p.codigo.endsWith("_VER") &&
+              !p.codigo.includes("CALENDARIO") &&
+              !p.codigo.includes("COMPORTAMIENTO"),
+          )?.codigo || `${modulo.id}_VER`;
+
+        // Si se activó una acción distinta a VER, auto-seleccionamos el VER correspondiente
+        if (
+          codigo !== permisoVer &&
+          modulo.permisos.some((p) => p.codigo === permisoVer)
+        ) {
+          nuevo[permisoVer] = nuevo[permisoVer] || {
+            esTemporal: esTemporalGlobal,
+          };
+        }
       }
+
       return nuevo;
     });
   };
@@ -285,7 +315,7 @@ export default function ModalMatrizPermisos({
                           <input
                             type="checkbox"
                             checked={activo}
-                            onChange={() => togglePermiso(p.codigo)}
+                            onChange={() => togglePermiso(p.codigo, mod)}
                             className="mt-0.5 w-4 h-4 text-indigo-600 rounded-sm focus:ring-indigo-500 cursor-pointer"
                           />
                           <div className="flex-1">

@@ -12,12 +12,14 @@ import {
   Repeat,
   CalendarCheck,
   UserPlus,
+  UserMinus,
 } from "lucide-react";
 import {
   getCatalogoMateriasAgrupadas,
   reactivarMateria,
+  desvincularDocenteMateria,
+  desvincularComisionMateria,
 } from "../../services/gestionMateriasService";
-import { removeEmpleadoHorario } from "../../services/empleadoService";
 import ModalAlerta from "../comunes/ModalAlerta";
 
 const DIAS_ORDEN = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
@@ -26,18 +28,23 @@ export default function CatalogoMateriasABM({
   onNuevaMateria,
   onEditarMateria,
   onEditarHorario,
+  onAsignarDocente,
   onEliminarMateria,
   docenteInicialId = null,
   filtroDocente = "",
   busqueda = "",
   puedeCrear,
   puedeEditar,
+  puedeGestionarDocente,
   puedeEliminar,
 }) {
   const [materias, setMaterias] = useState([]);
   const [loading, setLoading] = useState(true);
   const [expandidos, setExpandidos] = useState([]);
   const [filtroEstado, setFiltroEstado] = useState("ACTIVOS");
+
+  // REGLA ESTRICTA: Solo quien puede gestionar horarios puede vincular o desvincular docentes
+  const puedeOperarDocente = Boolean(puedeGestionarDocente);
 
   const [modalAlerta, setModalAlerta] = useState({
     isOpen: false,
@@ -174,21 +181,54 @@ export default function CatalogoMateriasABM({
     });
   };
 
-  const handleConfirmarBajaHorario = (horario, nombreMateria) => {
+  const handleConfirmarDesvincularDocente = (materia) => {
+    if (!puedeOperarDocente) return;
+
+    setModalAlerta({
+      isOpen: true,
+      tipo: "warning",
+      titulo: "¿Desvincular docente de la cátedra?",
+      mensaje: `¿Desea desvincular a "${materia.docenteTitularNombre}" de la materia "${materia.nombre}"? La materia conservará sus días y horarios fijados pero quedará en estado vacante. Los registros históricos del docente no se borrarán.`,
+      textoConfirmar: "Sí, desvincular",
+      textoCancelar: "Cancelar",
+      mostrarCancelar: true,
+      onConfirmar: async () => {
+        setModalAlerta((p) => ({ ...p, isOpen: false }));
+        try {
+          await desvincularDocenteMateria(materia.idMateria);
+          window.dispatchEvent(new CustomEvent("datos:actualizados"));
+          await cargarDatos();
+          mostrarAviso(
+            "success",
+            "Docente Desvinculado",
+            `La cátedra "${materia.nombre}" ahora se encuentra sin docente asignado.`,
+          );
+        } catch (err) {
+          mostrarAviso("danger", "Error", "No se pudo desvincular al docente.");
+        }
+      },
+    });
+  };
+
+  const handleConfirmarBajaHorario = (horario, materia) => {
     if (!puedeEliminar) return;
 
     setModalAlerta({
       isOpen: true,
       tipo: "danger",
       titulo: "¿Dar de baja comisión?",
-      mensaje: `¿Desea desvincular el horario de ${horario.diaNombre} (${horario.horaInicio} - ${horario.horaFin} hs) de la cátedra "${nombreMateria}"? La materia conservará sus demás comisiones.`,
+      mensaje: `¿Desea desvincular el horario de ${horario.diaNombre} (${horario.horaInicio} - ${horario.horaFin} hs) de la cátedra "${materia.nombre}"? La materia conservará sus demás comisiones.`,
       textoConfirmar: "Sí, desvincular",
       textoCancelar: "Cancelar",
       mostrarCancelar: true,
       onConfirmar: async () => {
         setModalAlerta((prev) => ({ ...prev, isOpen: false }));
         try {
-          await removeEmpleadoHorario(horario.idHorario);
+          await desvincularComisionMateria(
+            materia.idMateria,
+            horario.idHorario || null,
+            horario.diaSemana || null,
+          );
           window.dispatchEvent(new CustomEvent("datos:actualizados"));
           await cargarDatos();
           mostrarAviso(
@@ -353,7 +393,7 @@ export default function CatalogoMateriasABM({
         </div>
       </div>
 
-      {/* 1. VISTA MÓVIL (md:hidden) — LISTADO DE TARJETAS SIN SCROLL LATERAL */}
+      {/* 1. VISTA MÓVIL (md:hidden) */}
       <div className="md:hidden divide-y divide-slate-100">
         {materiasFiltradas.length === 0 ? (
           <div className="p-8 text-center text-slate-400 text-xs italic">
@@ -378,7 +418,7 @@ export default function CatalogoMateriasABM({
                       : "bg-white"
                 }`}
               >
-                {/* Cabecera de la Tarjeta Móvil */}
+                {/* Cabecera Móvil */}
                 <div
                   onClick={() => toggleExpandir(materia.idMateria)}
                   className="cursor-pointer select-none"
@@ -429,7 +469,6 @@ export default function CatalogoMateriasABM({
                     </div>
                   </div>
 
-                  {/* Datos resumidos de la cátedra */}
                   <div className="grid grid-cols-2 gap-2 mt-3 pt-3 border-t border-slate-100 text-xs">
                     <div>
                       <span className="text-[10px] text-slate-400 font-semibold block uppercase">
@@ -473,9 +512,25 @@ export default function CatalogoMateriasABM({
                   {/* Docentes a Cargo */}
                   <div className="mt-2.5 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
                     {materia.sinDocente ? (
-                      <div className="inline-flex items-center gap-1.5 text-amber-800 text-[11px] font-bold">
-                        <AlertCircle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                        <span>Sin Docente Asignado</span>
+                      <div className="flex items-center justify-between">
+                        <div className="inline-flex items-center gap-1.5 text-amber-800 text-[11px] font-bold">
+                          <AlertCircle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                          <span>Sin Docente Asignado</span>
+                        </div>
+                        {/* Botón Asignar: EXCLUSIVO si tiene permiso de horarios */}
+                        {puedeOperarDocente && !esInactiva && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (onAsignarDocente) onAsignarDocente(materia);
+                            }}
+                            className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-lg hover:bg-indigo-100 transition"
+                          >
+                            <UserPlus className="w-3 h-3" />
+                            <span>Asignar</span>
+                          </button>
+                        )}
                       </div>
                     ) : (
                       <div className="space-y-1 text-xs">
@@ -506,6 +561,38 @@ export default function CatalogoMateriasABM({
                 <div className="mt-3 flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
                   {!esInactiva ? (
                     <>
+                      {/* Botón Asignar / Cambiar Docente (EXCLUSIVO para quien gestiona horarios) */}
+                      {puedeOperarDocente && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (onAsignarDocente) onAsignarDocente(materia);
+                          }}
+                          className="px-2.5 py-1.5 bg-purple-50 text-purple-700 border border-purple-200 rounded-lg text-xs font-semibold hover:bg-purple-100 transition flex items-center gap-1 cursor-pointer"
+                          title="Asignar o cambiar profesor de cátedra"
+                        >
+                          <UserPlus className="w-3.5 h-3.5" />
+                          Docente
+                        </button>
+                      )}
+
+                      {/* Botón Desvincular Docente: EXCLUSIVO para quien gestiona horarios y cuando hay docente asignado */}
+                      {puedeOperarDocente && !materia.sinDocente && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleConfirmarDesvincularDocente(materia);
+                          }}
+                          className="px-2.5 py-1.5 bg-amber-50 text-amber-700 border border-amber-200 rounded-lg text-xs font-semibold hover:bg-amber-100 transition flex items-center gap-1 cursor-pointer"
+                          title="Desvincular docente y dejar cátedra vacante"
+                        >
+                          <UserMinus className="w-3.5 h-3.5" />
+                          Quitar Docente
+                        </button>
+                      )}
+
                       {puedeEditar &&
                         (horariosIguales ? (
                           <button
@@ -514,7 +601,7 @@ export default function CatalogoMateriasABM({
                               e.stopPropagation();
                               if (onEditarMateria) onEditarMateria(materia);
                             }}
-                            className="px-3 py-1.5 bg-indigo-50 text-indigo-700 rounded-lg text-xs font-semibold hover:bg-indigo-100 transition flex items-center gap-1"
+                            className="px-3 py-1.5 bg-indigo-50 text-indigo-700 rounded-lg text-xs font-semibold hover:bg-indigo-100 transition flex items-center gap-1 cursor-pointer"
                           >
                             <Pencil className="w-3.5 h-3.5" />
                             Editar
@@ -536,7 +623,7 @@ export default function CatalogoMateriasABM({
                                 materia.nombre,
                               );
                           }}
-                          className="px-3 py-1.5 bg-rose-50 text-rose-600 rounded-lg text-xs font-semibold hover:bg-rose-100 transition flex items-center gap-1"
+                          className="px-3 py-1.5 bg-rose-50 text-rose-600 rounded-lg text-xs font-semibold hover:bg-rose-100 transition flex items-center gap-1 cursor-pointer"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                           Baja
@@ -554,7 +641,7 @@ export default function CatalogoMateriasABM({
                             materia.nombre,
                           );
                         }}
-                        className="px-3 py-1.5 bg-emerald-50 text-emerald-700 rounded-lg text-xs font-semibold hover:bg-emerald-100 transition flex items-center gap-1"
+                        className="px-3 py-1.5 bg-emerald-50 text-emerald-700 rounded-lg text-xs font-semibold hover:bg-emerald-100 transition flex items-center gap-1 cursor-pointer"
                       >
                         <RotateCcw className="w-3.5 h-3.5" />
                         Reactivar
@@ -569,9 +656,9 @@ export default function CatalogoMateriasABM({
                     <span className="text-[11px] font-bold text-indigo-950 block">
                       Comisiones Asignadas:
                     </span>
-                    {materia.desgloseHorarios.map((horario) => (
+                    {materia.desgloseHorarios.map((horario, idx) => (
                       <div
-                        key={horario.idHorario}
+                        key={horario.idHorario || `h-mob-${idx}`}
                         className="bg-white rounded-xl border border-indigo-100 p-3 space-y-2 text-xs shadow-2xs"
                       >
                         <div className="flex items-center justify-between">
@@ -593,7 +680,6 @@ export default function CatalogoMateriasABM({
                           <span>{horario.aula}</span>
                         </div>
 
-                        {/* Docentes en Horario Desglosado */}
                         <div className="pt-2 border-t border-slate-100 text-[11px]">
                           {horario.idDocente ? (
                             <div>
@@ -606,8 +692,8 @@ export default function CatalogoMateriasABM({
                             </div>
                           ) : (
                             <span className="text-amber-700 font-bold text-[10px] flex items-center gap-1">
-                              <AlertCircle className="w-3 h-3" /> Sin titular
-                              asignado
+                              <AlertCircle className="w-3.5 h-3.5" /> Sin
+                              titular asignado
                             </span>
                           )}
 
@@ -625,31 +711,47 @@ export default function CatalogoMateriasABM({
 
                         {/* Acciones de la Comisión */}
                         <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
-                          {puedeEditar && !esInactiva && (
-                            <button
-                              type="button"
-                              onClick={() =>
-                                onEditarHorario &&
-                                onEditarHorario(horario, materia)
-                              }
-                              className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-[11px] font-semibold flex items-center gap-1 transition"
-                            >
-                              <Pencil className="w-3 h-3" />
-                              Editar Comisión
-                            </button>
-                          )}
+                          {/* Desvincular docente individual: EXCLUSIVO si tiene permiso de horarios y hay docente asignado */}
+                          {puedeOperarDocente &&
+                            horario.idDocente &&
+                            !esInactiva && (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  handleConfirmarDesvincularDocente(materia)
+                                }
+                                className="px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-700 rounded-lg text-[11px] font-semibold flex items-center gap-1 transition cursor-pointer"
+                                title="Desvincular docente de esta comisión"
+                              >
+                                <UserMinus className="w-3.5 h-3.5" />
+                                Quitar Docente
+                              </button>
+                            )}
+
+                          {(puedeEditar || puedeOperarDocente) &&
+                            !esInactiva && (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  onEditarHorario &&
+                                  onEditarHorario(horario, materia)
+                                }
+                                className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-[11px] font-semibold flex items-center gap-1 transition cursor-pointer"
+                              >
+                                <Pencil className="w-3.5 h-3.5" />
+                                Editar Comisión
+                              </button>
+                            )}
+
                           {puedeEliminar && !esInactiva && (
                             <button
                               type="button"
                               onClick={() =>
-                                handleConfirmarBajaHorario(
-                                  horario,
-                                  materia.nombre,
-                                )
+                                handleConfirmarBajaHorario(horario, materia)
                               }
-                              className="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg text-[11px] font-semibold flex items-center gap-1 transition"
+                              className="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg text-[11px] font-semibold flex items-center gap-1 transition cursor-pointer"
                             >
-                              <Trash2 className="w-3 h-3" />
+                              <Trash2 className="w-3.5 h-3.5" />
                               Quitar
                             </button>
                           )}
@@ -664,7 +766,7 @@ export default function CatalogoMateriasABM({
         )}
       </div>
 
-      {/* 2. VISTA ESCRITORIO (hidden md:block) — TABLA CLÁSICA COMPLETA */}
+      {/* 2. VISTA ESCRITORIO (hidden md:block) */}
       <div className="hidden md:block overflow-x-auto">
         <table className="w-full text-left text-xs border-collapse">
           <thead className="bg-[#f8fafc] text-slate-500 font-bold uppercase text-[10px] tracking-wider border-b border-slate-200/80">
@@ -682,7 +784,7 @@ export default function CatalogoMateriasABM({
             {materiasFiltradas.length === 0 ? (
               <tr>
                 <td
-                  colSpan={7}
+                  colSpan={6}
                   className="text-center py-12 text-slate-400 text-xs italic"
                 >
                   No se encontraron materias con el estado seleccionado.
@@ -791,9 +893,27 @@ export default function CatalogoMateriasABM({
 
                       <td className="py-4 px-4">
                         {materia.sinDocente ? (
-                          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-amber-50 text-amber-800 border border-amber-200 text-[11px] font-bold">
-                            <AlertCircle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                            <span>Sin Docente Asignado</span>
+                          <div className="inline-flex items-center gap-2">
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-amber-50 text-amber-800 border border-amber-200 text-[11px] font-bold">
+                              <AlertCircle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                              <span>Sin Docente Asignado</span>
+                            </span>
+                            {/* Botón Asignar: EXCLUSIVO si tiene permiso de horarios */}
+                            {puedeOperarDocente && !esInactiva && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (onAsignarDocente)
+                                    onAsignarDocente(materia);
+                                }}
+                                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-200 text-[11px] font-bold transition cursor-pointer"
+                                title="Asignar profesor titular o auxiliar a esta cátedra vacante"
+                              >
+                                <UserPlus className="w-3.5 h-3.5" />
+                                <span>Asignar</span>
+                              </button>
+                            )}
                           </div>
                         ) : (
                           <div className="space-y-1.5">
@@ -841,6 +961,37 @@ export default function CatalogoMateriasABM({
                         <div className="flex items-center justify-center gap-1.5">
                           {!esInactiva ? (
                             <>
+                              {/* Botón Asignar / Cambiar Docente (EXCLUSIVO para quien gestiona horarios) */}
+                              {puedeOperarDocente && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (onAsignarDocente)
+                                      onAsignarDocente(materia);
+                                  }}
+                                  className="p-1.5 text-purple-600 hover:text-purple-800 hover:bg-purple-50 rounded-lg transition cursor-pointer"
+                                  title="Asignar o cambiar profesor de cátedra"
+                                >
+                                  <UserPlus className="w-4 h-4" />
+                                </button>
+                              )}
+
+                              {/* Botón Desvincular Docente: EXCLUSIVO para quien gestiona horarios y cuando hay docente asignado */}
+                              {puedeOperarDocente && !materia.sinDocente && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleConfirmarDesvincularDocente(materia);
+                                  }}
+                                  className="p-1.5 text-amber-600 hover:text-amber-800 hover:bg-amber-50 rounded-lg transition cursor-pointer"
+                                  title="Desvincular docente y dejar cátedra vacante"
+                                >
+                                  <UserMinus className="w-4 h-4" />
+                                </button>
+                              )}
+
                               {puedeEditar &&
                                 (horariosIguales ? (
                                   <button
@@ -906,9 +1057,9 @@ export default function CatalogoMateriasABM({
 
                     {/* SUBFILAS DE COMISIONES */}
                     {estaExpandido &&
-                      materia.desgloseHorarios.map((horario) => (
+                      materia.desgloseHorarios.map((horario, idx) => (
                         <tr
-                          key={horario.idHorario}
+                          key={horario.idHorario || `h-${idx}`}
                           className="bg-indigo-50/20 border-l-4 border-indigo-600 hover:bg-indigo-50/40 transition-colors text-xs"
                         >
                           <td className="py-3 px-4 text-center">
@@ -985,28 +1136,42 @@ export default function CatalogoMateriasABM({
 
                           <td className="py-3 px-4 text-center">
                             <div className="flex items-center justify-center gap-2 text-slate-400">
-                              {puedeEditar && !esInactiva && (
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    onEditarHorario &&
-                                    onEditarHorario(horario, materia)
-                                  }
-                                  className="p-1.5 hover:text-indigo-600 hover:bg-white rounded-lg transition cursor-pointer"
-                                  title="Editar este horario y docentes"
-                                >
-                                  <Pencil className="w-3.5 h-3.5" />
-                                </button>
-                              )}
+                              {/* Botón Desvincular Docente en la subfila de comisión: EXCLUSIVO si tiene permiso de horarios y hay docente asignado */}
+                              {puedeOperarDocente &&
+                                horario.idDocente &&
+                                !esInactiva && (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      handleConfirmarDesvincularDocente(materia)
+                                    }
+                                    className="p-1.5 hover:text-amber-600 hover:bg-white rounded-lg transition cursor-pointer"
+                                    title="Desvincular docente de esta comisión"
+                                  >
+                                    <UserMinus className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
+
+                              {(puedeEditar || puedeOperarDocente) &&
+                                !esInactiva && (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      onEditarHorario &&
+                                      onEditarHorario(horario, materia)
+                                    }
+                                    className="p-1.5 hover:text-indigo-600 hover:bg-white rounded-lg transition cursor-pointer"
+                                    title="Editar este horario y docentes"
+                                  >
+                                    <Pencil className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
 
                               {puedeEliminar && !esInactiva && (
                                 <button
                                   type="button"
                                   onClick={() =>
-                                    handleConfirmarBajaHorario(
-                                      horario,
-                                      materia.nombre,
-                                    )
+                                    handleConfirmarBajaHorario(horario, materia)
                                   }
                                   className="p-1.5 hover:text-rose-600 hover:bg-white rounded-lg transition cursor-pointer"
                                   title="Eliminar este horario"

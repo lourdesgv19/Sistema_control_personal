@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { X, Users, Loader2, CalendarCheck } from "lucide-react";
+import { X, Users, Loader2, CalendarCheck, ShieldAlert } from "lucide-react";
 import { postNuevaMateria } from "../../services/gestionMateriasService";
 import { getEmpleadosActivos } from "../../services/empleadoService";
+import { useAuth } from "../../context/AuthContext";
 import ModalAlerta from "../comunes/ModalAlerta";
 
 const DIAS_OPCIONES = [
@@ -18,10 +19,24 @@ export default function ModalNuevaMateria({
   onCreado,
   materiaAEditar = null,
 }) {
+  const { tienePermiso } = useAuth();
   const esEdicion = Boolean(materiaAEditar);
 
+  // Regla: Solo quien gestiona horarios o es admin puede asignar profesor a una cátedra
+  const puedeAsignarDocente =
+    tienePermiso("HORARIOS_GESTIONAR") ||
+    tienePermiso("HORARIOS_CREAR") ||
+    tienePermiso("HORARIOS_EDITAR") ||
+    tienePermiso("PERM_ADMIN_TOTAL");
+
+  // Si tiene permiso sobre materias puede editar datos de plan de estudio
+  const puedeEditarPlanEstudio =
+    tienePermiso("MATERIAS_CREAR") ||
+    tienePermiso("MATERIAS_EDITAR") ||
+    tienePermiso("PERM_ADMIN_TOTAL");
+
   const [todosLosEmpleados, setTodosLosEmpleados] = useState([]);
-  const [loadingEmpleados, setLoadingEmpleados] = useState(true);
+  const [loadingEmpleados, setLoadingEmpleados] = useState(false);
   const [mostrarTodosLosEmpleados, setMostrarTodosLosEmpleados] =
     useState(false);
   const [guardando, setGuardando] = useState(false);
@@ -68,16 +83,10 @@ export default function ModalNuevaMateria({
     });
   };
 
-  const duracionHoras = useMemo(() => {
-    if (!form.horaInicio || !form.horaFin) return 1;
-    const [hIni, mIni] = form.horaInicio.split(":").map(Number);
-    const [hFin, mFin] = form.horaFin.split(":").map(Number);
-    const minTotales = hFin * 60 + mFin - (hIni * 60 + mIni);
-    return minTotales > 0 ? minTotales / 60 : 1;
-  }, [form.horaInicio, form.horaFin]);
-
   useEffect(() => {
+    if (!puedeAsignarDocente) return;
     const cargarEmpleados = async () => {
+      setLoadingEmpleados(true);
       try {
         const data = await getEmpleadosActivos(false);
         setTodosLosEmpleados(Array.isArray(data) ? data : []);
@@ -92,7 +101,7 @@ export default function ModalNuevaMateria({
       }
     };
     cargarEmpleados();
-  }, []);
+  }, [puedeAsignarDocente]);
 
   const listaEmpleadosFiltrada = useMemo(() => {
     if (mostrarTodosLosEmpleados) return todosLosEmpleados;
@@ -113,10 +122,6 @@ export default function ModalNuevaMateria({
         ? [Number(materiaAEditar.diaSemana)]
         : materiaAEditar.diasSemana || [1];
 
-      const tarifaBase = Number(
-        materiaAEditar.tarifaHora || materiaAEditar.tarifaHoraCatedra || 5200,
-      );
-
       setForm({
         nombre: materiaAEditar.nombre || materiaAEditar.nombreMateria || "",
         codigo: materiaAEditar.codigo || "",
@@ -136,9 +141,10 @@ export default function ModalNuevaMateria({
         tipoFrecuencia: materiaAEditar.tipoFrecuencia || "SEMANAL",
         repeticionesPeriodo: materiaAEditar.repeticionesPeriodo || 1,
         semanaAlterna: materiaAEditar.semanaAlterna || "PAR",
+        fechaDesde: materiaAEditar.fechaDesde || hoyIso,
       });
     }
-  }, [materiaAEditar, duracionHoras]);
+  }, [materiaAEditar]);
 
   const toggleDia = (id) => {
     setForm((prev) => ({
@@ -172,12 +178,15 @@ export default function ModalNuevaMateria({
         diasSemana: form.diasSemana || [],
         horaInicio: form.horaInicio,
         horaFin: form.horaFin,
-        idDocenteTitular: form.idDocenteTitular
-          ? Number(form.idDocenteTitular)
-          : null,
-        idDocenteAuxiliar: form.idDocenteAuxiliar
-          ? Number(form.idDocenteAuxiliar)
-          : null,
+        // Solo asigna el ID si posee autorización de horarios, de lo contrario se guarda vacante
+        idDocenteTitular:
+          puedeAsignarDocente && form.idDocenteTitular
+            ? Number(form.idDocenteTitular)
+            : null,
+        idDocenteAuxiliar:
+          puedeAsignarDocente && form.idDocenteAuxiliar
+            ? Number(form.idDocenteAuxiliar)
+            : null,
         rolTitular: "TITULAR",
         rolAuxiliar: "AUXILIAR",
         observaciones: form.observaciones,
@@ -195,6 +204,7 @@ export default function ModalNuevaMateria({
       };
 
       await postNuevaMateria(payload);
+      window.dispatchEvent(new CustomEvent("datos:actualizados"));
       onCreado();
       onClose();
     } catch (err) {
@@ -257,7 +267,7 @@ export default function ModalNuevaMateria({
               </h3>
               <p className="text-[11px] text-slate-400">
                 {esEdicion
-                  ? "Modifique parámetros pedagógicos, días, horarios o docentes titular y auxiliar."
+                  ? "Modifique parámetros pedagógicos, días, horarios o docentes de la cátedra."
                   : "Se registrará en el catálogo y se reflejará en el cronograma institucional."}
               </p>
             </div>
@@ -283,10 +293,15 @@ export default function ModalNuevaMateria({
               </label>
               <input
                 required
+                disabled={!puedeEditarPlanEstudio}
                 placeholder="Ej. Álgebra y Geometría Analítica"
                 value={form.nombre}
                 onChange={(e) => setForm({ ...form, nombre: e.target.value })}
-                className="w-full px-3 py-2 border border-slate-200 rounded-xl outline-none focus:border-indigo-600 font-medium"
+                className={`w-full px-3 py-2 border rounded-xl outline-none font-medium ${
+                  !puedeEditarPlanEstudio
+                    ? "bg-slate-100 border-slate-200 text-slate-500 cursor-not-allowed"
+                    : "border-slate-200 focus:border-indigo-600"
+                }`}
               />
             </div>
 
@@ -296,10 +311,15 @@ export default function ModalNuevaMateria({
                   Código (Opcional)
                 </label>
                 <input
+                  disabled={!puedeEditarPlanEstudio}
                   placeholder="Ej. MAT-101"
                   value={form.codigo}
                   onChange={(e) => setForm({ ...form, codigo: e.target.value })}
-                  className="w-full px-3 py-2 border border-slate-200 rounded-xl outline-none focus:border-indigo-600 font-mono"
+                  className={`w-full px-3 py-2 border rounded-xl outline-none font-mono ${
+                    !puedeEditarPlanEstudio
+                      ? "bg-slate-100 border-slate-200 text-slate-500 cursor-not-allowed"
+                      : "border-slate-200 focus:border-indigo-600"
+                  }`}
                 />
               </div>
               <div>
@@ -440,85 +460,104 @@ export default function ModalNuevaMateria({
               )}
             </div>
 
-            <div className="space-y-3 bg-slate-50 p-3.5 rounded-2xl border border-slate-200">
-              <div className="flex items-center justify-between">
-                <span className="font-bold text-slate-800 flex items-center gap-1.5">
-                  <Users className="w-4 h-4 text-indigo-600" />
-                  Equipo Docente de Cátedra
-                </span>
-                <button
-                  type="button"
-                  onClick={() =>
-                    setMostrarTodosLosEmpleados(!mostrarTodosLosEmpleados)
-                  }
-                  className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 underline cursor-pointer"
-                >
-                  {mostrarTodosLosEmpleados
-                    ? "Solo docentes"
-                    : "+ Ver todo el personal"}
-                </button>
-              </div>
-
-              {loadingEmpleados ? (
-                <div className="text-slate-400 py-2 flex items-center gap-1.5">
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" /> Cargando
-                  nómina...
+            {/* SECCIÓN DESACOPLADA: Solo visible/editable si puede gestionar horarios */}
+            {puedeAsignarDocente ? (
+              <div className="space-y-3 bg-slate-50 p-3.5 rounded-2xl border border-slate-200">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-slate-800 flex items-center gap-1.5">
+                    <Users className="w-4 h-4 text-indigo-600" />
+                    Equipo Docente de Cátedra
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setMostrarTodosLosEmpleados(!mostrarTodosLosEmpleados)
+                    }
+                    className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 underline cursor-pointer"
+                  >
+                    {mostrarTodosLosEmpleados
+                      ? "Solo docentes"
+                      : "+ Ver todo el personal"}
+                  </button>
                 </div>
-              ) : (
-                <div className="space-y-3">
-                  <div>
-                    <label className="font-semibold text-slate-700 block mb-1">
-                      Profesor Titular a Cargo
-                    </label>
-                    <select
-                      value={form.idDocenteTitular}
-                      onChange={(e) =>
-                        setForm({ ...form, idDocenteTitular: e.target.value })
-                      }
-                      className="w-full px-3 py-2 border border-slate-200 rounded-xl outline-none focus:border-indigo-600 font-medium bg-white"
-                    >
-                      <option value="">
-                        -- Sin titular (Cátedra Vacante) --
-                      </option>
-                      {listaEmpleadosFiltrada.map((doc) => (
-                        <option key={doc.id} value={doc.id}>
-                          {doc.apellido}, {doc.nombre}{" "}
-                          {doc.nroLegajo ? `(Leg: ${doc.nroLegajo})` : ""}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
 
-                  <div>
-                    <label className="font-semibold text-slate-700 block mb-1">
-                      Docente Auxiliar / Alterno (Reemplazos y Licencias)
-                    </label>
-                    <select
-                      value={form.idDocenteAuxiliar}
-                      onChange={(e) =>
-                        setForm({ ...form, idDocenteAuxiliar: e.target.value })
-                      }
-                      className="w-full px-3 py-2 border border-slate-200 rounded-xl outline-none focus:border-indigo-600 font-medium bg-white"
-                    >
-                      <option value="">
-                        -- Sin auxiliar designado (Opcional) --
-                      </option>
-                      {listaEmpleadosFiltrada
-                        .filter(
-                          (doc) =>
-                            String(doc.id) !== String(form.idDocenteTitular),
-                        )
-                        .map((doc) => (
+                {loadingEmpleados ? (
+                  <div className="text-slate-400 py-2 flex items-center gap-1.5">
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" /> Cargando
+                    nómina...
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <div>
+                      <label className="font-semibold text-slate-700 block mb-1">
+                        Profesor Titular a Cargo
+                      </label>
+                      <select
+                        value={form.idDocenteTitular}
+                        onChange={(e) =>
+                          setForm({ ...form, idDocenteTitular: e.target.value })
+                        }
+                        className="w-full px-3 py-2 border border-slate-200 rounded-xl outline-none focus:border-indigo-600 font-medium bg-white"
+                      >
+                        <option value="">
+                          -- Sin titular (Cátedra Vacante) --
+                        </option>
+                        {listaEmpleadosFiltrada.map((doc) => (
                           <option key={doc.id} value={doc.id}>
                             {doc.apellido}, {doc.nombre}{" "}
                             {doc.nroLegajo ? `(Leg: ${doc.nroLegajo})` : ""}
                           </option>
                         ))}
-                    </select>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="font-semibold text-slate-700 block mb-1">
+                        Docente Auxiliar / Alterno (Reemplazos y Licencias)
+                      </label>
+                      <select
+                        value={form.idDocenteAuxiliar}
+                        onChange={(e) =>
+                          setForm({
+                            ...form,
+                            idDocenteAuxiliar: e.target.value,
+                          })
+                        }
+                        className="w-full px-3 py-2 border border-slate-200 rounded-xl outline-none focus:border-indigo-600 font-medium bg-white"
+                      >
+                        <option value="">
+                          -- Sin auxiliar designado (Opcional) --
+                        </option>
+                        {listaEmpleadosFiltrada
+                          .filter(
+                            (doc) =>
+                              String(doc.id) !== String(form.idDocenteTitular),
+                          )
+                          .map((doc) => (
+                            <option key={doc.id} value={doc.id}>
+                              {doc.apellido}, {doc.nombre}{" "}
+                              {doc.nroLegajo ? `(Leg: ${doc.nroLegajo})` : ""}
+                            </option>
+                          ))}
+                      </select>
+                    </div>
                   </div>
+                )}
+              </div>
+            ) : (
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-2xl flex items-start gap-2.5 text-amber-800">
+                <ShieldAlert className="w-4 h-4 shrink-0 text-amber-600 mt-0.5" />
+                <div>
+                  <span className="font-bold block text-[11px]">
+                    Asignación Docente Reservada
+                  </span>
+                  <span className="text-[10px] text-amber-700">
+                    No cuenta con permisos de horarios para asignar docentes. La
+                    materia se registrará vacante en el catálogo.
+                  </span>
                 </div>
-              )}
-            </div>
+              </div>
+            )}
 
             <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200">
               <label className="font-semibold text-slate-700 block mb-1">

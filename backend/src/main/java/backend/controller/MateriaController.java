@@ -61,7 +61,7 @@ public class MateriaController {
         return ResponseEntity.ok(calendarioService.obtenerCalendarioSemanal(fechaInicio, idDocente, diasSemana, busqueda));
     }
 
-    // 6. Alta y modificación unificada de materia y asignación de horarios (ÚNICO POST)
+    // 6. Alta y modificación unificada de materia y asignación de horarios
     @PostMapping
     public ResponseEntity<?> registrarMateriaConHorarios(@RequestBody NuevaMateriaRequest request) {
         try {
@@ -78,27 +78,44 @@ public class MateriaController {
         return ResponseEntity.ok(materiaService.actualizar(id, m));
     }
 
-    // 8. Consulta de comisiones afectadas antes de confirmar baja
+    // 8. Desvincular docente de la cátedra (deja la materia vacante y asienta la baja en materia_docentes y empleado_horarios)
+    @PatchMapping("/{id}/desvincular-docente")
+    public ResponseEntity<Void> desvincularDocente(@PathVariable Long id) {
+        materiaService.desvincularDocenteDeMateria(id);
+        return ResponseEntity.noContent().build();
+    }
+
+    // 9. Desvincular comisión individual (soporta idHorario nulo si era comisión vacante)
+    @DeleteMapping("/{idMateria}/comisiones")
+    public ResponseEntity<Void> desvincularComision(
+            @PathVariable Long idMateria,
+            @RequestParam(required = false) Long idHorario,
+            @RequestParam(required = false) Integer diaSemana) {
+        materiaService.desvincularHorarioComision(idMateria, idHorario, diaSemana);
+        return ResponseEntity.noContent().build();
+    }
+
+    // 10. Consulta de comisiones afectadas antes de confirmar baja
     @GetMapping("/{id}/impacto-baja")
     public ResponseEntity<ImpactoBajaMateriaDTO> obtenerImpactoBaja(@PathVariable Long id) {
         return ResponseEntity.ok(materiaService.obtenerImpactoBajaMateria(id));
     }
 
-    // 9. Baja lógica simple
+    // 11. Baja lógica simple
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> baja(@PathVariable Long id) {
         materiaService.bajaLogica(id);
         return ResponseEntity.noContent().build();
     }
 
-    // 10. Baja en cascada (desvincula la cátedra y todos sus horarios en empleado_horarios)
+    // 12. Baja en cascada
     @DeleteMapping("/{id}/cascada")
     public ResponseEntity<Void> eliminarMateriaEnCascada(@PathVariable Long id) {
         materiaService.darDeBajaMateriaEnCascada(id);
         return ResponseEntity.noContent().build();
     }
 
-    // 11. Reactivación
+    // 13. Reactivación
     @PatchMapping("/{id}/reactivar")
     public ResponseEntity<Void> reactivar(@PathVariable Long id) {
         materiaService.reactivar(id);

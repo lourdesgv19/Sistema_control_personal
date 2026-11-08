@@ -2,8 +2,12 @@ import React from "react";
 import { Navigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 
-export default function ProtectedRoute({ children, permisoRequerido }) {
-  const { user, loading, tienePermiso } = useAuth();
+export default function ProtectedRoute({
+  children,
+  permisoRequerido,
+  permisosRequeridos,
+}) {
+  const { user, tienePermiso, loading } = useAuth();
 
   if (loading) {
     return (
@@ -13,15 +17,22 @@ export default function ProtectedRoute({ children, permisoRequerido }) {
     );
   }
 
-  // Si no está autenticado, va a Login
   if (!user) {
     return <Navigate to="/login" replace />;
   }
 
-  // Si la ruta exige un permiso y el usuario no lo tiene
+  // Si requiere un permiso específico único
   if (permisoRequerido && !tienePermiso(permisoRequerido)) {
-    // Si no tiene acceso a esta vista específica, lo redirige a una permitida (por ejemplo /personal)
-    return <Navigate to="/personal" replace />;
+    return <Navigate to="/incidentes" replace />;
+  }
+
+  // Si requiere cualquiera de los permisos de la lista (OR)
+  if (
+    Array.isArray(permisosRequeridos) &&
+    permisosRequeridos.length > 0 &&
+    !permisosRequeridos.some((p) => tienePermiso(p))
+  ) {
+    return <Navigate to="/incidentes" replace />;
   }
 
   return children;

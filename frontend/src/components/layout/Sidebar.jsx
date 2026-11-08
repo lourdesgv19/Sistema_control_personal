@@ -92,13 +92,25 @@ export default function Sidebar({ isOpen, onClose }) {
       to: "/horarios-catedras",
       label: "Horarios por empleado",
       icon: Clock,
-      permiso: "CONFIG_VER",
+      permisos: [
+        "HORARIOS_VER",
+        "HORARIOS_CREAR",
+        "HORARIOS_EDITAR",
+        "HORARIOS_GESTIONAR",
+      ],
     },
     {
       to: "/materias",
       label: "Calendario semanal de Materias",
       icon: LayoutDashboard,
-      permiso: "MATERIAS_VER",
+      permisos: [
+        "MATERIAS_VER",
+        "MATERIAS_CALENDARIO_VER",
+        "HORARIOS_VER",
+        "HORARIOS_CREAR",
+        "HORARIOS_EDITAR",
+        "HORARIOS_GESTIONAR",
+      ],
     },
     {
       to: "/excepciones-licencias",
@@ -139,9 +151,18 @@ export default function Sidebar({ isOpen, onClose }) {
     },
   ];
 
-  const menuVisible = menuItems.filter(
-    (item) => item.permiso && tienePermiso(item.permiso),
-  );
+  const menuVisible = menuItems.filter((item) => {
+    // Si no tiene restricciones, se muestra
+    if (!item.permiso && !item.permisos) return true;
+
+    // Si tiene un array de permisos alternativos (OR)
+    if (Array.isArray(item.permisos)) {
+      return item.permisos.some((p) => tienePermiso && tienePermiso(p));
+    }
+
+    // Si tiene un permiso único
+    return tienePermiso && tienePermiso(item.permiso);
+  });
 
   return (
     <>

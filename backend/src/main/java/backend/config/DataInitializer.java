@@ -75,12 +75,13 @@ public class DataInitializer implements CommandLineRunner {
             new Permiso("INCIDENTES_VER", "INCIDENTES", "Consultar el tablero de incidentes diarios y desvíos de asistencia"),
             new Permiso("INCIDENTES_JUSTIFICAR", "INCIDENTES", "Auditar, justificar o rechazar incidentes y anomalías de marcación"),
         
-            // Gestión de Materias & Liquidación Docente
-            new Permiso("MATERIAS_VER", "MATERIAS", "Visualizar catálogo de cátedras y calendario semanal de clases"),
+            // Gestión de Materias & Clases
+            new Permiso("MATERIAS_CALENDARIO_VER", "MATERIAS", "Visualizar el calendario semanal de clases y cumplimiento de horas"),
+            new Permiso("MATERIAS_VER", "MATERIAS", "Visualizar catálogo maestro de cátedras y comisiones"),
             new Permiso("MATERIAS_CREAR", "MATERIAS", "Crear materias y registrar comisiones en el sistema"),
             new Permiso("MATERIAS_EDITAR", "MATERIAS", "Modificar datos de cátedras, tarifas por hora y aulas predeterminadas"),
-            new Permiso("MATERIAS_ELIMINAR", "MATERIAS", "Dar de baja lógica o reactivar cátedras del catálogo institucional"),
-           
+            new Permiso("MATERIAS_ELIMINAR", "MATERIAS", "Dar de baja lógica o reactivar cátedras del catálogo institucional"),          
+            
             // Excepciones y Licencias
             new Permiso("EXCEPCIONES_VER", "EXCEPCIONES", "Visualizar módulo de excepciones, licencias vigentes y desglose por agente"),
             new Permiso("EXCEPCIONES_CREAR", "EXCEPCIONES", "Registrar licencias particulares y asuetos/feriados institucionales"),

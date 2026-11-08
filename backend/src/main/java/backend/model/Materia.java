@@ -2,8 +2,8 @@ package backend.model;
 
 import jakarta.persistence.*;
 import org.hibernate.annotations.SQLDelete;
-import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 
 @Entity
 @Table(name = "materias")
@@ -23,6 +23,24 @@ public class Materia {
 
     @Column(name = "aula_predeterminada", length = 80)
     private String aulaPredeterminada;
+
+    @Column(name = "dias_semana", length = 50)
+    private String diasSemana; // Coma-separated: "1,3"
+
+    @Column(name = "hora_inicio")
+    private LocalTime horaInicio;
+
+    @Column(name = "hora_fin")
+    private LocalTime horaFin;
+
+    @Column(name = "tipo_frecuencia", length = 30)
+    private String tipoFrecuencia = "SEMANAL";
+
+    @Column(name = "repeticiones_periodo")
+    private Integer repeticionesPeriodo = 1;
+
+    @Column(name = "semana_alterna", length = 10)
+    private String semanaAlterna;
 
     @Column(columnDefinition = "TEXT")
     private String observaciones;
@@ -47,6 +65,24 @@ public class Materia {
 
     public String getAulaPredeterminada() { return aulaPredeterminada; }
     public void setAulaPredeterminada(String aulaPredeterminada) { this.aulaPredeterminada = aulaPredeterminada; }
+
+    public String getDiasSemana() { return diasSemana; }
+    public void setDiasSemana(String diasSemana) { this.diasSemana = diasSemana; }
+
+    public LocalTime getHoraInicio() { return horaInicio; }
+    public void setHoraInicio(LocalTime horaInicio) { this.horaInicio = horaInicio; }
+
+    public LocalTime getHoraFin() { return horaFin; }
+    public void setHoraFin(LocalTime horaFin) { this.horaFin = horaFin; }
+
+    public String getTipoFrecuencia() { return tipoFrecuencia; }
+    public void setTipoFrecuencia(String tipoFrecuencia) { this.tipoFrecuencia = tipoFrecuencia; }
+
+    public Integer getRepeticionesPeriodo() { return repeticionesPeriodo; }
+    public void setRepeticionesPeriodo(Integer repeticionesPeriodo) { this.repeticionesPeriodo = repeticionesPeriodo; }
+
+    public String getSemanaAlterna() { return semanaAlterna; }
+    public void setSemanaAlterna(String semanaAlterna) { this.semanaAlterna = semanaAlterna; }
 
     public String getObservaciones() { return observaciones; }
     public void setObservaciones(String observaciones) { this.observaciones = observaciones; }

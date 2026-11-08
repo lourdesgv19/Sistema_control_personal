@@ -24,6 +24,16 @@ export const postNuevaMateria = (payload) => api.post("/materias", payload);
 export const getCatalogoMateriasAgrupadas = () =>
   api.get("/materias/catalogo-agrupado");
 
+export const desvincularDocenteMateria = (idMateria) =>
+  api.patch(`/materias/${idMateria}/desvincular-docente`);
+
+export const desvincularComisionMateria = (idMateria, idHorario, diaSemana) => {
+  const params = new URLSearchParams();
+  if (idHorario) params.append("idHorario", idHorario);
+  if (diaSemana) params.append("diaSemana", diaSemana);
+  return api.delete(`/materias/${idMateria}/comisiones?${params.toString()}`);
+};
+
 export const getImpactoBajaMateria = (idMateria) =>
   api.get(`/materias/${idMateria}/impacto-baja`);
 

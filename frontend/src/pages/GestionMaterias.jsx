@@ -24,20 +24,57 @@ export default function GestionMaterias() {
   const { tienePermiso } = useAuth();
   const location = useLocation();
 
-  const puedeVerMaterias =
-    tienePermiso("MATERIAS_VER") || tienePermiso("PERM_ADMIN_TOTAL");
-  const puedeCrear =
-    tienePermiso("MATERIAS_CREAR") || tienePermiso("PERM_ADMIN_TOTAL");
-  const puedeEditar =
-    tienePermiso("MATERIAS_EDITAR") || tienePermiso("PERM_ADMIN_TOTAL");
-  const puedeEliminar =
+  // 1. Matriz de Permisos Unificada
+  const puedeVerCalendario =
+    tienePermiso("MATERIAS_CALENDARIO_VER") ||
+    tienePermiso("MATERIAS_VER") ||
+    tienePermiso("HORARIOS_VER") ||
+    tienePermiso("HORARIOS_GESTIONAR") ||
+    tienePermiso("PERM_ADMIN_TOTAL");
+
+  const puedeVerCatalogo =
+    tienePermiso("MATERIAS_VER") ||
+    tienePermiso("HORARIOS_GESTIONAR") ||
+    tienePermiso("PERM_ADMIN_TOTAL");
+
+  const puedeCrearMateria =
+    tienePermiso("MATERIAS_CREAR") ||
+    tienePermiso("HORARIOS_GESTIONAR") ||
+    tienePermiso("PERM_ADMIN_TOTAL");
+
+  const puedeEditarMateria =
+    tienePermiso("MATERIAS_EDITAR") ||
+    tienePermiso("HORARIOS_GESTIONAR") ||
+    tienePermiso("PERM_ADMIN_TOTAL");
+
+  const puedeGestionarDocentes =
+    tienePermiso("HORARIOS_GESTIONAR") ||
+    tienePermiso("HORARIOS_EDITAR") ||
+    tienePermiso("HORARIOS_CREAR") ||
+    tienePermiso("PERM_ADMIN_TOTAL");
+
+  const puedeEliminarMateria =
     tienePermiso("MATERIAS_ELIMINAR") || tienePermiso("PERM_ADMIN_TOTAL");
 
+  // 2. Tab inicial inteligente
   const [tab, setTab] = useState(() => {
-    const tabInicial = location.state?.tab;
-    return tabInicial === "catalogo" ? "catalogo" : "calendario";
+    if (location.state?.tab === "catalogo" && puedeVerCatalogo) {
+      return "catalogo";
+    }
+    return puedeVerCalendario ? "calendario" : "catalogo";
   });
-  const [docenteSeleccionadoId, setDocenteSeleccionadoId] = useState(
+
+  useEffect(() => {
+    if (location.state?.tab === "catalogo") {
+      if (puedeVerCatalogo) {
+        setTab("catalogo");
+      } else if (puedeVerCalendario) {
+        setTab("calendario");
+      }
+    }
+  }, [location.state, puedeVerCatalogo, puedeVerCalendario]);
+
+  const [docenteSeleccionadoId] = useState(
     () => location.state?.docenteId || null,
   );
   const [mostrarResumen, setMostrarResumen] = useState(false);
@@ -100,23 +137,13 @@ export default function GestionMaterias() {
   }, [fechaLunes]);
 
   useEffect(() => {
-    if (puedeVerMaterias) {
+    if (puedeVerCalendario || puedeVerCatalogo) {
       cargarDatos();
     }
-  }, [puedeVerMaterias, cargarDatos]);
-
-  useEffect(() => {
-    if (location.state?.tab && location.state.tab !== "liquidacion") {
-      setTab(location.state.tab);
-    }
-    if (location.state?.docenteId !== undefined) {
-      setDocenteSeleccionadoId(location.state.docenteId);
-    }
-  }, [location.state]);
+  }, [puedeVerCalendario, puedeVerCatalogo, cargarDatos]);
 
   useEffect(() => {
     let timerSync = null;
-
     const handleSincronizacion = () => {
       if (timerSync) clearTimeout(timerSync);
       timerSync = setTimeout(() => {
@@ -132,7 +159,7 @@ export default function GestionMaterias() {
   }, [cargarDatos]);
 
   const handleEliminarMateria = async (id, nombre) => {
-    if (!puedeEliminar) return;
+    if (!puedeEliminarMateria) return;
 
     try {
       const res = await getImpactoBajaMateria(id);
@@ -144,7 +171,7 @@ export default function GestionMaterias() {
           .slice(0, 5)
           .map(
             (h) =>
-              `• ${h.diaNombre} ${h.horaInicio} - ${h.horaFin} hs (${h.docenteNombre})`,
+              `• ${h.diaNombre} ${h.horaInicio} a ${h.horaFin} hs (${h.docenteNombre})`,
           )
           .join("\n");
 
@@ -194,11 +221,13 @@ export default function GestionMaterias() {
   };
 
   const handleAbrirCrear = () => {
+    if (!puedeCrearMateria) return;
     setMateriaAEditar(null);
     setModalMateria(true);
   };
 
   const handleAbrirEditarHorario = (horario, materia) => {
+    if (!puedeEditarMateria && !puedeGestionarDocentes) return;
     setMateriaAEditar({
       idMateria: materia.idMateria,
       nombre: materia.nombre,
@@ -218,7 +247,33 @@ export default function GestionMaterias() {
     setModalMateria(true);
   };
 
-  if (!puedeVerMaterias) {
+  const handleAbrirAsignarDocente = (materia) => {
+    if (!puedeGestionarDocentes && !puedeEditarMateria) return;
+    const primerHorario =
+      materia.desgloseHorarios && materia.desgloseHorarios.length > 0
+        ? materia.desgloseHorarios[0]
+        : null;
+
+    setMateriaAEditar({
+      idMateria: materia.idMateria,
+      nombre: materia.nombre,
+      codigo: materia.codigo,
+      aula: primerHorario?.aula || materia.aulaPredeterminada || "",
+      diaSemana: primerHorario?.diaSemana || 1,
+      diasSemana: primerHorario ? [primerHorario.diaSemana] : [1],
+      horaInicio: primerHorario?.horaInicio || "08:30",
+      horaFin: primerHorario?.horaFin || "12:30",
+      idDocenteTitular: materia.idDocenteTitular || "",
+      idDocenteAuxiliar: materia.idDocenteAuxiliar || "",
+      idHorario: primerHorario?.idHorario || null,
+      tipoFrecuencia: primerHorario?.tipoFrecuencia || "SEMANAL",
+      repeticionesPeriodo: primerHorario?.repeticionesPeriodo || 1,
+      semanaAlterna: primerHorario?.semanaAlterna || "PAR",
+    });
+    setModalMateria(true);
+  };
+
+  if (!puedeVerCalendario && !puedeVerCatalogo) {
     return (
       <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto">
         <div className="bg-white border border-rose-200 rounded-3xl p-6 sm:p-8 text-center space-y-3 shadow-xs">
@@ -229,7 +284,8 @@ export default function GestionMaterias() {
             Acceso Restringido
           </h2>
           <p className="text-xs text-slate-500 max-w-md mx-auto">
-            No cuenta con permisos para consultar la gestión de materias.
+            No cuenta con permisos para consultar la gestión de materias ni el
+            cronograma semanal.
           </p>
         </div>
       </div>
@@ -269,7 +325,7 @@ export default function GestionMaterias() {
             {mostrarResumen ? "Ocultar resumen" : "Ver resumen"}
           </button>
 
-          {puedeCrear && (
+          {puedeCrearMateria && (
             <button
               type="button"
               onClick={handleAbrirCrear}
@@ -349,40 +405,47 @@ export default function GestionMaterias() {
       )}
 
       {/* SELECTOR DE PESTAÑAS */}
-      <div className="bg-white border border-slate-200 rounded-2xl p-1.5 shadow-xs flex items-center justify-between">
-        <div className="flex w-full sm:w-auto bg-slate-100 p-1 rounded-xl text-xs font-semibold text-slate-600">
-          <button
-            type="button"
-            onClick={() => setTab("calendario")}
-            className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 px-3 sm:px-4 py-2 rounded-lg transition cursor-pointer ${
-              tab === "calendario"
-                ? "bg-white text-indigo-700 shadow-xs"
-                : "hover:text-slate-900"
-            }`}
-          >
-            <Calendar className="w-4 h-4 shrink-0" />
-            <span>Calendario Semanal</span>
-          </button>
+      {(puedeVerCalendario || puedeVerCatalogo) && (
+        <div className="bg-white border border-slate-200 rounded-2xl p-1.5 shadow-xs flex items-center justify-between">
+          <div className="flex w-full sm:w-auto bg-slate-100 p-1 rounded-xl text-xs font-semibold text-slate-600">
+            {puedeVerCalendario && (
+              <button
+                type="button"
+                onClick={() => setTab("calendario")}
+                className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 px-3 sm:px-4 py-2 rounded-lg transition cursor-pointer ${
+                  tab === "calendario"
+                    ? "bg-white text-indigo-700 shadow-xs"
+                    : "hover:text-slate-900"
+                }`}
+              >
+                <Calendar className="w-4 h-4 shrink-0" />
+                <span>Calendario Semanal</span>
+              </button>
+            )}
 
-          <button
-            type="button"
-            onClick={() => setTab("catalogo")}
-            className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 px-3 sm:px-4 py-2 rounded-lg transition cursor-pointer ${
-              tab === "catalogo"
-                ? "bg-white text-indigo-700 shadow-xs"
-                : "hover:text-slate-900"
-            }`}
-          >
-            <BookOpen className="w-4 h-4 shrink-0" />
-            <span>Catálogo & ABM</span>
-          </button>
+            {puedeVerCatalogo && (
+              <button
+                type="button"
+                onClick={() => setTab("catalogo")}
+                className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 px-3 sm:px-4 py-2 rounded-lg transition cursor-pointer ${
+                  tab === "catalogo"
+                    ? "bg-white text-indigo-700 shadow-xs"
+                    : "hover:text-slate-900"
+                }`}
+              >
+                <BookOpen className="w-4 h-4 shrink-0" />
+                <span>Catálogo & ABM</span>
+              </button>
+            )}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* CONTENIDO PRINCIPAL */}
-      {tab === "calendario" && (
+      {tab === "calendario" && puedeVerCalendario && (
         <CalendarioSemanalMaterias
           onEditarMateriaParam={(clase) => {
+            if (!puedeEditarMateria && !puedeGestionarDocentes) return;
             setMateriaAEditar({
               idMateria: clase.idMateria,
               nombre: clase.nombreMateria,
@@ -399,11 +462,12 @@ export default function GestionMaterias() {
         />
       )}
 
-      {tab === "catalogo" && (
+      {tab === "catalogo" && puedeVerCatalogo && (
         <CatalogoMateriasABM
           docenteInicialId={docenteSeleccionadoId}
           onNuevaMateria={handleAbrirCrear}
           onEditarMateria={(materia) => {
+            if (!puedeEditarMateria) return;
             setMateriaAEditar({
               idMateria: materia.idMateria,
               nombre: materia.nombre,
@@ -413,33 +477,40 @@ export default function GestionMaterias() {
             });
             setModalMateria(true);
           }}
-          onEditarHorario={handleAbrirEditarHorario}
+          onEditarHorario={(horario, materia) => {
+            if (!puedeEditarMateria && !puedeGestionarDocentes) return;
+            handleAbrirEditarHorario(horario, materia);
+          }}
+          onAsignarDocente={handleAbrirAsignarDocente}
           onEliminarMateria={handleEliminarMateria}
-          puedeCrear={puedeCrear}
-          puedeEditar={puedeEditar}
-          puedeEliminar={puedeEliminar}
+          puedeCrear={puedeCrearMateria}
+          puedeEditar={puedeEditarMateria}
+          puedeGestionarDocente={puedeGestionarDocentes}
+          puedeEliminar={puedeEliminarMateria}
         />
       )}
 
-      {modalMateria && (
-        <ModalNuevaMateria
-          materiaAEditar={materiaAEditar}
-          onClose={() => {
-            setModalMateria(false);
-            setMateriaAEditar(null);
-          }}
-          onCreado={async () => {
-            await cargarDatos();
-            mostrarAviso(
-              "success",
-              "Operación Exitosa",
-              materiaAEditar
-                ? "La cátedra y sus horarios fueron actualizados correctamente."
-                : "La nueva materia fue registrada en el cronograma institucional.",
-            );
-          }}
-        />
-      )}
+      {/* MODAL DE NUEVA / EDICIÓN DE MATERIA */}
+      {modalMateria &&
+        (puedeCrearMateria || puedeEditarMateria || puedeGestionarDocentes) && (
+          <ModalNuevaMateria
+            materiaAEditar={materiaAEditar}
+            onClose={() => {
+              setModalMateria(false);
+              setMateriaAEditar(null);
+            }}
+            onCreado={async () => {
+              await cargarDatos();
+              mostrarAviso(
+                "success",
+                "Operación Exitosa",
+                materiaAEditar
+                  ? "La cátedra y sus horarios fueron actualizados correctamente."
+                  : "La nueva materia fue registrada en el cronograma institucional.",
+              );
+            }}
+          />
+        )}
 
       <ModalAlerta
         isOpen={modalAlerta.isOpen}

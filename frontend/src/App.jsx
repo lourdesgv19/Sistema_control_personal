@@ -13,7 +13,6 @@ import GestionHorarios from "./pages/GestionHorarios";
 import TableroIncidentesDiarios from "./pages/TableroIncidentesDiarios";
 import GestionMaterias from "./pages/GestionMaterias";
 import Perfil from "./pages/Perfil";
-import FichaComportamiento from "./pages/FichaComportamiento";
 import FichaComportamiento2 from "./pages/FichaComportamiento2";
 import ExcepcionesLicencias from "./pages/ExcepcionesLicencias";
 
@@ -51,11 +50,19 @@ export default function App() {
               </ProtectedRoute>
             }
           />
-
           <Route
             path="/materias"
             element={
-              <ProtectedRoute permisoRequerido="MATERIAS_VER">
+              <ProtectedRoute
+                permisosRequeridos={[
+                  "MATERIAS_VER",
+                  "MATERIAS_CALENDARIO_VER",
+                  "HORARIOS_VER",
+                  "HORARIOS_CREAR",
+                  "HORARIOS_EDITAR",
+                  "HORARIOS_GESTIONAR",
+                ]}
+              >
                 <GestionMaterias />
               </ProtectedRoute>
             }
