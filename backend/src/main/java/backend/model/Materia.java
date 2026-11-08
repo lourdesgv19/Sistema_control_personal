@@ -25,7 +25,7 @@ public class Materia {
     private String aulaPredeterminada;
 
     @Column(name = "dias_semana", length = 50)
-    private String diasSemana; // Coma-separated: "1,3"
+    private String diasSemana;
 
     @Column(name = "hora_inicio")
     private LocalTime horaInicio;
@@ -47,6 +47,9 @@ public class Materia {
 
     @Column(nullable = false)
     private Boolean activo = true;
+
+    @Column(name = "fecha_alta")
+    private LocalDateTime fechaAlta;
 
     @Column(name = "fecha_baja")
     private LocalDateTime fechaBaja;
@@ -89,6 +92,9 @@ public class Materia {
 
     public Boolean getActivo() { return activo; }
     public void setActivo(Boolean activo) { this.activo = activo; }
+
+    public LocalDateTime getFechaAlta() { return fechaAlta; }
+    public void setFechaAlta(LocalDateTime fechaAlta) { this.fechaAlta = fechaAlta; }
 
     public LocalDateTime getFechaBaja() { return fechaBaja; }
     public void setFechaBaja(LocalDateTime fechaBaja) { this.fechaBaja = fechaBaja; }

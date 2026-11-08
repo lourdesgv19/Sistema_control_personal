@@ -62,6 +62,9 @@ public class MateriaService {
     public Materia guardar(Materia m) {
         m.setActivo(true);
         m.setFechaBaja(null);
+        if (m.getFechaAlta() == null) {
+            m.setFechaAlta(LocalDateTime.now());
+        }
         return materiaRepo.save(m);
     }
 
@@ -354,11 +357,19 @@ public class MateriaService {
         materia.setRepeticionesPeriodo(req.repeticionesPeriodo() != null ? req.repeticionesPeriodo() : 1);
         materia.setSemanaAlterna(req.semanaAlterna());
         materia.setActivo(true);
+
+        LocalDate fDesde = req.fechaDesde() != null ? req.fechaDesde() : LocalDate.now();
+        LocalDateTime fechaAltaFinal = fDesde.atStartOfDay();
+
+        if (materia.getId() == null || materia.getFechaAlta() == null) {
+            materia.setFechaAlta(fechaAltaFinal);
+        }
+
         Materia guardada = materiaRepo.saveAndFlush(materia);
 
         // 3. Vincular relación en materia_docentes
         Optional<MateriaDocente> vinculoActivoOpt = materiaDocenteRepo.findByMateriaActiva(guardada.getId());
-        LocalDateTime fechaCambio = (req.fechaDesde() != null ? req.fechaDesde() : LocalDate.now()).atStartOfDay();
+        LocalDateTime fechaCambio = fechaAltaFinal;
 
         if (docTitular != null) {
             MateriaDocente vinculo = vinculoActivoOpt.orElseGet(MateriaDocente::new);
@@ -408,7 +419,7 @@ public class MateriaService {
                     nuevoH.setRepeticionesPeriodo(guardada.getRepeticionesPeriodo());
                     nuevoH.setSemanaAlterna(guardada.getSemanaAlterna());
                     nuevoH.setActivo(true);
-                    nuevoH.setFechaAlta(fechaCambio);
+                    nuevoH.setFechaAlta(fechaAltaFinal);
                     nuevoH.setFechaBaja(null);
                     horarioRepo.saveAndFlush(nuevoH);
                 }
@@ -423,6 +434,9 @@ public class MateriaService {
                 hExistente.setTipoFrecuencia(guardada.getTipoFrecuencia());
                 hExistente.setRepeticionesPeriodo(guardada.getRepeticionesPeriodo());
                 hExistente.setSemanaAlterna(guardada.getSemanaAlterna());
+                if (req.fechaDesde() != null) {
+                    hExistente.setFechaAlta(fechaAltaFinal);
+                }
                 horarioRepo.saveAndFlush(hExistente);
             }
         }
@@ -438,7 +452,6 @@ public class MateriaService {
         return guardada;
     }
 
-    // Listado paginado a nivel SQL
     @Transactional(readOnly = true)
     public Page<MateriaCatalogoDTO> obtenerCatalogoMateriasPaginado(String q, String estado, Long docenteId, int page, int size) {
         Boolean activo = null;
@@ -463,7 +476,6 @@ public class MateriaService {
                 .toList();
     }
 
-    // Método de conversión unificado que resuelve comisiones, horas y docentes
     public MateriaCatalogoDTO convertirAMateriaCatalogoDTO(Materia m) {
         List<EmpleadoHorario> horariosDeMateria = horarioRepo.findAll().stream()
                 .filter(h -> Boolean.TRUE.equals(h.getActivo()) && h.getMateria() != null && h.getMateria().getId().equals(m.getId()))

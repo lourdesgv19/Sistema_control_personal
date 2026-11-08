@@ -91,7 +91,6 @@ public class CalendarioSemanalService {
                 .toList();
 
         // 4. Obtener materias vacantes (con días y horas fijados en 'materias' pero sin docente)
-        // Solo se incluyen si NO estamos filtrando por un docente específico
         List<Materia> materiasVacantes = new ArrayList<>();
         if (idDocente == null) {
             Set<Long> idsMateriasConHorarioActivo = todosHorarios.stream()
@@ -138,15 +137,23 @@ public class CalendarioSemanalService {
             LocalDateTime finDelDia = fechaDia.atTime(LocalTime.MAX);
             boolean esFuturo = fechaDia.isAfter(hoy);
 
-            // A. Clases asignadas a docentes para este día (validando vigencia fechaAlta/fechaBaja)
+            // A. Clases asignadas a docentes: VALIDACIÓN ESTRICTA DE VIGENCIA (fechaAlta / fechaBaja)
             List<EmpleadoHorario> horariosDia = horariosFiltrados.stream()
                     .filter(h -> h.getDiaSemana() != null && h.getDiaSemana() == diaNum)
                     .filter(h -> {
-                        LocalDateTime alta = h.getFechaAlta() != null ? h.getFechaAlta() : LocalDateTime.MIN;
-                        LocalDateTime baja = h.getFechaBaja();
-                        boolean yaHabiaIniciado = !alta.isAfter(finDelDia);
-                        boolean noHabiaFinalizado = (baja == null) || !baja.isBefore(inicioDelDia);
-                        return yaHabiaIniciado && noHabiaFinalizado;
+                        LocalDateTime altaH = h.getFechaAlta() != null ? h.getFechaAlta() : LocalDateTime.MIN;
+                        LocalDateTime bajaH = h.getFechaBaja();
+                        boolean horarioIniciado = !altaH.isAfter(finDelDia);
+                        boolean horarioNoTerminado = (bajaH == null) || !bajaH.isBefore(inicioDelDia);
+
+                        // Comprobar vigencia de la materia asociada
+                        Materia mat = h.getMateria();
+                        LocalDateTime altaM = (mat != null && mat.getFechaAlta() != null) ? mat.getFechaAlta() : LocalDateTime.MIN;
+                        LocalDateTime bajaM = (mat != null) ? mat.getFechaBaja() : null;
+                        boolean materiaIniciada = !altaM.isAfter(finDelDia);
+                        boolean materiaNoTerminada = (bajaM == null) || !bajaM.isBefore(inicioDelDia);
+
+                        return horarioIniciado && horarioNoTerminado && materiaIniciada && materiaNoTerminada;
                     })
                     .sorted(Comparator.comparing(h -> h.getHoraEntrada() != null ? h.getHoraEntrada() : LocalTime.MIDNIGHT))
                     .toList();
@@ -230,8 +237,17 @@ public class CalendarioSemanalService {
                 ));
             }
 
-            // B. Agregar materias vacantes que correspondan a este día de la semana
+            // B. Materias vacantes: VALIDACIÓN DE VIGENCIA (fechaAlta / fechaBaja)
             for (Materia mv : materiasVacantes) {
+                LocalDateTime altaM = mv.getFechaAlta() != null ? mv.getFechaAlta() : LocalDateTime.MIN;
+                LocalDateTime bajaM = mv.getFechaBaja();
+                boolean yaIniciada = !altaM.isAfter(finDelDia);
+                boolean noTerminada = (bajaM == null) || !bajaM.isBefore(inicioDelDia);
+
+                if (!yaIniciada || !noTerminada) {
+                    continue; // Se omite si la cátedra no está vigente en este día
+                }
+
                 List<Integer> diasMateria = Arrays.stream(mv.getDiasSemana().split(","))
                         .map(String::trim)
                         .map(Integer::parseInt)
@@ -244,7 +260,7 @@ public class CalendarioSemanalService {
                     double horasProg = Math.round((minutosTeoricos / 60.0) * 10.0) / 10.0;
 
                     bloquesDia.add(new BloqueClaseDTO(
-                            null, // idHorario es null porque aún no existe en empleado_horarios
+                            null,
                             mv.getId(),
                             mv.getNombre(),
                             mv.getAulaPredeterminada() != null ? mv.getAulaPredeterminada() : "Aula sin asignar",
@@ -263,7 +279,6 @@ public class CalendarioSemanalService {
                 }
             }
 
-            // Ordenar todos los bloques por hora de inicio
             bloquesDia.sort(Comparator.comparing(b -> b.horaInicio() != null ? b.horaInicio() : LocalTime.MIDNIGHT));
 
             diasResponse.add(new DiaCalendarioDTO(
