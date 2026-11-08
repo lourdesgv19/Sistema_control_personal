@@ -1,6 +1,5 @@
 import apiClient from "./api";
 
-// Obtener usuarios paginados desde el backend
 export const getUsuariosPaginados = async (
   q = "",
   rol = "TODOS",
@@ -8,22 +7,25 @@ export const getUsuariosPaginados = async (
   page = 0,
   size = 10,
 ) => {
-  const params = new URLSearchParams();
-  if (q) params.append("q", q);
-  if (rol) params.append("rol", rol);
-  if (estado) params.append("estado", estado);
-  params.append("page", page);
-  params.append("size", size);
+  const pageSegura = Number.isNaN(Number(page))
+    ? 0
+    : Math.max(0, parseInt(page, 10) || 0);
 
-  return (await apiClient.get(`/usuarios?${params.toString()}`)).data;
+  const params = {
+    q: q.trim() || undefined,
+    rol: rol || "TODOS",
+    estado: estado || "TODOS",
+    page: pageSegura,
+    size: Number(size) || 10,
+  };
+
+  return (await apiClient.get("/usuarios", { params })).data;
 };
 
-// Empleados disponibles para asignación de cuenta
 export const getEmpleadosSinUsuario = async () => {
   return (await apiClient.get("/usuarios/empleados-disponibles")).data;
 };
 
-// Resumen de métricas
 export const getUsuarioResumen = async () => {
   return (await apiClient.get("/usuarios/resumen-metricas")).data;
 };

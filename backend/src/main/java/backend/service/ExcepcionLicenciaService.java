@@ -13,7 +13,6 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
@@ -54,6 +53,7 @@ public class ExcepcionLicenciaService {
             String busqueda,
             String estado,
             String tipo,
+            String categoria,
             String filtroKpi,
             String filtroActivo,
             int page,
@@ -65,10 +65,11 @@ public class ExcepcionLicenciaService {
         String act = (filtroActivo != null && !filtroActivo.isBlank()) ? filtroActivo.toUpperCase() : "ACTIVOS";
         String est = (estado != null && !estado.isBlank()) ? estado.toUpperCase() : "TODOS";
         String tip = (tipo != null && !tipo.isBlank()) ? tipo.toUpperCase() : "TODOS";
+        String cat = (categoria != null && !categoria.isBlank()) ? categoria.trim() : "TODAS";
         String kpi = (filtroKpi != null && !filtroKpi.isBlank()) ? filtroKpi.toUpperCase() : "TODOS";
         String q = (busqueda != null) ? busqueda.trim() : "";
 
-        return excepcionRepo.listarPaginado(act, est, tip, kpi, q, hoy, pageable)
+        return excepcionRepo.listarPaginado(act, est, tip, cat, kpi, q, hoy, pageable)
                 .map(e -> calcularDetalle(e, hoy));
     }
 
@@ -340,13 +341,6 @@ public class ExcepcionLicenciaService {
             case "ADMINISTRATIVO" -> "Administrativo";
             default -> rol;
         };
-    }
-
-    private String obtenerIniciales(String nombreCompleto) {
-        if (nombreCompleto == null || nombreCompleto.isBlank()) return "EX";
-        String[] partes = nombreCompleto.replace(",", "").trim().split("\\s+");
-        if (partes.length == 1) return partes[0].substring(0, Math.min(2, partes[0].length())).toUpperCase();
-        return ("" + partes[0].charAt(0) + partes[1].charAt(0)).toUpperCase();
     }
 
     private String formatearTipoEtiqueta(String tipo) {

@@ -29,11 +29,12 @@ public class ExcepcionLicenciaController {
             @RequestParam(defaultValue = "") String busqueda,
             @RequestParam(defaultValue = "TODOS") String estado,
             @RequestParam(defaultValue = "TODOS") String tipo,
+            @RequestParam(defaultValue = "TODAS") String categoria,
             @RequestParam(defaultValue = "TODOS") String filtroKpi,
             @RequestParam(defaultValue = "ACTIVOS") String filtroActivo,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "15") int size) {
-        return ResponseEntity.ok(service.listarPaginado(busqueda, estado, tipo, filtroKpi, filtroActivo, page, size));
+        return ResponseEntity.ok(service.listarPaginado(busqueda, estado, tipo, categoria, filtroKpi, filtroActivo, page, size));
     }
 
     @PostMapping

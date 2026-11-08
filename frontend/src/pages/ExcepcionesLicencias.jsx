@@ -1,10 +1,4 @@
-import React, {
-  useState,
-  useEffect,
-  useCallback,
-  useMemo,
-  useRef,
-} from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
   Calendar,
   Search,
@@ -94,8 +88,6 @@ export default function ExcepcionesLicencias() {
   const [licenciaFicha, setLicenciaFicha] = useState(null);
   const [desglosesAbiertos, setDesglosesAbiertos] = useState({});
 
-  const cargandoPaginacionRef = useRef(false);
-
   // ModalAlerta
   const [modalAlerta, setModalAlerta] = useState({
     isOpen: false,
@@ -131,8 +123,6 @@ export default function ExcepcionesLicencias() {
 
   const cargarRegistrosServidor = useCallback(
     async (pageIndex = 0) => {
-      if (cargandoPaginacionRef.current) return;
-      cargandoPaginacionRef.current = true;
       setLoading(true);
 
       try {
@@ -144,6 +134,7 @@ export default function ExcepcionesLicencias() {
           busqueda: busqueda.trim(),
           estado: filtroRegimen,
           tipo: filtroTipo,
+          categoria: filtroCategoria,
           filtroKpi,
           filtroActivo: filtroEstadoActivo,
           page: pageSegura,
@@ -153,32 +144,33 @@ export default function ExcepcionesLicencias() {
         const res = await getExcepcionesPaginadas(params);
 
         if (res && res.content) {
-          let lista = res.content;
-
-          if (filtroCategoria !== "TODAS") {
-            lista = lista.filter((d) => {
-              if (filtroCategoria === "INSTITUCIONAL") return d.esInstitucional;
-              return (
-                d.rolArea &&
-                d.rolArea.toLowerCase() === filtroCategoria.toLowerCase()
-              );
-            });
-          }
-
+          const lista = Array.isArray(res.content) ? res.content : [];
           setRegistros(lista);
 
-          const totalElem =
-            res.page?.totalElements ?? res.totalElements ?? lista.length;
-          const totalPags = res.page?.totalPages ?? res.totalPages ?? 1;
-          const numPag = res.page?.number ?? res.number ?? 0;
+          // Lectura universal: res.page.* (DTO) o res.* (raíz)
+          const totalReal =
+            res.page?.totalElements ??
+            res.totalElements ??
+            res.page?.total ??
+            lista.length;
 
-          setTotalElementos(Number(totalElem) || 0);
+          const totalPags =
+            res.page?.totalPages ??
+            res.totalPages ??
+            Math.max(1, Math.ceil(Number(totalReal) / ITEMS_POR_PAGINA));
+
+          const numPag = res.page?.number ?? res.number ?? pageSegura;
+
+          setTotalElementos(Number(totalReal) || 0);
           setTotalPaginas(Math.max(1, Number(totalPags) || 1));
-
-          const nuevaPagina = (Number(numPag) || 0) + 1;
-          setPaginaActual((prev) =>
-            prev !== nuevaPagina ? nuevaPagina : prev,
+          setPaginaActual((Number(numPag) || 0) + 1);
+        } else if (Array.isArray(res)) {
+          setRegistros(res);
+          setTotalElementos(res.length);
+          setTotalPaginas(
+            Math.max(1, Math.ceil(res.length / ITEMS_POR_PAGINA)),
           );
+          setPaginaActual(1);
         } else {
           setRegistros([]);
           setTotalPaginas(1);
@@ -187,41 +179,50 @@ export default function ExcepcionesLicencias() {
       } catch (err) {
         console.error("Error al cargar registros paginados:", err);
         setRegistros([]);
+        setTotalPaginas(1);
+        setTotalElementos(0);
       } finally {
         setLoading(false);
-        cargandoPaginacionRef.current = false;
       }
     },
     [
       busqueda,
       filtroRegimen,
       filtroTipo,
+      filtroCategoria,
       filtroKpi,
       filtroEstadoActivo,
-      filtroCategoria,
     ],
   );
 
+  // Navegación imperativa directa
+  const handleCambiarPagina = (nuevaPagina) => {
+    const pag = Math.max(1, Math.min(nuevaPagina, totalPaginas));
+    setPaginaActual(pag);
+    cargarRegistrosServidor(pag - 1);
+  };
+
   useEffect(() => {
     cargarMetricas();
-    getEmpleadosPaginados(1, ITEMS_POR_PAGINA)
-      .then((res) => setEmpleados(Array.isArray(res) ? res : []))
+    getEmpleadosPaginados("", null, "TODOS", 0, 100)
+      .then((res) => {
+        const lista = res?.content || (Array.isArray(res) ? res : []);
+        setEmpleados(lista);
+      })
       .catch(() => setEmpleados([]));
+
     getCategorias()
       .then((res) => setCategorias(Array.isArray(res) ? res : []))
       .catch(() => setCategorias([]));
   }, [cargarMetricas]);
 
+  // Debounce exclusivo para filtros de búsqueda y selects (reinicia a página 1)
   useEffect(() => {
     const timer = setTimeout(() => {
-      const pageIndex = Math.max(0, (Number(paginaActual) || 1) - 1);
-      cargarRegistrosServidor(pageIndex);
+      setPaginaActual(1);
+      cargarRegistrosServidor(0);
     }, 250);
     return () => clearTimeout(timer);
-  }, [cargarRegistrosServidor, paginaActual]);
-
-  useEffect(() => {
-    setPaginaActual(1);
   }, [
     busqueda,
     filtroRegimen,
@@ -229,9 +230,9 @@ export default function ExcepcionesLicencias() {
     filtroCategoria,
     filtroEstadoActivo,
     filtroKpi,
+    cargarRegistrosServidor,
   ]);
 
-  // Obtiene el color exacto definido en Tipos y Configuración
   const obtenerColorDeConfiguracion = useCallback(
     (nombreOArea, esInstitucional = false) => {
       if (
@@ -345,10 +346,6 @@ export default function ExcepcionesLicencias() {
 
   const toggleDesglose = (key) => {
     setDesglosesAbiertos((prev) => ({ ...prev, [key]: !prev[key] }));
-  };
-
-  const handleCambiarPagina = (nuevaPagina) => {
-    setPaginaActual(Math.max(1, Math.min(nuevaPagina, totalPaginas)));
   };
 
   const abrirModalNuevo = (idEmpleadoPrefill = null, esAsueto = false) => {
@@ -530,7 +527,7 @@ export default function ExcepcionesLicencias() {
 
   return (
     <div className="p-3 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-4 sm:space-y-6 font-sans">
-      {/* 1. HEADER LIMPIO */}
+      {/* 1. HEADER */}
       <div className="bg-white border border-slate-200 rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2.5">
@@ -676,7 +673,7 @@ export default function ExcepcionesLicencias() {
         </button>
       </div>
 
-      {/* 3. PESTAÑAS Y ACCIÓN COLAPSAR / DESGLOSAR */}
+      {/* 3. PESTAÑAS */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="flex bg-slate-100 p-1 rounded-2xl border border-slate-200 text-xs font-semibold overflow-x-auto w-full sm:w-fit scrollbar-none">
           {[
@@ -684,7 +681,10 @@ export default function ExcepcionesLicencias() {
               key: "DESGLOSE",
               label: `Desglose por Agente (${desgloseAgentes.length})`,
             },
-            { key: "LISTADO", label: `Listado Detallado (${totalElementos})` },
+            {
+              key: "LISTADO",
+              label: `Listado Detallado (${Math.max(Number(totalElementos) || 0, registros.length)})`,
+            },
             { key: "ASUETOS", label: "Asuetos & Feriados Institucionales" },
           ].map((t) => (
             <button
@@ -1199,7 +1199,7 @@ export default function ExcepcionesLicencias() {
         </div>
       )}
 
-      {/* 6. VISTA 2: LISTADO DETALLADO (RESPONSIVE: TARJETAS EN MÓVIL Y TABLA EN ESCRITORIO) */}
+      {/* 6. VISTA 2: LISTADO DETALLADO */}
       {tabPrincipal === "LISTADO" && (
         <div>
           {loading ? (
@@ -1213,7 +1213,7 @@ export default function ExcepcionesLicencias() {
             </div>
           ) : (
             <>
-              {/* VISTA MÓVIL (< md): TARJETAS TÁCTILES LIMPIAS SIN SCROLL LATERAL */}
+              {/* VISTA MÓVIL (< md) */}
               <div className="grid grid-cols-1 gap-3 md:hidden">
                 {registros.map((lic) => {
                   const estaActivo = esActivo(lic);
@@ -1239,7 +1239,6 @@ export default function ExcepcionesLicencias() {
                           : "border-slate-200"
                       }`}
                     >
-                      {/* Cabecera del colaborador */}
                       <div className="flex items-start justify-between gap-2.5">
                         <div className="flex items-center gap-2.5 min-w-0">
                           <div className="w-9 h-9 rounded-xl bg-slate-100 border border-slate-200 font-bold text-slate-700 flex items-center justify-center text-xs shrink-0">
@@ -1271,7 +1270,6 @@ export default function ExcepcionesLicencias() {
                           </div>
                         </div>
 
-                        {/* Estado Dictamen */}
                         <span
                           className={`px-2 py-0.5 rounded-md text-[10px] font-bold border shrink-0 ${
                             lic.estado === "APROBADA"
@@ -1287,7 +1285,6 @@ export default function ExcepcionesLicencias() {
                         </span>
                       </div>
 
-                      {/* Datos de la Licencia: Tipo y Fechas */}
                       <div className="bg-slate-50/70 p-2.5 rounded-xl border border-slate-100 space-y-1.5 text-xs">
                         <div className="flex items-center justify-between gap-2 flex-wrap">
                           <span
@@ -1327,7 +1324,6 @@ export default function ExcepcionesLicencias() {
                         </div>
                       </div>
 
-                      {/* Motivo o Dictamen */}
                       <div className="text-[11px] text-slate-600">
                         <strong className="text-slate-800">Motivo:</strong>{" "}
                         <span className="text-slate-600">
@@ -1336,9 +1332,7 @@ export default function ExcepcionesLicencias() {
                         </span>
                       </div>
 
-                      {/* Botones de acción */}
                       <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-2">
-                        {/* Aprobación rápida para RRHH si está pendiente */}
                         <div className="flex items-center gap-1.5">
                           {estaActivo && esPendiente && puedeDictaminar && (
                             <>
@@ -1414,7 +1408,7 @@ export default function ExcepcionesLicencias() {
                 })}
               </div>
 
-              {/* VISTA ESCRITORIO (>= md): TABLA ESTRUCTURADA COMPLETA */}
+              {/* VISTA ESCRITORIO (>= md) */}
               <div className="hidden md:block bg-white border border-slate-200 rounded-2xl sm:rounded-3xl overflow-hidden shadow-xs">
                 <table className="w-full text-left text-xs">
                   <thead className="bg-[#f8fafc] text-slate-500 uppercase text-[10px] font-bold border-b border-slate-200 tracking-wider">
@@ -1782,7 +1776,7 @@ export default function ExcepcionesLicencias() {
       {/* 8. BARRA DE CONTROL DE PAGINACIÓN */}
       <div className="bg-white px-4 sm:px-6 py-3.5 sm:py-4 border border-slate-200 rounded-2xl sm:rounded-3xl flex flex-col sm:flex-row items-center justify-between gap-3 text-xs shadow-xs">
         <div className="text-slate-500 text-center sm:text-left">
-          {Number(totalElementos) === 0 ? (
+          {Math.max(Number(totalElementos) || 0, registros.length) === 0 ? (
             <span>
               Mostrando <span className="font-bold text-slate-800">0</span> de{" "}
               <span className="font-bold text-slate-800">0</span> registros
@@ -1799,12 +1793,12 @@ export default function ExcepcionesLicencias() {
               <span className="font-bold text-slate-800">
                 {Math.min(
                   Math.max(1, Number(paginaActual) || 1) * ITEMS_POR_PAGINA,
-                  Number(totalElementos) || 0,
+                  Math.max(Number(totalElementos) || 0, registros.length),
                 )}
               </span>{" "}
               de{" "}
               <span className="font-bold text-slate-800">
-                {Number(totalElementos) || 0}
+                {Math.max(Number(totalElementos) || 0, registros.length)}
               </span>{" "}
               registros
             </span>
@@ -1813,7 +1807,8 @@ export default function ExcepcionesLicencias() {
 
         <div className="flex items-center gap-1 sm:gap-1.5 flex-wrap justify-center">
           <button
-            onClick={() => handleCambiarPagina((Number(paginaActual) || 1) - 1)}
+            type="button"
+            onClick={() => handleCambiarPagina(Number(paginaActual) - 1)}
             disabled={Number(paginaActual) <= 1 || loading}
             className="p-1.5 sm:p-2 border border-slate-200 rounded-xl hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer"
             title="Página Anterior"
@@ -1827,6 +1822,7 @@ export default function ExcepcionesLicencias() {
           ).map((num) => (
             <button
               key={num}
+              type="button"
               onClick={() => handleCambiarPagina(num)}
               disabled={loading}
               className={`w-7 h-7 sm:w-8 sm:h-8 rounded-xl font-bold transition cursor-pointer text-xs ${
@@ -1840,7 +1836,8 @@ export default function ExcepcionesLicencias() {
           ))}
 
           <button
-            onClick={() => handleCambiarPagina((Number(paginaActual) || 1) + 1)}
+            type="button"
+            onClick={() => handleCambiarPagina(Number(paginaActual) + 1)}
             disabled={Number(paginaActual) >= Number(totalPaginas) || loading}
             className="p-1.5 sm:p-2 border border-slate-200 rounded-xl hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer"
             title="Página Siguiente"

@@ -17,19 +17,36 @@ public interface EmpleadoRepository extends JpaRepository<Empleado, Long> {
 
     Optional<Empleado> findByEmail(String email);
 
-    // Consulta de padrón optimizada con filtros y paginación
-    @Query("SELECT DISTINCT e FROM Empleado e " +
-           "LEFT JOIN e.categorias cat " +
-           "LEFT JOIN e.cargos car " +
-           "WHERE (:estado = 'TODOS' OR (:estado = 'ACTIVOS' AND e.activo = true) OR (:estado = 'INACTIVOS' AND e.activo = false)) " +
-           "  AND (:categoriaId IS NULL OR cat.id = :categoriaId) " +
-           "  AND (:q IS NULL OR :q = '' OR " +
-           "       LOWER(e.nombre) LIKE LOWER(CONCAT('%', :q, '%')) OR " +
-           "       LOWER(e.apellido) LIKE LOWER(CONCAT('%', :q, '%')) OR " +
-           "       e.dni LIKE CONCAT('%', :q, '%') OR " +
-           "       e.nroLegajo LIKE CONCAT('%', :q, '%') OR " +
-           "       LOWER(car.nombre) LIKE LOWER(CONCAT('%', :q, '%'))) " +
-           "ORDER BY e.activo DESC, e.apellido ASC, e.nombre ASC")
+    // Consulta con countQuery explícito blindado
+    @Query(
+        value = """
+            SELECT DISTINCT e FROM Empleado e 
+            LEFT JOIN e.categorias cat 
+            LEFT JOIN e.cargos car 
+            WHERE (:estado = 'TODOS' OR (:estado = 'ACTIVOS' AND e.activo = true) OR (:estado = 'INACTIVOS' AND e.activo = false)) 
+              AND (:categoriaId IS NULL OR cat.id = :categoriaId) 
+              AND (:q IS NULL OR :q = '' OR 
+                   LOWER(e.nombre) LIKE LOWER(CONCAT('%', :q, '%')) OR 
+                   LOWER(e.apellido) LIKE LOWER(CONCAT('%', :q, '%')) OR 
+                   e.dni LIKE CONCAT('%', :q, '%') OR 
+                   e.nroLegajo LIKE CONCAT('%', :q, '%') OR 
+                   LOWER(car.nombre) LIKE LOWER(CONCAT('%', :q, '%'))) 
+            ORDER BY e.activo DESC, e.apellido ASC, e.nombre ASC
+        """,
+        countQuery = """
+            SELECT COUNT(DISTINCT e) FROM Empleado e 
+            LEFT JOIN e.categorias cat 
+            LEFT JOIN e.cargos car 
+            WHERE (:estado = 'TODOS' OR (:estado = 'ACTIVOS' AND e.activo = true) OR (:estado = 'INACTIVOS' AND e.activo = false)) 
+              AND (:categoriaId IS NULL OR cat.id = :categoriaId) 
+              AND (:q IS NULL OR :q = '' OR 
+                   LOWER(e.nombre) LIKE LOWER(CONCAT('%', :q, '%')) OR 
+                   LOWER(e.apellido) LIKE LOWER(CONCAT('%', :q, '%')) OR 
+                   e.dni LIKE CONCAT('%', :q, '%') OR 
+                   e.nroLegajo LIKE CONCAT('%', :q, '%') OR 
+                   LOWER(car.nombre) LIKE LOWER(CONCAT('%', :q, '%')))
+        """
+    )
     Page<Empleado> buscarPaginado(
             @Param("q") String q,
             @Param("categoriaId") Long categoriaId,
@@ -37,9 +54,7 @@ public interface EmpleadoRepository extends JpaRepository<Empleado, Long> {
             Pageable pageable
     );
 
-    @Query("SELECT e FROM Empleado e LEFT JOIN Usuario u ON u.empleado = e " +
-           "WHERE e.activo = true AND u.id IS NULL " +
-           "ORDER BY e.apellido ASC, e.nombre ASC")
+    @Query("SELECT e FROM Empleado e LEFT JOIN Usuario u ON u.empleado = e WHERE e.activo = true AND u.id IS NULL ORDER BY e.apellido ASC, e.nombre ASC")
     List<Empleado> findEmpleadosSinUsuarioActivos();
 
     @Query("SELECT e FROM Empleado e WHERE e.activo = true ORDER BY e.apellido ASC, e.nombre ASC")
@@ -54,6 +69,6 @@ public interface EmpleadoRepository extends JpaRepository<Empleado, Long> {
     @Query("SELECT COUNT(DISTINCT e) FROM Empleado e JOIN e.categorias c WHERE e.activo = true AND (LOWER(c.codigoTag) LIKE '%docente%' OR LOWER(c.nombre) LIKE '%docente%')")
     long countDocentes();
 
-     @Query("SELECT COUNT(DISTINCT e) FROM Empleado e JOIN e.categorias c WHERE e.activo = true AND (LOWER(c.codigoTag) LIKE '%administrativo%' OR LOWER(c.nombre) LIKE '%administrativo%')")
-     long countAdministrativos();
+    @Query("SELECT COUNT(DISTINCT e) FROM Empleado e JOIN e.categorias c WHERE e.activo = true AND (LOWER(c.codigoTag) LIKE '%administrativo%' OR LOWER(c.nombre) LIKE '%administrativo%')")
+    long countAdministrativos();
 }

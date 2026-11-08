@@ -113,7 +113,9 @@ export default function GestionUsuarios() {
     async (page = 0) => {
       setLoading(true);
       try {
-        const paginaSegura = Math.max(0, parseInt(page, 10) || 0);
+        const paginaSegura = Number.isNaN(Number(page))
+          ? 0
+          : Math.max(0, parseInt(page, 10) || 0);
 
         const res = await getUsuariosPaginados(
           searchTerm.trim(),
@@ -124,12 +126,35 @@ export default function GestionUsuarios() {
         );
 
         if (res && res.content) {
-          setUsuarios(res.content);
-          setTotalPaginas(res.totalPages || res.page?.totalPages || 1);
-          setTotalElementos(res.totalElements || res.page?.totalElements || 0);
-          setPaginaActual((res.number ?? res.page?.number ?? paginaSegura) + 1);
+          const lista = Array.isArray(res.content) ? res.content : [];
+          setUsuarios(lista);
+
+          // Lectura universal de metadatos (Spring Data Page / DTO)
+          const totalReal =
+            res.page?.totalElements ??
+            res.totalElements ??
+            res.page?.total ??
+            lista.length;
+
+          const totalPags =
+            res.page?.totalPages ??
+            res.totalPages ??
+            Math.max(1, Math.ceil(Number(totalReal) / ITEMS_POR_PAGINA));
+
+          const numPag = res.page?.number ?? res.number ?? paginaSegura;
+
+          setTotalElementos(Number(totalReal) || 0);
+          setTotalPaginas(Math.max(1, Number(totalPags) || 1));
+          setPaginaActual((Number(numPag) || 0) + 1);
+        } else if (Array.isArray(res)) {
+          setUsuarios(res);
+          setTotalElementos(res.length);
+          setTotalPaginas(
+            Math.max(1, Math.ceil(res.length / ITEMS_POR_PAGINA)),
+          );
+          setPaginaActual(1);
         } else {
-          setUsuarios(Array.isArray(res) ? res : []);
+          setUsuarios([]);
           setTotalPaginas(1);
           setTotalElementos(0);
         }
@@ -145,17 +170,26 @@ export default function GestionUsuarios() {
     [searchTerm, filtroRol, filtroEstado],
   );
 
+  // Navegación imperativa directa sin debounce
+  const handleCambiarPagina = (nuevaPagina) => {
+    const pag = Math.max(1, Math.min(nuevaPagina, totalPaginas));
+    setPaginaActual(pag);
+    cargarUsuariosServidor(pag - 1);
+  };
+
   useEffect(() => {
     cargarResumenGlobal();
     cargarEmpleadosCatalogo();
   }, [cargarResumenGlobal, cargarEmpleadosCatalogo]);
 
+  // Debounce exclusivo para filtros de búsqueda y selectores (vuelve a página 1)
   useEffect(() => {
     const timer = setTimeout(() => {
-      cargarUsuariosServidor(paginaActual - 1);
-    }, 300);
+      setPaginaActual(1);
+      cargarUsuariosServidor(0);
+    }, 250);
     return () => clearTimeout(timer);
-  }, [cargarUsuariosServidor, paginaActual]);
+  }, [searchTerm, filtroRol, filtroEstado, cargarUsuariosServidor]);
 
   const empleadosSinUsuario = useMemo(() => {
     return empleados.filter((e) => e.activo !== false);
@@ -253,12 +287,6 @@ export default function GestionUsuarios() {
 
   const elementosTotalesNum = Number(totalElementos) || 0;
   const paginasTotalesNum = Number(totalPaginas) || 1;
-  const desdeItem =
-    elementosTotalesNum === 0 ? 0 : (paginaActual - 1) * ITEMS_POR_PAGINA + 1;
-  const hastaItem = Math.min(
-    paginaActual * ITEMS_POR_PAGINA,
-    elementosTotalesNum,
-  );
 
   return (
     <div className="p-3.5 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-4 sm:space-y-6 font-sans">
@@ -424,10 +452,7 @@ export default function GestionUsuarios() {
           <input
             type="text"
             value={searchTerm}
-            onChange={(e) => {
-              setSearchTerm(e.target.value);
-              setPaginaActual(1);
-            }}
+            onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="Buscar por usuario o nombre del empleado..."
             className="w-full pl-9 pr-3 py-2 text-xs text-slate-800 placeholder-slate-400 border border-slate-200 rounded-xl outline-none focus:border-indigo-500"
           />
@@ -436,10 +461,7 @@ export default function GestionUsuarios() {
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 text-xs">
           <select
             value={filtroRol}
-            onChange={(e) => {
-              setFiltroRol(e.target.value);
-              setPaginaActual(1);
-            }}
+            onChange={(e) => setFiltroRol(e.target.value)}
             className="border border-slate-200 rounded-xl px-3 py-2 bg-white text-slate-700 outline-none focus:border-indigo-500 font-medium"
           >
             <option value="TODOS">Todos los roles</option>
@@ -450,10 +472,7 @@ export default function GestionUsuarios() {
 
           <select
             value={filtroEstado}
-            onChange={(e) => {
-              setFiltroEstado(e.target.value);
-              setPaginaActual(1);
-            }}
+            onChange={(e) => setFiltroEstado(e.target.value)}
             className="border border-slate-200 rounded-xl px-3 py-2 bg-white font-medium text-slate-700 outline-none focus:border-indigo-500"
           >
             <option value="TODOS">Todos los estados</option>
@@ -463,9 +482,9 @@ export default function GestionUsuarios() {
         </div>
       </div>
 
-      {/* 4. LISTADO DE USUARIOS (TARJETAS EN MÓVIL / TABLA EN ESCRITORIO) */}
+      {/* 4. LISTADO DE USUARIOS (MÓVIL EN CARDS / ESCRITORIO EN TABLA) */}
       <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-xs">
-        {/* VISTA MÓVIL (md:hidden) — Tarjetas verticales sin scroll lateral */}
+        {/* VISTA MÓVIL */}
         <div className="md:hidden divide-y divide-slate-100">
           {loading ? (
             <div className="text-center py-12 text-slate-400 text-xs">
@@ -534,7 +553,6 @@ export default function GestionUsuarios() {
                     </span>
                   </div>
 
-                  {/* Acciones de Seguridad en Móvil */}
                   <div className="pt-2 border-t border-slate-100 flex flex-wrap items-center justify-end gap-2">
                     {!esAdminRaiz ? (
                       puedeResetPassword ? (
@@ -629,7 +647,7 @@ export default function GestionUsuarios() {
           )}
         </div>
 
-        {/* VISTA ESCRITORIO (hidden md:block) — Tabla tradicional */}
+        {/* VISTA ESCRITORIO */}
         <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-left text-xs border-collapse">
             <thead className="bg-[#f8fafc] text-slate-500 font-bold uppercase text-[10px] border-b border-slate-100">
@@ -822,22 +840,43 @@ export default function GestionUsuarios() {
           </table>
         </div>
 
-        {/* 5. PAGINACIÓN RESPONSIVE */}
+        {/* 5. CONTROL DE PAGINACIÓN */}
         <div className="bg-white px-4 sm:px-6 py-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
           <div className="text-slate-500 text-center sm:text-left">
-            Mostrando{" "}
-            <span className="font-bold text-slate-800">{desdeItem}</span> a{" "}
-            <span className="font-bold text-slate-800">{hastaItem}</span> de{" "}
-            <span className="font-bold text-slate-800">
-              {elementosTotalesNum}
-            </span>{" "}
-            usuarios
+            {Math.max(elementosTotalesNum, usuarios.length) === 0 ? (
+              <span>
+                Mostrando <span className="font-bold text-slate-800">0</span> de{" "}
+                <span className="font-bold text-slate-800">0</span> usuarios
+              </span>
+            ) : (
+              <span>
+                Mostrando{" "}
+                <span className="font-bold text-slate-800">
+                  {(Math.max(1, Number(paginaActual) || 1) - 1) *
+                    ITEMS_POR_PAGINA +
+                    1}
+                </span>{" "}
+                a{" "}
+                <span className="font-bold text-slate-800">
+                  {Math.min(
+                    Math.max(1, Number(paginaActual) || 1) * ITEMS_POR_PAGINA,
+                    Math.max(elementosTotalesNum, usuarios.length),
+                  )}
+                </span>{" "}
+                de{" "}
+                <span className="font-bold text-slate-800">
+                  {Math.max(elementosTotalesNum, usuarios.length)}
+                </span>{" "}
+                usuarios
+              </span>
+            )}
           </div>
 
           <div className="flex items-center gap-1.5 flex-wrap justify-center">
             <button
-              onClick={() => setPaginaActual((prev) => Math.max(prev - 1, 1))}
-              disabled={paginaActual === 1 || loading}
+              type="button"
+              onClick={() => handleCambiarPagina(Number(paginaActual) - 1)}
+              disabled={Number(paginaActual) <= 1 || loading}
               className="p-2 border border-slate-200 rounded-xl hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer"
               title="Página Anterior"
             >
@@ -847,11 +886,12 @@ export default function GestionUsuarios() {
             {Array.from({ length: paginasTotalesNum }, (_, i) => i + 1).map(
               (num) => (
                 <button
+                  type="button"
                   key={num}
-                  onClick={() => setPaginaActual(num)}
+                  onClick={() => handleCambiarPagina(num)}
                   disabled={loading}
                   className={`w-8 h-8 rounded-xl font-bold transition cursor-pointer ${
-                    paginaActual === num
+                    Number(paginaActual) === num
                       ? "bg-[#4b35e6] text-white shadow-xs"
                       : "border border-slate-200 text-slate-600 hover:bg-slate-50"
                   }`}
@@ -862,10 +902,9 @@ export default function GestionUsuarios() {
             )}
 
             <button
-              onClick={() =>
-                setPaginaActual((prev) => Math.min(prev + 1, paginasTotalesNum))
-              }
-              disabled={paginaActual === paginasTotalesNum || loading}
+              type="button"
+              onClick={() => handleCambiarPagina(Number(paginaActual) + 1)}
+              disabled={Number(paginaActual) >= paginasTotalesNum || loading}
               className="p-2 border border-slate-200 rounded-xl hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer"
               title="Página Siguiente"
             >

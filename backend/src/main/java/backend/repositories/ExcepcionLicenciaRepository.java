@@ -15,15 +15,19 @@ import java.util.List;
 @Repository
 public interface ExcepcionLicenciaRepository extends JpaRepository<ExcepcionLicencia, Long> {
 
-@Query(
+    @Query(
         value = """
-            SELECT e FROM ExcepcionLicencia e
+            SELECT DISTINCT e FROM ExcepcionLicencia e
             LEFT JOIN e.empleado emp
+            LEFT JOIN emp.categorias cat
             WHERE (:filtroActivo = 'TODOS' 
                    OR (:filtroActivo = 'ACTIVOS' AND (e.activo = true OR e.activo IS NULL)) 
                    OR (:filtroActivo = 'INACTIVOS' AND e.activo = false))
               AND (:estado = 'TODOS' OR e.estado = :estado)
               AND (:tipo = 'TODOS' OR e.tipo = :tipo)
+              AND (:categoria = 'TODAS'
+                   OR (:categoria = 'INSTITUCIONAL' AND e.esInstitucional = true)
+                   OR (LOWER(cat.nombre) = LOWER(:categoria)))
               AND (:filtroKpi = 'TODOS'
                    OR (:filtroKpi = 'EN_CURSO' AND :hoy BETWEEN e.fechaInicio AND e.fechaFin)
                    OR (:filtroKpi = 'PROXIMA' AND e.fechaInicio > :hoy)
@@ -39,13 +43,17 @@ public interface ExcepcionLicenciaRepository extends JpaRepository<ExcepcionLice
             ORDER BY e.activo DESC, e.fechaInicio DESC
         """,
         countQuery = """
-            SELECT COUNT(e) FROM ExcepcionLicencia e
+            SELECT COUNT(DISTINCT e) FROM ExcepcionLicencia e
             LEFT JOIN e.empleado emp
+            LEFT JOIN emp.categorias cat
             WHERE (:filtroActivo = 'TODOS' 
                    OR (:filtroActivo = 'ACTIVOS' AND (e.activo = true OR e.activo IS NULL)) 
                    OR (:filtroActivo = 'INACTIVOS' AND e.activo = false))
               AND (:estado = 'TODOS' OR e.estado = :estado)
               AND (:tipo = 'TODOS' OR e.tipo = :tipo)
+              AND (:categoria = 'TODAS'
+                   OR (:categoria = 'INSTITUCIONAL' AND e.esInstitucional = true)
+                   OR (LOWER(cat.nombre) = LOWER(:categoria)))
               AND (:filtroKpi = 'TODOS'
                    OR (:filtroKpi = 'EN_CURSO' AND :hoy BETWEEN e.fechaInicio AND e.fechaFin)
                    OR (:filtroKpi = 'PROXIMA' AND e.fechaInicio > :hoy)
@@ -64,6 +72,7 @@ public interface ExcepcionLicenciaRepository extends JpaRepository<ExcepcionLice
         @Param("filtroActivo") String filtroActivo,
         @Param("estado") String estado,
         @Param("tipo") String tipo,
+        @Param("categoria") String categoria,
         @Param("filtroKpi") String filtroKpi,
         @Param("busqueda") String busqueda,
         @Param("hoy") LocalDate hoy,

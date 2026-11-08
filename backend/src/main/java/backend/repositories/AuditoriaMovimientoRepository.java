@@ -7,22 +7,30 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
-
 import java.time.LocalDateTime;
 import java.util.List;
 
 @Repository
 public interface AuditoriaMovimientoRepository extends JpaRepository<AuditoriaMovimiento, Long> {
 
-    // 1. Paginado con filtros
-    @Query("""
-        SELECT a FROM AuditoriaMovimiento a
-        WHERE (:username IS NULL OR :username = '' OR LOWER(a.username) LIKE LOWER(CONCAT('%', :username, '%')))
-          AND (:accion IS NULL OR :accion = '' OR a.accion = :accion)
-          AND (:fechaInicio IS NULL OR a.fechaHora >= :fechaInicio)
-          AND (:fechaFin IS NULL OR a.fechaHora <= :fechaFin)
-        ORDER BY a.fechaHora DESC
-    """)
+    // 1. Paginado con filtros y countQuery explícito
+    @Query(
+        value = """
+            SELECT a FROM AuditoriaMovimiento a
+            WHERE (:username IS NULL OR :username = '' OR LOWER(a.username) LIKE LOWER(CONCAT('%', :username, '%')))
+              AND (:accion IS NULL OR :accion = '' OR a.accion = :accion)
+              AND (:fechaInicio IS NULL OR a.fechaHora >= :fechaInicio)
+              AND (:fechaFin IS NULL OR a.fechaHora <= :fechaFin)
+            ORDER BY a.fechaHora DESC
+        """,
+        countQuery = """
+            SELECT COUNT(a) FROM AuditoriaMovimiento a
+            WHERE (:username IS NULL OR :username = '' OR LOWER(a.username) LIKE LOWER(CONCAT('%', :username, '%')))
+              AND (:accion IS NULL OR :accion = '' OR a.accion = :accion)
+              AND (:fechaInicio IS NULL OR a.fechaHora >= :fechaInicio)
+              AND (:fechaFin IS NULL OR a.fechaHora <= :fechaFin)
+        """
+    )
     Page<AuditoriaMovimiento> buscarPaginado(
             @Param("username") String username,
             @Param("accion") String accion,
@@ -71,7 +79,7 @@ public interface AuditoriaMovimientoRepository extends JpaRepository<AuditoriaMo
             @Param("fechaFin") LocalDateTime fechaFin
     );
 
-    // 5. Catálogo completo de acciones únicas (para el selector de filtros)
+    // 5. Catálogo completo de acciones únicas
     @Query("SELECT DISTINCT a.accion FROM AuditoriaMovimiento a ORDER BY a.accion ASC")
     List<String> findDistinctAcciones();
 }

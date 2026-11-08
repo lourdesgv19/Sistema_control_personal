@@ -24,6 +24,22 @@ export const postNuevaMateria = (payload) => api.post("/materias", payload);
 export const getCatalogoMateriasAgrupadas = () =>
   api.get("/materias/catalogo-agrupado");
 
+export const getCatalogoMateriasPaginado = (params = {}) => {
+  const pageSegura = Number.isNaN(Number(params.page))
+    ? 0
+    : Math.max(0, parseInt(params.page, 10) || 0);
+
+  return api.get("/materias/catalogo-paginado", {
+    params: {
+      q: params.q || undefined,
+      estado: params.estado || "ACTIVOS",
+      docenteId: params.docenteId || undefined,
+      page: pageSegura,
+      size: Number(params.size) || 10,
+    },
+  });
+};
+
 export const desvincularDocenteMateria = (idMateria) =>
   api.patch(`/materias/${idMateria}/desvincular-docente`);
 

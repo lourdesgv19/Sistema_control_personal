@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.*;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
+import org.springframework.data.domain.Page;
 
 @RestController
 @RequestMapping("/api/materias")
@@ -29,6 +30,16 @@ public class MateriaController {
     @GetMapping
     public ResponseEntity<List<Materia>> listar() {
         return ResponseEntity.ok(materiaService.listarTodas());
+    }
+
+    @GetMapping("/catalogo-paginado")
+    public ResponseEntity<Page<MateriaCatalogoDTO>> getCatalogoPaginado(
+            @RequestParam(value = "q", required = false, defaultValue = "") String q,
+            @RequestParam(value = "estado", required = false, defaultValue = "ACTIVOS") String estado,
+            @RequestParam(value = "docenteId", required = false) Long docenteId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        return ResponseEntity.ok(materiaService.obtenerCatalogoMateriasPaginado(q, estado, docenteId, page, size));
     }
 
     // 2. Consulta por ID

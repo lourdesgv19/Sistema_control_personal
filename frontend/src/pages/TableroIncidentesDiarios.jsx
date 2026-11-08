@@ -198,25 +198,23 @@ export default function TableroIncidentesDiarios() {
           const lista = pag.content;
           setIncidentes(lista);
 
+          // Lectura compatible: res.page.* (Spring DTO) o res.* directo
           const totalReal =
-            pag.totalElements !== undefined &&
-            pag.totalElements !== null &&
-            Number(pag.totalElements) > 0
-              ? Number(pag.totalElements)
-              : lista.length;
+            pag.page?.totalElements ??
+            pag.totalElements ??
+            pag.page?.total ??
+            lista.length;
 
-          setTotalElementos(totalReal);
-          setTotalPaginas(
-            Math.max(
-              1,
-              Number(pag.totalPages) ||
-                Math.ceil(totalReal / ITEMS_POR_PAGINA) ||
-                1,
-            ),
-          );
+          const totalPags =
+            pag.page?.totalPages ??
+            pag.totalPages ??
+            Math.max(1, Math.ceil(Number(totalReal) / ITEMS_POR_PAGINA));
 
-          const pageNum = (Number(pag.number) || 0) + 1;
-          setPaginaActual((prev) => (prev !== pageNum ? pageNum : prev));
+          const pageNum = pag.page?.number ?? pag.number ?? pageSegura;
+
+          setTotalElementos(Number(totalReal) || 0);
+          setTotalPaginas(Math.max(1, Number(totalPags) || 1));
+          setPaginaActual((Number(pageNum) || 0) + 1);
         } else if (Array.isArray(pag)) {
           setIncidentes(pag);
           setTotalElementos(pag.length);
@@ -251,12 +249,30 @@ export default function TableroIncidentesDiarios() {
     ],
   );
 
+  // Recarga reactiva con debounce de filtros (vuelve a página 1)
   useEffect(() => {
     const timer = setTimeout(() => {
-      cargarDatos(paginaActual - 1, false);
+      setPaginaActual(1);
+      cargarDatos(0, false);
     }, 250);
     return () => clearTimeout(timer);
-  }, [cargarDatos, paginaActual]);
+  }, [
+    cargarDatos,
+    fechaDesde,
+    fechaHasta,
+    modoFiltroFecha,
+    severidad,
+    categoria,
+    estado,
+    busqueda,
+  ]);
+
+  // Navegación imperativa directa
+  const handleCambiarPagina = (nuevaPagina) => {
+    const pag = Math.max(1, Math.min(nuevaPagina, totalPaginas));
+    setPaginaActual(pag);
+    cargarDatos(pag - 1, false);
+  };
 
   useEffect(() => {
     let timerSync = null;
@@ -288,8 +304,6 @@ export default function TableroIncidentesDiarios() {
       );
     };
   }, [cargarDatos, paginaActual]);
-
-  const handleCambiarPagina = (nuevaPagina) => setPaginaActual(nuevaPagina);
 
   const handleResolver = async (id, payload) => {
     try {
@@ -357,9 +371,8 @@ export default function TableroIncidentesDiarios() {
           </p>
         </div>
 
-        {/* CONTENEDOR FLEXIBLE: SELECTORES + DATEPICKER + ACTUALIZAR EN UNA SOLA HILERA */}
+        {/* SELECTORES + DATEPICKER + ACTUALIZAR */}
         <div className="flex items-center gap-2 sm:gap-2.5 flex-wrap sm:flex-nowrap w-full md:w-auto">
-          {/* BOTONES DE MODO DE FILTRADO CON SCROLL TÁCTIL */}
           <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs font-semibold overflow-x-auto shrink-0">
             {[
               { label: "Un Día", key: "DIA" },
@@ -407,7 +420,6 @@ export default function TableroIncidentesDiarios() {
             ))}
           </div>
 
-          {/* DATEPICKER UN DÍA */}
           {modoFiltroFecha === "DIA" && (
             <div
               onClick={(e) => {
@@ -439,7 +451,6 @@ export default function TableroIncidentesDiarios() {
             </div>
           )}
 
-          {/* DATEPICKER SEMANAL */}
           {modoFiltroFecha === "SEMANAL" && (
             <div
               onClick={(e) => {
@@ -473,7 +484,6 @@ export default function TableroIncidentesDiarios() {
             </div>
           )}
 
-          {/* DATEPICKERS RANGO LIBRE */}
           {modoFiltroFecha === "RANGO" && (
             <div className="flex items-center gap-1.5 shrink-0">
               <div
@@ -539,7 +549,6 @@ export default function TableroIncidentesDiarios() {
             </div>
           )}
 
-          {/* SELECTOR TRIMESTRE / CUATRIMESTRE */}
           {(modoFiltroFecha === "TRIMESTRE" ||
             modoFiltroFecha === "CUATRIMESTRE") && (
             <div className="flex items-center gap-1.5 shrink-0">
@@ -589,7 +598,6 @@ export default function TableroIncidentesDiarios() {
             </div>
           )}
 
-          {/* BOTÓN ACTUALIZAR INTEGRADO A LA DERECHA */}
           <button
             onClick={() => cargarDatos(paginaActual - 1, false)}
             disabled={loading}
@@ -909,7 +917,8 @@ export default function TableroIncidentesDiarios() {
           <div className="flex items-center gap-2">
             <AlertCircle className="w-4 h-4 text-amber-500" />
             <h2 className="text-xs font-bold uppercase tracking-wider text-slate-800">
-              Lista de Incidentes ({totalElementos})
+              Lista de Incidentes (
+              {Math.max(Number(totalElementos) || 0, incidentes.length)})
             </h2>
           </div>
           <span className="text-[11px] text-slate-400 hidden sm:inline">
@@ -917,7 +926,7 @@ export default function TableroIncidentesDiarios() {
           </span>
         </div>
 
-        {/* 4.A VISTA MÓVIL (md:hidden) — TARJETAS VERTICALES SIN SCROLL LATERAL */}
+        {/* VISTA MÓVIL */}
         <div className="md:hidden divide-y divide-slate-100">
           {loading ? (
             <div className="text-center py-12 text-slate-400 text-xs">
@@ -1059,7 +1068,7 @@ export default function TableroIncidentesDiarios() {
           )}
         </div>
 
-        {/* 4.B VISTA ESCRITORIO (hidden md:block) — TABLA CLÁSICA COMPLETA */}
+        {/* VISTA ESCRITORIO */}
         <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-left text-xs border-collapse">
             <thead className="bg-[#f8fafc] text-slate-500 font-bold uppercase text-[10px] border-b border-slate-100 tracking-wider">
@@ -1231,10 +1240,10 @@ export default function TableroIncidentesDiarios() {
           </table>
         </div>
 
-        {/* 5. PAGINACIÓN RESPONSIVE */}
+        {/* 5. PAGINACIÓN RESPONSIVE BLINDADA */}
         <div className="bg-white px-4 sm:px-6 py-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
           <div className="text-slate-500 text-center sm:text-left">
-            {incidentes.length === 0 ? (
+            {Math.max(Number(totalElementos) || 0, incidentes.length) === 0 ? (
               <span>
                 Mostrando <span className="font-bold text-slate-800">0</span> de{" "}
                 <span className="font-bold text-slate-800">0</span> incidentes
@@ -1265,11 +1274,8 @@ export default function TableroIncidentesDiarios() {
 
           <div className="flex items-center gap-1.5 flex-wrap justify-center">
             <button
-              onClick={() =>
-                handleCambiarPagina(
-                  Math.max((Number(paginaActual) || 1) - 1, 1),
-                )
-              }
+              type="button"
+              onClick={() => handleCambiarPagina(Number(paginaActual) - 1)}
               disabled={Number(paginaActual) <= 1 || loading}
               className="p-2 border border-slate-200 rounded-xl hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer"
               title="Página Anterior"
@@ -1282,6 +1288,7 @@ export default function TableroIncidentesDiarios() {
               (_, i) => i + 1,
             ).map((num) => (
               <button
+                type="button"
                 key={num}
                 onClick={() => handleCambiarPagina(num)}
                 disabled={loading}
@@ -1296,14 +1303,8 @@ export default function TableroIncidentesDiarios() {
             ))}
 
             <button
-              onClick={() =>
-                handleCambiarPagina(
-                  Math.min(
-                    (Number(paginaActual) || 1) + 1,
-                    Math.max(1, Number(totalPaginas) || 1),
-                  ),
-                )
-              }
+              type="button"
+              onClick={() => handleCambiarPagina(Number(paginaActual) + 1)}
               disabled={Number(paginaActual) >= Number(totalPaginas) || loading}
               className="p-2 border border-slate-200 rounded-xl hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer"
               title="Página Siguiente"

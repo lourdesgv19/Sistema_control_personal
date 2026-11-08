@@ -168,6 +168,7 @@ export default function GestionHorarios() {
     );
   }, [categoriaActiva]);
 
+  // Filtrado de la nómina
   const empleadosFiltrados = useMemo(() => {
     return empleados.filter((emp) => {
       const perteneceCat =
@@ -187,8 +188,20 @@ export default function GestionHorarios() {
     });
   }, [empleados, categoriaActiva, searchEmpleado]);
 
-  const totalPaginas =
-    Math.ceil(empleadosFiltrados.length / ITEMS_POR_PAGINA) || 1;
+  // Cálculo de páginas totales
+  const totalPaginas = Math.max(
+    1,
+    Math.ceil(empleadosFiltrados.length / ITEMS_POR_PAGINA),
+  );
+
+  // Autoajuste si el filtro reduce la cantidad de páginas existentes
+  useEffect(() => {
+    if (paginaActual > totalPaginas && totalPaginas > 0) {
+      setPaginaActual(totalPaginas);
+    }
+  }, [totalPaginas, paginaActual]);
+
+  // Elementos recortados para la vista actual
   const empleadosPaginados = useMemo(() => {
     const inicio = (paginaActual - 1) * ITEMS_POR_PAGINA;
     return empleadosFiltrados.slice(inicio, inicio + ITEMS_POR_PAGINA);
@@ -421,7 +434,7 @@ export default function GestionHorarios() {
         </div>
       </div>
 
-      {/* SELECTOR DE CATEGORÍA DE PERSONAL */}
+      {/* Selector de Categoría */}
       <div className="bg-white border border-slate-200 rounded-2xl p-3 sm:p-3.5 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3">
         <div className="flex items-center gap-2 text-xs font-bold text-slate-500 uppercase tracking-wider shrink-0">
           <Filter className="w-3.5 h-3.5 text-indigo-600" />
@@ -429,7 +442,6 @@ export default function GestionHorarios() {
         </div>
 
         <div className="flex items-center gap-2 overflow-x-auto pb-1 md:pb-0 scrollbar-none">
-          {/* BOTÓN TODAS LAS CATEGORÍAS */}
           <button
             type="button"
             onClick={() => {
@@ -478,6 +490,7 @@ export default function GestionHorarios() {
         </div>
       </div>
 
+      {/* Buscador */}
       <div className="bg-white p-3 sm:p-3.5 border border-slate-200 rounded-2xl shadow-xs flex flex-col sm:flex-row items-center justify-between gap-3">
         <div className="relative w-full sm:w-80">
           <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -504,6 +517,7 @@ export default function GestionHorarios() {
         </div>
       </div>
 
+      {/* Tabla y Cards */}
       <div className="bg-white border border-slate-200 rounded-2xl shadow-xs overflow-hidden">
         {loading ? (
           <div className="text-center py-12 text-slate-400">
@@ -568,7 +582,6 @@ export default function GestionHorarios() {
                       </div>
                     </div>
 
-                    {/* COLUMNA CARGO / PUESTOS + BADGE CATEGORÍA EN FILTRO TODAS */}
                     <div className="flex flex-col gap-1 text-xs text-slate-600">
                       {categoriaActiva === "TODAS" && (
                         <div className="flex flex-wrap gap-1 mb-0.5">
@@ -728,7 +741,6 @@ export default function GestionHorarios() {
                           </div>
                         </td>
 
-                        {/* COLUMNA CARGOS / PUESTOS + BADGE DE CATEGORÍA SI ESTÁ EN "TODAS" */}
                         <td className="px-6 py-4">
                           {categoriaActiva === "TODAS" && (
                             <div className="flex flex-wrap gap-1 mb-1.5">
@@ -824,7 +836,7 @@ export default function GestionHorarios() {
                                       className="flex items-center gap-1 px-2.5 py-1 bg-purple-50 hover:bg-purple-100 text-purple-700 font-bold rounded-lg text-xs transition cursor-pointer border border-purple-200"
                                     >
                                       <span>Materias</span>
-                                      <ArrowRight className="w-3.5 h-3.5" />
+                                      <ArrowRight className="w-3 h-3" />
                                     </button>
                                   )}
                                 </>
@@ -845,33 +857,38 @@ export default function GestionHorarios() {
           </>
         )}
 
+        {/* Paginador Local Blindado */}
         <div className="bg-white px-4 sm:px-6 py-3.5 sm:py-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
           <div className="text-slate-500 text-center sm:text-left">
-            Mostrando{" "}
-            <span className="font-bold text-slate-800">
-              {empleadosFiltrados.length === 0
-                ? 0
-                : (paginaActual - 1) * ITEMS_POR_PAGINA + 1}
-            </span>{" "}
-            a{" "}
-            <span className="font-bold text-slate-800">
-              {Math.min(
-                paginaActual * ITEMS_POR_PAGINA,
-                empleadosFiltrados.length,
-              )}
-            </span>{" "}
-            de{" "}
-            <span className="font-bold text-slate-800">
-              {empleadosFiltrados.length}
-            </span>{" "}
-            empleados
+            {empleadosFiltrados.length === 0 ? (
+              <span>Mostrando 0 de 0 empleados</span>
+            ) : (
+              <span>
+                Mostrando{" "}
+                <span className="font-bold text-slate-800">
+                  {(paginaActual - 1) * ITEMS_POR_PAGINA + 1}
+                </span>{" "}
+                a{" "}
+                <span className="font-bold text-slate-800">
+                  {Math.min(
+                    paginaActual * ITEMS_POR_PAGINA,
+                    empleadosFiltrados.length,
+                  )}
+                </span>{" "}
+                de{" "}
+                <span className="font-bold text-slate-800">
+                  {empleadosFiltrados.length}
+                </span>{" "}
+                empleados
+              </span>
+            )}
           </div>
 
           <div className="flex items-center gap-1.5">
             <button
               type="button"
               onClick={() => setPaginaActual((p) => Math.max(p - 1, 1))}
-              disabled={paginaActual === 1 || loading}
+              disabled={paginaActual <= 1 || loading}
               className="p-2 border border-slate-200 rounded-xl hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer"
             >
               <ChevronLeft className="w-4 h-4" />
@@ -900,7 +917,7 @@ export default function GestionHorarios() {
               onClick={() =>
                 setPaginaActual((p) => Math.min(p + 1, totalPaginas))
               }
-              disabled={paginaActual === totalPaginas || loading}
+              disabled={paginaActual >= totalPaginas || loading}
               className="p-2 border border-slate-200 rounded-xl hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer"
             >
               <ChevronRight className="w-4 h-4" />

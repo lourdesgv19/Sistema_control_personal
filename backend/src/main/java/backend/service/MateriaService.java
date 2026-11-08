@@ -6,6 +6,9 @@ import backend.dto.GestionMateriasDTO.*;
 import backend.dto.GestionMateriasDTO.ImpactoBajaMateriaDTO.HorarioAfectadoDTO;
 import backend.model.*;
 import backend.repositories.*;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -95,25 +98,17 @@ public class MateriaService {
         materiaRepo.save(m);
     }
 
-    /**
-     * Desvincula al docente de la materia:
-     * 1. Da de baja lógica en materia_docentes (activo=0, fecha_baja=NOW).
-     * 2. Da de baja lógica en empleado_horarios para ese docente (activo=0, fecha_baja=NOW).
-     * 3. La materia conserva sus días, horas y aula fijada en la tabla materias.
-     */
     @Transactional
     public void desvincularDocenteDeMateria(Long idMateria) {
         Materia materia = obtenerPorId(idMateria);
         LocalDateTime ahora = LocalDateTime.now();
 
-        // 1. Baja lógica en materia_docentes
         materiaDocenteRepo.findByMateriaActiva(idMateria).ifPresent(md -> {
             md.setActivo(false);
             md.setFechaBaja(ahora);
             materiaDocenteRepo.save(md);
         });
 
-        // 2. Baja lógica en empleado_horarios (inmutabilidad histórica conservada)
         List<EmpleadoHorario> asignados = horarioRepo.findAll().stream()
                 .filter(h -> Boolean.TRUE.equals(h.getActivo()))
                 .filter(h -> h.getMateria() != null && h.getMateria().getId().equals(idMateria))
@@ -132,14 +127,10 @@ public class MateriaService {
         );
     }
 
-    /**
-     * Eliminar una comisión individual o limpiar el día si estaba vacante
-     */
     @Transactional
     public void desvincularHorarioComision(Long idMateria, Long idHorario, Integer diaSemana) {
         LocalDateTime ahora = LocalDateTime.now();
 
-        // Si existe un registro persistido en empleado_horarios, se da de baja lógica
         if (idHorario != null) {
             EmpleadoHorario h = horarioRepo.findById(idHorario).orElse(null);
             if (h != null) {
@@ -149,7 +140,6 @@ public class MateriaService {
             }
         }
 
-        // Si no quedan comisiones activas con docente, inactivar materia_docentes
         List<EmpleadoHorario> restantes = horarioRepo.findAll().stream()
                 .filter(h -> Boolean.TRUE.equals(h.getActivo()))
                 .filter(h -> h.getMateria() != null && h.getMateria().getId().equals(idMateria))
@@ -163,7 +153,6 @@ public class MateriaService {
             });
         }
 
-        // Limpiar el día en la tabla materias si correspondía a un día fijado
         Materia m = materiaRepo.findById(idMateria).orElse(null);
         if (m != null && m.getDiasSemana() != null && diaSemana != null) {
             List<String> dias = new ArrayList<>(Arrays.asList(m.getDiasSemana().split(",")));
@@ -449,160 +438,167 @@ public class MateriaService {
         return guardada;
     }
 
+    // Listado paginado a nivel SQL
     @Transactional(readOnly = true)
-    public List<MateriaCatalogoDTO> obtenerCatalogoMateriasAgrupadas() {
-        List<Materia> materias = materiaRepo.findAll().stream()
-                .sorted(Comparator.comparing(Materia::getNombre, String.CASE_INSENSITIVE_ORDER))
-                .toList();
-
-        List<EmpleadoHorario> horariosActivos = horarioRepo.findAll().stream()
-                .filter(h -> Boolean.TRUE.equals(h.getActivo()) && h.getMateria() != null)
-                .toList();
-
-        List<MateriaCatalogoDTO> resultado = new ArrayList<>();
-
-        for (Materia m : materias) {
-            List<EmpleadoHorario> horariosDeMateria = horariosActivos.stream()
-                    .filter(h -> h.getMateria().getId().equals(m.getId()))
-                    .sorted(Comparator.comparing((EmpleadoHorario h) -> h.getDiaSemana() != null ? h.getDiaSemana() : 1)
-                            .thenComparing(h -> h.getHoraEntrada() != null ? h.getHoraEntrada() : LocalTime.MIDNIGHT))
-                    .toList();
-
-            double horasTotales = 0.0;
-            Set<String> diasUnicos = new LinkedHashSet<>();
-            List<HorarioDesgloseDTO> desgloses = new ArrayList<>();
-
-            Optional<MateriaDocente> vinculoOpt = materiaDocenteRepo.findByMateriaActiva(m.getId());
-
-            Long titularId = null;
-            String titularNombre = "Sin docente asignado";
-            Long auxiliarId = null;
-            String auxiliarNombre = null;
-
-            // FUENTE DE DATOS UNIFICADA:
-            // 1. Si hay franjas activas con docente en empleado_horarios, manda ese docente
-            Optional<EmpleadoHorario> horarioConDocente = horariosDeMateria.stream()
-                    .filter(h -> h.getEmpleado() != null)
-                    .findFirst();
-
-            if (horarioConDocente.isPresent()) {
-                Empleado doc = horarioConDocente.get().getEmpleado();
-                titularId = doc.getId();
-                titularNombre = doc.getApellido() + " " + doc.getNombre();
-            } else if (vinculoOpt.isPresent() && Boolean.TRUE.equals(vinculoOpt.get().getActivo()) && horariosDeMateria.isEmpty()) {
-                // Solo si la materia tiene vínculo pero aún no comisiones operativas
-                MateriaDocente vinculo = vinculoOpt.get();
-                if (vinculo.getDocenteTitular() != null) {
-                    titularId = vinculo.getDocenteTitular().getId();
-                    titularNombre = vinculo.getDocenteTitular().getApellido() + " " + vinculo.getDocenteTitular().getNombre();
-                }
-            }
-
-            if (vinculoOpt.isPresent() && Boolean.TRUE.equals(vinculoOpt.get().getActivo())) {
-                if (vinculoOpt.get().getDocenteAuxiliar() != null) {
-                    auxiliarId = vinculoOpt.get().getDocenteAuxiliar().getId();
-                    auxiliarNombre = vinculoOpt.get().getDocenteAuxiliar().getApellido() + " " + vinculoOpt.get().getDocenteAuxiliar().getNombre();
-                }
-            }
-
-            if (!horariosDeMateria.isEmpty()) {
-                for (EmpleadoHorario h : horariosDeMateria) {
-                    int diaNum = h.getDiaSemana() != null ? h.getDiaSemana() : 1;
-                    String diaNombre = diaNumeroANombre(diaNum);
-                    diasUnicos.add(diaNombre.substring(0, 3));
-
-                    long minutos = (h.getHoraEntrada() != null && h.getHoraSalida() != null)
-                            ? Duration.between(h.getHoraEntrada(), h.getHoraSalida()).toMinutes()
-                            : 0;
-                    double horasClase = Math.round((minutos / 60.0) * 10.0) / 10.0;
-                    horasTotales += horasClase;
-
-                    String turno = (h.getHoraEntrada() != null && h.getHoraEntrada().isBefore(LocalTime.of(13, 0)))
-                            ? "Turno Mañana" : "Turno Tarde";
-
-                    String docNombre = h.getEmpleado() != null 
-                        ? h.getEmpleado().getApellido() + " " + h.getEmpleado().getNombre() 
-                        : "Sin Docente";
-                    String docLegajo = (h.getEmpleado() != null && h.getEmpleado().getNroLegajo() != null) 
-                        ? h.getEmpleado().getNroLegajo() 
-                        : "-";
-
-                    String aulaFinal = h.getAula() != null ? h.getAula() : (m.getAulaPredeterminada() != null ? m.getAulaPredeterminada() : "-");
-
-                    desgloses.add(new HorarioDesgloseDTO(
-                        h.getId(),
-                        diaNum,
-                        diaNombre,
-                        h.getHoraEntrada() != null ? h.getHoraEntrada().toString().substring(0, 5) : "--:--",
-                        h.getHoraSalida() != null ? h.getHoraSalida().toString().substring(0, 5) : "--:--",
-                        horasClase,
-                        turno,
-                        aulaFinal,
-                        h.getEmpleado() != null ? h.getEmpleado().getId() : null,
-                        docNombre,
-                        docLegajo,
-                        h.getTipoFrecuencia() != null ? h.getTipoFrecuencia() : "SEMANAL",
-                        h.getRepeticionesPeriodo() != null ? h.getRepeticionesPeriodo() : 1,
-                        h.getSemanaAlterna()
-                    ));
-                }
-            } else if (m.getDiasSemana() != null && !m.getDiasSemana().isBlank() && m.getHoraInicio() != null && m.getHoraFin() != null) {
-                // Materia con horarios pero sin docente asignado
-                String[] diasStr = m.getDiasSemana().split(",");
-                long minutos = Duration.between(m.getHoraInicio(), m.getHoraFin()).toMinutes();
-                double horasClase = Math.round((minutos / 60.0) * 10.0) / 10.0;
-
-                for (String d : diasStr) {
-                    try {
-                        int diaNum = Integer.parseInt(d.trim());
-                        String diaNombre = diaNumeroANombre(diaNum);
-                        diasUnicos.add(diaNombre.substring(0, 3));
-                        horasTotales += horasClase;
-
-                        String turno = m.getHoraInicio().isBefore(LocalTime.of(13, 0)) ? "Turno Mañana" : "Turno Tarde";
-
-                        desgloses.add(new HorarioDesgloseDTO(
-                            null,
-                            diaNum,
-                            diaNombre,
-                            m.getHoraInicio().toString().substring(0, 5),
-                            m.getHoraFin().toString().substring(0, 5),
-                            horasClase,
-                            turno,
-                            m.getAulaPredeterminada() != null ? m.getAulaPredeterminada() : "-",
-                            null,
-                            "Sin Docente Asignado",
-                            "-",
-                            m.getTipoFrecuencia() != null ? m.getTipoFrecuencia() : "SEMANAL",
-                            m.getRepeticionesPeriodo() != null ? m.getRepeticionesPeriodo() : 1,
-                            m.getSemanaAlterna()
-                        ));
-                    } catch (NumberFormatException ignored) {}
-                }
-            }
-
-            boolean sinDocente = (titularId == null);
-            boolean esActivo = Boolean.TRUE.equals(m.getActivo());
-
-            resultado.add(new MateriaCatalogoDTO(
-                m.getId(),
-                m.getNombre(),
-                m.getCodigo(),
-                m.getAulaPredeterminada() != null ? m.getAulaPredeterminada() : "Aula sin asignar",
-                desgloses.size(),
-                new ArrayList<>(diasUnicos),
-                Math.round(horasTotales * 10.0) / 10.0,
-                titularId,
-                titularNombre,
-                auxiliarId,
-                auxiliarNombre,
-                sinDocente,
-                esActivo,
-                desgloses
-            ));
+    public Page<MateriaCatalogoDTO> obtenerCatalogoMateriasPaginado(String q, String estado, Long docenteId, int page, int size) {
+        Boolean activo = null;
+        if ("ACTIVOS".equalsIgnoreCase(estado)) {
+            activo = true;
+        } else if ("INACTIVOS".equalsIgnoreCase(estado)) {
+            activo = false;
         }
 
-        return resultado;
+        Pageable pageable = PageRequest.of(Math.max(0, page), Math.max(1, size));
+        String query = (q != null) ? q.trim() : "";
+
+        Page<Materia> pagina = materiaRepo.buscarPaginado(query, activo, pageable);
+        return pagina.map(this::convertirAMateriaCatalogoDTO);
+    }
+
+    @Transactional(readOnly = true)
+    public List<MateriaCatalogoDTO> obtenerCatalogoMateriasAgrupadas() {
+        return materiaRepo.findAll().stream()
+                .sorted(Comparator.comparing(Materia::getNombre, String.CASE_INSENSITIVE_ORDER))
+                .map(this::convertirAMateriaCatalogoDTO)
+                .toList();
+    }
+
+    // Método de conversión unificado que resuelve comisiones, horas y docentes
+    public MateriaCatalogoDTO convertirAMateriaCatalogoDTO(Materia m) {
+        List<EmpleadoHorario> horariosDeMateria = horarioRepo.findAll().stream()
+                .filter(h -> Boolean.TRUE.equals(h.getActivo()) && h.getMateria() != null && h.getMateria().getId().equals(m.getId()))
+                .sorted(Comparator.comparing((EmpleadoHorario h) -> h.getDiaSemana() != null ? h.getDiaSemana() : 1)
+                        .thenComparing(h -> h.getHoraEntrada() != null ? h.getHoraEntrada() : LocalTime.MIDNIGHT))
+                .toList();
+
+        double horasTotales = 0.0;
+        Set<String> diasUnicos = new LinkedHashSet<>();
+        List<HorarioDesgloseDTO> desgloses = new ArrayList<>();
+
+        Optional<MateriaDocente> vinculoOpt = materiaDocenteRepo.findByMateriaActiva(m.getId());
+
+        Long titularId = null;
+        String titularNombre = "Sin docente asignado";
+        Long auxiliarId = null;
+        String auxiliarNombre = null;
+
+        Optional<EmpleadoHorario> horarioConDocente = horariosDeMateria.stream()
+                .filter(h -> h.getEmpleado() != null)
+                .findFirst();
+
+        if (horarioConDocente.isPresent()) {
+            Empleado doc = horarioConDocente.get().getEmpleado();
+            titularId = doc.getId();
+            titularNombre = doc.getApellido() + " " + doc.getNombre();
+        } else if (vinculoOpt.isPresent() && Boolean.TRUE.equals(vinculoOpt.get().getActivo()) && horariosDeMateria.isEmpty()) {
+            MateriaDocente vinculo = vinculoOpt.get();
+            if (vinculo.getDocenteTitular() != null) {
+                titularId = vinculo.getDocenteTitular().getId();
+                titularNombre = vinculo.getDocenteTitular().getApellido() + " " + vinculo.getDocenteTitular().getNombre();
+            }
+        }
+
+        if (vinculoOpt.isPresent() && Boolean.TRUE.equals(vinculoOpt.get().getActivo())) {
+            if (vinculoOpt.get().getDocenteAuxiliar() != null) {
+                auxiliarId = vinculoOpt.get().getDocenteAuxiliar().getId();
+                auxiliarNombre = vinculoOpt.get().getDocenteAuxiliar().getApellido() + " " + vinculoOpt.get().getDocenteAuxiliar().getNombre();
+            }
+        }
+
+        if (!horariosDeMateria.isEmpty()) {
+            for (EmpleadoHorario h : horariosDeMateria) {
+                int diaNum = h.getDiaSemana() != null ? h.getDiaSemana() : 1;
+                String diaNombre = diaNumeroANombre(diaNum);
+                diasUnicos.add(diaNombre.substring(0, 3));
+
+                long minutos = (h.getHoraEntrada() != null && h.getHoraSalida() != null)
+                        ? Duration.between(h.getHoraEntrada(), h.getHoraSalida()).toMinutes()
+                        : 0;
+                double horasClase = Math.round((minutos / 60.0) * 10.0) / 10.0;
+                horasTotales += horasClase;
+
+                String turno = (h.getHoraEntrada() != null && h.getHoraEntrada().isBefore(LocalTime.of(13, 0)))
+                        ? "Turno Mañana" : "Turno Tarde";
+
+                String docNombre = h.getEmpleado() != null 
+                    ? h.getEmpleado().getApellido() + " " + h.getEmpleado().getNombre() 
+                    : "Sin Docente";
+                String docLegajo = (h.getEmpleado() != null && h.getEmpleado().getNroLegajo() != null) 
+                    ? h.getEmpleado().getNroLegajo() 
+                    : "-";
+
+                String aulaFinal = h.getAula() != null ? h.getAula() : (m.getAulaPredeterminada() != null ? m.getAulaPredeterminada() : "-");
+
+                desgloses.add(new HorarioDesgloseDTO(
+                    h.getId(),
+                    diaNum,
+                    diaNombre,
+                    h.getHoraEntrada() != null ? h.getHoraEntrada().toString().substring(0, 5) : "--:--",
+                    h.getHoraSalida() != null ? h.getHoraSalida().toString().substring(0, 5) : "--:--",
+                    horasClase,
+                    turno,
+                    aulaFinal,
+                    h.getEmpleado() != null ? h.getEmpleado().getId() : null,
+                    docNombre,
+                    docLegajo,
+                    h.getTipoFrecuencia() != null ? h.getTipoFrecuencia() : "SEMANAL",
+                    h.getRepeticionesPeriodo() != null ? h.getRepeticionesPeriodo() : 1,
+                    h.getSemanaAlterna()
+                ));
+            }
+        } else if (m.getDiasSemana() != null && !m.getDiasSemana().isBlank() && m.getHoraInicio() != null && m.getHoraFin() != null) {
+            String[] diasStr = m.getDiasSemana().split(",");
+            long minutos = Duration.between(m.getHoraInicio(), m.getHoraFin()).toMinutes();
+            double horasClase = Math.round((minutos / 60.0) * 10.0) / 10.0;
+
+            for (String d : diasStr) {
+                try {
+                    int diaNum = Integer.parseInt(d.trim());
+                    String diaNombre = diaNumeroANombre(diaNum);
+                    diasUnicos.add(diaNombre.substring(0, 3));
+                    horasTotales += horasClase;
+
+                    String turno = m.getHoraInicio().isBefore(LocalTime.of(13, 0)) ? "Turno Mañana" : "Turno Tarde";
+
+                    desgloses.add(new HorarioDesgloseDTO(
+                        null,
+                        diaNum,
+                        diaNombre,
+                        m.getHoraInicio().toString().substring(0, 5),
+                        m.getHoraFin().toString().substring(0, 5),
+                        horasClase,
+                        turno,
+                        m.getAulaPredeterminada() != null ? m.getAulaPredeterminada() : "-",
+                        null,
+                        "Sin Docente Asignado",
+                        "-",
+                        m.getTipoFrecuencia() != null ? m.getTipoFrecuencia() : "SEMANAL",
+                        m.getRepeticionesPeriodo() != null ? m.getRepeticionesPeriodo() : 1,
+                        m.getSemanaAlterna()
+                    ));
+                } catch (NumberFormatException ignored) {}
+            }
+        }
+
+        boolean sinDocente = (titularId == null);
+        boolean esActivo = Boolean.TRUE.equals(m.getActivo());
+
+        return new MateriaCatalogoDTO(
+            m.getId(),
+            m.getNombre(),
+            m.getCodigo(),
+            m.getAulaPredeterminada() != null ? m.getAulaPredeterminada() : "Aula sin asignar",
+            desgloses.size(),
+            new ArrayList<>(diasUnicos),
+            Math.round(horasTotales * 10.0) / 10.0,
+            titularId,
+            titularNombre,
+            auxiliarId,
+            auxiliarNombre,
+            sinDocente,
+            esActivo,
+            desgloses
+        );
     }
 
     private void garantizarCategoriaDocente(Empleado emp) {

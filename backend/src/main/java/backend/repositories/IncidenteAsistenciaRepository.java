@@ -7,26 +7,38 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
-
 import java.time.LocalDate;
-import java.util.List;
 
 @Repository
 public interface IncidenteAsistenciaRepository extends JpaRepository<IncidenteAsistencia, Long> {
 
-    @Query("""
-        SELECT i FROM IncidenteAsistencia i
-        WHERE i.fecha BETWEEN :fechaDesde AND :fechaHasta
-          AND (:severidad IS NULL OR :severidad = '' OR i.severidad = :severidad)
-          AND (:categoria IS NULL OR :categoria = '' OR i.categoriaRegla = :categoria)
-          AND (:estado IS NULL OR :estado = '' OR i.estado = :estado)
-          AND (:busqueda IS NULL OR :busqueda = '' OR
-               LOWER(i.empleado.nombre) LIKE LOWER(CONCAT('%', :busqueda, '%')) OR
-               LOWER(i.empleado.apellido) LIKE LOWER(CONCAT('%', :busqueda, '%')) OR
-               LOWER(i.empleado.nroLegajo) LIKE LOWER(CONCAT('%', :busqueda, '%')) OR
-               LOWER(i.tipo) LIKE LOWER(CONCAT('%', :busqueda, '%')))
-        ORDER BY i.fecha DESC, i.hora DESC
-    """)
+    @Query(
+        value = """
+            SELECT i FROM IncidenteAsistencia i
+            WHERE i.fecha BETWEEN :fechaDesde AND :fechaHasta
+              AND (:severidad IS NULL OR :severidad = '' OR i.severidad = :severidad)
+              AND (:categoria IS NULL OR :categoria = '' OR i.categoriaRegla = :categoria)
+              AND (:estado IS NULL OR :estado = '' OR i.estado = :estado)
+              AND (:busqueda IS NULL OR :busqueda = '' OR
+                   LOWER(i.empleado.nombre) LIKE LOWER(CONCAT('%', :busqueda, '%')) OR
+                   LOWER(i.empleado.apellido) LIKE LOWER(CONCAT('%', :busqueda, '%')) OR
+                   LOWER(i.empleado.nroLegajo) LIKE LOWER(CONCAT('%', :busqueda, '%')) OR
+                   LOWER(i.tipo) LIKE LOWER(CONCAT('%', :busqueda, '%')))
+            ORDER BY i.fecha DESC, i.hora DESC
+        """,
+        countQuery = """
+            SELECT COUNT(i) FROM IncidenteAsistencia i
+            WHERE i.fecha BETWEEN :fechaDesde AND :fechaHasta
+              AND (:severidad IS NULL OR :severidad = '' OR i.severidad = :severidad)
+              AND (:categoria IS NULL OR :categoria = '' OR i.categoriaRegla = :categoria)
+              AND (:estado IS NULL OR :estado = '' OR i.estado = :estado)
+              AND (:busqueda IS NULL OR :busqueda = '' OR
+                   LOWER(i.empleado.nombre) LIKE LOWER(CONCAT('%', :busqueda, '%')) OR
+                   LOWER(i.empleado.apellido) LIKE LOWER(CONCAT('%', :busqueda, '%')) OR
+                   LOWER(i.empleado.nroLegajo) LIKE LOWER(CONCAT('%', :busqueda, '%')) OR
+                   LOWER(i.tipo) LIKE LOWER(CONCAT('%', :busqueda, '%')))
+        """
+    )
     Page<IncidenteAsistencia> buscarFiltradoPaginadoRango(
         @Param("fechaDesde") LocalDate fechaDesde,
         @Param("fechaHasta") LocalDate fechaHasta,

@@ -80,15 +80,32 @@ export default function PanelAuditoria() {
             ? data.accionesDisponibles
             : [],
         });
+      } else {
+        setMetricas({
+          totalMovimientos: 0,
+          totalUsuariosActivos: 0,
+          accionMasFrecuente: "-",
+          distribucionAcciones: [],
+          actividadUsuarios: [],
+          accionesDisponibles: [],
+        });
       }
     } catch (err) {
       console.error("Error al cargar métricas de auditoría filtradas:", err);
+      setMetricas((prev) => ({
+        totalMovimientos: 0,
+        totalUsuariosActivos: 0,
+        accionMasFrecuente: "-",
+        distribucionAcciones: [],
+        actividadUsuarios: [],
+        accionesDisponibles: prev?.accionesDisponibles || [],
+      }));
     } finally {
       setLoadingMetricas(false);
     }
   }, [fechaInicio, fechaFin]);
 
-  // Consulta paginada de registros en el backend blindada
+  // Consulta paginada en el servidor (soporta formato Spring Page en res.page o res directo)
   const cargarAuditoria = useCallback(
     async (page = 0) => {
       setLoading(true);
@@ -107,29 +124,28 @@ export default function PanelAuditoria() {
         };
 
         const res = await getAuditoriaMovimientosPaginados(params);
+
         if (res && res.content) {
           const lista = Array.isArray(res.content) ? res.content : [];
           setLogs(lista);
 
+          // Lectura compatible: si Spring Boot anidó los metadatos en res.page o los envió sueltos
           const totalReal =
-            res.totalElements !== undefined &&
-            res.totalElements !== null &&
-            Number(res.totalElements) > 0
-              ? Number(res.totalElements)
-              : lista.length;
+            res.page?.totalElements ??
+            res.totalElements ??
+            res.page?.total ??
+            lista.length;
 
-          setTotalElementos(totalReal);
-          setTotalPaginas(
-            Math.max(
-              1,
-              Number(res.totalPages) ||
-                Math.ceil(totalReal / ITEMS_POR_PAGINA) ||
-                1,
-            ),
-          );
+          const totalPags =
+            res.page?.totalPages ??
+            res.totalPages ??
+            Math.max(1, Math.ceil(Number(totalReal) / ITEMS_POR_PAGINA));
 
-          const pageNum = (Number(res.number) || 0) + 1;
-          setPaginaActual((prev) => (prev !== pageNum ? pageNum : prev));
+          const numPag = res.page?.number ?? res.number ?? pageSegura;
+
+          setTotalElementos(Number(totalReal) || 0);
+          setTotalPaginas(Math.max(1, Number(totalPags) || 1));
+          setPaginaActual((Number(numPag) || 0) + 1);
         } else if (Array.isArray(res)) {
           setLogs(res);
           setTotalElementos(res.length);
@@ -154,19 +170,28 @@ export default function PanelAuditoria() {
     [filtroUsuario, filtroAccion, fechaInicio, fechaFin],
   );
 
+  // Navegación explícita de páginas
+  const handleCambiarPagina = (nuevaPagina) => {
+    const pag = Math.max(1, Math.min(nuevaPagina, totalPaginas));
+    setPaginaActual(pag);
+    cargarAuditoria(pag - 1);
+  };
+
+  // Recarga manual completa
   const recargarTodo = useCallback(() => {
     const pageIndex = Math.max(0, (Number(paginaActual) || 1) - 1);
     cargarAuditoria(pageIndex);
     cargarMetricas();
   }, [cargarAuditoria, cargarMetricas, paginaActual]);
 
-  // Recarga reactiva con debounce de filtros
+  // Recarga reactiva con debounce ante cambios de filtros (vuelve a página 1)
   useEffect(() => {
     const timer = setTimeout(() => {
-      recargarTodo();
+      cargarAuditoria(0);
+      cargarMetricas();
     }, 300);
     return () => clearTimeout(timer);
-  }, [recargarTodo]);
+  }, [cargarAuditoria, cargarMetricas]);
 
   // Auto-recuperación al restaurarse la conexión tras reiniciar el backend
   useEffect(() => {
@@ -497,7 +522,7 @@ export default function PanelAuditoria() {
 
       {/* 5. LISTADO DE REGISTROS (MÓVIL EN CARDS / ESCRITORIO EN TABLA) */}
       <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-xs">
-        {/* VISTA MÓVIL (md:hidden) — Tarjetas verticales sin scroll lateral */}
+        {/* VISTA MÓVIL (md:hidden) */}
         <div className="md:hidden divide-y divide-slate-100">
           {loading ? (
             <div className="text-center py-12 text-slate-400 text-xs">
@@ -512,7 +537,6 @@ export default function PanelAuditoria() {
           ) : (
             logs.map((log) => (
               <div key={log.id} className="p-4 space-y-2.5 bg-white text-xs">
-                {/* Cabecera de la Tarjeta */}
                 <div className="flex items-start justify-between gap-2">
                   <div>
                     <span className="font-bold text-slate-900 text-sm">
@@ -530,7 +554,6 @@ export default function PanelAuditoria() {
                   </span>
                 </div>
 
-                {/* Badges de Acción y Módulo */}
                 <div className="flex items-center gap-2 flex-wrap">
                   <span
                     className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold border tracking-wider uppercase ${getBadgeAccionPorModulo(
@@ -546,7 +569,6 @@ export default function PanelAuditoria() {
                   </span>
                 </div>
 
-                {/* Detalle descriptivo */}
                 <div className="pt-2 border-t border-slate-100 text-slate-600 text-xs leading-relaxed break-words">
                   {log.descripcion}
                 </div>
@@ -555,7 +577,7 @@ export default function PanelAuditoria() {
           )}
         </div>
 
-        {/* VISTA ESCRITORIO (hidden md:block) — Tabla tradicional */}
+        {/* VISTA ESCRITORIO (hidden md:block) */}
         <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-left text-xs border-collapse">
             <thead className="bg-[#f8fafc] text-slate-500 font-bold uppercase text-[10px] border-b border-slate-100 tracking-wider">
@@ -632,7 +654,7 @@ export default function PanelAuditoria() {
           </table>
         </div>
 
-        {/* 6. CONTROL DE PAGINACIÓN */}
+        {/* 6. CONTROL DE PAGINACIÓN BLINDADO CON PUNTOS SUSPENSIVOS */}
         <div className="bg-white px-4 sm:px-6 py-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
           <div className="text-slate-500 text-center sm:text-left">
             {Math.max(Number(totalElementos) || 0, logs.length) === 0 ? (
@@ -665,10 +687,9 @@ export default function PanelAuditoria() {
           </div>
 
           <div className="flex items-center gap-1.5 flex-wrap justify-center">
+            {/* Flecha Anterior */}
             <button
-              onClick={() =>
-                setPaginaActual((prev) => Math.max((Number(prev) || 1) - 1, 1))
-              }
+              onClick={() => handleCambiarPagina(Number(paginaActual) - 1)}
               disabled={Number(paginaActual) <= 1 || loading}
               className="p-2 border border-slate-200 rounded-xl hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer"
               title="Página Anterior"
@@ -676,33 +697,72 @@ export default function PanelAuditoria() {
               <ChevronLeft className="w-4 h-4" />
             </button>
 
-            {Array.from(
-              { length: Math.max(1, Number(totalPaginas) || 1) },
-              (_, i) => i + 1,
-            ).map((num) => (
-              <button
-                key={num}
-                onClick={() => setPaginaActual(num)}
-                disabled={loading}
-                className={`w-8 h-8 rounded-xl font-bold transition cursor-pointer ${
-                  (Number(paginaActual) || 1) === num
-                    ? "bg-[#4b35e6] text-white shadow-xs"
-                    : "border border-slate-200 text-slate-600 hover:bg-slate-50"
-                }`}
-              >
-                {num}
-              </button>
-            ))}
+            {/* Números y Puntos Suspensivos */}
+            {(() => {
+              const pags = [];
+              const total = Math.max(1, Number(totalPaginas) || 1);
+              const actual = Math.max(
+                1,
+                Math.min(Number(paginaActual) || 1, total),
+              );
 
-            <button
-              onClick={() =>
-                setPaginaActual((prev) =>
-                  Math.min(
-                    (Number(prev) || 1) + 1,
-                    Math.max(1, Number(totalPaginas) || 1),
-                  ),
-                )
+              if (total <= 5) {
+                // Pocas páginas: mostrar todas
+                for (let i = 1; i <= total; i++) pags.push(i);
+              } else {
+                // Muchas páginas: primera y última fijas, rango dinámico central
+                pags.push(1);
+
+                if (actual > 3) {
+                  pags.push("dots-prev");
+                }
+
+                const inicio = Math.max(2, actual - 1);
+                const fin = Math.min(total - 1, actual + 1);
+
+                for (let i = inicio; i <= fin; i++) {
+                  pags.push(i);
+                }
+
+                if (actual < total - 2) {
+                  pags.push("dots-next");
+                }
+
+                pags.push(total);
               }
+
+              return pags.map((item, idx) => {
+                if (typeof item === "string") {
+                  return (
+                    <span
+                      key={`${item}-${idx}`}
+                      className="w-8 h-8 flex items-center justify-center text-slate-400 font-semibold select-none"
+                    >
+                      ...
+                    </span>
+                  );
+                }
+
+                return (
+                  <button
+                    key={item}
+                    onClick={() => handleCambiarPagina(item)}
+                    disabled={loading}
+                    className={`w-8 h-8 rounded-xl font-bold transition cursor-pointer ${
+                      actual === item
+                        ? "bg-[#4b35e6] text-white shadow-xs"
+                        : "border border-slate-200 text-slate-600 hover:bg-slate-50"
+                    }`}
+                  >
+                    {item}
+                  </button>
+                );
+              });
+            })()}
+
+            {/* Flecha Siguiente */}
+            <button
+              onClick={() => handleCambiarPagina(Number(paginaActual) + 1)}
               disabled={Number(paginaActual) >= Number(totalPaginas) || loading}
               className="p-2 border border-slate-200 rounded-xl hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer"
               title="Página Siguiente"

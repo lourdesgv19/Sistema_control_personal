@@ -123,19 +123,16 @@ export default function GestionPersonal() {
   const [cargos, setCargos] = useState([]);
   const [horarios, setHorarios] = useState([]);
 
-  // Referencia para acceder a categorías dentro de callbacks sin bucles
   const categoriasRef = useRef([]);
   useEffect(() => {
     categoriasRef.current = categorias;
   }, [categorias]);
 
-  // Bandera de control para evitar peticiones duplicadas en vuelo
-  const cargandoPaginacionRef = useRef(false);
-
   const [tipoFrecuencia, setTipoFrecuencia] = useState("SEMANAL");
   const [repeticionesPeriodo, setRepeticionesPeriodo] = useState(1);
   const [semanaAlterna, setSemanaAlterna] = useState("PAR");
 
+  // Paginación desde Servidor
   const [paginaActual, setPaginaActual] = useState(1);
   const [totalPaginas, setTotalPaginas] = useState(1);
   const [totalElementos, setTotalElementos] = useState(0);
@@ -206,8 +203,9 @@ export default function GestionPersonal() {
     try {
       const data = await getPersonalResumen();
       if (data) setResumenGlobal(data);
-      const todos = await getEmpleadosPaginados();
-      if (Array.isArray(todos)) setTodosLosEmpleados(todos);
+      const todos = await getEmpleadosPaginados("", null, "TODOS", 0, 1000);
+      const listaTodos = todos?.content || (Array.isArray(todos) ? todos : []);
+      setTodosLosEmpleados(listaTodos);
     } catch (err) {
       console.error("Error al cargar resumen global:", err);
     }
@@ -240,6 +238,7 @@ export default function GestionPersonal() {
     }
   }, []);
 
+  // Carga paginada en servidor compatible con DTO (res.page) y res directo
   const cargarEmpleadosServidor = useCallback(
     async (
       page = 0,
@@ -247,13 +246,10 @@ export default function GestionPersonal() {
       cat = filterCategoria,
       est = filterEstado,
     ) => {
-      if (cargandoPaginacionRef.current) return;
-
       const pageSegura = Number.isNaN(Number(page))
         ? 0
         : Math.max(0, parseInt(page, 10) || 0);
 
-      cargandoPaginacionRef.current = true;
       setLoading(true);
 
       try {
@@ -278,26 +274,21 @@ export default function GestionPersonal() {
           setEmpleados(lista);
 
           const totalReal =
-            res.totalElements !== undefined &&
-            res.totalElements !== null &&
-            Number(res.totalElements) > 0
-              ? Number(res.totalElements)
-              : lista.length;
+            res.page?.totalElements ??
+            res.totalElements ??
+            res.page?.total ??
+            lista.length;
 
-          setTotalElementos(totalReal);
-          setTotalPaginas(
-            Math.max(
-              1,
-              Number(res.totalPages) ||
-                Math.ceil(totalReal / ITEMS_POR_PAGINA) ||
-                1,
-            ),
-          );
+          const totalPags =
+            res.page?.totalPages ??
+            res.totalPages ??
+            Math.max(1, Math.ceil(Number(totalReal) / ITEMS_POR_PAGINA));
 
-          const paginaServidor = (Number(res.number) || 0) + 1;
-          setPaginaActual((prev) =>
-            prev !== paginaServidor ? paginaServidor : prev,
-          );
+          const numPag = res.page?.number ?? res.number ?? pageSegura;
+
+          setTotalElementos(Number(totalReal) || 0);
+          setTotalPaginas(Math.max(1, Number(totalPags) || 1));
+          setPaginaActual(Number(numPag) + 1);
         } else if (Array.isArray(res)) {
           setEmpleados(res);
           setTotalElementos(res.length);
@@ -317,36 +308,33 @@ export default function GestionPersonal() {
         setTotalPaginas(1);
       } finally {
         setLoading(false);
-        cargandoPaginacionRef.current = false;
       }
     },
     [filterCategoria, filterEstado, searchTerm],
   );
+
+  // Cambio de página imperativo
+  const handleCambiarPagina = (nuevaPagina) => {
+    const pag = Math.max(1, Math.min(nuevaPagina, totalPaginas));
+    setPaginaActual(pag);
+    cargarEmpleadosServidor(pag - 1);
+  };
 
   useEffect(() => {
     cargarCatalogos();
     cargarResumenGlobal();
   }, [cargarCatalogos, cargarResumenGlobal]);
 
+  // Debounce para filtros y búsqueda (resetea siempre a página 1)
   useEffect(() => {
     const timer = setTimeout(() => {
-      const pageIndex = Math.max(0, (Number(paginaActual) || 1) - 1);
-      cargarEmpleadosServidor(
-        pageIndex,
-        searchTerm,
-        filterCategoria,
-        filterEstado,
-      );
+      setPaginaActual(1);
+      cargarEmpleadosServidor(0, searchTerm, filterCategoria, filterEstado);
     }, 300);
     return () => clearTimeout(timer);
-  }, [
-    searchTerm,
-    filterCategoria,
-    filterEstado,
-    paginaActual,
-    cargarEmpleadosServidor,
-  ]);
+  }, [searchTerm, filterCategoria, filterEstado, cargarEmpleadosServidor]);
 
+  // Recarga reactiva en eventos de sincronización
   useEffect(() => {
     let timerSync = null;
 
@@ -964,10 +952,7 @@ export default function GestionPersonal() {
         <div className="grid grid-cols-2 sm:flex sm:items-center gap-2 text-xs">
           <select
             value={filterCategoria}
-            onChange={(e) => {
-              setFilterCategoria(e.target.value);
-              setPaginaActual(1);
-            }}
+            onChange={(e) => setFilterCategoria(e.target.value)}
             className="border border-slate-200 rounded-xl px-2.5 py-2 bg-white text-slate-700 outline-none focus:border-indigo-500 font-medium truncate"
           >
             <option value="TODAS">Todas Las Categorías</option>
@@ -980,10 +965,7 @@ export default function GestionPersonal() {
 
           <select
             value={filterEstado}
-            onChange={(e) => {
-              setFilterEstado(e.target.value);
-              setPaginaActual(1);
-            }}
+            onChange={(e) => setFilterEstado(e.target.value)}
             className="border border-slate-200 rounded-xl px-2.5 py-2 bg-white font-semibold text-slate-700 outline-none focus:border-indigo-500 truncate"
           >
             <option value="TODOS">Todos los estados</option>
@@ -993,9 +975,9 @@ export default function GestionPersonal() {
         </div>
       </div>
 
-      {/* Contenedor de Nómina: Tabla en Desktop / Cards en Móvil */}
+      {/* Contenedor de Nómina */}
       <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-xs">
-        {/* VISTA MÓVIL Y TABLET (Cards apiladas) */}
+        {/* VISTA MÓVIL (Cards) */}
         <div className="block lg:hidden divide-y divide-slate-100">
           {loading ? (
             <div className="text-center py-12 text-slate-400 text-xs">
@@ -1040,7 +1022,6 @@ export default function GestionPersonal() {
                         : "bg-white"
                   }`}
                 >
-                  {/* Encabezado de la Card Móvil */}
                   <div className="flex items-start justify-between gap-2">
                     <div>
                       <div className="flex flex-wrap items-center gap-1.5">
@@ -1090,7 +1071,6 @@ export default function GestionPersonal() {
                     </span>
                   </div>
 
-                  {/* Categorías y Cargos */}
                   <div className="space-y-1">
                     <div className="flex flex-wrap gap-1">
                       {categoriasList.length > 0 ? (
@@ -1129,7 +1109,6 @@ export default function GestionPersonal() {
                     </div>
                   </div>
 
-                  {/* Barra de Acciones Móvil */}
                   <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-1.5">
                     <div>
                       {puedeHorariosVer ? (
@@ -1247,7 +1226,7 @@ export default function GestionPersonal() {
           )}
         </div>
 
-        {/* VISTA ESCRITORIO (Tabla Tradicional en pantallas lg+) */}
+        {/* VISTA ESCRITORIO (Tabla) */}
         <div className="hidden lg:block overflow-x-auto">
           <table className="w-full text-left text-xs">
             <thead className="bg-[#f8fafc] text-slate-500 font-bold uppercase text-[10px] border-b border-slate-100">
@@ -1546,7 +1525,7 @@ export default function GestionPersonal() {
           </table>
         </div>
 
-        {/* Paginador Adaptable */}
+        {/* Paginador Adaptable Blindado */}
         <div className="bg-white px-4 sm:px-6 py-3.5 sm:py-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
           <div className="text-slate-500 text-center sm:text-left">
             {Math.max(Number(totalElementos) || 0, empleados.length) === 0 ? (
@@ -1580,9 +1559,8 @@ export default function GestionPersonal() {
 
           <div className="flex items-center gap-1 sm:gap-1.5 flex-wrap justify-center">
             <button
-              onClick={() =>
-                setPaginaActual((prev) => Math.max((Number(prev) || 1) - 1, 1))
-              }
+              type="button"
+              onClick={() => handleCambiarPagina(Number(paginaActual) - 1)}
               disabled={Number(paginaActual) <= 1 || loading}
               className="p-1.5 sm:p-2 border border-slate-200 rounded-xl hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer"
               title="Página Anterior"
@@ -1596,7 +1574,8 @@ export default function GestionPersonal() {
             ).map((num) => (
               <button
                 key={num}
-                onClick={() => setPaginaActual(num)}
+                type="button"
+                onClick={() => handleCambiarPagina(num)}
                 disabled={loading}
                 className={`w-7 h-7 sm:w-8 sm:h-8 rounded-xl font-bold text-xs transition cursor-pointer ${
                   (Number(paginaActual) || 1) === num
@@ -1609,14 +1588,8 @@ export default function GestionPersonal() {
             ))}
 
             <button
-              onClick={() =>
-                setPaginaActual((prev) =>
-                  Math.min(
-                    (Number(prev) || 1) + 1,
-                    Math.max(1, Number(totalPaginas) || 1),
-                  ),
-                )
-              }
+              type="button"
+              onClick={() => handleCambiarPagina(Number(paginaActual) + 1)}
               disabled={Number(paginaActual) >= Number(totalPaginas) || loading}
               className="p-1.5 sm:p-2 border border-slate-200 rounded-xl hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer"
               title="Página Siguiente"
@@ -1627,7 +1600,7 @@ export default function GestionPersonal() {
         </div>
       </div>
 
-      {/* MODALES ADAPTADOS */}
+      {/* Modales */}
       <ModalRegistroEmpleado
         isOpen={modalRegistro}
         onClose={() => setModalRegistro(false)}

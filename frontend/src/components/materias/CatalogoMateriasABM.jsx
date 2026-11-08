@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
   Plus,
   ChevronDown,
   ChevronRight,
+  ChevronLeft,
   Pencil,
   Trash2,
   MapPin,
@@ -13,9 +14,10 @@ import {
   CalendarCheck,
   UserPlus,
   UserMinus,
+  Search,
 } from "lucide-react";
 import {
-  getCatalogoMateriasAgrupadas,
+  getCatalogoMateriasPaginado,
   reactivarMateria,
   desvincularDocenteMateria,
   desvincularComisionMateria,
@@ -23,6 +25,7 @@ import {
 import ModalAlerta from "../comunes/ModalAlerta";
 
 const DIAS_ORDEN = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
+const ITEMS_POR_PAGINA = 10;
 
 export default function CatalogoMateriasABM({
   onNuevaMateria,
@@ -32,7 +35,7 @@ export default function CatalogoMateriasABM({
   onEliminarMateria,
   docenteInicialId = null,
   filtroDocente = "",
-  busqueda = "",
+  busqueda: busquedaProp = "",
   puedeCrear,
   puedeEditar,
   puedeGestionarDocente,
@@ -42,8 +45,13 @@ export default function CatalogoMateriasABM({
   const [loading, setLoading] = useState(true);
   const [expandidos, setExpandidos] = useState([]);
   const [filtroEstado, setFiltroEstado] = useState("ACTIVOS");
+  const [busquedaLocal, setBusquedaLocal] = useState(busquedaProp);
 
-  // REGLA ESTRICTA: Solo quien puede gestionar horarios puede vincular o desvincular docentes
+  // Paginación desde Servidor (Spring Data)
+  const [paginaActual, setPaginaActual] = useState(1);
+  const [totalPaginas, setTotalPaginas] = useState(1);
+  const [totalElementos, setTotalElementos] = useState(0);
+
   const puedeOperarDocente = Boolean(puedeGestionarDocente);
 
   const [modalAlerta, setModalAlerta] = useState({
@@ -69,51 +77,101 @@ export default function CatalogoMateriasABM({
     });
   };
 
-  const cargarDatos = async () => {
-    setLoading(true);
-    try {
-      const res = await getCatalogoMateriasAgrupadas();
-      const lista = Array.isArray(res.data) ? res.data : [];
-      setMaterias(lista);
-    } catch (err) {
-      console.error("Error al cargar catálogo de materias agrupadas", err);
-    } finally {
-      setLoading(false);
-    }
+  // Carga paginada desde el servidor
+  const cargarDatos = useCallback(
+    async (pageIndex = 0) => {
+      setLoading(true);
+      try {
+        const pageSegura = Number.isNaN(Number(pageIndex))
+          ? 0
+          : Math.max(0, parseInt(pageIndex, 10) || 0);
+
+        const res = await getCatalogoMateriasPaginado({
+          q: busquedaLocal.trim(),
+          estado: filtroEstado,
+          docenteId: filtroDocente || docenteInicialId || undefined,
+          page: pageSegura,
+          size: ITEMS_POR_PAGINA,
+        });
+
+        const data = res.data;
+        if (data && data.content) {
+          const lista = Array.isArray(data.content) ? data.content : [];
+          setMaterias(lista);
+
+          // Compatibilidad: res.page.* (DTO) o res.* (raíz)
+          const totalReal =
+            data.page?.totalElements ??
+            data.totalElements ??
+            data.page?.total ??
+            lista.length;
+
+          const totalPags =
+            data.page?.totalPages ??
+            data.totalPages ??
+            Math.max(1, Math.ceil(Number(totalReal) / ITEMS_POR_PAGINA));
+
+          const numPag = data.page?.number ?? data.number ?? pageSegura;
+
+          setTotalElementos(Number(totalReal) || 0);
+          setTotalPaginas(Math.max(1, Number(totalPags) || 1));
+          setPaginaActual((Number(numPag) || 0) + 1);
+        } else if (Array.isArray(data)) {
+          setMaterias(data);
+          setTotalElementos(data.length);
+          setTotalPaginas(
+            Math.max(1, Math.ceil(data.length / ITEMS_POR_PAGINA)),
+          );
+          setPaginaActual(1);
+        } else {
+          setMaterias([]);
+          setTotalElementos(0);
+          setTotalPaginas(1);
+        }
+      } catch (err) {
+        console.error("Error al cargar catálogo paginado de materias:", err);
+        setMaterias([]);
+        setTotalElementos(0);
+        setTotalPaginas(1);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [busquedaLocal, filtroEstado, filtroDocente, docenteInicialId],
+  );
+
+  // Navegación imperativa directa
+  const handleCambiarPagina = (nuevaPagina) => {
+    const pag = Math.max(1, Math.min(nuevaPagina, totalPaginas));
+    setPaginaActual(pag);
+    cargarDatos(pag - 1);
   };
 
+  // Debounce para filtros y búsqueda (reinicia siempre a página 1)
   useEffect(() => {
-    cargarDatos();
-  }, []);
+    const timer = setTimeout(() => {
+      setPaginaActual(1);
+      cargarDatos(0);
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [busquedaLocal, filtroEstado, filtroDocente, cargarDatos]);
 
+  // Sincronización reactiva por eventos globales
   useEffect(() => {
-    if (docenteInicialId && materias.length > 0) {
-      const idBuscado = String(docenteInicialId);
-      const materiasDelDocente = materias
-        .filter((m) => {
-          const esTitular = String(m.idDocenteTitular) === idBuscado;
-          const esAuxiliar = String(m.idDocenteAuxiliar) === idBuscado;
-          const tieneComision = (m.desgloseHorarios || []).some(
-            (h) => String(h.idDocente) === idBuscado,
-          );
-          return esTitular || esAuxiliar || tieneComision;
-        })
-        .map((m) => m.idMateria);
-
-      setExpandidos(materiasDelDocente);
-    } else if (!docenteInicialId) {
-      setExpandidos([]);
-    }
-  }, [docenteInicialId, materias]);
-
-  useEffect(() => {
+    let timerSync = null;
     const handleActualizar = () => {
-      cargarDatos();
+      if (timerSync) clearTimeout(timerSync);
+      timerSync = setTimeout(() => {
+        cargarDatos(paginaActual - 1);
+      }, 250);
     };
+
     window.addEventListener("datos:actualizados", handleActualizar);
-    return () =>
+    return () => {
+      if (timerSync) clearTimeout(timerSync);
       window.removeEventListener("datos:actualizados", handleActualizar);
-  }, []);
+    };
+  }, [cargarDatos, paginaActual]);
 
   const toggleExpandir = (id) => {
     setExpandidos((prev) =>
@@ -122,35 +180,15 @@ export default function CatalogoMateriasABM({
   };
 
   const toggleTodos = () => {
-    if (expandidos.length === materiasFiltradas.length) {
-      setExpandidos([]);
+    const idsPagina = materias.map((m) => m.idMateria);
+    const estanTodosPagina = idsPagina.every((id) => expandidos.includes(id));
+
+    if (estanTodosPagina) {
+      setExpandidos((prev) => prev.filter((id) => !idsPagina.includes(id)));
     } else {
-      setExpandidos(materiasFiltradas.map((m) => m.idMateria));
+      setExpandidos((prev) => Array.from(new Set([...prev, ...idsPagina])));
     }
   };
-
-  const materiasFiltradas = useMemo(() => {
-    return materias.filter((m) => {
-      const matchEstado =
-        filtroEstado === "TODOS" ||
-        (filtroEstado === "ACTIVOS" && m.activo !== false) ||
-        (filtroEstado === "INACTIVOS" && m.activo === false);
-
-      const q = busqueda.trim().toLowerCase();
-      const matchBusqueda =
-        !q ||
-        m.nombre?.toLowerCase().includes(q) ||
-        m.codigo?.toLowerCase().includes(q) ||
-        m.aulaPredeterminada?.toLowerCase().includes(q);
-
-      const matchDocente =
-        !filtroDocente ||
-        String(m.idDocenteTitular) === String(filtroDocente) ||
-        String(m.idDocenteAuxiliar) === String(filtroDocente);
-
-      return matchEstado && matchBusqueda && matchDocente;
-    });
-  }, [materias, filtroEstado, busqueda, filtroDocente]);
 
   const handleReactivarMateria = (idMateria, nombreMateria) => {
     if (!puedeEditar) return;
@@ -168,7 +206,7 @@ export default function CatalogoMateriasABM({
         try {
           await reactivarMateria(idMateria);
           window.dispatchEvent(new CustomEvent("datos:actualizados"));
-          await cargarDatos();
+          await cargarDatos(paginaActual - 1);
           mostrarAviso(
             "success",
             "Reactivada",
@@ -197,7 +235,7 @@ export default function CatalogoMateriasABM({
         try {
           await desvincularDocenteMateria(materia.idMateria);
           window.dispatchEvent(new CustomEvent("datos:actualizados"));
-          await cargarDatos();
+          await cargarDatos(paginaActual - 1);
           mostrarAviso(
             "success",
             "Docente Desvinculado",
@@ -230,7 +268,7 @@ export default function CatalogoMateriasABM({
             horario.diaSemana || null,
           );
           window.dispatchEvent(new CustomEvent("datos:actualizados"));
-          await cargarDatos();
+          await cargarDatos(paginaActual - 1);
           mostrarAviso(
             "success",
             "Baja Confirmada",
@@ -319,18 +357,9 @@ export default function CatalogoMateriasABM({
     });
   };
 
-  if (loading) {
-    return (
-      <div className="bg-white border border-slate-200 rounded-3xl p-16 text-center text-slate-400 text-xs">
-        <Loader2 className="w-6 h-6 animate-spin mx-auto text-indigo-600 mb-2" />
-        Cargando catálogo de asignaturas académicas...
-      </div>
-    );
-  }
-
   return (
     <div className="bg-white border border-slate-200 rounded-2xl sm:rounded-3xl shadow-xs overflow-hidden">
-      {/* HEADER DE LA SECCIÓN */}
+      {/* HEADER Y FILTROS INTEGRADOS */}
       <div className="p-4 sm:p-6 border-b border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2.5">
@@ -338,7 +367,7 @@ export default function CatalogoMateriasABM({
               Catálogo de Asignaturas Académicas
             </h2>
             <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-slate-100 text-slate-600 border border-slate-200">
-              {materiasFiltradas.length} materias
+              {Math.max(Number(totalElementos) || 0, materias.length)} materias
             </span>
           </div>
           <p className="text-[11px] sm:text-xs text-slate-500 mt-1">
@@ -348,8 +377,20 @@ export default function CatalogoMateriasABM({
         </div>
 
         <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
+          {/* Buscador */}
+          <div className="relative w-full sm:w-60">
+            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              placeholder="Buscar por cátedra o aula..."
+              value={busquedaLocal}
+              onChange={(e) => setBusquedaLocal(e.target.value)}
+              className="w-full text-xs pl-8 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-indigo-600 transition"
+            />
+          </div>
+
+          {/* Selector Estado */}
           <div className="flex items-center gap-2 text-xs w-full sm:w-auto">
-            <span className="text-slate-500 font-medium">Estado:</span>
             <select
               value={filtroEstado}
               onChange={(e) => setFiltroEstado(e.target.value)}
@@ -366,16 +407,16 @@ export default function CatalogoMateriasABM({
             onClick={toggleTodos}
             className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition cursor-pointer"
           >
-            {expandidos.length === materiasFiltradas.length &&
-            materiasFiltradas.length > 0 ? (
+            {materias.length > 0 &&
+            materias.every((m) => expandidos.includes(m.idMateria)) ? (
               <>
                 <ChevronDown className="w-3.5 h-3.5 rotate-180 transition-transform" />
-                <span>Colapsar todas</span>
+                <span>Colapsar página</span>
               </>
             ) : (
               <>
                 <ChevronDown className="w-3.5 h-3.5 transition-transform" />
-                <span>Desglosar todas</span>
+                <span>Desglosar página</span>
               </>
             )}
           </button>
@@ -395,12 +436,17 @@ export default function CatalogoMateriasABM({
 
       {/* 1. VISTA MÓVIL (md:hidden) */}
       <div className="md:hidden divide-y divide-slate-100">
-        {materiasFiltradas.length === 0 ? (
+        {loading ? (
+          <div className="p-12 text-center text-slate-400 text-xs">
+            <Loader2 className="w-6 h-6 animate-spin mx-auto text-indigo-600 mb-2" />
+            Consultando asignaturas académicas...
+          </div>
+        ) : materias.length === 0 ? (
           <div className="p-8 text-center text-slate-400 text-xs italic">
-            No se encontraron materias con el estado seleccionado.
+            No se encontraron materias registradas con los filtros aplicados.
           </div>
         ) : (
-          materiasFiltradas.map((materia) => {
+          materias.map((materia) => {
             const estaExpandido = expandidos.includes(materia.idMateria);
             const esInactiva = materia.activo === false;
             const horariosIguales = sonHorariosUniforme(
@@ -418,7 +464,6 @@ export default function CatalogoMateriasABM({
                       : "bg-white"
                 }`}
               >
-                {/* Cabecera Móvil */}
                 <div
                   onClick={() => toggleExpandir(materia.idMateria)}
                   className="cursor-pointer select-none"
@@ -489,7 +534,9 @@ export default function CatalogoMateriasABM({
                     </span>
                     <div className="flex flex-wrap gap-1 items-center">
                       {DIAS_ORDEN.map((dia) => {
-                        const activo = materia.diasResumen.includes(dia);
+                        const activo = (materia.diasResumen || []).includes(
+                          dia,
+                        );
                         return (
                           <span
                             key={dia}
@@ -504,7 +551,8 @@ export default function CatalogoMateriasABM({
                         );
                       })}
                       <span className="text-[10px] text-slate-500 font-medium ml-1">
-                        • {materia.totalHorasSemanales.toFixed(1)}h / sem
+                        • {Number(materia.totalHorasSemanales || 0).toFixed(1)}h
+                        / sem
                       </span>
                     </div>
                   </div>
@@ -517,7 +565,6 @@ export default function CatalogoMateriasABM({
                           <AlertCircle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
                           <span>Sin Docente Asignado</span>
                         </div>
-                        {/* Botón Asignar: EXCLUSIVO si tiene permiso de horarios */}
                         {puedeOperarDocente && !esInactiva && (
                           <button
                             type="button"
@@ -557,11 +604,9 @@ export default function CatalogoMateriasABM({
                   </div>
                 </div>
 
-                {/* Acciones principales de la tarjeta */}
                 <div className="mt-3 flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
                   {!esInactiva ? (
                     <>
-                      {/* Botón Asignar / Cambiar Docente (EXCLUSIVO para quien gestiona horarios) */}
                       {puedeOperarDocente && (
                         <button
                           type="button"
@@ -577,7 +622,6 @@ export default function CatalogoMateriasABM({
                         </button>
                       )}
 
-                      {/* Botón Desvincular Docente: EXCLUSIVO para quien gestiona horarios y cuando hay docente asignado */}
                       {puedeOperarDocente && !materia.sinDocente && (
                         <button
                           type="button"
@@ -650,13 +694,12 @@ export default function CatalogoMateriasABM({
                   )}
                 </div>
 
-                {/* Desglose Expandido Móvil */}
                 {estaExpandido && (
                   <div className="mt-3 space-y-2 pt-3 border-t-2 border-indigo-100">
                     <span className="text-[11px] font-bold text-indigo-950 block">
                       Comisiones Asignadas:
                     </span>
-                    {materia.desgloseHorarios.map((horario, idx) => (
+                    {(materia.desgloseHorarios || []).map((horario, idx) => (
                       <div
                         key={horario.idHorario || `h-mob-${idx}`}
                         className="bg-white rounded-xl border border-indigo-100 p-3 space-y-2 text-xs shadow-2xs"
@@ -671,7 +714,7 @@ export default function CatalogoMateriasABM({
                         <div className="flex items-center justify-between text-slate-600 font-mono text-[11px]">
                           <span>
                             {horario.horaInicio} - {horario.horaFin} (
-                            {horario.horasClase.toFixed(1)}h)
+                            {Number(horario.horasClase || 0).toFixed(1)}h)
                           </span>
                         </div>
 
@@ -709,9 +752,7 @@ export default function CatalogoMateriasABM({
                           )}
                         </div>
 
-                        {/* Acciones de la Comisión */}
                         <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
-                          {/* Desvincular docente individual: EXCLUSIVO si tiene permiso de horarios y hay docente asignado */}
                           {puedeOperarDocente &&
                             horario.idDocente &&
                             !esInactiva && (
@@ -781,17 +822,28 @@ export default function CatalogoMateriasABM({
           </thead>
 
           <tbody className="divide-y divide-slate-100">
-            {materiasFiltradas.length === 0 ? (
+            {loading ? (
+              <tr>
+                <td
+                  colSpan={6}
+                  className="text-center py-12 text-slate-400 text-xs"
+                >
+                  <Loader2 className="w-6 h-6 animate-spin mx-auto text-indigo-600 mb-2" />
+                  Consultando asignaturas académicas...
+                </td>
+              </tr>
+            ) : materias.length === 0 ? (
               <tr>
                 <td
                   colSpan={6}
                   className="text-center py-12 text-slate-400 text-xs italic"
                 >
-                  No se encontraron materias con el estado seleccionado.
+                  No se encontraron materias registradas con los filtros
+                  aplicados.
                 </td>
               </tr>
             ) : (
-              materiasFiltradas.map((materia) => {
+              materias.map((materia) => {
                 const estaExpandido = expandidos.includes(materia.idMateria);
                 const esInactiva = materia.activo === false;
                 const horariosIguales = sonHorariosUniforme(
@@ -870,7 +922,9 @@ export default function CatalogoMateriasABM({
                       <td className="py-4 px-4">
                         <div className="flex flex-wrap gap-1 mb-1">
                           {DIAS_ORDEN.map((dia) => {
-                            const activo = materia.diasResumen.includes(dia);
+                            const activo = (materia.diasResumen || []).includes(
+                              dia,
+                            );
                             return (
                               <span
                                 key={dia}
@@ -886,8 +940,8 @@ export default function CatalogoMateriasABM({
                           })}
                         </div>
                         <span className="text-[10px] text-slate-400 font-medium">
-                          {materia.totalHorasSemanales.toFixed(1)}h reloj /
-                          semana
+                          {Number(materia.totalHorasSemanales || 0).toFixed(1)}h
+                          reloj / semana
                         </span>
                       </td>
 
@@ -898,7 +952,6 @@ export default function CatalogoMateriasABM({
                               <AlertCircle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
                               <span>Sin Docente Asignado</span>
                             </span>
-                            {/* Botón Asignar: EXCLUSIVO si tiene permiso de horarios */}
                             {puedeOperarDocente && !esInactiva && (
                               <button
                                 type="button"
@@ -961,7 +1014,6 @@ export default function CatalogoMateriasABM({
                         <div className="flex items-center justify-center gap-1.5">
                           {!esInactiva ? (
                             <>
-                              {/* Botón Asignar / Cambiar Docente (EXCLUSIVO para quien gestiona horarios) */}
                               {puedeOperarDocente && (
                                 <button
                                   type="button"
@@ -977,7 +1029,6 @@ export default function CatalogoMateriasABM({
                                 </button>
                               )}
 
-                              {/* Botón Desvincular Docente: EXCLUSIVO para quien gestiona horarios y cuando hay docente asignado */}
                               {puedeOperarDocente && !materia.sinDocente && (
                                 <button
                                   type="button"
@@ -1057,7 +1108,7 @@ export default function CatalogoMateriasABM({
 
                     {/* SUBFILAS DE COMISIONES */}
                     {estaExpandido &&
-                      materia.desgloseHorarios.map((horario, idx) => (
+                      (materia.desgloseHorarios || []).map((horario, idx) => (
                         <tr
                           key={horario.idHorario || `h-${idx}`}
                           className="bg-indigo-50/20 border-l-4 border-indigo-600 hover:bg-indigo-50/40 transition-colors text-xs"
@@ -1074,7 +1125,7 @@ export default function CatalogoMateriasABM({
                             </div>
                             <span className="text-[11px] text-slate-500 font-mono">
                               {horario.horaInicio} - {horario.horaFin} (
-                              {horario.horasClase.toFixed(1)}h)
+                              {Number(horario.horasClase || 0).toFixed(1)}h)
                             </span>
                           </td>
 
@@ -1136,7 +1187,6 @@ export default function CatalogoMateriasABM({
 
                           <td className="py-3 px-4 text-center">
                             <div className="flex items-center justify-center gap-2 text-slate-400">
-                              {/* Botón Desvincular Docente en la subfila de comisión: EXCLUSIVO si tiene permiso de horarios y hay docente asignado */}
                               {puedeOperarDocente &&
                                 horario.idDocente &&
                                 !esInactiva && (
@@ -1189,6 +1239,80 @@ export default function CatalogoMateriasABM({
             )}
           </tbody>
         </table>
+      </div>
+
+      {/* 3. BARRA DE CONTROL DE PAGINACIÓN */}
+      <div className="bg-white px-4 sm:px-6 py-3.5 sm:py-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+        <div className="text-slate-500 text-center sm:text-left">
+          {Math.max(Number(totalElementos) || 0, materias.length) === 0 ? (
+            <span>
+              Mostrando <span className="font-bold text-slate-800">0</span> de{" "}
+              <span className="font-bold text-slate-800">0</span> materias
+            </span>
+          ) : (
+            <span>
+              Mostrando{" "}
+              <span className="font-bold text-slate-800">
+                {(Math.max(1, Number(paginaActual) || 1) - 1) *
+                  ITEMS_POR_PAGINA +
+                  1}
+              </span>{" "}
+              a{" "}
+              <span className="font-bold text-slate-800">
+                {Math.min(
+                  Math.max(1, Number(paginaActual) || 1) * ITEMS_POR_PAGINA,
+                  Math.max(Number(totalElementos) || 0, materias.length),
+                )}
+              </span>{" "}
+              de{" "}
+              <span className="font-bold text-slate-800">
+                {Math.max(Number(totalElementos) || 0, materias.length)}
+              </span>{" "}
+              materias
+            </span>
+          )}
+        </div>
+
+        <div className="flex items-center gap-1.5 flex-wrap justify-center">
+          <button
+            type="button"
+            onClick={() => handleCambiarPagina(Number(paginaActual) - 1)}
+            disabled={Number(paginaActual) <= 1 || loading}
+            className="p-2 border border-slate-200 rounded-xl hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer"
+            title="Página Anterior"
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </button>
+
+          {Array.from(
+            { length: Math.max(1, Number(totalPaginas) || 1) },
+            (_, i) => i + 1,
+          ).map((num) => (
+            <button
+              type="button"
+              key={num}
+              onClick={() => handleCambiarPagina(num)}
+              disabled={loading}
+              className={`w-8 h-8 rounded-xl font-bold transition cursor-pointer ${
+                Number(paginaActual) === num
+                  ? "bg-[#4b35e6] text-white shadow-xs"
+                  : "border border-slate-200 text-slate-600 hover:bg-slate-50"
+              }`}
+            >
+              {num}
+            </button>
+          ))}
+
+          <button
+            type="button"
+            onClick={() => handleCambiarPagina(Number(paginaActual) + 1)}
+            disabled={Number(paginaActual) >= Number(totalPaginas) || loading}
+            className="p-2 border border-slate-200 rounded-xl hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer"
+            title="Página Siguiente"
+          >
+            <ChevronRight className="w-4 h-4" />
+          </button>
+        </div>
       </div>
 
       <ModalAlerta
