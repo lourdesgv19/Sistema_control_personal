@@ -26,51 +26,13 @@ import {
 import ModalJustificarIncidente from "../components/incidentes/ModalJustificarIncidente";
 import { useAuth } from "../context/AuthContext";
 import { useLocation } from "react-router-dom";
+import {
+  formatearFechaVisual,
+  calcularRangoSemana,
+} from "../utils/fechasFichaUtils";
 
 const ITEMS_POR_PAGINA = 15;
 const STORAGE_KEY = "tablero_incidentes_filtros_v1";
-
-function formatearFechaVisual(fechaIso) {
-  if (!fechaIso) return "--/--/----";
-  const soloFecha = String(fechaIso).split("T")[0].split(" ")[0].trim();
-  const partes = soloFecha.split("-");
-  if (partes.length === 3) {
-    return `${partes[2].padStart(2, "0")}/${partes[1].padStart(2, "0")}/${partes[0].padStart(4, "0")}`;
-  }
-  return soloFecha;
-}
-
-function calcularRangoSemana(fechaStr) {
-  if (!fechaStr) return { inicio: "", fin: "" };
-  const partes = String(fechaStr).split("T")[0].split("-");
-  if (partes.length !== 3) return { inicio: fechaStr, fin: fechaStr };
-
-  const d = new Date(
-    parseInt(partes[0], 10),
-    parseInt(partes[1], 10) - 1,
-    parseInt(partes[2], 10),
-  );
-  const diaSemana = d.getDay();
-  const diffLunes = diaSemana === 0 ? -6 : 1 - diaSemana;
-
-  const lunes = new Date(d);
-  lunes.setDate(d.getDate() + diffLunes);
-
-  const domingo = new Date(lunes);
-  domingo.setDate(lunes.getDate() + 6);
-
-  const formatear = (dateObj) => {
-    const y = dateObj.getFullYear();
-    const m = String(dateObj.getMonth() + 1).padStart(2, "0");
-    const day = String(dateObj.getDate()).padStart(2, "0");
-    return `${y}-${m}-${day}`;
-  };
-
-  return {
-    inicio: formatear(lunes),
-    fin: formatear(domingo),
-  };
-}
 
 export default function TableroIncidentesDiarios() {
   const { tienePermiso } = useAuth();
@@ -198,7 +160,6 @@ export default function TableroIncidentesDiarios() {
           const lista = pag.content;
           setIncidentes(lista);
 
-          // Lectura compatible: res.page.* (Spring DTO) o res.* directo
           const totalReal =
             pag.page?.totalElements ??
             pag.totalElements ??
@@ -249,7 +210,6 @@ export default function TableroIncidentesDiarios() {
     ],
   );
 
-  // Recarga reactiva con debounce de filtros (vuelve a página 1)
   useEffect(() => {
     const timer = setTimeout(() => {
       setPaginaActual(1);
@@ -267,7 +227,6 @@ export default function TableroIncidentesDiarios() {
     busqueda,
   ]);
 
-  // Navegación imperativa directa
   const handleCambiarPagina = (nuevaPagina) => {
     const pag = Math.max(1, Math.min(nuevaPagina, totalPaginas));
     setPaginaActual(pag);
@@ -390,8 +349,8 @@ export default function TableroIncidentesDiarios() {
                     setFechaHasta(fechaDesde);
                   } else if (key === "SEMANAL") {
                     const rango = calcularRangoSemana(fechaDesde);
-                    setFechaDesde(rango.inicio);
-                    setFechaHasta(rango.fin);
+                    setFechaDesde(rango.inicioSemanaStr);
+                    setFechaHasta(rango.finSemanaStr);
                   } else if (key === "TRIMESTRE" || key === "CUATRIMESTRE") {
                     const mesesContar = key === "TRIMESTRE" ? 3 : 4;
                     const mesBase =
@@ -474,8 +433,8 @@ export default function TableroIncidentesDiarios() {
                 onChange={(e) => {
                   if (e.target.value) {
                     const rango = calcularRangoSemana(e.target.value);
-                    setFechaDesde(rango.inicio);
-                    setFechaHasta(rango.fin);
+                    setFechaDesde(rango.inicioSemanaStr);
+                    setFechaHasta(rango.finSemanaStr);
                     setPaginaActual(1);
                   }
                 }}
