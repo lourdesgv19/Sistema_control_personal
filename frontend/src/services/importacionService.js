@@ -1,17 +1,48 @@
 import apiClient from "./api";
 
+// Resumen superior dual (último fichaje de la tabla + última importación)
+export const getUltimoRegistroResumen = async () => {
+  return (await apiClient.get("/dispositivo/ultimo-registro-resumen")).data;
+};
+
+// Padrón del día paginado por backend (Spring Data Pageable)
+export const getFichajesDelDiaPaginado = async (
+  fecha,
+  q = "",
+  page = 0,
+  size = 15,
+) => {
+  const pageSegura = Number.isNaN(Number(page))
+    ? 0
+    : Math.max(0, parseInt(page, 10) || 0);
+  return (
+    await apiClient.get("/dispositivo/fichajes/dia", {
+      params: { fecha, q, page: pageSegura, size },
+    })
+  ).data;
+};
+
+// Historial de lotes con paginación en el backend
+export const getHistorialImportacionesPaginado = async (
+  estado = "ACTIVOS",
+  fecha = "",
+  page = 0,
+  size = 15,
+) => {
+  const pageSegura = Number.isNaN(Number(page))
+    ? 0
+    : Math.max(0, parseInt(page, 10) || 0);
+  return (
+    await apiClient.get("/importacion/historial/paginado", {
+      params: { estado, fecha, page: pageSegura, size },
+    })
+  ).data;
+};
+
 export const getHistorialImportaciones = async () => {
   return (await apiClient.get("/importacion/historial")).data;
 };
 
-// Padrón paginado y filtrado en base de datos
-export const getMarcacionesPaginadas = async (q = "", page = 0, size = 25) => {
-  return (
-    await apiClient.get("/importacion/fichajes", { params: { q, page, size } })
-  ).data;
-};
-
-// Conteo ligero de identificadores huérfanos
 export const getSinVincularCount = async () => {
   return (await apiClient.get("/importacion/sin-vincular-count")).data;
 };
@@ -20,7 +51,6 @@ export const getPendientesVinculacion = async () => {
   return (await apiClient.get("/importacion/pendientes-vinculacion")).data;
 };
 
-// Consulta filtrada en BD para el modal del ojito
 export const getFichajesPorImportacion = async (
   importacionId,
   nombre = "",
@@ -67,15 +97,5 @@ export const previsualizarVinculaciones = async (archivo) => {
 export const guardarVinculaciones = async (asignaciones) => {
   return (
     await apiClient.post("/importacion/guardar-vinculaciones", asignaciones)
-  ).data;
-};
-
-export const getHistorialImportacionesDispositivo = async () => {
-  return (await apiClient.get("/dispositivo/historial-diario")).data;
-};
-
-export const getFichajesDelDia = async (fecha, q = "") => {
-  return (
-    await apiClient.get("/dispositivo/fichajes/dia", { params: { fecha, q } })
   ).data;
 };

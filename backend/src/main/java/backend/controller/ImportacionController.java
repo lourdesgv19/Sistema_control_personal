@@ -9,6 +9,10 @@ import backend.service.VinculacionBiometricaService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.List;
 
 @RestController
@@ -31,6 +35,28 @@ public class ImportacionController {
     @GetMapping("/historial")
     public ResponseEntity<List<ImportacionHistorial>> listarHistorial() {
         return ResponseEntity.ok(historialRepo.findAllByOrderByFechaImportacionDesc());
+    }
+
+    @GetMapping("/historial/paginado")
+    public ResponseEntity<org.springframework.data.domain.Page<ImportacionHistorial>> listarHistorialPaginado(
+            @RequestParam(value = "estado", defaultValue = "TODOS") String estado,
+            @RequestParam(value = "fecha", required = false) String fechaStr,
+            @RequestParam(value = "page", defaultValue = "0") int page,
+            @RequestParam(value = "size", defaultValue = "15") int size) {
+
+        LocalDateTime inicio = null;
+        LocalDateTime fin = null;
+
+        if (fechaStr != null && !fechaStr.isBlank()) {
+            LocalDate f = LocalDate.parse(fechaStr.trim());
+            inicio = f.atStartOfDay();
+            fin = f.atTime(LocalTime.MAX);
+        }
+
+        org.springframework.data.domain.Pageable pageable = 
+                org.springframework.data.domain.PageRequest.of(page, size);
+
+        return ResponseEntity.ok(historialRepo.buscarHistorialPaginado(estado, inicio, fin, pageable));
     }
 
     @GetMapping("/fichajes")

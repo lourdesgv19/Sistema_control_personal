@@ -13,8 +13,10 @@ import org.springframework.web.bind.annotation.*;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 @RestController
 @RequestMapping("/api/dispositivo")
@@ -68,11 +70,25 @@ public class DispositivoImportacionController {
         return ResponseEntity.ok(historialRepo.findAllByOrderByFechaImportacionDesc());
     }
 
-    // Padrón de marcaciones filtrado por fecha del día
+    @GetMapping("/ultimo-registro-resumen")
+    public ResponseEntity<Map<String, Object>> obtenerUltimoRegistroResumen() {
+        Optional<EmpleadoFichaje> ultimoFichaje = fichajeRepo.findFirstByActivoTrueOrderByHoraFichajeDesc();
+        Optional<ImportacionHistorial> ultimaImportacion = historialRepo.findFirstByActivoTrueOrderByFechaImportacionDesc();
+
+        Map<String, Object> respuesta = new HashMap<>();
+        respuesta.put("ultimoFichaje", ultimoFichaje.orElse(null));
+        respuesta.put("ultimaImportacion", ultimaImportacion.orElse(null));
+
+        return ResponseEntity.ok(respuesta);
+    }
+
+    // Endpoint del día con soporte para paginación (Pageable)
     @GetMapping("/fichajes/dia")
-    public ResponseEntity<List<EmpleadoFichaje>> listarFichajesDelDia(
+    public ResponseEntity<org.springframework.data.domain.Page<EmpleadoFichaje>> listarFichajesDelDiaPaginado(
             @RequestParam(value = "fecha", required = false) String fechaStr,
-            @RequestParam(value = "q", required = false) String q) {
+            @RequestParam(value = "q", required = false) String q,
+            @RequestParam(value = "page", defaultValue = "0") int page,
+            @RequestParam(value = "size", defaultValue = "15") int size) {
 
         LocalDate fecha = (fechaStr != null && !fechaStr.isBlank())
                 ? LocalDate.parse(fechaStr.trim())
@@ -81,6 +97,12 @@ public class DispositivoImportacionController {
         LocalDateTime inicio = fecha.atStartOfDay();
         LocalDateTime fin = fecha.atTime(LocalTime.MAX);
 
-        return ResponseEntity.ok(fichajeRepo.findFichajesPorRangoYBusqueda(inicio, fin, q != null ? q.trim() : ""));
+        org.springframework.data.domain.Pageable pageable = 
+                org.springframework.data.domain.PageRequest.of(page, size);
+
+        return ResponseEntity.ok(fichajeRepo.findFichajesPorRangoYBusquedaPaginado(
+                inicio, fin, q != null ? q.trim() : "", pageable
+        ));
     }
+
 }
