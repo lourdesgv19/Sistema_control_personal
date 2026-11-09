@@ -2,7 +2,6 @@ import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
   Calendar,
   Search,
-  Users,
   LogOut,
   Clock,
   TrendingDown,
@@ -14,8 +13,6 @@ import {
   GraduationCap,
   Briefcase,
   Wrench,
-  ChevronLeft,
-  ChevronRight,
   Lock,
   ArrowRight,
 } from "lucide-react";
@@ -24,6 +21,7 @@ import {
   resolverIncidente,
 } from "../services/incidenteService";
 import ModalJustificarIncidente from "../components/incidentes/ModalJustificarIncidente";
+import PaginadorTabla from "../components/comunes/PaginadorTabla";
 import { useAuth } from "../context/AuthContext";
 import { useLocation } from "react-router-dom";
 import {
@@ -308,7 +306,7 @@ export default function TableroIncidentesDiarios() {
 
   return (
     <div className="p-3.5 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-4 sm:space-y-6 font-sans">
-      {/* 1. CABECERA CON FILTROS Y BOTÓN ACTUALIZAR EN LÍNEA */}
+      {/* 1. CABECERA CON FILTROS Y BOTÓN ACTUALIZAR */}
       <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2.5 sm:gap-3 flex-wrap">
@@ -1199,79 +1197,15 @@ export default function TableroIncidentesDiarios() {
           </table>
         </div>
 
-        {/* 5. PAGINACIÓN RESPONSIVE BLINDADA */}
-        <div className="bg-white px-4 sm:px-6 py-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
-          <div className="text-slate-500 text-center sm:text-left">
-            {Math.max(Number(totalElementos) || 0, incidentes.length) === 0 ? (
-              <span>
-                Mostrando <span className="font-bold text-slate-800">0</span> de{" "}
-                <span className="font-bold text-slate-800">0</span> incidentes
-              </span>
-            ) : (
-              <span>
-                Mostrando{" "}
-                <span className="font-bold text-slate-800">
-                  {(Math.max(1, Number(paginaActual) || 1) - 1) *
-                    ITEMS_POR_PAGINA +
-                    1}
-                </span>{" "}
-                a{" "}
-                <span className="font-bold text-slate-800">
-                  {Math.min(
-                    Math.max(1, Number(paginaActual) || 1) * ITEMS_POR_PAGINA,
-                    Math.max(Number(totalElementos) || 0, incidentes.length),
-                  )}
-                </span>{" "}
-                de{" "}
-                <span className="font-bold text-slate-800">
-                  {Math.max(Number(totalElementos) || 0, incidentes.length)}
-                </span>{" "}
-                incidentes
-              </span>
-            )}
-          </div>
-
-          <div className="flex items-center gap-1.5 flex-wrap justify-center">
-            <button
-              type="button"
-              onClick={() => handleCambiarPagina(Number(paginaActual) - 1)}
-              disabled={Number(paginaActual) <= 1 || loading}
-              className="p-2 border border-slate-200 rounded-xl hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer"
-              title="Página Anterior"
-            >
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-
-            {Array.from(
-              { length: Math.max(1, Number(totalPaginas) || 1) },
-              (_, i) => i + 1,
-            ).map((num) => (
-              <button
-                type="button"
-                key={num}
-                onClick={() => handleCambiarPagina(num)}
-                disabled={loading}
-                className={`w-8 h-8 rounded-xl font-bold transition cursor-pointer ${
-                  (Number(paginaActual) || 1) === num
-                    ? "bg-[#4b35e6] text-white shadow-xs"
-                    : "border border-slate-200 text-slate-600 hover:bg-slate-50"
-                }`}
-              >
-                {num}
-              </button>
-            ))}
-
-            <button
-              type="button"
-              onClick={() => handleCambiarPagina(Number(paginaActual) + 1)}
-              disabled={Number(paginaActual) >= Number(totalPaginas) || loading}
-              className="p-2 border border-slate-200 rounded-xl hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer"
-              title="Página Siguiente"
-            >
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
+        {/* 5. CONTROL DE PAGINACIÓN MODULARIZADO */}
+        <PaginadorTabla
+          paginaActual={paginaActual}
+          totalPaginas={totalPaginas}
+          totalElementos={totalElementos}
+          itemsPorPagina={ITEMS_POR_PAGINA}
+          onCambiarPagina={handleCambiarPagina}
+          etiqueta="incidentes"
+        />
       </div>
 
       <ModalJustificarIncidente

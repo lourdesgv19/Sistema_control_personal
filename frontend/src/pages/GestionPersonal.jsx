@@ -19,8 +19,6 @@ import {
   RotateCcw,
   Calendar,
   Loader2,
-  ChevronLeft,
-  ChevronRight,
   Lock,
   AlertCircle,
   ArrowRight,
@@ -47,6 +45,7 @@ import ModalAlerta from "../components/comunes/ModalAlerta";
 import ModalRegistroEmpleado from "../components/personal/ModalRegistroEmpleado";
 import ModalDetalleCronograma from "../components/personal/ModalDetalleCronograma";
 import ModalAsignarTurno from "../components/personal/ModalAsignarTurno";
+import PaginadorTabla from "../components/comunes/PaginadorTabla";
 import { useAuth } from "../context/AuthContext";
 
 const FORM_EMP_INICIAL = {
@@ -238,7 +237,6 @@ export default function GestionPersonal() {
     }
   }, []);
 
-  // Carga paginada en servidor compatible con DTO (res.page) y res directo
   const cargarEmpleadosServidor = useCallback(
     async (
       page = 0,
@@ -313,7 +311,6 @@ export default function GestionPersonal() {
     [filterCategoria, filterEstado, searchTerm],
   );
 
-  // Cambio de página imperativo
   const handleCambiarPagina = (nuevaPagina) => {
     const pag = Math.max(1, Math.min(nuevaPagina, totalPaginas));
     setPaginaActual(pag);
@@ -325,7 +322,6 @@ export default function GestionPersonal() {
     cargarResumenGlobal();
   }, [cargarCatalogos, cargarResumenGlobal]);
 
-  // Debounce para filtros y búsqueda (resetea siempre a página 1)
   useEffect(() => {
     const timer = setTimeout(() => {
       setPaginaActual(1);
@@ -334,7 +330,6 @@ export default function GestionPersonal() {
     return () => clearTimeout(timer);
   }, [searchTerm, filterCategoria, filterEstado, cargarEmpleadosServidor]);
 
-  // Recarga reactiva en eventos de sincronización
   useEffect(() => {
     let timerSync = null;
 
@@ -1525,79 +1520,15 @@ export default function GestionPersonal() {
           </table>
         </div>
 
-        {/* Paginador Adaptable Blindado */}
-        <div className="bg-white px-4 sm:px-6 py-3.5 sm:py-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
-          <div className="text-slate-500 text-center sm:text-left">
-            {Math.max(Number(totalElementos) || 0, empleados.length) === 0 ? (
-              <span>
-                Mostrando <span className="font-bold text-slate-800">0</span> de{" "}
-                <span className="font-bold text-slate-800">0</span> empleados
-              </span>
-            ) : (
-              <span>
-                Mostrando{" "}
-                <span className="font-bold text-slate-800">
-                  {(Math.max(1, Number(paginaActual) || 1) - 1) *
-                    ITEMS_POR_PAGINA +
-                    1}
-                </span>{" "}
-                a{" "}
-                <span className="font-bold text-slate-800">
-                  {Math.min(
-                    Math.max(1, Number(paginaActual) || 1) * ITEMS_POR_PAGINA,
-                    Math.max(Number(totalElementos) || 0, empleados.length),
-                  )}
-                </span>{" "}
-                de{" "}
-                <span className="font-bold text-slate-800">
-                  {Math.max(Number(totalElementos) || 0, empleados.length)}
-                </span>{" "}
-                empleados
-              </span>
-            )}
-          </div>
-
-          <div className="flex items-center gap-1 sm:gap-1.5 flex-wrap justify-center">
-            <button
-              type="button"
-              onClick={() => handleCambiarPagina(Number(paginaActual) - 1)}
-              disabled={Number(paginaActual) <= 1 || loading}
-              className="p-1.5 sm:p-2 border border-slate-200 rounded-xl hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer"
-              title="Página Anterior"
-            >
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-
-            {Array.from(
-              { length: Math.max(1, Number(totalPaginas) || 1) },
-              (_, i) => i + 1,
-            ).map((num) => (
-              <button
-                key={num}
-                type="button"
-                onClick={() => handleCambiarPagina(num)}
-                disabled={loading}
-                className={`w-7 h-7 sm:w-8 sm:h-8 rounded-xl font-bold text-xs transition cursor-pointer ${
-                  (Number(paginaActual) || 1) === num
-                    ? "bg-[#4b35e6] text-white shadow-xs"
-                    : "border border-slate-200 text-slate-600 hover:bg-slate-50"
-                }`}
-              >
-                {num}
-              </button>
-            ))}
-
-            <button
-              type="button"
-              onClick={() => handleCambiarPagina(Number(paginaActual) + 1)}
-              disabled={Number(paginaActual) >= Number(totalPaginas) || loading}
-              className="p-1.5 sm:p-2 border border-slate-200 rounded-xl hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer"
-              title="Página Siguiente"
-            >
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
+        {/* Paginador Modularizado */}
+        <PaginadorTabla
+          paginaActual={paginaActual}
+          totalPaginas={totalPaginas}
+          totalElementos={totalElementos}
+          itemsPorPagina={ITEMS_POR_PAGINA}
+          onCambiarPagina={handleCambiarPagina}
+          etiqueta="empleados"
+        />
       </div>
 
       {/* Modales */}

@@ -9,8 +9,6 @@ import {
   Lock,
   BookOpen,
   Briefcase,
-  ChevronLeft,
-  ChevronRight,
   Filter,
   ArrowRight,
   User,
@@ -27,6 +25,7 @@ import { getCategorias, getHorarios } from "../services/configuracionService";
 import ModalAlerta from "../components/comunes/ModalAlerta";
 import ModalDetalleCronograma from "../components/personal/ModalDetalleCronograma";
 import ModalAsignarTurno from "../components/personal/ModalAsignarTurno";
+import PaginadorTabla from "../components/comunes/PaginadorTabla";
 import { useAuth } from "../context/AuthContext";
 
 import {
@@ -857,73 +856,15 @@ export default function GestionHorarios() {
           </>
         )}
 
-        {/* Paginador Local Blindado */}
-        <div className="bg-white px-4 sm:px-6 py-3.5 sm:py-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
-          <div className="text-slate-500 text-center sm:text-left">
-            {empleadosFiltrados.length === 0 ? (
-              <span>Mostrando 0 de 0 empleados</span>
-            ) : (
-              <span>
-                Mostrando{" "}
-                <span className="font-bold text-slate-800">
-                  {(paginaActual - 1) * ITEMS_POR_PAGINA + 1}
-                </span>{" "}
-                a{" "}
-                <span className="font-bold text-slate-800">
-                  {Math.min(
-                    paginaActual * ITEMS_POR_PAGINA,
-                    empleadosFiltrados.length,
-                  )}
-                </span>{" "}
-                de{" "}
-                <span className="font-bold text-slate-800">
-                  {empleadosFiltrados.length}
-                </span>{" "}
-                empleados
-              </span>
-            )}
-          </div>
-
-          <div className="flex items-center gap-1.5">
-            <button
-              type="button"
-              onClick={() => setPaginaActual((p) => Math.max(p - 1, 1))}
-              disabled={paginaActual <= 1 || loading}
-              className="p-2 border border-slate-200 rounded-xl hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer"
-            >
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-
-            {Array.from({ length: totalPaginas }, (_, i) => i + 1).map(
-              (num) => (
-                <button
-                  type="button"
-                  key={num}
-                  onClick={() => setPaginaActual(num)}
-                  disabled={loading}
-                  className={`w-8 h-8 rounded-xl font-bold transition cursor-pointer ${
-                    paginaActual === num
-                      ? "bg-[#4338ca] text-white shadow-xs"
-                      : "border border-slate-200 text-slate-600 hover:bg-slate-50"
-                  }`}
-                >
-                  {num}
-                </button>
-              ),
-            )}
-
-            <button
-              type="button"
-              onClick={() =>
-                setPaginaActual((p) => Math.min(p + 1, totalPaginas))
-              }
-              disabled={paginaActual >= totalPaginas || loading}
-              className="p-2 border border-slate-200 rounded-xl hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer"
-            >
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
+        {/* Paginador Modularizado */}
+        <PaginadorTabla
+          paginaActual={paginaActual}
+          totalPaginas={totalPaginas}
+          totalElementos={empleadosFiltrados.length}
+          itemsPorPagina={ITEMS_POR_PAGINA}
+          onCambiarPagina={(nuevaPag) => setPaginaActual(nuevaPag)}
+          etiqueta="empleados"
+        />
       </div>
 
       <ModalDetalleCronograma

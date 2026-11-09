@@ -5,8 +5,6 @@ import {
   Filter,
   Calendar,
   RefreshCw,
-  ChevronLeft,
-  ChevronRight,
   BarChart2,
   Users,
   Activity,
@@ -20,6 +18,7 @@ import {
   getAuditoriaMetricas,
 } from "../services/seguridadService";
 import SelectorAccionFiltro from "../components/comunes/SelectorAccionFiltro";
+import PaginadorTabla from "../components/comunes/PaginadorTabla";
 import {
   getBadgeAccionPorModulo,
   formatearFecha24hs,
@@ -654,123 +653,15 @@ export default function PanelAuditoria() {
           </table>
         </div>
 
-        {/* 6. CONTROL DE PAGINACIÓN BLINDADO CON PUNTOS SUSPENSIVOS */}
-        <div className="bg-white px-4 sm:px-6 py-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
-          <div className="text-slate-500 text-center sm:text-left">
-            {Math.max(Number(totalElementos) || 0, logs.length) === 0 ? (
-              <span>
-                Mostrando <span className="font-bold text-slate-800">0</span> de{" "}
-                <span className="font-bold text-slate-800">0</span> movimientos
-              </span>
-            ) : (
-              <span>
-                Mostrando{" "}
-                <span className="font-bold text-slate-800">
-                  {(Math.max(1, Number(paginaActual) || 1) - 1) *
-                    ITEMS_POR_PAGINA +
-                    1}
-                </span>{" "}
-                a{" "}
-                <span className="font-bold text-slate-800">
-                  {Math.min(
-                    Math.max(1, Number(paginaActual) || 1) * ITEMS_POR_PAGINA,
-                    Math.max(Number(totalElementos) || 0, logs.length),
-                  )}
-                </span>{" "}
-                de{" "}
-                <span className="font-bold text-slate-800">
-                  {Math.max(Number(totalElementos) || 0, logs.length)}
-                </span>{" "}
-                movimientos
-              </span>
-            )}
-          </div>
-
-          <div className="flex items-center gap-1.5 flex-wrap justify-center">
-            {/* Flecha Anterior */}
-            <button
-              onClick={() => handleCambiarPagina(Number(paginaActual) - 1)}
-              disabled={Number(paginaActual) <= 1 || loading}
-              className="p-2 border border-slate-200 rounded-xl hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer"
-              title="Página Anterior"
-            >
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-
-            {/* Números y Puntos Suspensivos */}
-            {(() => {
-              const pags = [];
-              const total = Math.max(1, Number(totalPaginas) || 1);
-              const actual = Math.max(
-                1,
-                Math.min(Number(paginaActual) || 1, total),
-              );
-
-              if (total <= 5) {
-                // Pocas páginas: mostrar todas
-                for (let i = 1; i <= total; i++) pags.push(i);
-              } else {
-                // Muchas páginas: primera y última fijas, rango dinámico central
-                pags.push(1);
-
-                if (actual > 3) {
-                  pags.push("dots-prev");
-                }
-
-                const inicio = Math.max(2, actual - 1);
-                const fin = Math.min(total - 1, actual + 1);
-
-                for (let i = inicio; i <= fin; i++) {
-                  pags.push(i);
-                }
-
-                if (actual < total - 2) {
-                  pags.push("dots-next");
-                }
-
-                pags.push(total);
-              }
-
-              return pags.map((item, idx) => {
-                if (typeof item === "string") {
-                  return (
-                    <span
-                      key={`${item}-${idx}`}
-                      className="w-8 h-8 flex items-center justify-center text-slate-400 font-semibold select-none"
-                    >
-                      ...
-                    </span>
-                  );
-                }
-
-                return (
-                  <button
-                    key={item}
-                    onClick={() => handleCambiarPagina(item)}
-                    disabled={loading}
-                    className={`w-8 h-8 rounded-xl font-bold transition cursor-pointer ${
-                      actual === item
-                        ? "bg-[#4b35e6] text-white shadow-xs"
-                        : "border border-slate-200 text-slate-600 hover:bg-slate-50"
-                    }`}
-                  >
-                    {item}
-                  </button>
-                );
-              });
-            })()}
-
-            {/* Flecha Siguiente */}
-            <button
-              onClick={() => handleCambiarPagina(Number(paginaActual) + 1)}
-              disabled={Number(paginaActual) >= Number(totalPaginas) || loading}
-              className="p-2 border border-slate-200 rounded-xl hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer"
-              title="Página Siguiente"
-            >
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
+        {/* 6. CONTROL DE PAGINACIÓN MODULARIZADO */}
+        <PaginadorTabla
+          paginaActual={paginaActual}
+          totalPaginas={totalPaginas}
+          totalElementos={totalElementos}
+          itemsPorPagina={ITEMS_POR_PAGINA}
+          onCambiarPagina={handleCambiarPagina}
+          etiqueta="movimientos"
+        />
       </div>
 
       {/* 7. MODAL DETALLE COMPLETO */}

@@ -10,8 +10,6 @@ import {
   ShieldAlert,
   Loader2,
   Lock,
-  ChevronLeft,
-  ChevronRight,
 } from "lucide-react";
 import {
   getUsuariosPaginados,
@@ -24,6 +22,7 @@ import {
 import ModalAlerta from "../components/comunes/ModalAlerta";
 import ModalCrearUsuario from "../components/usuarios/ModalCrearUsuario";
 import ModalMatrizPermisos from "../components/usuarios/ModalMatrizPermisos";
+import PaginadorTabla from "../components/comunes/PaginadorTabla";
 import { useAuth } from "../context/AuthContext";
 
 const ITEMS_POR_PAGINA = 10;
@@ -129,7 +128,6 @@ export default function GestionUsuarios() {
           const lista = Array.isArray(res.content) ? res.content : [];
           setUsuarios(lista);
 
-          // Lectura universal de metadatos (Spring Data Page / DTO)
           const totalReal =
             res.page?.totalElements ??
             res.totalElements ??
@@ -170,7 +168,6 @@ export default function GestionUsuarios() {
     [searchTerm, filtroRol, filtroEstado],
   );
 
-  // Navegación imperativa directa sin debounce
   const handleCambiarPagina = (nuevaPagina) => {
     const pag = Math.max(1, Math.min(nuevaPagina, totalPaginas));
     setPaginaActual(pag);
@@ -182,7 +179,6 @@ export default function GestionUsuarios() {
     cargarEmpleadosCatalogo();
   }, [cargarResumenGlobal, cargarEmpleadosCatalogo]);
 
-  // Debounce exclusivo para filtros de búsqueda y selectores (vuelve a página 1)
   useEffect(() => {
     const timer = setTimeout(() => {
       setPaginaActual(1);
@@ -284,9 +280,6 @@ export default function GestionUsuarios() {
       },
     });
   };
-
-  const elementosTotalesNum = Number(totalElementos) || 0;
-  const paginasTotalesNum = Number(totalPaginas) || 1;
 
   return (
     <div className="p-3.5 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-4 sm:space-y-6 font-sans">
@@ -800,18 +793,18 @@ export default function GestionUsuarios() {
                               u.activo !== false ? (
                                 <button
                                   onClick={() => handleToggleEstado(u)}
-                                  className="p-1.5 hover:text-rose-600 transition cursor-pointer"
+                                  className="p-1.5 hover:text-rose-600 transition cursor-pointer text-rose-500"
                                   title="Suspender acceso"
                                 >
-                                  <XCircle className="w-4 h-4 text-rose-500" />
+                                  <XCircle className="w-5 h-5" />
                                 </button>
                               ) : (
                                 <button
                                   onClick={() => handleToggleEstado(u)}
-                                  className="p-1.5 hover:text-emerald-600 transition cursor-pointer"
+                                  className="p-1.5 hover:text-emerald-600 transition cursor-pointer text-emerald-600"
                                   title="Reactivar acceso"
                                 >
-                                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                                  <CheckCircle2 className="w-5 h-5" />
                                 </button>
                               )
                             ) : (
@@ -840,78 +833,15 @@ export default function GestionUsuarios() {
           </table>
         </div>
 
-        {/* 5. CONTROL DE PAGINACIÓN */}
-        <div className="bg-white px-4 sm:px-6 py-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
-          <div className="text-slate-500 text-center sm:text-left">
-            {Math.max(elementosTotalesNum, usuarios.length) === 0 ? (
-              <span>
-                Mostrando <span className="font-bold text-slate-800">0</span> de{" "}
-                <span className="font-bold text-slate-800">0</span> usuarios
-              </span>
-            ) : (
-              <span>
-                Mostrando{" "}
-                <span className="font-bold text-slate-800">
-                  {(Math.max(1, Number(paginaActual) || 1) - 1) *
-                    ITEMS_POR_PAGINA +
-                    1}
-                </span>{" "}
-                a{" "}
-                <span className="font-bold text-slate-800">
-                  {Math.min(
-                    Math.max(1, Number(paginaActual) || 1) * ITEMS_POR_PAGINA,
-                    Math.max(elementosTotalesNum, usuarios.length),
-                  )}
-                </span>{" "}
-                de{" "}
-                <span className="font-bold text-slate-800">
-                  {Math.max(elementosTotalesNum, usuarios.length)}
-                </span>{" "}
-                usuarios
-              </span>
-            )}
-          </div>
-
-          <div className="flex items-center gap-1.5 flex-wrap justify-center">
-            <button
-              type="button"
-              onClick={() => handleCambiarPagina(Number(paginaActual) - 1)}
-              disabled={Number(paginaActual) <= 1 || loading}
-              className="p-2 border border-slate-200 rounded-xl hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer"
-              title="Página Anterior"
-            >
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-
-            {Array.from({ length: paginasTotalesNum }, (_, i) => i + 1).map(
-              (num) => (
-                <button
-                  type="button"
-                  key={num}
-                  onClick={() => handleCambiarPagina(num)}
-                  disabled={loading}
-                  className={`w-8 h-8 rounded-xl font-bold transition cursor-pointer ${
-                    Number(paginaActual) === num
-                      ? "bg-[#4b35e6] text-white shadow-xs"
-                      : "border border-slate-200 text-slate-600 hover:bg-slate-50"
-                  }`}
-                >
-                  {num}
-                </button>
-              ),
-            )}
-
-            <button
-              type="button"
-              onClick={() => handleCambiarPagina(Number(paginaActual) + 1)}
-              disabled={Number(paginaActual) >= paginasTotalesNum || loading}
-              className="p-2 border border-slate-200 rounded-xl hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer"
-              title="Página Siguiente"
-            >
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
+        {/* 5. CONTROL DE PAGINACIÓN MODULARIZADO */}
+        <PaginadorTabla
+          paginaActual={paginaActual}
+          totalPaginas={totalPaginas}
+          totalElementos={totalElementos}
+          itemsPorPagina={ITEMS_POR_PAGINA}
+          onCambiarPagina={handleCambiarPagina}
+          etiqueta="usuarios"
+        />
       </div>
 
       <ModalCrearUsuario
