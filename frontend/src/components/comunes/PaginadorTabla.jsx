@@ -1,5 +1,10 @@
 import React, { useMemo } from "react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
+} from "lucide-react";
 
 export default function PaginadorTabla({
   paginaActual = 1,
@@ -54,7 +59,20 @@ export default function PaginadorTabla({
         {etiqueta}
       </div>
 
-      <div className="flex items-center gap-1.5">
+      <div className="flex items-center gap-1 sm:gap-1.5">
+        {/* Flecha Doble: Ir a la Primera Página */}
+        {totalPags > 3 && (
+          <button
+            type="button"
+            onClick={() => onCambiarPagina(1)}
+            disabled={pagActual <= 1}
+            className="p-1.5 sm:p-2 border border-slate-200 rounded-xl hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer text-slate-600"
+            title="Primera Página"
+          >
+            <ChevronsLeft className="w-4 h-4" />
+          </button>
+        )}
+
         {/* Flecha Anterior (retrocede de a 1) */}
         <button
           type="button"
@@ -106,6 +124,19 @@ export default function PaginadorTabla({
         >
           <ChevronRight className="w-4 h-4" />
         </button>
+
+        {/* Flecha Doble: Ir a la Última Página */}
+        {totalPags > 3 && (
+          <button
+            type="button"
+            onClick={() => onCambiarPagina(totalPags)}
+            disabled={pagActual >= totalPags}
+            className="p-1.5 sm:p-2 border border-slate-200 rounded-xl hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer text-slate-600"
+            title="Última Página"
+          >
+            <ChevronsRight className="w-4 h-4" />
+          </button>
+        )}
       </div>
     </div>
   );
