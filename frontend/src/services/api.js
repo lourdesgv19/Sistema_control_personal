@@ -7,6 +7,30 @@ const api = axios.create({
   },
 });
 
+// Genera una clave única por endpoint y sus parámetros de consulta
+const generarClaveCache = (config) => {
+  const url = config.url || "";
+  const params = config.params ? JSON.stringify(config.params) : "";
+  return `swr_cache:${url}|${params}`;
+};
+
+// Limpia entradas viejas si localStorage alcanza su límite de espacio
+const guardarEnCacheSegura = (clave, data) => {
+  try {
+    localStorage.setItem(
+      clave,
+      JSON.stringify({
+        timestamp: Date.now(),
+        data,
+      }),
+    );
+  } catch (e) {
+    Object.keys(localStorage)
+      .filter((k) => k.startsWith("swr_cache:"))
+      .forEach((k) => localStorage.removeItem(k));
+  }
+};
+
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem("token");
@@ -20,25 +44,65 @@ api.interceptors.request.use(
 
 api.interceptors.response.use(
   (response) => {
-    // Si la llamada fue exitosa, notificamos que el servidor está online
+    // Notificamos que el servidor está online
     window.dispatchEvent(
       new CustomEvent("servidor:estado", { detail: { ok: true } }),
     );
+
+    // Guardamos copia de respaldo para peticiones GET (salvo que se pida omitir caché)
+    const esGet = response.config?.method?.toLowerCase() === "get";
+    const omitirCache = response.config?.skipCache === true;
+
+    if (esGet && !omitirCache && response.data !== undefined) {
+      const clave = generarClaveCache(response.config);
+      guardarEnCacheSegura(clave, response.data);
+    }
+
     return response;
   },
   (error) => {
     const originalRequest = error.config;
     const url = originalRequest?.url || "";
 
-    // Notificación inmediata si el backend no responde o hay error de red
-    if (
+    const esCaidaServidor =
       !error.response ||
       error.code === "ERR_NETWORK" ||
-      error.message === "Network Error"
-    ) {
+      error.message === "Network Error";
+
+    // Notificación inmediata si el backend no responde o hay error de red
+    if (esCaidaServidor) {
       window.dispatchEvent(
         new CustomEvent("servidor:estado", { detail: { ok: false } }),
       );
+
+      // Si es una lectura (GET) y el servidor está caído, devolvemos los últimos datos cacheados
+      const esGet = originalRequest?.method?.toLowerCase() === "get";
+      const omitirCache = originalRequest?.skipCache === true;
+
+      if (esGet && !omitirCache) {
+        const clave = generarClaveCache(originalRequest);
+        const guardado = localStorage.getItem(clave);
+
+        if (guardado) {
+          try {
+            const { data } = JSON.parse(guardado);
+            console.warn(
+              `📦 [MODO OFFLINE] Mostrando últimos datos guardados para: ${url}`,
+            );
+
+            return Promise.resolve({
+              data,
+              status: 200,
+              statusText: "OK (Offline Cache)",
+              headers: {},
+              config: originalRequest,
+              fromCache: true,
+            });
+          } catch {
+            localStorage.removeItem(clave);
+          }
+        }
+      }
     }
 
     const esRutaLogin =
@@ -50,6 +114,10 @@ api.interceptors.response.use(
       console.warn("⚠️ Token expirado o sesión inválida.");
       localStorage.removeItem("token");
       localStorage.removeItem("user");
+      // Limpiamos también la caché de datos privados al cerrar sesión por seguridad
+      Object.keys(localStorage)
+        .filter((k) => k.startsWith("swr_cache:"))
+        .forEach((k) => localStorage.removeItem(k));
       window.dispatchEvent(new CustomEvent("auth:logout"));
     }
 
