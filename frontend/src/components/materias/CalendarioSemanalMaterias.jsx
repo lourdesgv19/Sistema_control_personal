@@ -22,7 +22,10 @@ const DIAS_OPCIONES = [
   { id: 6, label: "Sáb" },
 ];
 
-export default function CalendarioSemanalMaterias({ onEditarMateriaParam }) {
+export default function CalendarioSemanalMaterias({
+  onEditarMateriaParam,
+  onCambioSemana,
+}) {
   const [fechaLunes, setFechaLunes] = useState(() => {
     const d = new Date();
     const day = d.getDay();
@@ -85,6 +88,12 @@ export default function CalendarioSemanalMaterias({ onEditarMateriaParam }) {
   useEffect(() => {
     cargarDatos();
   }, [cargarDatos]);
+
+  useEffect(() => {
+    if (onCambioSemana && fechaLunes) {
+      onCambioSemana(fechaLunes);
+    }
+  }, [fechaLunes, onCambioSemana]);
 
   const textoRangoSemana = () => {
     if (!datosCalendario?.fechaInicioSemana) return "Cargando semana...";

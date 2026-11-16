@@ -38,7 +38,7 @@ public class HorarioController {
 
     @GetMapping("/empleado/{empleadoId}")
     public ResponseEntity<List<EmpleadoHorario>> listarHorariosPorEmpleado(@PathVariable Long empleadoId) {
-        return ResponseEntity.ok(horarioService.listarHorariosEmpleado(empleadoId));
+        return ResponseEntity.ok(horarioService.listarHorariosActivosEmpleado(empleadoId));
     }
 
     public record AsignarHorarioRequest(

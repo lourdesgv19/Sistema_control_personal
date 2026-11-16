@@ -81,7 +81,7 @@ export default function GestionMaterias() {
   const [modalMateria, setModalMateria] = useState(false);
   const [materiaAEditar, setMateriaAEditar] = useState(null);
 
-  const [fechaLunes] = useState(() => {
+  const [fechaLunes, setFechaLunes] = useState(() => {
     const d = new Date();
     const day = d.getDay();
     const diff = d.getDate() - day + (day === 0 ? -6 : 1);
@@ -444,6 +444,12 @@ export default function GestionMaterias() {
       {/* CONTENIDO PRINCIPAL */}
       {tab === "calendario" && puedeVerCalendario && (
         <CalendarioSemanalMaterias
+          fechaLunes={fechaLunes}
+          onCambioSemana={(nuevaFechaLunes) => {
+            if (nuevaFechaLunes && nuevaFechaLunes !== fechaLunes) {
+              setFechaLunes(nuevaFechaLunes);
+            }
+          }}
           onEditarMateriaParam={(clase) => {
             if (!puedeEditarMateria && !puedeGestionarDocentes) return;
             setMateriaAEditar({

@@ -165,21 +165,30 @@ public class MateriaService {
         }
     }
 
-    @Transactional(readOnly = true)
-    public ResumenMetricas obtenerResumenSemanal(LocalDate fechaInicio, LocalDate fechaFin) {
-        RespuestaCalendarioDTO calendario = calendarioService.obtenerCalendarioSemanal(fechaInicio, null, null, null);
+@Transactional(readOnly = true)
+public ResumenMetricas obtenerResumenSemanal(LocalDate fechaInicio, LocalDate fechaFin) {
+    RespuestaCalendarioDTO calendario = calendarioService.obtenerCalendarioSemanal(fechaInicio, null, null, null);
+    LocalDate hoy = LocalDate.now();
 
-        double horasDictadas = 0.0;
-        double horasFijadas = 0.0;
-        long completas = 0;
-        long desvios = 0;
-        long faltas = 0;
+    double horasDictadas = 0.0;
+    double horasFijadas = 0.0;
+    long completas = 0;
+    long desvios = 0;
+    long faltas = 0;
 
-        for (var dia : calendario.dias()) {
-            for (BloqueClaseDTO clase : dia.clases()) {
-                horasFijadas += clase.horasProgramadas();
-                horasDictadas += clase.horasEfectivas();
+    for (var dia : calendario.dias()) {
+        boolean esDiaPasadoOHoy = !dia.fecha().isAfter(hoy);
 
+        for (BloqueClaseDTO clase : dia.clases()) {
+            // Ignorar cátedras vacantes sin docente asignado
+            if (clase.idDocente() == null) {
+                continue;
+            }
+
+            horasFijadas += clase.horasProgramadas();
+            horasDictadas += clase.horasEfectivas();
+
+            if (esDiaPasadoOHoy) {
                 switch (clase.estadoSemaforo()) {
                     case "VERDE" -> completas++;
                     case "AMBAR" -> desvios++;
@@ -188,20 +197,21 @@ public class MateriaService {
                 }
             }
         }
-
-        double cumplimiento = horasFijadas > 0 
-                ? Math.round((horasDictadas / horasFijadas) * 100.0) 
-                : 0.0;
-
-        return new ResumenMetricas(
-            Math.round(horasDictadas * 10.0) / 10.0,
-            Math.round(horasFijadas * 10.0) / 10.0,
-            cumplimiento,
-            completas,
-            desvios,
-            faltas
-        );
     }
+
+    double cumplimiento = horasFijadas > 0
+            ? Math.round((horasDictadas / horasFijadas) * 100.0)
+            : 0.0;
+
+    return new ResumenMetricas(
+        Math.round(horasDictadas * 10.0) / 10.0,
+        Math.round(horasFijadas * 10.0) / 10.0,
+        cumplimiento,
+        completas,
+        desvios,
+        faltas
+    );
+}
 
     @Transactional(readOnly = true)
     public ImpactoBajaMateriaDTO obtenerImpactoBajaMateria(Long idMateria) {

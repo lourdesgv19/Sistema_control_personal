@@ -27,7 +27,8 @@ import {
   guardarVinculaciones,
 } from "../services/importacionService";
 import {
-  getEmpleadosPaginados,
+  getEmpleadosActivos,
+  invalidarCacheEmpleados,
   createEmpleado,
 } from "../services/empleadoService";
 import { getCategorias, getCargos } from "../services/configuracionService";
@@ -174,11 +175,11 @@ export default function ImportacionFichajes() {
     }
   }, []);
 
-  const cargarCatalogos = useCallback(async () => {
+  const cargarCatalogos = useCallback(async (forzar = false) => {
     setLoading(true);
     try {
       const [empRes, sinVincRes, catRes, cargoRes] = await Promise.allSettled([
-        getEmpleadosPaginados({ page: 0, size: 1000 }),
+        getEmpleadosActivos(forzar),
         getSinVincularCount(),
         getCategorias(),
         getCargos(),
@@ -607,8 +608,12 @@ export default function ImportacionFichajes() {
     e.preventDefault();
     try {
       const nuevo = await createEmpleado(formEmpleado);
-      cargarCatalogos();
+
+      invalidarCacheEmpleados();
+      setEmpleados((prev) => [...prev, nuevo]);
       handleCambiarEmpleadoAsignado(formEmpleado.idBiometrico, nuevo.id);
+      await cargarCatalogos(true);
+
       setModalRegistro(false);
       setFormEmpleado(ESTADO_INICIAL_EMPLEADO);
       mostrarAviso(
@@ -689,10 +694,10 @@ export default function ImportacionFichajes() {
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
               <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                Último Fichaje en Sistema (empleado_fichajes)
+                Último Fichaje en Sistema
               </span>
               <span className="inline-flex items-center px-1.5 py-0.2 rounded text-[9px] font-bold uppercase bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
-                Marcación
+                Lector
               </span>
             </div>
             <div className="text-xs sm:text-sm font-black font-mono tracking-tight text-white mt-0.5">
@@ -736,7 +741,7 @@ export default function ImportacionFichajes() {
                 Última Importación / Sincronización
               </span>
               <span className="inline-flex items-center px-1.5 py-0.2 rounded text-[9px] font-bold uppercase bg-indigo-500/20 text-indigo-300 border border-indigo-400/30">
-                Lote
+                Subidos
               </span>
             </div>
             <div className="text-xs sm:text-sm font-black font-mono tracking-tight text-white mt-0.5">

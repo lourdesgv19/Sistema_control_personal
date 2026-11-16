@@ -74,6 +74,15 @@ public class HorarioService {
         return horarioRepo.findByEmpleadoId(empleadoId);
     }
 
+    @Transactional(readOnly = true)
+    public List<EmpleadoHorario> listarHorariosActivosEmpleado(Long empleadoId) {
+    LocalDateTime ahora = LocalDateTime.now();
+    return horarioRepo.findByEmpleadoId(empleadoId).stream()
+            .filter(h -> Boolean.TRUE.equals(h.getActivo()))
+            .filter(h -> h.getFechaBaja() == null || !h.getFechaBaja().isBefore(ahora))
+            .toList();
+    }
+
     @Transactional
     public List<EmpleadoHorario> agregarHorariosMultiples(Long empleadoId,
                                                          List<Integer> diasSemana,
