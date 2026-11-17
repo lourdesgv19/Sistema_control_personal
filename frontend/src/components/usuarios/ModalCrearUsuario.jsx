@@ -1,26 +1,30 @@
-import React, { useState, useMemo } from "react";
-import { X, ShieldCheck, UserCheck, KeyRound } from "lucide-react";
+import React, { useState, useMemo, useEffect } from "react";
+import {
+  X,
+  ShieldCheck,
+  UserCheck,
+  KeyRound,
+  SlidersHorizontal,
+} from "lucide-react";
 
 const ROLES_SISTEMA = [
   {
     id: "ADMINISTRADOR",
     nombre: "Administrador General",
     descripcion:
-      "Acceso total: configuración, personal, fichajes, reportes y usuarios.",
-    color: "border-purple-200 bg-purple-50 text-purple-800",
+      "Acceso total: configuración, personal, horarios, fichajes, reportes y usuarios.",
   },
   {
     id: "AUDITOR",
     nombre: "Auditor",
     descripcion:
-      "Control y auditoría de fichajes, gestión de horarios, e informes.",
-    color: "border-indigo-200 bg-indigo-50 text-indigo-800",
+      "Plantilla base de lectura operativa y justificación de incidentes (ajustable en la matriz).",
   },
   {
-    id: "CONSULTA",
-    nombre: "Consulta / Visualizador",
-    descripcion: "Acceso de solo lectura a su propia ficha y cronograma.",
-    color: "border-slate-200 bg-slate-50 text-slate-800",
+    id: "PERSONALIZADO",
+    nombre: "Personalizado (A medida)",
+    descripcion:
+      "Inicia sin permisos preasignados y abre la matriz para elegir facultades puntuales o temporales.",
   },
 ];
 
@@ -33,6 +37,16 @@ export default function ModalCrearUsuario({
   const [empleadoId, setEmpleadoId] = useState("");
   const [username, setUsername] = useState("");
   const [rol, setRol] = useState("AUDITOR");
+  const [enviando, setEnviando] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      setEmpleadoId("");
+      setUsername("");
+      setRol("AUDITOR");
+      setEnviando(false);
+    }
+  }, [isOpen]);
 
   const empleadoSeleccionado = useMemo(() => {
     return empleadosSinUsuario.find((e) => String(e.id) === String(empleadoId));
@@ -53,14 +67,19 @@ export default function ModalCrearUsuario({
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!empleadoId) return;
-    onSubmit({
-      empleadoId: parseInt(empleadoId, 10),
-      username: username.trim() || undefined,
-      rol,
-    });
+    if (!empleadoId || enviando) return;
+    setEnviando(true);
+    try {
+      await onSubmit({
+        empleadoId: parseInt(empleadoId, 10),
+        username: username.trim() || undefined,
+        rol,
+      });
+    } finally {
+      setEnviando(false);
+    }
   };
 
   return (
@@ -81,7 +100,7 @@ export default function ModalCrearUsuario({
             <div>
               <h3 className="font-bold text-sm">Habilitar Acceso al Sistema</h3>
               <p className="text-[11px] text-slate-400">
-                Cree un usuario y asigne permisos operativos.
+                Elija una plantilla base o configure permisos a medida.
               </p>
             </div>
           </div>
@@ -147,7 +166,7 @@ export default function ModalCrearUsuario({
           {/* Selector de Roles y Permisos */}
           <div>
             <label className="block font-semibold text-slate-700 mb-2">
-              Rol y Nivel de Permisos *
+              Perfil de Acceso Inicial *
             </label>
             <div className="space-y-2">
               {ROLES_SISTEMA.map((r) => (
@@ -167,8 +186,13 @@ export default function ModalCrearUsuario({
                     onChange={() => setRol(r.id)}
                     className="mt-0.5 text-indigo-600 focus:ring-indigo-500"
                   />
-                  <div>
-                    <div className="font-bold text-slate-900">{r.nombre}</div>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-1.5 font-bold text-slate-900">
+                      <span>{r.nombre}</span>
+                      {r.id === "PERSONALIZADO" && (
+                        <SlidersHorizontal className="w-3.5 h-3.5 text-indigo-600" />
+                      )}
+                    </div>
                     <div className="text-[11px] text-slate-500 mt-0.5 leading-snug">
                       {r.descripcion}
                     </div>
@@ -208,11 +232,17 @@ export default function ModalCrearUsuario({
             </button>
             <button
               type="submit"
-              disabled={!empleadoId}
+              disabled={!empleadoId || enviando}
               className="px-5 py-2 font-semibold text-white bg-[#4b35e6] hover:bg-[#3e2bc0] disabled:opacity-50 disabled:cursor-not-allowed rounded-xl shadow-md cursor-pointer flex items-center justify-center gap-1.5"
             >
               <UserCheck className="w-4 h-4" />
-              Habilitar Usuario
+              {enviando
+                ? "Creando cuenta..."
+                : rol === "ADMINISTRADOR"
+                  ? "Habilitar Administrador"
+                  : rol === "PERSONALIZADO"
+                    ? "Crear y Elegir Permisos"
+                    : "Crear y Ajustar Permisos"}
             </button>
           </div>
         </form>

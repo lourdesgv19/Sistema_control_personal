@@ -229,7 +229,7 @@ export default function ModalPrimerCambioPassword({
             ) : (
               <>
                 <ShieldCheck className="w-4 h-4 stroke-[2.5]" />
-                <span>Establecer Nueva Contraseña y Entrar</span>
+                <span>Establecer Nueva Contraseña</span>
               </>
             )}
           </button>

@@ -194,18 +194,27 @@ export default function GestionUsuarios() {
   const handleCrearUsuario = async (payload) => {
     if (!puedeGestionarAccesos) return;
     try {
-      await createUsuario(payload);
+      const nuevoUsuarioCreado = await createUsuario(payload);
       setModalCrear(false);
+
       await Promise.all([
-        cargarUsuariosServidor(paginaActual - 1),
+        cargarUsuariosServidor(0),
         cargarResumenGlobal(),
         cargarEmpleadosCatalogo(),
       ]);
-      mostrarAviso(
-        "success",
-        "Usuario Habilitado",
-        "El acceso fue creado con éxito y su contraseña predeterminada fue generada.",
-      );
+
+      if (payload.rol === "ADMINISTRADOR") {
+        mostrarAviso(
+          "success",
+          "Administrador Habilitado",
+          "El acceso fue creado con control total y su contraseña predeterminada fue generada.",
+        );
+      } else {
+        setModalPermisos({
+          isOpen: true,
+          usuario: nuevoUsuarioCreado,
+        });
+      }
     } catch (err) {
       mostrarAviso(
         "danger",
@@ -279,6 +288,19 @@ export default function GestionUsuarios() {
         }
       },
     });
+  };
+
+  const obtenerBadgeRol = (rol) => {
+    if (rol === "ADMINISTRADOR" || rol === "ADMIN") {
+      return "bg-purple-50 text-purple-700 border-purple-200";
+    }
+    if (rol === "AUDITOR" || rol === "RECURSOS_HUMANOS") {
+      return "bg-indigo-50 text-indigo-700 border-indigo-200";
+    }
+    if (rol === "PERSONALIZADO") {
+      return "bg-teal-50 text-teal-700 border-teal-200";
+    }
+    return "bg-slate-100 text-slate-700 border-slate-200";
   };
 
   return (
@@ -460,6 +482,7 @@ export default function GestionUsuarios() {
             <option value="TODOS">Todos los roles</option>
             <option value="ADMINISTRADOR">Administrador</option>
             <option value="AUDITOR">Auditores / RRHH</option>
+            <option value="PERSONALIZADO">Personalizado</option>
             <option value="CONSULTA">Consulta / Empleado</option>
           </select>
 
@@ -490,13 +513,7 @@ export default function GestionUsuarios() {
             </div>
           ) : (
             usuarios.map((u) => {
-              const badgeRol =
-                u.rol === "ADMINISTRADOR" || u.rol === "ADMIN"
-                  ? "bg-purple-50 text-purple-700 border-purple-200"
-                  : u.rol === "AUDITOR" || u.rol === "RECURSOS_HUMANOS"
-                    ? "bg-indigo-50 text-indigo-700 border-indigo-200"
-                    : "bg-slate-100 text-slate-700 border-slate-200";
-
+              const badgeRol = obtenerBadgeRol(u.rol);
               const esAdminRaiz = u.username === "admin";
               const esUsuarioActual = (u.id || u.idUsuario) === user?.idUsuario;
 
@@ -676,13 +693,7 @@ export default function GestionUsuarios() {
                 </tr>
               ) : (
                 usuarios.map((u) => {
-                  const badgeRol =
-                    u.rol === "ADMINISTRADOR" || u.rol === "ADMIN"
-                      ? "bg-purple-50 text-purple-700 border-purple-200"
-                      : u.rol === "AUDITOR" || u.rol === "RECURSOS_HUMANOS"
-                        ? "bg-indigo-50 text-indigo-700 border-indigo-200"
-                        : "bg-slate-100 text-slate-700 border-slate-200";
-
+                  const badgeRol = obtenerBadgeRol(u.rol);
                   const esAdminRaiz = u.username === "admin";
                   const esUsuarioActual =
                     (u.id || u.idUsuario) === user?.idUsuario;

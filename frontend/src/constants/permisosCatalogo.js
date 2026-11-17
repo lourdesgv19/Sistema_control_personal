@@ -214,7 +214,7 @@ export const MODULOS_PERMISOS = [
         accion: "VER",
       },
       {
-        codigo: "INCIDENTES_EDITAR",
+        codigo: "INCIDENTES_JUSTIFICAR",
         label: "Justificar y dictaminar incidentes",
         accion: "EDITAR",
         critico: true,

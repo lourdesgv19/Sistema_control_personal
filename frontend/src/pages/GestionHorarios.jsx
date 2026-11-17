@@ -3,15 +3,9 @@ import { useNavigate } from "react-router-dom";
 import {
   Calendar,
   Search,
-  Eye,
-  Sliders,
-  Loader2,
-  Lock,
   BookOpen,
   Briefcase,
   Filter,
-  ArrowRight,
-  User,
   Users,
 } from "lucide-react";
 import {
@@ -23,16 +17,15 @@ import {
 } from "../services/empleadoService";
 import { getCategorias, getHorarios } from "../services/configuracionService";
 import ModalAlerta from "../components/comunes/ModalAlerta";
-import ModalDetalleCronograma from "../components/personal/ModalDetalleCronograma";
 import ModalAsignarTurno from "../components/personal/ModalAsignarTurno";
 import PaginadorTabla from "../components/comunes/PaginadorTabla";
+import TablaEmpleadosHorarios from "../components/horarios/TablaEmpleadosHorarios";
 import { useAuth } from "../context/AuthContext";
 
 import {
   DIAS_MAP,
   MAPA_DIAS_NUMERO,
   getPestanaBgClass,
-  getBadgeColorClasses,
 } from "../utils/categoriasHorariosUtils";
 
 const ITEMS_POR_PAGINA = 12;
@@ -57,10 +50,12 @@ export default function GestionHorarios() {
   const [searchEmpleado, setSearchEmpleado] = useState("");
   const [categoriaActiva, setCategoriaActiva] = useState("TODAS");
 
-  const [modalDetalle, setModalDetalle] = useState(false);
+  // Estado del acordeón desplegable
+  const [filasExpandidas, setFilasExpandidas] = useState({});
+  const [cargandoDetalle, setCargandoDetalle] = useState({});
+  const [detallesPorEmpleado, setDetallesPorEmpleado] = useState({});
+
   const [empleadoEnModal, setEmpleadoEnModal] = useState(null);
-  const [horariosEmpleadoModal, setHorariosEmpleadoModal] = useState([]);
-  const [metricasEmpleadoModal, setMetricasEmpleadoModal] = useState(null);
 
   const hoyIso = new Date().toISOString().split("T")[0];
   const [fechaDesdeTurno, setFechaDesdeTurno] = useState(hoyIso);
@@ -123,11 +118,8 @@ export default function GestionHorarios() {
         getHorarios(),
       ]);
 
-      const emps = Array.isArray(empRes) ? empRes : [];
-      setEmpleados(emps);
-
-      const cats = Array.isArray(catRes) ? catRes : [];
-      setCategorias(cats);
+      setEmpleados(Array.isArray(empRes) ? empRes : []);
+      setCategorias(Array.isArray(catRes) ? catRes : []);
       setHorariosPreestablecidos(Array.isArray(horRes) ? horRes : []);
     } catch (err) {
       console.error("Error al cargar datos de horarios:", err);
@@ -160,6 +152,51 @@ export default function GestionHorarios() {
     };
   }, [cargarCatalogos]);
 
+  const refrescarDetalleEmpleado = useCallback(async (empId) => {
+    setCargandoDetalle((prev) => ({ ...prev, [empId]: true }));
+    try {
+      const [hRes, mRes] = await Promise.all([
+        getEmpleadoHorarios(empId),
+        getMetricasEmpleado(empId),
+      ]);
+      setDetallesPorEmpleado((prev) => ({
+        ...prev,
+        [empId]: {
+          clases: hRes || [],
+          metricas: mRes || null,
+        },
+      }));
+    } catch {
+      setDetallesPorEmpleado((prev) => ({
+        ...prev,
+        [empId]: {
+          clases: [],
+          metricas: null,
+        },
+      }));
+    } finally {
+      setCargandoDetalle((prev) => ({ ...prev, [empId]: false }));
+    }
+  }, []);
+
+  const handleToggleExpandir = async (emp) => {
+    const yaAbierto = !!filasExpandidas[emp.id];
+    setFilasExpandidas((prev) => ({
+      ...prev,
+      [emp.id]: !yaAbierto,
+    }));
+
+    if (!yaAbierto && !detallesPorEmpleado[emp.id]) {
+      await refrescarDetalleEmpleado(emp.id);
+    }
+  };
+
+  const handleIrAMaterias = (docenteId) => {
+    navigate("/materias", {
+      state: { tab: "catalogo", docenteId },
+    });
+  };
+
   const esVistaDocentePura = useMemo(() => {
     return (
       categoriaActiva.toLowerCase() === "docentes" ||
@@ -167,7 +204,6 @@ export default function GestionHorarios() {
     );
   }, [categoriaActiva]);
 
-  // Filtrado de la nómina
   const empleadosFiltrados = useMemo(() => {
     return empleados.filter((emp) => {
       const perteneceCat =
@@ -187,40 +223,21 @@ export default function GestionHorarios() {
     });
   }, [empleados, categoriaActiva, searchEmpleado]);
 
-  // Cálculo de páginas totales
   const totalPaginas = Math.max(
     1,
     Math.ceil(empleadosFiltrados.length / ITEMS_POR_PAGINA),
   );
 
-  // Autoajuste si el filtro reduce la cantidad de páginas existentes
   useEffect(() => {
     if (paginaActual > totalPaginas && totalPaginas > 0) {
       setPaginaActual(totalPaginas);
     }
   }, [totalPaginas, paginaActual]);
 
-  // Elementos recortados para la vista actual
   const empleadosPaginados = useMemo(() => {
     const inicio = (paginaActual - 1) * ITEMS_POR_PAGINA;
     return empleadosFiltrados.slice(inicio, inicio + ITEMS_POR_PAGINA);
   }, [empleadosFiltrados, paginaActual]);
-
-  const abrirCronograma = async (emp) => {
-    setEmpleadoEnModal(emp);
-    try {
-      const [hRes, mRes] = await Promise.all([
-        getEmpleadoHorarios(emp.id),
-        getMetricasEmpleado(emp.id),
-      ]);
-      setHorariosEmpleadoModal(hRes || []);
-      setMetricasEmpleadoModal(mRes);
-    } catch {
-      setHorariosEmpleadoModal([]);
-      setMetricasEmpleadoModal(null);
-    }
-    setModalDetalle(true);
-  };
 
   const abrirTurno = (emp) => {
     if (!puedeEditar && !puedeCrear) return;
@@ -242,6 +259,8 @@ export default function GestionHorarios() {
     const esForzado = typeof forzar === "boolean" ? forzar : false;
     if (!empleadoEnModal) return;
 
+    const empIdActual = empleadoEnModal.id;
+
     try {
       if (tipoAsignacionTurno === "FLEXIBLE") {
         if (!horasObjetivoTurno || horasObjetivoTurno <= 0) {
@@ -253,7 +272,7 @@ export default function GestionHorarios() {
           return;
         }
 
-        await addEmpleadoHorario(empleadoEnModal.id, {
+        await addEmpleadoHorario(empIdActual, {
           diasSemana: [],
           horaEntrada: null,
           horaSalida: null,
@@ -292,7 +311,7 @@ export default function GestionHorarios() {
               .map((d) => MAPA_DIAS_NUMERO[d.trim()] || 1)
           : [1, 2, 3, 4, 5];
 
-        await addEmpleadoHorario(empleadoEnModal.id, {
+        await addEmpleadoHorario(empIdActual, {
           diasSemana: diasArray,
           horaEntrada: plantilla.horaEntrada,
           horaSalida: plantilla.horaEgreso,
@@ -317,7 +336,7 @@ export default function GestionHorarios() {
           (d) => MAPA_DIAS_NUMERO[d] || 1,
         );
         for (const r of rangosEspecificos) {
-          await addEmpleadoHorario(empleadoEnModal.id, {
+          await addEmpleadoHorario(empIdActual, {
             diasSemana: diasNumericos,
             horaEntrada:
               r.horaDesde.length === 5 ? `${r.horaDesde}:00` : r.horaDesde,
@@ -344,7 +363,11 @@ export default function GestionHorarios() {
       }
 
       setModalAsignarTurno(false);
-      await cargarCatalogos(true);
+      setFilasExpandidas((prev) => ({ ...prev, [empIdActual]: true }));
+      await Promise.all([
+        cargarCatalogos(true),
+        refrescarDetalleEmpleado(empIdActual),
+      ]);
       mostrarAviso("success", "Éxito", "Horario registrado correctamente.");
     } catch (err) {
       const msg = err.response?.data?.message || "";
@@ -372,7 +395,7 @@ export default function GestionHorarios() {
     }
   };
 
-  const handleConfirmarEliminarFranja = (franja) => {
+  const handleConfirmarEliminarFranja = (emp, franja) => {
     if (!puedeEliminar) return;
 
     const esMateria = Boolean(franja.materia);
@@ -395,13 +418,10 @@ export default function GestionHorarios() {
         setModalAlerta((p) => ({ ...p, isOpen: false }));
         try {
           await removeEmpleadoHorario(franja.id || franja.idEmpleadoHorario);
-          const [hRes, mRes] = await Promise.all([
-            getEmpleadoHorarios(empleadoEnModal.id),
-            getMetricasEmpleado(empleadoEnModal.id),
+          await Promise.all([
+            refrescarDetalleEmpleado(emp.id),
+            cargarCatalogos(true),
           ]);
-          setHorariosEmpleadoModal(hRes || []);
-          setMetricasEmpleadoModal(mRes);
-          await cargarCatalogos(true);
           mostrarAviso(
             "success",
             "Éxito",
@@ -416,6 +436,7 @@ export default function GestionHorarios() {
 
   return (
     <div className="p-3 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-4 sm:space-y-5 font-sans">
+      {/* Cabecera */}
       <div className="bg-white border border-slate-200 rounded-2xl sm:rounded-3xl p-4 sm:p-5 shadow-xs flex items-center justify-between">
         <div className="flex items-center gap-3 sm:gap-4">
           <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-purple-50 border border-purple-100 flex items-center justify-center text-purple-600 shadow-xs shrink-0">
@@ -440,7 +461,7 @@ export default function GestionHorarios() {
           <span>Categoría de Personal:</span>
         </div>
 
-        <div className="flex items-center gap-2 overflow-x-auto pb-1 md:pb-0 scrollbar-none">
+        <div className="flex items-center gap-2 flex-wrap">
           <button
             type="button"
             onClick={() => {
@@ -516,347 +537,25 @@ export default function GestionHorarios() {
         </div>
       </div>
 
-      {/* Tabla y Cards */}
+      {/* Tabla Modularizada con Desglose Desplegable */}
       <div className="bg-white border border-slate-200 rounded-2xl shadow-xs overflow-hidden">
-        {loading ? (
-          <div className="text-center py-12 text-slate-400">
-            <Loader2 className="w-5 h-5 animate-spin mx-auto text-indigo-600 mb-2" />
-            <span className="text-xs font-medium">
-              Cargando nómina de horarios...
-            </span>
-          </div>
-        ) : empleadosPaginados.length === 0 ? (
-          <div className="text-center py-12 text-slate-400 text-xs italic">
-            No se encontraron empleados registrados en{" "}
-            {categoriaActiva === "TODAS"
-              ? "el sistema"
-              : `la categoría ${categoriaActiva}`}
-            .
-          </div>
-        ) : (
-          <>
-            {/* VISTA MÓVIL */}
-            <div className="md:hidden divide-y divide-slate-100">
-              {empleadosPaginados.map((emp) => {
-                const cargosList = emp.cargos || [];
-                const esDocente =
-                  (emp.categorias || []).some((c) =>
-                    (c.nombre || c.codigoTag || "")
-                      .toLowerCase()
-                      .includes("docente"),
-                  ) ||
-                  (emp.categoria?.nombre || "")
-                    .toLowerCase()
-                    .includes("docente");
+        <TablaEmpleadosHorarios
+          loading={loading}
+          empleados={empleadosPaginados}
+          categoriaActiva={categoriaActiva}
+          esVistaDocentePura={esVistaDocentePura}
+          filasExpandidas={filasExpandidas}
+          cargandoDetalle={cargandoDetalle}
+          detallesPorEmpleado={detallesPorEmpleado}
+          puedeCrear={puedeCrear}
+          puedeEditar={puedeEditar}
+          puedeEliminar={puedeEliminar}
+          onToggleExpandir={handleToggleExpandir}
+          onAbrirTurno={abrirTurno}
+          onIrAMaterias={handleIrAMaterias}
+          onEliminarFranja={handleConfirmarEliminarFranja}
+        />
 
-                const categoriasEmp =
-                  emp.categorias && emp.categorias.length > 0
-                    ? emp.categorias
-                    : emp.categoria
-                      ? [emp.categoria]
-                      : [];
-
-                return (
-                  <div
-                    key={emp.id}
-                    className="p-4 flex flex-col gap-3 hover:bg-slate-50/60 transition-colors"
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex items-start gap-2.5">
-                        <div className="w-8 h-8 rounded-lg bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 shrink-0 mt-0.5">
-                          <User className="w-4 h-4" />
-                        </div>
-                        <div>
-                          <div className="font-bold text-slate-900 text-sm leading-snug">
-                            {emp.apellido}, {emp.nombre}
-                          </div>
-                          <div className="text-[11px] text-slate-500 font-mono mt-0.5">
-                            Legajo:{" "}
-                            <span className="font-semibold text-slate-700">
-                              {emp.nroLegajo || "Sin asignar"}
-                            </span>{" "}
-                            • DNI: {emp.dni || "-"}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex flex-col gap-1 text-xs text-slate-600">
-                      {categoriaActiva === "TODAS" && (
-                        <div className="flex flex-wrap gap-1 mb-0.5">
-                          {categoriasEmp.length > 0 ? (
-                            categoriasEmp.map((cat, idx) => (
-                              <span
-                                key={cat.id || idx}
-                                className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wider uppercase border ${getBadgeColorClasses(
-                                  cat.colorIdentificacion,
-                                )}`}
-                              >
-                                {cat.nombre || "General"}
-                              </span>
-                            ))
-                          ) : (
-                            <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wider uppercase border bg-slate-50 text-slate-600 border-slate-200">
-                              General
-                            </span>
-                          )}
-                        </div>
-                      )}
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">
-                          Cargo:
-                        </span>
-                        {cargosList.length > 0 ? (
-                          cargosList.map((c, i) => (
-                            <span
-                              key={c.id || i}
-                              className="px-2 py-0.5 rounded-md bg-slate-100 border border-slate-200 text-slate-700 text-[11px] font-medium"
-                            >
-                              {c.nombre || c}
-                            </span>
-                          ))
-                        ) : (
-                          <span className="text-slate-400 text-xs italic">
-                            Sin cargos asignados
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-2 pt-1 border-t border-slate-100/80">
-                      <button
-                        type="button"
-                        onClick={() => abrirCronograma(emp)}
-                        className="flex items-center justify-center gap-1.5 px-3 py-2 bg-indigo-50 hover:bg-indigo-100 active:bg-indigo-200 text-indigo-700 rounded-xl text-xs font-bold transition cursor-pointer"
-                      >
-                        <Eye className="w-3.5 h-3.5 shrink-0" />
-                        <span>Cronograma</span>
-                      </button>
-
-                      {puedeCrear || puedeEditar ? (
-                        esVistaDocentePura ? (
-                          <button
-                            type="button"
-                            onClick={() =>
-                              navigate("/materias", {
-                                state: { tab: "catalogo", docenteId: emp.id },
-                              })
-                            }
-                            className="flex items-center justify-center gap-1.5 px-3 py-2 bg-purple-50 hover:bg-purple-100 active:bg-purple-200 text-purple-700 font-bold rounded-xl text-xs transition cursor-pointer border border-purple-200"
-                          >
-                            <span>Materias</span>
-                            <ArrowRight className="w-3.5 h-3.5 shrink-0" />
-                          </button>
-                        ) : (
-                          <div className="flex flex-col gap-1.5">
-                            <button
-                              type="button"
-                              onClick={() => abrirTurno(emp)}
-                              className="flex items-center justify-center gap-1.5 px-3 py-2 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white font-bold rounded-xl text-xs transition cursor-pointer shadow-xs"
-                            >
-                              <Sliders className="w-3.5 h-3.5 shrink-0" />
-                              <span>Asignar Horario</span>
-                            </button>
-                            {categoriaActiva === "TODAS" && esDocente && (
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  navigate("/materias", {
-                                    state: {
-                                      tab: "catalogo",
-                                      docenteId: emp.id,
-                                    },
-                                  })
-                                }
-                                className="flex items-center justify-center gap-1.5 px-3 py-1.5 bg-purple-50 hover:bg-purple-100 text-purple-700 font-bold rounded-xl text-xs transition cursor-pointer border border-purple-200"
-                              >
-                                <span>Materias</span>
-                                <ArrowRight className="w-3 h-3 shrink-0" />
-                              </button>
-                            )}
-                          </div>
-                        )
-                      ) : (
-                        <div className="flex items-center justify-center gap-1 px-3 py-2 bg-slate-50 border border-slate-200 text-slate-400 font-bold rounded-xl text-xs">
-                          <Lock className="w-3.5 h-3.5" />
-                          <span>Bloqueado</span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* VISTA ESCRITORIO */}
-            <div className="hidden md:block overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-[#f8fafc] text-slate-500 font-bold uppercase text-[10px] border-b border-slate-100">
-                  <tr>
-                    <th className="px-6 py-3.5 tracking-wider">Empleado</th>
-                    <th className="px-6 py-3.5 tracking-wider">
-                      Cargos / Puestos
-                    </th>
-                    <th className="px-6 py-3.5 tracking-wider">
-                      Cronograma Semanal
-                    </th>
-                    <th className="px-6 py-3.5 tracking-wider text-right">
-                      Acciones
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 text-slate-800">
-                  {empleadosPaginados.map((emp) => {
-                    const cargosList = emp.cargos || [];
-                    const esDocente =
-                      (emp.categorias || []).some((c) =>
-                        (c.nombre || c.codigoTag || "")
-                          .toLowerCase()
-                          .includes("docente"),
-                      ) ||
-                      (emp.categoria?.nombre || "")
-                        .toLowerCase()
-                        .includes("docente");
-
-                    const categoriasEmp =
-                      emp.categorias && emp.categorias.length > 0
-                        ? emp.categorias
-                        : emp.categoria
-                          ? [emp.categoria]
-                          : [];
-
-                    return (
-                      <tr
-                        key={emp.id}
-                        className="hover:bg-slate-50/70 transition-colors"
-                      >
-                        <td className="px-6 py-4">
-                          <div className="font-bold text-slate-900 text-sm">
-                            {emp.apellido}, {emp.nombre}
-                          </div>
-                          <div className="text-[11px] text-slate-500 mt-0.5 font-mono">
-                            Legajo: {emp.nroLegajo || "Sin asignar"} • DNI:{" "}
-                            {emp.dni || "-"}
-                          </div>
-                        </td>
-
-                        <td className="px-6 py-4">
-                          {categoriaActiva === "TODAS" && (
-                            <div className="flex flex-wrap gap-1 mb-1.5">
-                              {categoriasEmp.length > 0 ? (
-                                categoriasEmp.map((cat, idx) => (
-                                  <span
-                                    key={cat.id || idx}
-                                    className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-wider uppercase border ${getBadgeColorClasses(
-                                      cat.colorIdentificacion,
-                                    )}`}
-                                  >
-                                    {cat.nombre || "General"}
-                                  </span>
-                                ))
-                              ) : (
-                                <span className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-wider uppercase border bg-slate-50 text-slate-600 border-slate-200">
-                                  General
-                                </span>
-                              )}
-                            </div>
-                          )}
-
-                          <div className="flex flex-wrap gap-1 mt-0.5">
-                            {cargosList.length > 0 ? (
-                              cargosList.map((cg, i) => (
-                                <span
-                                  key={cg.id || i}
-                                  className="inline-block px-2.5 py-1 rounded-lg bg-slate-100 border border-slate-200 text-slate-700 text-xs font-medium"
-                                >
-                                  {cg.nombre || cg}
-                                </span>
-                              ))
-                            ) : (
-                              <span className="text-slate-400 text-xs italic">
-                                Sin cargos asignados
-                              </span>
-                            )}
-                          </div>
-                        </td>
-
-                        <td className="px-6 py-4">
-                          <button
-                            type="button"
-                            onClick={() => abrirCronograma(emp)}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-xs font-bold transition cursor-pointer shadow-2xs"
-                          >
-                            <Eye className="w-3.5 h-3.5" />
-                            <span>Ver cronograma</span>
-                          </button>
-                        </td>
-
-                        <td className="px-6 py-4 text-right whitespace-nowrap">
-                          <div className="flex items-center justify-end gap-2 text-slate-400">
-                            {puedeCrear || puedeEditar ? (
-                              esVistaDocentePura ? (
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    navigate("/materias", {
-                                      state: {
-                                        tab: "catalogo",
-                                        docenteId: emp.id,
-                                      },
-                                    })
-                                  }
-                                  className="flex items-center gap-1.5 px-3 py-1 bg-purple-50 hover:bg-purple-100 text-purple-700 font-bold rounded-lg text-xs transition cursor-pointer border border-purple-200"
-                                >
-                                  <span>Gestionar Materias</span>
-                                  <ArrowRight className="w-3.5 h-3.5" />
-                                </button>
-                              ) : (
-                                <>
-                                  <button
-                                    type="button"
-                                    onClick={() => abrirTurno(emp)}
-                                    className="flex items-center gap-1 px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold rounded-lg text-xs transition cursor-pointer"
-                                  >
-                                    <Sliders className="w-3.5 h-3.5" />
-                                    <span>Asignar Horario</span>
-                                  </button>
-
-                                  {categoriaActiva === "TODAS" && esDocente && (
-                                    <button
-                                      type="button"
-                                      onClick={() =>
-                                        navigate("/materias", {
-                                          state: {
-                                            tab: "catalogo",
-                                            docenteId: emp.id,
-                                          },
-                                        })
-                                      }
-                                      className="flex items-center gap-1 px-2.5 py-1 bg-purple-50 hover:bg-purple-100 text-purple-700 font-bold rounded-lg text-xs transition cursor-pointer border border-purple-200"
-                                    >
-                                      <span>Materias</span>
-                                      <ArrowRight className="w-3 h-3" />
-                                    </button>
-                                  )}
-                                </>
-                              )
-                            ) : (
-                              <span className="p-1 text-slate-300 cursor-not-allowed">
-                                <Lock className="w-4 h-4" />
-                              </span>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </>
-        )}
-
-        {/* Paginador Modularizado */}
         <PaginadorTabla
           paginaActual={paginaActual}
           totalPaginas={totalPaginas}
@@ -866,27 +565,6 @@ export default function GestionHorarios() {
           etiqueta="empleados"
         />
       </div>
-
-      <ModalDetalleCronograma
-        isOpen={modalDetalle}
-        onClose={() => setModalDetalle(false)}
-        empleado={empleadoEnModal}
-        clases={horariosEmpleadoModal}
-        metricas={metricasEmpleadoModal}
-        diasMap={DIAS_MAP}
-        onOpenAsignarClase={() =>
-          navigate("/materias", {
-            state: { tab: "catalogo", docenteId: empleadoEnModal?.id },
-          })
-        }
-        onEliminarClase={(franja) => handleConfirmarEliminarFranja(franja)}
-        onOpenAsignarTurno={(emp) => {
-          setModalDetalle(false);
-          abrirTurno(emp);
-        }}
-        puedeEditar={puedeEditar}
-        puedeEliminar={puedeEliminar}
-      />
 
       <ModalAsignarTurno
         isOpen={modalAsignarTurno}

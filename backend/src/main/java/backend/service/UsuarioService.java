@@ -5,7 +5,10 @@ import backend.dto.UsuarioDTO;
 import backend.dto.UsuarioResumenDTO;
 import backend.model.Empleado;
 import backend.model.Usuario;
+import backend.model.UsuarioPermiso;
 import backend.repositories.EmpleadoRepository;
+import backend.repositories.PermisoRepository;
+import backend.repositories.UsuarioPermisoRepository;
 import backend.repositories.UsuarioRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -15,8 +18,13 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
 import java.text.Normalizer;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 @Service
 public class UsuarioService {
@@ -24,28 +32,36 @@ public class UsuarioService {
     private final UsuarioRepository usuarioRepo;
     private final EmpleadoRepository empleadoRepo;
     private final AuditoriaYPermisosService auditoriaService;
+    private final PermisoRepository permisoRepo;
+    private final UsuarioPermisoRepository usuarioPermRepo;
     private final BCryptPasswordEncoder passwordEncoder;
 
-    public UsuarioService(UsuarioRepository usuarioRepo, 
-                          EmpleadoRepository empleadoRepo, 
-                          AuditoriaYPermisosService auditoriaService) {
+    public UsuarioService(UsuarioRepository usuarioRepo,
+                          EmpleadoRepository empleadoRepo,
+                          AuditoriaYPermisosService auditoriaService,
+                          PermisoRepository permisoRepo,
+                          UsuarioPermisoRepository usuarioPermRepo) {
         this.usuarioRepo = usuarioRepo;
         this.empleadoRepo = empleadoRepo;
         this.auditoriaService = auditoriaService;
+        this.permisoRepo = permisoRepo;
+        this.usuarioPermRepo = usuarioPermRepo;
         this.passwordEncoder = new BCryptPasswordEncoder();
     }
 
     private String obtenerOperadorActual() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        return (auth != null && auth.getName() != null && !auth.getName().isBlank()) 
-                ? auth.getName() 
+        return (auth != null && auth.getName() != null && !auth.getName().isBlank())
+                ? auth.getName()
                 : "SISTEMA";
     }
 
+    @Transactional(readOnly = true)
     public List<UsuarioDTO> listarUsuarios() {
         return usuarioRepo.findAll().stream().map(this::convertirADTO).toList();
     }
 
+    @Transactional(readOnly = true)
     public Page<UsuarioDTO> listarPaginado(String q, String rol, String estado, int page, int size) {
         Boolean activo = null;
         if ("ACTIVOS".equalsIgnoreCase(estado)) {
@@ -62,12 +78,14 @@ public class UsuarioService {
                 .map(this::convertirADTO);
     }
 
+    @Transactional(readOnly = true)
     public UsuarioDTO obtenerPorEmpleadoId(Long empleadoId) {
         return usuarioRepo.findByEmpleadoId(empleadoId)
                 .map(this::convertirADTO)
                 .orElse(null);
     }
 
+    @Transactional(readOnly = true)
     public UsuarioResumenDTO obtenerResumenMetricas() {
         return new UsuarioResumenDTO(
             usuarioRepo.countTotal(),
@@ -167,25 +185,66 @@ public class UsuarioService {
 
         String passwordPlano = generarPasswordPredeterminada(emp.getApellido(), emp.getDni());
         String passwordHash = passwordEncoder.encode(passwordPlano);
+        String rolNormalizado = (req.rol() != null && !req.rol().isBlank())
+                ? req.rol().trim().toUpperCase()
+                : "AUDITOR";
 
         Usuario usuario = new Usuario();
         usuario.setUsername(username);
         usuario.setPasswordHash(passwordHash);
-        usuario.setRol(req.rol() != null ? req.rol() : "CONSULTA");
+        usuario.setRol(rolNormalizado);
         usuario.setActivo(true);
         usuario.setDebeCambiarPassword(true);
         usuario.setEmpleado(emp);
 
         Usuario guardado = usuarioRepo.save(usuario);
-
         String operador = obtenerOperadorActual();
+
+        // --- PLANTILLA INICIAL DE PERMISOS SEGÚN EL ROL ---
+        Set<String> catalogoValido = new LinkedHashSet<>(permisoRepo.findAllCodigos());
+        List<String> permisosPlantilla = new ArrayList<>();
+
+        if (rolNormalizado.contains("ADMIN")) {
+            permisosPlantilla.addAll(catalogoValido);
+        } else if (rolNormalizado.equals("AUDITOR")) {
+            List<String> baseAuditor = List.of(
+                "PERSONAL_VER",
+                "HORARIOS_VER",
+                "FICHAJES_VER",
+                "INCIDENTES_VER",
+                "INCIDENTES_JUSTIFICAR",
+                "CONFIG_VER",
+                "MATERIAS_VER"
+            );
+            for (String cod : baseAuditor) {
+                if (catalogoValido.contains(cod)) {
+                    permisosPlantilla.add(cod);
+                }
+            }
+        }
+        // Si rolNormalizado es "PERSONALIZADO", permisosPlantilla queda vacío (0 permisos iniciales)
+        // y se asignan inmediatamente al abrir ModalMatrizPermisos en el frontend.
+
+        LocalDateTime ahora = LocalDateTime.now();
+        for (String cod : permisosPlantilla) {
+            UsuarioPermiso up = new UsuarioPermiso();
+            up.setUsuario(guardado);
+            up.setCodigoPermiso(cod);
+            up.setActivo(true);
+            up.setEsTemporal(false);
+            up.setFechaOtorgacion(ahora);
+            up.setOtorgadoPor(operador);
+            up.setMotivo("Plantilla inicial por rol " + rolNormalizado);
+            usuarioPermRepo.save(up);
+        }
+
         auditoriaService.registrarMovimiento(
             null,
             operador,
             "ADMINISTRADOR_GENERAL",
             "CREAR_USUARIO",
             "SEGURIDAD",
-            "Creación de usuario " + guardado.getUsername() + " (Rol: " + guardado.getRol() + ") para colaborador: " + emp.getApellido() + ", " + emp.getNombre(),
+            "Creación de usuario " + guardado.getUsername() + " (Rol: " + guardado.getRol() + ") con " + permisosPlantilla.size() + " permisos iniciales.",
             null
         );
 
@@ -197,7 +256,6 @@ public class UsuarioService {
         Usuario usuario = usuarioRepo.findById(usuarioId)
                 .orElseThrow(() -> new IllegalArgumentException("Usuario no encontrado con ID: " + usuarioId));
 
-        // Blindaje explícito de la cuenta raíz
         if ("admin".equalsIgnoreCase(usuario.getUsername())) {
             throw new IllegalStateException("La contraseña del usuario administrador raíz no se puede restablecer por este medio. Debe gestionarse desde 'Mi Perfil'.");
         }
@@ -254,8 +312,8 @@ public class UsuarioService {
     public UsuarioDTO convertirADTO(Usuario u) {
         boolean esAdminRaiz = (u.getEmpleado() == null && "admin".equalsIgnoreCase(u.getUsername()));
 
-        String nombreCompleto = u.getEmpleado() != null 
-                ? (u.getEmpleado().getNombre() + " " + u.getEmpleado().getApellido()) 
+        String nombreCompleto = u.getEmpleado() != null
+                ? (u.getEmpleado().getNombre() + " " + u.getEmpleado().getApellido())
                 : (esAdminRaiz ? "Administrador General del Sistema" : "Sin Empleado Asociado");
 
         Long empId = u.getEmpleado() != null ? u.getEmpleado().getId() : null;
