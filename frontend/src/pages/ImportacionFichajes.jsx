@@ -33,6 +33,7 @@ import {
 } from "../services/empleadoService";
 import { getCategorias, getCargos } from "../services/configuracionService";
 import ModalAlerta from "../components/comunes/ModalAlerta";
+import EstadoCarga from "../components/comunes/EstadoCarga";
 import ModalRegistroEmpleado from "../components/personal/ModalRegistroEmpleado";
 import VistaPadronHoy from "../components/importacion/VistaPadronHoy";
 import VistaHistorialImportaciones from "../components/importacion/VistaHistorialImportaciones";
@@ -84,6 +85,7 @@ export default function ImportacionFichajes() {
   const puedeCrearEmpleado = tienePermiso("PERSONAL_CREAR");
 
   const [loading, setLoading] = useState(false);
+  const [importandoArchivo, setImportandoArchivo] = useState(false);
   const [resumenCabecera, setResumenCabecera] = useState({
     ultimoFichaje: null,
     ultimaImportacion: null,
@@ -414,8 +416,8 @@ export default function ImportacionFichajes() {
   };
 
   const handleImportar = async () => {
-    if (!puedeImportar || !archivo) return;
-    setLoading(true);
+    if (!puedeImportar || !archivo || importandoArchivo) return;
+    setImportandoArchivo(true);
     setErrorGlobal("");
     try {
       const res = await uploadArchivoFichajes(archivo);
@@ -470,12 +472,12 @@ export default function ImportacionFichajes() {
       setErrorGlobal(msg);
       mostrarAviso("danger", "Error de Procesamiento", msg);
     } finally {
-      setLoading(false);
+      setImportandoArchivo(false);
     }
   };
 
   const handleEliminarHistorial = (id, nombre) => {
-    if (!puedeEliminarLote) return;
+    if (!puedeEliminarLote || loading) return;
     setModalAlerta({
       isOpen: true,
       tipo: "danger",
@@ -486,10 +488,11 @@ export default function ImportacionFichajes() {
       mostrarCancelar: true,
       onConfirmar: async () => {
         setModalAlerta((prev) => ({ ...prev, isOpen: false }));
+        setLoading(true);
         try {
           await deleteHistorialImportacion(id);
-          cargarResumenCabecera();
-          cargarHistorialServidor(
+          await cargarResumenCabecera();
+          await cargarHistorialServidor(
             filtroEstadoHistorial,
             filtroFechaHistorial,
             paginaHistorial,
@@ -500,6 +503,7 @@ export default function ImportacionFichajes() {
             `El lote "${nombre}" fue dado de baja correctamente.`,
           );
         } catch (err) {
+          setLoading(false);
           mostrarAviso(
             "danger",
             "Error",
@@ -512,7 +516,7 @@ export default function ImportacionFichajes() {
   };
 
   const handleReactivarHistorial = (id, nombre) => {
-    if (!puedeEliminarLote) return;
+    if (!puedeEliminarLote || loading) return;
     setModalAlerta({
       isOpen: true,
       tipo: "info",
@@ -523,10 +527,11 @@ export default function ImportacionFichajes() {
       mostrarCancelar: true,
       onConfirmar: async () => {
         setModalAlerta((prev) => ({ ...prev, isOpen: false }));
+        setLoading(true);
         try {
           await reactivarHistorialImportacion(id);
-          cargarResumenCabecera();
-          cargarHistorialServidor(
+          await cargarResumenCabecera();
+          await cargarHistorialServidor(
             filtroEstadoHistorial,
             filtroFechaHistorial,
             paginaHistorial,
@@ -537,6 +542,7 @@ export default function ImportacionFichajes() {
             `El lote "${nombre}" y sus marcaciones han sido reactivados.`,
           );
         } catch (err) {
+          setLoading(false);
           mostrarAviso(
             "danger",
             "Error",
@@ -548,7 +554,7 @@ export default function ImportacionFichajes() {
   };
 
   const handleAbrirAsistenteDesdeCabecera = async () => {
-    if (!puedeVincular) return;
+    if (!puedeVincular || cargandoAsistente) return;
     if (vistaActual === "asistente") {
       setVistaActual("hoy");
       return;
@@ -606,6 +612,7 @@ export default function ImportacionFichajes() {
 
   const handleGuardarNuevoEmpleado = async (e) => {
     e.preventDefault();
+    setLoading(true);
     try {
       const payload = {
         ...formEmpleado,
@@ -637,6 +644,7 @@ export default function ImportacionFichajes() {
         `Se dio de alta a ${nuevo.nombre} ${nuevo.apellido}.`,
       );
     } catch (err) {
+      setLoading(false);
       mostrarAviso(
         "danger",
         "Error de Registro",
@@ -646,7 +654,8 @@ export default function ImportacionFichajes() {
   };
 
   const handleGuardarVinculaciones = async () => {
-    if (!puedeVincular) return;
+    if (!puedeVincular || loading) return;
+    setLoading(true);
     try {
       const payload = vinculaciones
         .filter(
@@ -659,6 +668,7 @@ export default function ImportacionFichajes() {
         }));
 
       if (payload.length === 0) {
+        setLoading(false);
         mostrarAviso(
           "warning",
           "Atención",
@@ -673,9 +683,10 @@ export default function ImportacionFichajes() {
         "Vinculaciones Guardadas",
         "Asignaciones procesadas.",
       );
-      cargarCatalogos();
+      await cargarCatalogos();
       setVistaActual("hoy");
     } catch (err) {
+      setLoading(false);
       mostrarAviso(
         "danger",
         "Error",
@@ -698,8 +709,27 @@ export default function ImportacionFichajes() {
     };
   }, [fechaConsultaHoy]);
 
+  const cargandoFlotante =
+    !importandoArchivo && (loading || cargandoAsistente || cargandoHoy);
+
   return (
     <div className="p-3.5 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-4 sm:space-y-6 font-sans">
+      {/* 1. Modal con detalle para importación de lotes (proceso largo) */}
+      <EstadoCarga
+        cargando={importandoArchivo}
+        tipoIcono="escaner"
+        variante="modal"
+        titulo="Procesando archivo biométrico..."
+        descripcion="Validando fichadas, vinculando legajos y evaluando incidentes horarios."
+      />
+
+      {/* 2. Indicador flotante ligero para navegación, paginación y vinculaciones */}
+      <EstadoCarga
+        cargando={cargandoFlotante}
+        tipoIcono="escaner"
+        variante="flotante"
+      />
+
       {/* 0. RECUADRO SUPERIOR DUAL */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-3.5 sm:px-6 sm:py-3.5 shadow-md grid grid-cols-1 md:grid-cols-2 gap-4 text-white animate-in fade-in duration-200">
         <div className="flex items-start gap-3">
@@ -801,10 +831,11 @@ export default function ImportacionFichajes() {
 
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
           <button
+            disabled={importandoArchivo || loading}
             onClick={() =>
               setVistaActual(vistaActual === "hoy" ? "historial" : "hoy")
             }
-            className={`flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold border transition cursor-pointer shadow-xs ${
+            className={`flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold border transition cursor-pointer shadow-xs disabled:opacity-50 disabled:cursor-not-allowed ${
               vistaActual === "historial"
                 ? "bg-indigo-600 text-white border-indigo-600"
                 : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50"
@@ -827,8 +858,8 @@ export default function ImportacionFichajes() {
             (conteoSinVincular > 0 || vistaActual === "asistente") && (
               <button
                 onClick={handleAbrirAsistenteDesdeCabecera}
-                disabled={cargandoAsistente}
-                className={`flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold border transition cursor-pointer ${
+                disabled={cargandoAsistente || importandoArchivo || loading}
+                className={`flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold border transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
                   vistaActual === "asistente"
                     ? "bg-slate-100 border-slate-300 text-slate-700 font-bold"
                     : "bg-amber-500 hover:bg-amber-600 text-white border-amber-600 shadow-md font-bold"
@@ -855,7 +886,13 @@ export default function ImportacionFichajes() {
       <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-6 shadow-xs">
         {puedeImportar ? (
           <div className="flex flex-col md:flex-row items-center justify-between gap-4 sm:gap-6">
-            <label className="flex-1 w-full border-2 border-dashed border-slate-300 hover:border-indigo-500 rounded-2xl p-5 sm:p-6 flex flex-col items-center justify-center cursor-pointer bg-slate-50 hover:bg-indigo-50/20 transition group text-center">
+            <label
+              className={`flex-1 w-full border-2 border-dashed border-slate-300 hover:border-indigo-500 rounded-2xl p-5 sm:p-6 flex flex-col items-center justify-center bg-slate-50 hover:bg-indigo-50/20 transition group text-center ${
+                importandoArchivo
+                  ? "opacity-50 pointer-events-none"
+                  : "cursor-pointer"
+              }`}
+            >
               <FileSpreadsheet className="w-8 h-8 sm:w-10 sm:h-10 text-indigo-500 group-hover:scale-110 transition duration-200 mb-2 stroke-[1.5]" />
               <span className="font-semibold text-slate-700 text-xs sm:text-sm break-all">
                 {archivo
@@ -868,6 +905,7 @@ export default function ImportacionFichajes() {
               </span>
               <input
                 type="file"
+                disabled={importandoArchivo}
                 accept=".csv,.xlsx,.xls,.txt"
                 onChange={(e) => {
                   if (e.target.files && e.target.files[0]) {
@@ -883,10 +921,10 @@ export default function ImportacionFichajes() {
             <div className="w-full md:w-56">
               <button
                 onClick={handleImportar}
-                disabled={!archivo || loading}
-                className="flex items-center justify-center gap-2 w-full py-2.5 sm:py-3 bg-[#4b35e6] hover:bg-[#3f2bc9] disabled:opacity-50 text-white rounded-xl text-xs font-semibold shadow-md shadow-indigo-100 transition cursor-pointer"
+                disabled={!archivo || importandoArchivo}
+                className="flex items-center justify-center gap-2 w-full py-2.5 sm:py-3 bg-[#4b35e6] hover:bg-[#3f2bc9] disabled:opacity-50 text-white rounded-xl text-xs font-semibold shadow-md shadow-indigo-100 transition cursor-pointer disabled:cursor-not-allowed"
               >
-                {loading ? (
+                {importandoArchivo ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
                 ) : (
                   <UploadCloud className="w-4 h-4" />

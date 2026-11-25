@@ -13,13 +13,19 @@ import {
   LogOut,
   User,
   AlertCircle,
-  DollarSign,
   X,
   Fingerprint,
+  MessageCircle,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import ModalAlerta from "../comunes/ModalAlerta";
 import { getEmpleadosActivos } from "../../services/empleadoService";
+
+// Reemplazar por tu número real en formato internacional (54 + 9 + código de área + número sin 15)
+const WHATSAPP_SOPORTE = "5493854208256";
+const MENSAJE_WHATSAPP = encodeURIComponent(
+  "Hola Lourdes, te contacto desde el Sistema de Control de Personal.",
+);
 
 export default function Sidebar({ isOpen, onClose }) {
   const { user, logout, tienePermiso } = useAuth();
@@ -152,17 +158,14 @@ export default function Sidebar({ isOpen, onClose }) {
   ];
 
   const menuVisible = menuItems.filter((item) => {
-    // Si no tiene restricciones, se muestra
     if (!item.permiso && !item.permisos) return true;
-
-    // Si tiene un array de permisos alternativos (OR)
     if (Array.isArray(item.permisos)) {
       return item.permisos.some((p) => tienePermiso && tienePermiso(p));
     }
-
-    // Si tiene un permiso único
     return tienePermiso && tienePermiso(item.permiso);
   });
+
+  const urlWhatsapp = `https://wa.me/${WHATSAPP_SOPORTE}?text=${MENSAJE_WHATSAPP}`;
 
   return (
     <>
@@ -237,7 +240,7 @@ export default function Sidebar({ isOpen, onClose }) {
           </nav>
         </div>
 
-        {/* Perfil Dinámico + Cerrar Sesión */}
+        {/* Perfil Dinámico + Cerrar Sesión + Crédito de Desarrollo */}
         <div className="p-4 border-t border-slate-100 space-y-2 min-w-[16rem]">
           <div
             onClick={() => {
@@ -277,6 +280,29 @@ export default function Sidebar({ isOpen, onClose }) {
             <LogOut className="w-4 h-4" />
             <span>Cerrar sesión</span>
           </button>
+
+          {/* Crédito y contacto directo por WhatsApp */}
+          <div className="pt-2 border-t border-slate-100">
+            <a
+              href={urlWhatsapp}
+              target="_blank"
+              rel="noopener noreferrer"
+              title="Contactar por WhatsApp con soporte / desarrollo"
+              className="group flex items-center justify-between px-2.5 py-2 rounded-xl bg-slate-50/80 hover:bg-emerald-50/80 border border-slate-200/60 hover:border-emerald-200 transition-all"
+            >
+              <div className="min-w-0">
+                <span className="block text-[9px] font-semibold uppercase tracking-wider text-slate-400 group-hover:text-emerald-600 transition-colors">
+                  Desarrollado por
+                </span>
+                <span className="block text-[11px] font-bold text-slate-700 group-hover:text-emerald-900 truncate transition-colors">
+                  Gevé Software
+                </span>
+              </div>
+              <div className="w-7 h-7 rounded-lg bg-white group-hover:bg-emerald-500 text-emerald-600 group-hover:text-white border border-slate-200 group-hover:border-emerald-500 flex items-center justify-center shrink-0 shadow-2xs transition-all">
+                <MessageCircle className="w-3.5 h-3.5 stroke-[2.2]" />
+              </div>
+            </a>
+          </div>
         </div>
       </aside>
 

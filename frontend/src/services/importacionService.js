@@ -90,6 +90,7 @@ export const previsualizarVinculaciones = async (archivo) => {
   return (
     await apiClient.post("/importacion/previsualizar-vinculaciones", formData, {
       headers: { "Content-Type": "multipart/form-data" },
+      skipInvalidate: true, // Es solo lectura/vista previa, no modifica la base de datos
     })
   ).data;
 };

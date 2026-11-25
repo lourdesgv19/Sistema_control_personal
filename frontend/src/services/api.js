@@ -7,11 +7,37 @@ const api = axios.create({
   },
 });
 
+const CACHE_PREFIX = "swr_cache:";
+let servidorDisponible = true;
+
 // Genera una clave única por endpoint y sus parámetros de consulta
 const generarClaveCache = (config) => {
   const url = config.url || "";
-  const params = config.params ? JSON.stringify(config.params) : "";
-  return `swr_cache:${url}|${params}`;
+  // Ordenamos las claves de params para evitar falsos misses por orden de propiedades
+  const paramsOrdenados = config.params
+    ? JSON.stringify(
+        Object.keys(config.params)
+          .sort()
+          .reduce((acc, k) => {
+            if (config.params[k] !== undefined && config.params[k] !== "") {
+              acc[k] = config.params[k];
+            }
+            return acc;
+          }, {}),
+      )
+    : "";
+  return `${CACHE_PREFIX}${url}|${paramsOrdenados}`;
+};
+
+// Elimina toda la caché almacenada (al mutar datos, recibir SSE o cerrar sesión)
+export const invalidarTodaLaCache = () => {
+  try {
+    Object.keys(localStorage)
+      .filter((k) => k.startsWith(CACHE_PREFIX))
+      .forEach((k) => localStorage.removeItem(k));
+  } catch {
+    // Ignorar errores de acceso a storage
+  }
 };
 
 // Limpia entradas viejas si localStorage alcanza su límite de espacio
@@ -24,12 +50,51 @@ const guardarEnCacheSegura = (clave, data) => {
         data,
       }),
     );
-  } catch (e) {
-    Object.keys(localStorage)
-      .filter((k) => k.startsWith("swr_cache:"))
-      .forEach((k) => localStorage.removeItem(k));
+  } catch {
+    invalidarTodaLaCache();
+    try {
+      localStorage.setItem(
+        clave,
+        JSON.stringify({
+          timestamp: Date.now(),
+          data,
+        }),
+      );
+    } catch {
+      // Si el payload supera el límite total de localStorage, continuar sin cachear
+    }
   }
 };
+
+const leerDeCache = (clave) => {
+  try {
+    const guardado = localStorage.getItem(clave);
+    if (!guardado) return null;
+    const parsed = JSON.parse(guardado);
+    return parsed?.data !== undefined ? parsed.data : null;
+  } catch {
+    localStorage.removeItem(clave);
+    return null;
+  }
+};
+
+// Listeners globales para invalidar caché ante cambios reales o reconexión
+if (typeof window !== "undefined") {
+  window.addEventListener("datos:actualizados", () => {
+    invalidarTodaLaCache();
+  });
+
+  window.addEventListener("conexion:restaurada", () => {
+    servidorDisponible = true;
+    invalidarTodaLaCache();
+  });
+
+  window.addEventListener("servidor:estado", (e) => {
+    if (typeof e.detail?.ok === "boolean") {
+      servidorDisponible = e.detail.ok;
+    }
+  });
+}
 
 api.interceptors.request.use(
   (config) => {
@@ -37,6 +102,45 @@ api.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+
+    const metodo = (config.method || "get").toLowerCase();
+
+    // Si es una escritura (POST, PUT, PATCH, DELETE), invalidamos caché inmediatamente
+    if (["post", "put", "patch", "delete"].includes(metodo)) {
+      // Excluimos endpoints de lectura que puedan usar POST si los hubiera, o limpiamos todo
+      if (!config.skipInvalidate) {
+        invalidarTodaLaCache();
+      }
+      return config;
+    }
+
+    // Estrategia CACHE-FIRST para GET:
+    // Si tenemos datos cacheados y no se pidió forzar red (forceRefresh), respondemos sin ir al backend.
+    // Si el servidor está offline, servimos caché incluso si se pidió forceRefresh.
+    const estaOffline = !navigator.onLine || !servidorDisponible;
+    const omitirCache = config.skipCache === true;
+    const forzarRed = config.forceRefresh === true && !estaOffline;
+
+    if (metodo === "get" && !omitirCache && !forzarRed) {
+      const clave = generarClaveCache(config);
+      const dataCacheada = leerDeCache(clave);
+
+      if (dataCacheada !== null) {
+        // Usamos un adapter personalizado para resolver la promesa sin disparar petición de red
+        config.adapter = () =>
+          Promise.resolve({
+            data: dataCacheada,
+            status: 200,
+            statusText: estaOffline
+              ? "OK (Offline Cache)"
+              : "OK (Memory/Local Cache)",
+            headers: {},
+            config,
+            fromCache: true,
+          });
+      }
+    }
+
     return config;
   },
   (error) => Promise.reject(error),
@@ -44,18 +148,20 @@ api.interceptors.request.use(
 
 api.interceptors.response.use(
   (response) => {
-    // Notificamos que el servidor está online
-    window.dispatchEvent(
-      new CustomEvent("servidor:estado", { detail: { ok: true } }),
-    );
+    // Si la respuesta vino de red real (no de nuestro adapter de caché), marcamos servidor online y guardamos
+    if (!response.fromCache) {
+      servidorDisponible = true;
+      window.dispatchEvent(
+        new CustomEvent("servidor:estado", { detail: { ok: true } }),
+      );
 
-    // Guardamos copia de respaldo para peticiones GET (salvo que se pida omitir caché)
-    const esGet = response.config?.method?.toLowerCase() === "get";
-    const omitirCache = response.config?.skipCache === true;
+      const esGet = response.config?.method?.toLowerCase() === "get";
+      const omitirCache = response.config?.skipCache === true;
 
-    if (esGet && !omitirCache && response.data !== undefined) {
-      const clave = generarClaveCache(response.config);
-      guardarEnCacheSegura(clave, response.data);
+      if (esGet && !omitirCache && response.data !== undefined) {
+        const clave = generarClaveCache(response.config);
+        guardarEnCacheSegura(clave, response.data);
+      }
     }
 
     return response;
@@ -69,38 +175,29 @@ api.interceptors.response.use(
       error.code === "ERR_NETWORK" ||
       error.message === "Network Error";
 
-    // Notificación inmediata si el backend no responde o hay error de red
     if (esCaidaServidor) {
+      servidorDisponible = false;
       window.dispatchEvent(
         new CustomEvent("servidor:estado", { detail: { ok: false } }),
       );
 
-      // Si es una lectura (GET) y el servidor está caído, devolvemos los últimos datos cacheados
+      // Respaldo de emergencia: si falló una petición GET que intentó ir a red, devolvemos caché si existe
       const esGet = originalRequest?.method?.toLowerCase() === "get";
       const omitirCache = originalRequest?.skipCache === true;
 
       if (esGet && !omitirCache) {
         const clave = generarClaveCache(originalRequest);
-        const guardado = localStorage.getItem(clave);
+        const dataCacheada = leerDeCache(clave);
 
-        if (guardado) {
-          try {
-            const { data } = JSON.parse(guardado);
-            console.warn(
-              `📦 [MODO OFFLINE] Mostrando últimos datos guardados para: ${url}`,
-            );
-
-            return Promise.resolve({
-              data,
-              status: 200,
-              statusText: "OK (Offline Cache)",
-              headers: {},
-              config: originalRequest,
-              fromCache: true,
-            });
-          } catch {
-            localStorage.removeItem(clave);
-          }
+        if (dataCacheada !== null) {
+          return Promise.resolve({
+            data: dataCacheada,
+            status: 200,
+            statusText: "OK (Offline Fallback)",
+            headers: {},
+            config: originalRequest,
+            fromCache: true,
+          });
         }
       }
     }
@@ -114,10 +211,7 @@ api.interceptors.response.use(
       console.warn("⚠️ Token expirado o sesión inválida.");
       localStorage.removeItem("token");
       localStorage.removeItem("user");
-      // Limpiamos también la caché de datos privados al cerrar sesión por seguridad
-      Object.keys(localStorage)
-        .filter((k) => k.startsWith("swr_cache:"))
-        .forEach((k) => localStorage.removeItem(k));
+      invalidarTodaLaCache();
       window.dispatchEvent(new CustomEvent("auth:logout"));
     }
 

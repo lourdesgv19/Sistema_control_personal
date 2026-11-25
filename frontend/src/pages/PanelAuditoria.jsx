@@ -10,8 +10,9 @@ import {
   Activity,
   Layers,
   X,
-  Loader2,
   Maximize2,
+  ChevronUp,
+  ChevronDown,
 } from "lucide-react";
 import {
   getAuditoriaMovimientosPaginados,
@@ -19,17 +20,29 @@ import {
 } from "../services/seguridadService";
 import SelectorAccionFiltro from "../components/comunes/SelectorAccionFiltro";
 import PaginadorTabla from "../components/comunes/PaginadorTabla";
+import EstadoCarga from "../components/comunes/EstadoCarga";
 import {
   getBadgeAccionPorModulo,
   formatearFecha24hs,
 } from "../utils/auditoriaColorUtils";
 
 const ITEMS_POR_PAGINA = 15;
+const STORAGE_KEY_METRICAS = "panel_auditoria_mostrar_metricas_v1";
 
 export default function PanelAuditoria() {
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [loadingMetricas, setLoadingMetricas] = useState(true);
+  const [loadingMetricas, setLoadingMetricas] = useState(false);
+
+  // Preferencia persistente de visibilidad de métricas (visible por defecto)
+  const [mostrarMetricas, setMostrarMetricas] = useState(() => {
+    try {
+      const guardado = localStorage.getItem(STORAGE_KEY_METRICAS);
+      return guardado === null ? true : guardado === "true";
+    } catch {
+      return true;
+    }
+  });
 
   // Paginación desde Servidor
   const [paginaActual, setPaginaActual] = useState(1);
@@ -52,6 +65,18 @@ export default function PanelAuditoria() {
     tipo: "", // 'acciones' | 'usuarios'
     items: [],
   });
+
+  const toggleMostrarMetricas = () => {
+    setMostrarMetricas((prev) => {
+      const nuevoValor = !prev;
+      try {
+        localStorage.setItem(STORAGE_KEY_METRICAS, String(nuevoValor));
+      } catch {
+        // Ignorar errores de almacenamiento privado
+      }
+      return nuevoValor;
+    });
+  };
 
   // Consulta de métricas filtradas por el rango de fechas
   const cargarMetricas = useCallback(async () => {
@@ -104,7 +129,7 @@ export default function PanelAuditoria() {
     }
   }, [fechaInicio, fechaFin]);
 
-  // Consulta paginada en el servidor (soporta formato Spring Page en res.page o res directo)
+  // Consulta paginada en el servidor
   const cargarAuditoria = useCallback(
     async (page = 0) => {
       setLoading(true);
@@ -128,7 +153,6 @@ export default function PanelAuditoria() {
           const lista = Array.isArray(res.content) ? res.content : [];
           setLogs(lista);
 
-          // Lectura compatible: si Spring Boot anidó los metadatos en res.page o los envió sueltos
           const totalReal =
             res.page?.totalElements ??
             res.totalElements ??
@@ -171,6 +195,7 @@ export default function PanelAuditoria() {
 
   // Navegación explícita de páginas
   const handleCambiarPagina = (nuevaPagina) => {
+    if (loading) return;
     const pag = Math.max(1, Math.min(nuevaPagina, totalPaginas));
     setPaginaActual(pag);
     cargarAuditoria(pag - 1);
@@ -178,33 +203,58 @@ export default function PanelAuditoria() {
 
   // Recarga manual completa
   const recargarTodo = useCallback(() => {
+    if (loading || loadingMetricas) return;
     const pageIndex = Math.max(0, (Number(paginaActual) || 1) - 1);
     cargarAuditoria(pageIndex);
-    cargarMetricas();
-  }, [cargarAuditoria, cargarMetricas, paginaActual]);
+    if (mostrarMetricas || !metricas) {
+      cargarMetricas();
+    }
+  }, [
+    cargarAuditoria,
+    cargarMetricas,
+    paginaActual,
+    loading,
+    loadingMetricas,
+    mostrarMetricas,
+    metricas,
+  ]);
 
   // Recarga reactiva con debounce ante cambios de filtros (vuelve a página 1)
   useEffect(() => {
     const timer = setTimeout(() => {
       cargarAuditoria(0);
-      cargarMetricas();
+      if (mostrarMetricas || !metricas) {
+        cargarMetricas();
+      }
     }, 300);
     return () => clearTimeout(timer);
-  }, [cargarAuditoria, cargarMetricas]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cargarAuditoria, cargarMetricas, mostrarMetricas]);
 
   // Auto-recuperación al restaurarse la conexión tras reiniciar el backend
   useEffect(() => {
     const handleRecuperacion = () => {
-      recargarTodo();
+      const pageIndex = Math.max(0, (Number(paginaActual) || 1) - 1);
+      cargarAuditoria(pageIndex);
+      if (mostrarMetricas || !metricas) {
+        cargarMetricas();
+      }
     };
 
     window.addEventListener("conexion:restaurada", handleRecuperacion);
     return () => {
       window.removeEventListener("conexion:restaurada", handleRecuperacion);
     };
-  }, [recargarTodo]);
+  }, [
+    cargarAuditoria,
+    cargarMetricas,
+    paginaActual,
+    mostrarMetricas,
+    metricas,
+  ]);
 
   const limpiarFiltros = () => {
+    if (loading) return;
     setFiltroUsuario("");
     setFiltroAccion("");
     setFechaInicio("");
@@ -239,6 +289,12 @@ export default function PanelAuditoria() {
 
   return (
     <div className="p-3.5 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-4 sm:space-y-6 font-sans">
+      <EstadoCarga
+        cargando={loading || loadingMetricas}
+        variante="flotante"
+        icono={History}
+      />
+
       {/* 1. CABECERA */}
       <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-3 sm:gap-4">
@@ -256,185 +312,211 @@ export default function PanelAuditoria() {
           </div>
         </div>
 
-        <button
-          onClick={recargarTodo}
-          disabled={loading}
-          className="flex items-center justify-center gap-2 px-4 py-2 border border-slate-200 hover:bg-slate-50 rounded-xl text-xs font-semibold text-slate-700 transition cursor-pointer w-full sm:w-auto"
-        >
-          <RefreshCw
-            className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`}
-          />
-          <span>Actualizar Datos</span>
-        </button>
-      </div>
-
-      {/* 2. TARJETAS DE MÉTRICAS GLOBALES / FILTRADAS */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
-        <div className="bg-white border border-slate-200 p-4 sm:p-5 rounded-2xl shadow-xs">
-          <div className="flex items-center justify-between text-slate-500">
-            <span className="text-[10px] font-bold uppercase tracking-wider">
-              Total Movimientos
-            </span>
-            <Activity className="w-4 h-4 text-indigo-600" />
-          </div>
-          <div className="text-xl sm:text-2xl font-black text-slate-900 mt-2">
-            {metricas ? metricas.totalMovimientos : "..."}
-          </div>
-          <div className="text-[10px] sm:text-[11px] text-slate-400 mt-0.5">
-            {fechaInicio || fechaFin
-              ? "En el rango seleccionado"
-              : "Acciones registradas en el sistema"}
-          </div>
-        </div>
-
-        <div className="bg-white border border-slate-200 p-4 sm:p-5 rounded-2xl shadow-xs">
-          <div className="flex items-center justify-between text-slate-500">
-            <span className="text-[10px] font-bold uppercase tracking-wider">
-              Operadores Activos
-            </span>
-            <Users className="w-4 h-4 text-purple-600" />
-          </div>
-          <div className="text-xl sm:text-2xl font-black text-slate-900 mt-2">
-            {metricas ? metricas.totalUsuariosActivos : "..."}
-          </div>
-          <div className="text-[10px] sm:text-[11px] text-slate-400 mt-0.5">
-            {fechaInicio || fechaFin
-              ? "Con actividad en el período"
-              : "Usuarios con actividad registrada"}
-          </div>
-        </div>
-
-        <div className="bg-white border border-slate-200 p-4 sm:p-5 rounded-2xl shadow-xs sm:col-span-1">
-          <div className="flex items-center justify-between text-slate-500">
-            <span className="text-[10px] font-bold uppercase tracking-wider">
-              Operación Más Frecuente
-            </span>
-            <Layers className="w-4 h-4 text-emerald-600" />
-          </div>
-          <div
-            className="text-base sm:text-lg font-bold text-slate-800 mt-2 truncate"
-            title={metricas?.accionMasFrecuente}
+        <div className="flex items-center gap-2.5 flex-wrap w-full md:w-auto">
+          <button
+            type="button"
+            onClick={toggleMostrarMetricas}
+            disabled={loading || loadingMetricas}
+            className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold shadow-2xs transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {metricas ? metricas.accionMasFrecuente : "..."}
-          </div>
-          <div className="text-[10px] sm:text-[11px] text-slate-400 mt-0.5">
-            Mayor volumen de registros
-          </div>
+            {mostrarMetricas ? (
+              <ChevronUp className="w-4 h-4 text-slate-500 shrink-0" />
+            ) : (
+              <ChevronDown className="w-4 h-4 text-slate-500 shrink-0" />
+            )}
+            <span>
+              {mostrarMetricas ? "Ocultar métricas" : "Mostrar métricas"}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={recargarTodo}
+            disabled={loading || loadingMetricas}
+            className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-4 py-2 border border-slate-200 hover:bg-slate-50 rounded-xl text-xs font-semibold text-slate-700 transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <RefreshCw
+              className={`w-3.5 h-3.5 ${loading || loadingMetricas ? "animate-spin" : ""}`}
+            />
+            <span>Actualizar Datos</span>
+          </button>
         </div>
       </div>
 
-      {/* 3. GRÁFICOS: TOP 5 CON DETALLE EN MODAL */}
-      {metricas && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
-          {/* Top 5 Movimientos */}
-          <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 shadow-xs space-y-3 sm:space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-2.5 sm:pb-3 gap-2">
-              <div className="flex items-center gap-2 flex-wrap">
-                <BarChart2 className="w-4 h-4 text-indigo-600 shrink-0" />
-                <span className="text-xs font-bold text-slate-800 uppercase tracking-wide">
-                  Top 5 Movimientos
+      {/* 2. TARJETAS DE MÉTRICAS Y GRÁFICOS TOP 5 (RENDERIZADO CONDICIONAL) */}
+      {mostrarMetricas && (
+        <>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+            <div className="bg-white border border-slate-200 p-4 sm:p-5 rounded-2xl shadow-xs">
+              <div className="flex items-center justify-between text-slate-500">
+                <span className="text-[10px] font-bold uppercase tracking-wider">
+                  Total Movimientos
                 </span>
-                {(fechaInicio || fechaFin) && (
-                  <span className="text-[9px] sm:text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
-                    Filtrado
-                  </span>
-                )}
+                <Activity className="w-4 h-4 text-indigo-600" />
               </div>
-              <button
-                type="button"
-                onClick={() => abrirModalDetalle("acciones")}
-                className="inline-flex items-center gap-1 text-[11px] font-semibold text-indigo-600 hover:text-indigo-800 hover:underline cursor-pointer shrink-0"
-              >
-                <Maximize2 className="w-3 h-3" />
-                <span>
-                  Ver todos ({metricas.distribucionAcciones?.length || 0})
-                </span>
-              </button>
+              <div className="text-xl sm:text-2xl font-black text-slate-900 mt-2">
+                {metricas ? metricas.totalMovimientos : "..."}
+              </div>
+              <div className="text-[10px] sm:text-[11px] text-slate-400 mt-0.5">
+                {fechaInicio || fechaFin
+                  ? "En el rango seleccionado"
+                  : "Acciones registradas en el sistema"}
+              </div>
             </div>
 
-            <div className="space-y-2.5 sm:space-y-3">
-              {metricas.distribucionAcciones?.length === 0 ? (
-                <div className="py-6 text-center text-xs text-slate-400 italic">
-                  Sin registros de acciones en este período.
-                </div>
-              ) : (
-                metricas.distribucionAcciones.slice(0, 5).map((item) => (
-                  <div key={item.etiqueta} className="space-y-1">
-                    <div className="flex justify-between text-xs font-semibold text-slate-700">
-                      <span className="truncate pr-2">{item.etiqueta}</span>
-                      <span className="text-indigo-600 font-mono font-bold shrink-0">
-                        {item.cantidad} ({item.porcentaje}%)
-                      </span>
-                    </div>
-                    <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-                      <div
-                        className="bg-indigo-600 h-full rounded-full transition-all duration-500"
-                        style={{ width: `${Math.min(item.porcentaje, 100)}%` }}
-                      ></div>
-                    </div>
-                  </div>
-                ))
-              )}
+            <div className="bg-white border border-slate-200 p-4 sm:p-5 rounded-2xl shadow-xs">
+              <div className="flex items-center justify-between text-slate-500">
+                <span className="text-[10px] font-bold uppercase tracking-wider">
+                  Operadores Activos
+                </span>
+                <Users className="w-4 h-4 text-purple-600" />
+              </div>
+              <div className="text-xl sm:text-2xl font-black text-slate-900 mt-2">
+                {metricas ? metricas.totalUsuariosActivos : "..."}
+              </div>
+              <div className="text-[10px] sm:text-[11px] text-slate-400 mt-0.5">
+                {fechaInicio || fechaFin
+                  ? "Con actividad en el período"
+                  : "Usuarios con actividad registrada"}
+              </div>
+            </div>
+
+            <div className="bg-white border border-slate-200 p-4 sm:p-5 rounded-2xl shadow-xs sm:col-span-1">
+              <div className="flex items-center justify-between text-slate-500">
+                <span className="text-[10px] font-bold uppercase tracking-wider">
+                  Operación Más Frecuente
+                </span>
+                <Layers className="w-4 h-4 text-emerald-600" />
+              </div>
+              <div
+                className="text-base sm:text-lg font-bold text-slate-800 mt-2 truncate"
+                title={metricas?.accionMasFrecuente}
+              >
+                {metricas ? metricas.accionMasFrecuente : "..."}
+              </div>
+              <div className="text-[10px] sm:text-[11px] text-slate-400 mt-0.5">
+                Mayor volumen de registros
+              </div>
             </div>
           </div>
 
-          {/* Top 5 Operadores */}
-          <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 shadow-xs space-y-3 sm:space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-2.5 sm:pb-3 gap-2">
-              <div className="flex items-center gap-2 flex-wrap">
-                <Users className="w-4 h-4 text-purple-600 shrink-0" />
-                <span className="text-xs font-bold text-slate-800 uppercase tracking-wide">
-                  Top 5 Operadores
-                </span>
-                {(fechaInicio || fechaFin) && (
-                  <span className="text-[9px] sm:text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
-                    Filtrado
-                  </span>
-                )}
-              </div>
-              <button
-                type="button"
-                onClick={() => abrirModalDetalle("usuarios")}
-                className="inline-flex items-center gap-1 text-[11px] font-semibold text-purple-600 hover:text-purple-800 hover:underline cursor-pointer shrink-0"
-              >
-                <Maximize2 className="w-3 h-3" />
-                <span>
-                  Ver todos ({metricas.actividadUsuarios?.length || 0})
-                </span>
-              </button>
-            </div>
-
-            <div className="space-y-2.5 sm:space-y-3">
-              {metricas.actividadUsuarios?.length === 0 ? (
-                <div className="py-6 text-center text-xs text-slate-400 italic">
-                  Sin actividad de operadores en este período.
-                </div>
-              ) : (
-                metricas.actividadUsuarios.slice(0, 5).map((item) => (
-                  <div key={item.etiqueta} className="space-y-1">
-                    <div className="flex justify-between text-xs font-semibold text-slate-700">
-                      <span className="font-mono text-slate-800 truncate pr-2">
-                        {item.etiqueta}
+          {metricas && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
+              {/* Top 5 Movimientos */}
+              <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 shadow-xs space-y-3 sm:space-y-4">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-2.5 sm:pb-3 gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <BarChart2 className="w-4 h-4 text-indigo-600 shrink-0" />
+                    <span className="text-xs font-bold text-slate-800 uppercase tracking-wide">
+                      Top 5 Movimientos
+                    </span>
+                    {(fechaInicio || fechaFin) && (
+                      <span className="text-[9px] sm:text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
+                        Filtrado
                       </span>
-                      <span className="text-purple-600 font-mono font-bold shrink-0">
-                        {item.cantidad} ({item.porcentaje}%)
-                      </span>
-                    </div>
-                    <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-                      <div
-                        className="bg-purple-600 h-full rounded-full transition-all duration-500"
-                        style={{ width: `${Math.min(item.porcentaje, 100)}%` }}
-                      ></div>
-                    </div>
+                    )}
                   </div>
-                ))
-              )}
+                  <button
+                    type="button"
+                    onClick={() => abrirModalDetalle("acciones")}
+                    className="inline-flex items-center gap-1 text-[11px] font-semibold text-indigo-600 hover:text-indigo-800 hover:underline cursor-pointer shrink-0"
+                  >
+                    <Maximize2 className="w-3 h-3" />
+                    <span>
+                      Ver todos ({metricas.distribucionAcciones?.length || 0})
+                    </span>
+                  </button>
+                </div>
+
+                <div className="space-y-2.5 sm:space-y-3">
+                  {metricas.distribucionAcciones?.length === 0 ? (
+                    <div className="py-6 text-center text-xs text-slate-400 italic">
+                      Sin registros de acciones en este período.
+                    </div>
+                  ) : (
+                    metricas.distribucionAcciones.slice(0, 5).map((item) => (
+                      <div key={item.etiqueta} className="space-y-1">
+                        <div className="flex justify-between text-xs font-semibold text-slate-700">
+                          <span className="truncate pr-2">{item.etiqueta}</span>
+                          <span className="text-indigo-600 font-mono font-bold shrink-0">
+                            {item.cantidad} ({item.porcentaje}%)
+                          </span>
+                        </div>
+                        <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                          <div
+                            className="bg-indigo-600 h-full rounded-full transition-all duration-500"
+                            style={{
+                              width: `${Math.min(item.porcentaje, 100)}%`,
+                            }}
+                          ></div>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              {/* Top 5 Operadores */}
+              <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 shadow-xs space-y-3 sm:space-y-4">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-2.5 sm:pb-3 gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <Users className="w-4 h-4 text-purple-600 shrink-0" />
+                    <span className="text-xs font-bold text-slate-800 uppercase tracking-wide">
+                      Top 5 Operadores
+                    </span>
+                    {(fechaInicio || fechaFin) && (
+                      <span className="text-[9px] sm:text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
+                        Filtrado
+                      </span>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => abrirModalDetalle("usuarios")}
+                    className="inline-flex items-center gap-1 text-[11px] font-semibold text-purple-600 hover:text-purple-800 hover:underline cursor-pointer shrink-0"
+                  >
+                    <Maximize2 className="w-3 h-3" />
+                    <span>
+                      Ver todos ({metricas.actividadUsuarios?.length || 0})
+                    </span>
+                  </button>
+                </div>
+
+                <div className="space-y-2.5 sm:space-y-3">
+                  {metricas.actividadUsuarios?.length === 0 ? (
+                    <div className="py-6 text-center text-xs text-slate-400 italic">
+                      Sin actividad de operadores en este período.
+                    </div>
+                  ) : (
+                    metricas.actividadUsuarios.slice(0, 5).map((item) => (
+                      <div key={item.etiqueta} className="space-y-1">
+                        <div className="flex justify-between text-xs font-semibold text-slate-700">
+                          <span className="font-mono text-slate-800 truncate pr-2">
+                            {item.etiqueta}
+                          </span>
+                          <span className="text-purple-600 font-mono font-bold shrink-0">
+                            {item.cantidad} ({item.porcentaje}%)
+                          </span>
+                        </div>
+                        <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                          <div
+                            className="bg-purple-600 h-full rounded-full transition-all duration-500"
+                            style={{
+                              width: `${Math.min(item.porcentaje, 100)}%`,
+                            }}
+                          ></div>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
+          )}
+        </>
       )}
 
-      {/* 4. FILTROS Y BÚSQUEDA */}
+      {/* 3. FILTROS Y BÚSQUEDA */}
       <div className="bg-white p-3.5 sm:p-4 border border-slate-200 rounded-2xl shadow-xs space-y-3">
         <div className="flex items-center justify-between text-xs font-bold text-slate-700 border-b border-slate-100 pb-2">
           <div className="flex items-center gap-1.5">
@@ -444,8 +526,9 @@ export default function PanelAuditoria() {
 
           {hayFiltrosActivos && (
             <button
+              disabled={loading}
               onClick={limpiarFiltros}
-              className="flex items-center gap-1 text-[11px] text-rose-600 hover:text-rose-700 font-semibold cursor-pointer"
+              className="flex items-center gap-1 text-[11px] text-rose-600 hover:text-rose-700 font-semibold cursor-pointer disabled:opacity-50"
             >
               <X className="w-3.5 h-3.5" />
               Limpiar filtros
@@ -489,12 +572,13 @@ export default function PanelAuditoria() {
             <Calendar className="w-3.5 h-3.5 text-slate-400 shrink-0" />
             <input
               type="date"
+              disabled={loading}
               value={fechaInicio}
               onChange={(e) => {
                 setFechaInicio(e.target.value);
                 setPaginaActual(1);
               }}
-              className="w-full outline-none text-slate-700 text-xs bg-transparent cursor-pointer"
+              className="w-full outline-none text-slate-700 text-xs bg-transparent cursor-pointer disabled:opacity-50"
               title="Fecha inicial (Desde)"
             />
           </div>
@@ -507,28 +591,24 @@ export default function PanelAuditoria() {
             <Calendar className="w-3.5 h-3.5 text-slate-400 shrink-0" />
             <input
               type="date"
+              disabled={loading}
               value={fechaFin}
               onChange={(e) => {
                 setFechaFin(e.target.value);
                 setPaginaActual(1);
               }}
-              className="w-full outline-none text-slate-700 text-xs bg-transparent cursor-pointer"
+              className="w-full outline-none text-slate-700 text-xs bg-transparent cursor-pointer disabled:opacity-50"
               title="Fecha límite (Hasta)"
             />
           </div>
         </div>
       </div>
 
-      {/* 5. LISTADO DE REGISTROS (MÓVIL EN CARDS / ESCRITORIO EN TABLA) */}
+      {/* 4. LISTADO DE REGISTROS (MÓVIL EN CARDS / ESCRITORIO EN TABLA) */}
       <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-xs">
         {/* VISTA MÓVIL (md:hidden) */}
         <div className="md:hidden divide-y divide-slate-100">
-          {loading ? (
-            <div className="text-center py-12 text-slate-400 text-xs">
-              <Loader2 className="w-5 h-5 animate-spin mx-auto text-indigo-600 mb-2" />
-              Consultando auditoría en el servidor...
-            </div>
-          ) : logs.length === 0 ? (
+          {!loading && logs.length === 0 ? (
             <div className="text-center py-12 text-slate-400 text-xs italic">
               No se encontraron registros de auditoría con los filtros
               aplicados.
@@ -589,14 +669,7 @@ export default function PanelAuditoria() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-slate-700">
-              {loading ? (
-                <tr>
-                  <td colSpan="5" className="text-center py-12 text-slate-400">
-                    <Loader2 className="w-5 h-5 animate-spin mx-auto text-indigo-600 mb-2" />
-                    Consultando auditoría en el servidor...
-                  </td>
-                </tr>
-              ) : logs.length === 0 ? (
+              {!loading && logs.length === 0 ? (
                 <tr>
                   <td
                     colSpan="5"
@@ -653,7 +726,7 @@ export default function PanelAuditoria() {
           </table>
         </div>
 
-        {/* 6. CONTROL DE PAGINACIÓN MODULARIZADO */}
+        {/* 5. CONTROL DE PAGINACIÓN MODULARIZADO */}
         <PaginadorTabla
           paginaActual={paginaActual}
           totalPaginas={totalPaginas}
@@ -664,7 +737,7 @@ export default function PanelAuditoria() {
         />
       </div>
 
-      {/* 7. MODAL DETALLE COMPLETO */}
+      {/* 6. MODAL DETALLE COMPLETO */}
       {modalMetricas.isOpen && (
         <div
           onClick={() =>

@@ -1,42 +1,23 @@
-import apiClient from "./api";
+import apiClient, { invalidarTodaLaCache } from "./api";
 
 // 1. Resumen de métricas globales (tarjetas superiores)
 export const getPersonalResumen = async () =>
   (await apiClient.get("/empleados/resumen-metricas")).data;
 
-// 2. Selectores y listados generales de empleados
-let cacheEmpleadosActivos = null;
-let ultimaCargaEmpleados = 0;
+// 2. Selectores y listados generales de empleados (cacheado centralmente en api.js + deduplicación en vuelo)
 let promesaEnVuelo = null;
-const TIEMPO_CACHE_MS = 60000; // 60 segundos de gracia
 
 export const getEmpleadosActivos = async (forzarRefresco = false) => {
-  const ahora = Date.now();
-
-  // Si hay datos en caché válidos y no se pide forzar, retornamos la caché
-  if (
-    !forzarRefresco &&
-    cacheEmpleadosActivos &&
-    ahora - ultimaCargaEmpleados < TIEMPO_CACHE_MS
-  ) {
-    return cacheEmpleadosActivos;
-  }
-
-  // Si ya hay una petición HTTP en curso, nos sumamos a la misma sin duplicar
-  if (promesaEnVuelo) {
+  if (promesaEnVuelo && !forzarRefresco) {
     return promesaEnVuelo;
   }
 
   promesaEnVuelo = apiClient
-    .get("/empleados/activos")
-    .then((res) => {
-      cacheEmpleadosActivos = Array.isArray(res.data) ? res.data : [];
-      ultimaCargaEmpleados = Date.now();
-      return cacheEmpleadosActivos;
-    })
+    .get("/empleados/activos", { forceRefresh: forzarRefresco })
+    .then((res) => (Array.isArray(res.data) ? res.data : []))
     .catch((err) => {
       console.error("Error al obtener empleados activos:", err);
-      return cacheEmpleadosActivos || [];
+      return [];
     })
     .finally(() => {
       promesaEnVuelo = null;
@@ -45,10 +26,9 @@ export const getEmpleadosActivos = async (forzarRefresco = false) => {
   return promesaEnVuelo;
 };
 
-// Limpiar la caché únicamente cuando se crea, edita o elimina un empleado
+// Mantenemos la firma exportada para compatibilidad con componentes existentes
 export const invalidarCacheEmpleados = () => {
-  cacheEmpleadosActivos = null;
-  ultimaCargaEmpleados = 0;
+  invalidarTodaLaCache();
 };
 
 // 3. Paginación de empleados
@@ -59,7 +39,6 @@ export const getEmpleadosPaginados = async (
   page = 0,
   size = 15,
 ) => {
-  // Asegura que page sea un número entero y nunca NaN
   const pageSegura = Number.isNaN(Number(page))
     ? 0
     : Math.max(0, parseInt(page, 10) || 0);

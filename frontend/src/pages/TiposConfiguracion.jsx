@@ -9,7 +9,6 @@ import {
   Trash2,
   Search,
   AlignLeft,
-  Loader2,
   RotateCcw,
   Lock,
 } from "lucide-react";
@@ -31,6 +30,7 @@ import {
   reactivarHorario,
 } from "../services/configuracionService";
 import ModalAlerta from "../components/comunes/ModalAlerta";
+import EstadoCarga from "../components/comunes/EstadoCarga";
 import ModalCategoria from "../components/configuracion/ModalCategoria";
 import ModalCargo from "../components/configuracion/ModalCargo";
 import ModalHorario from "../components/configuracion/ModalHorario";
@@ -218,14 +218,14 @@ export default function TiposConfiguracion() {
 
   // --- HANDLERS CATEGORÍAS ---
   const abrirModalCrearCategoria = () => {
-    if (!puedeEditarCategorias) return;
+    if (!puedeEditarCategorias || loading) return;
     setEditandoCatId(null);
     setFormCat(FORM_CAT_INICIAL);
     setModalCat(true);
   };
 
   const abrirModalEditarCategoria = (cat) => {
-    if (!puedeEditarCategorias) return;
+    if (!puedeEditarCategorias || loading) return;
     setEditandoCatId(cat.id);
     setFormCat({
       nombre: cat.nombre || "",
@@ -239,6 +239,7 @@ export default function TiposConfiguracion() {
 
   const procederGuardarCategoria = async () => {
     if (!puedeEditarCategorias) return;
+    setLoading(true);
     try {
       const payload = {
         nombre: formCat.nombre.trim(),
@@ -271,6 +272,7 @@ export default function TiposConfiguracion() {
       setEditandoCatId(null);
       setFormCat(FORM_CAT_INICIAL);
     } catch (err) {
+      setLoading(false);
       mostrarAviso(
         "danger",
         "Error al Guardar",
@@ -282,7 +284,7 @@ export default function TiposConfiguracion() {
 
   const handleGuardarCategoria = async (e) => {
     e.preventDefault();
-    if (!puedeEditarCategorias) return;
+    if (!puedeEditarCategorias || loading) return;
 
     const coincidencia = buscarSimilar(
       formCat.nombre,
@@ -319,7 +321,7 @@ export default function TiposConfiguracion() {
   };
 
   const handleEliminarCategoria = (id, nombre) => {
-    if (!puedeEditarCategorias) return;
+    if (!puedeEditarCategorias || loading) return;
     setModalAlerta({
       isOpen: true,
       tipo: "danger",
@@ -330,6 +332,7 @@ export default function TiposConfiguracion() {
       mostrarCancelar: true,
       onConfirmar: async () => {
         setModalAlerta((prev) => ({ ...prev, isOpen: false }));
+        setLoading(true);
         try {
           await deleteCategoria(id);
           await cargarDatos();
@@ -339,6 +342,7 @@ export default function TiposConfiguracion() {
             `La categoría "${nombre}" fue dada de baja.`,
           );
         } catch (err) {
+          setLoading(false);
           mostrarAviso(
             "danger",
             "Error",
@@ -351,7 +355,7 @@ export default function TiposConfiguracion() {
   };
 
   const handleReactivarCategoria = (id, nombre) => {
-    if (!puedeEditarCategorias) return;
+    if (!puedeEditarCategorias || loading) return;
     setModalAlerta({
       isOpen: true,
       tipo: "info",
@@ -362,6 +366,7 @@ export default function TiposConfiguracion() {
       mostrarCancelar: true,
       onConfirmar: async () => {
         setModalAlerta((prev) => ({ ...prev, isOpen: false }));
+        setLoading(true);
         try {
           await reactivarCategoria(id);
           await cargarDatos();
@@ -371,6 +376,7 @@ export default function TiposConfiguracion() {
             `La categoría "${nombre}" fue reactivada.`,
           );
         } catch (err) {
+          setLoading(false);
           mostrarAviso("danger", "Error", "No se pudo reactivar la categoría.");
         }
       },
@@ -379,7 +385,7 @@ export default function TiposConfiguracion() {
 
   // --- HANDLERS CARGOS ---
   const abrirModalCrearCargo = () => {
-    if (!puedeEditarCargos) return;
+    if (!puedeEditarCargos || loading) return;
     setEditandoCargoId(null);
     setFormCargo({
       nombre: "",
@@ -391,7 +397,7 @@ export default function TiposConfiguracion() {
   };
 
   const abrirModalEditarCargo = (cargo) => {
-    if (!puedeEditarCargos) return;
+    if (!puedeEditarCargos || loading) return;
     setEditandoCargoId(cargo.id);
     setFormCargo({
       nombre: cargo.nombre || "",
@@ -404,7 +410,7 @@ export default function TiposConfiguracion() {
 
   const handleGuardarCargo = async (e) => {
     e.preventDefault();
-    if (!puedeEditarCargos) return;
+    if (!puedeEditarCargos || loading) return;
 
     if (!formCargo.nombre.trim()) {
       mostrarAviso(
@@ -429,6 +435,7 @@ export default function TiposConfiguracion() {
       editandoCargoId,
     );
     const ejecutarPeticion = async () => {
+      setLoading(true);
       try {
         const payload = {
           nombre: formCargo.nombre.trim(),
@@ -458,6 +465,7 @@ export default function TiposConfiguracion() {
         setEditandoCargoId(null);
         setFormCargo(FORM_CARGO_INICIAL);
       } catch (err) {
+        setLoading(false);
         mostrarAviso(
           "danger",
           "Error",
@@ -496,7 +504,7 @@ export default function TiposConfiguracion() {
   };
 
   const handleEliminarCargo = (id, nombre) => {
-    if (!puedeEditarCargos) return;
+    if (!puedeEditarCargos || loading) return;
     setModalAlerta({
       isOpen: true,
       tipo: "danger",
@@ -507,6 +515,7 @@ export default function TiposConfiguracion() {
       mostrarCancelar: true,
       onConfirmar: async () => {
         setModalAlerta((prev) => ({ ...prev, isOpen: false }));
+        setLoading(true);
         try {
           await deleteCargo(id);
           await cargarDatos();
@@ -516,6 +525,7 @@ export default function TiposConfiguracion() {
             `El cargo "${nombre}" fue dado de baja.`,
           );
         } catch (err) {
+          setLoading(false);
           mostrarAviso("danger", "Error", "No se pudo dar de baja el cargo.");
         }
       },
@@ -523,7 +533,7 @@ export default function TiposConfiguracion() {
   };
 
   const handleReactivarCargo = (id, nombre) => {
-    if (!puedeEditarCargos) return;
+    if (!puedeEditarCargos || loading) return;
     setModalAlerta({
       isOpen: true,
       tipo: "info",
@@ -534,6 +544,7 @@ export default function TiposConfiguracion() {
       mostrarCancelar: true,
       onConfirmar: async () => {
         setModalAlerta((prev) => ({ ...prev, isOpen: false }));
+        setLoading(true);
         try {
           await reactivarCargo(id);
           await cargarDatos();
@@ -543,6 +554,7 @@ export default function TiposConfiguracion() {
             `El cargo "${nombre}" fue reactivado.`,
           );
         } catch (err) {
+          setLoading(false);
           mostrarAviso("danger", "Error", "No se pudo reactivar el cargo.");
         }
       },
@@ -551,7 +563,7 @@ export default function TiposConfiguracion() {
 
   // --- HANDLERS HORARIOS ---
   const abrirModalCrearHorario = () => {
-    if (!puedeEditarTurnos) return;
+    if (!puedeEditarTurnos || loading) return;
     setEditandoHorarioId(null);
     setFormHorario({
       ...FORM_HORARIO_INICIAL,
@@ -561,7 +573,7 @@ export default function TiposConfiguracion() {
   };
 
   const abrirModalEditarHorario = (h) => {
-    if (!puedeEditarTurnos) return;
+    if (!puedeEditarTurnos || loading) return;
     setEditandoHorarioId(h.id);
     setFormHorario({
       nombre: h.nombre || "",
@@ -582,7 +594,7 @@ export default function TiposConfiguracion() {
 
   const handleGuardarHorario = async (e) => {
     e.preventDefault();
-    if (!puedeEditarTurnos) return;
+    if (!puedeEditarTurnos || loading) return;
 
     if (!formHorario.nombre.trim()) {
       mostrarAviso(
@@ -623,6 +635,7 @@ export default function TiposConfiguracion() {
       editandoHorarioId,
     );
     const ejecutarPeticion = async () => {
+      setLoading(true);
       try {
         const payload = {
           nombre: formHorario.nombre.trim(),
@@ -664,6 +677,7 @@ export default function TiposConfiguracion() {
         setEditandoHorarioId(null);
         setFormHorario(FORM_HORARIO_INICIAL);
       } catch (err) {
+        setLoading(false);
         mostrarAviso(
           "danger",
           "Error",
@@ -703,7 +717,7 @@ export default function TiposConfiguracion() {
   };
 
   const handleEliminarHorario = (id, nombre) => {
-    if (!puedeEditarTurnos) return;
+    if (!puedeEditarTurnos || loading) return;
     setModalAlerta({
       isOpen: true,
       tipo: "danger",
@@ -714,6 +728,7 @@ export default function TiposConfiguracion() {
       mostrarCancelar: true,
       onConfirmar: async () => {
         setModalAlerta((prev) => ({ ...prev, isOpen: false }));
+        setLoading(true);
         try {
           await deleteHorario(id);
           await cargarDatos();
@@ -723,6 +738,7 @@ export default function TiposConfiguracion() {
             `El horario "${nombre}" fue dado de baja.`,
           );
         } catch (err) {
+          setLoading(false);
           mostrarAviso("danger", "Error", "No se pudo dar de baja el horario.");
         }
       },
@@ -730,7 +746,7 @@ export default function TiposConfiguracion() {
   };
 
   const handleReactivarHorario = (id, nombre) => {
-    if (!puedeEditarTurnos) return;
+    if (!puedeEditarTurnos || loading) return;
     setModalAlerta({
       isOpen: true,
       tipo: "info",
@@ -741,6 +757,7 @@ export default function TiposConfiguracion() {
       mostrarCancelar: true,
       onConfirmar: async () => {
         setModalAlerta((prev) => ({ ...prev, isOpen: false }));
+        setLoading(true);
         try {
           await reactivarHorario(id);
           await cargarDatos();
@@ -750,6 +767,7 @@ export default function TiposConfiguracion() {
             `El horario "${nombre}" fue reactivado.`,
           );
         } catch (err) {
+          setLoading(false);
           mostrarAviso("danger", "Error", "No se pudo reactivar el horario.");
         }
       },
@@ -798,21 +816,10 @@ export default function TiposConfiguracion() {
     return matchEstado && matchCat;
   });
 
-  if (loading) {
-    return (
-      <div className="flex h-96 items-center justify-center">
-        <div className="flex flex-col items-center gap-2 text-slate-500">
-          <Loader2 className="w-8 h-8 animate-spin text-indigo-600" />
-          <span className="text-xs font-semibold">
-            Cargando configuración del sistema...
-          </span>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="p-3.5 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-4 sm:space-y-6 font-sans">
+      <EstadoCarga cargando={loading} variante="flotante" icono={Settings} />
+
       {/* 1. HEADER PRINCIPAL */}
       <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-3 sm:gap-4">
@@ -834,8 +841,9 @@ export default function TiposConfiguracion() {
         <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs font-semibold text-slate-600 overflow-x-auto w-full md:w-auto">
           <button
             type="button"
+            disabled={loading}
             onClick={() => setActiveTab("categorias")}
-            className={`flex items-center gap-2 px-3 sm:px-3.5 py-1.5 rounded-lg transition-all shrink-0 cursor-pointer ${
+            className={`flex items-center gap-2 px-3 sm:px-3.5 py-1.5 rounded-lg transition-all shrink-0 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed ${
               activeTab === "categorias"
                 ? "bg-white text-indigo-700 shadow-xs border border-slate-200 font-bold"
                 : "hover:text-slate-900"
@@ -850,8 +858,9 @@ export default function TiposConfiguracion() {
 
           <button
             type="button"
+            disabled={loading}
             onClick={() => setActiveTab("cargos")}
-            className={`flex items-center gap-2 px-3 sm:px-3.5 py-1.5 rounded-lg transition-all shrink-0 cursor-pointer ${
+            className={`flex items-center gap-2 px-3 sm:px-3.5 py-1.5 rounded-lg transition-all shrink-0 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed ${
               activeTab === "cargos"
                 ? "bg-white text-indigo-700 shadow-xs border border-slate-200 font-bold"
                 : "hover:text-slate-900"
@@ -866,8 +875,9 @@ export default function TiposConfiguracion() {
 
           <button
             type="button"
+            disabled={loading}
             onClick={() => setActiveTab("horarios")}
-            className={`flex items-center gap-2 px-3 sm:px-3.5 py-1.5 rounded-lg transition-all shrink-0 cursor-pointer ${
+            className={`flex items-center gap-2 px-3 sm:px-3.5 py-1.5 rounded-lg transition-all shrink-0 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed ${
               activeTab === "horarios"
                 ? "bg-white text-indigo-700 shadow-xs border border-slate-200 font-bold"
                 : "hover:text-slate-900"
@@ -901,9 +911,10 @@ export default function TiposConfiguracion() {
               <div className="flex items-center gap-2 text-xs flex-1 sm:flex-initial">
                 <span className="text-slate-500 font-medium">Estado:</span>
                 <select
+                  disabled={loading}
                   value={filtroEstadoCat}
                   onChange={(e) => setFiltroEstadoCat(e.target.value)}
-                  className="bg-white border border-slate-200 text-slate-700 font-semibold rounded-xl px-2.5 sm:px-3 py-1.5 sm:py-2 text-xs outline-none focus:border-indigo-600 transition shadow-xs cursor-pointer flex-1 sm:flex-initial"
+                  className="bg-white border border-slate-200 text-slate-700 font-semibold rounded-xl px-2.5 sm:px-3 py-1.5 sm:py-2 text-xs outline-none focus:border-indigo-600 transition shadow-xs cursor-pointer flex-1 sm:flex-initial disabled:opacity-50"
                 >
                   <option value="ACTIVOS">Solo Activos</option>
                   <option value="TODOS">Todos</option>
@@ -913,8 +924,9 @@ export default function TiposConfiguracion() {
 
               {puedeEditarCategorias ? (
                 <button
+                  disabled={loading}
                   onClick={abrirModalCrearCategoria}
-                  className="flex items-center justify-center gap-2 px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl bg-[#4b35e6] hover:bg-[#3f2bc9] text-white text-xs font-semibold shadow-md transition cursor-pointer"
+                  className="flex items-center justify-center gap-2 px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl bg-[#4b35e6] hover:bg-[#3f2bc9] text-white text-xs font-semibold shadow-md transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Plus className="w-4 h-4 stroke-[2.5]" />
                   <span>Nueva Categoría</span>
@@ -933,7 +945,7 @@ export default function TiposConfiguracion() {
 
           {/* VISTA MÓVIL CATEGORÍAS (md:hidden) — TARJETAS TÁCTILES */}
           <div className="md:hidden divide-y divide-slate-100 bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-xs">
-            {filteredCategorias.length === 0 ? (
+            {!loading && filteredCategorias.length === 0 ? (
               <div className="p-8 text-center text-slate-400 text-xs italic">
                 No se encontraron categorías registradas con este estado.
               </div>
@@ -976,8 +988,9 @@ export default function TiposConfiguracion() {
                       <>
                         <button
                           type="button"
+                          disabled={loading}
                           onClick={() => abrirModalEditarCategoria(cat)}
-                          className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-xs font-semibold flex items-center gap-1 transition cursor-pointer"
+                          className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-xs font-semibold flex items-center gap-1 transition cursor-pointer disabled:opacity-50"
                         >
                           <Pencil className="w-3.5 h-3.5" />
                           <span>Editar</span>
@@ -985,10 +998,11 @@ export default function TiposConfiguracion() {
                         {cat.activo !== false ? (
                           <button
                             type="button"
+                            disabled={loading}
                             onClick={() =>
                               handleEliminarCategoria(cat.id, cat.nombre)
                             }
-                            className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-xl text-xs font-semibold flex items-center gap-1 transition cursor-pointer"
+                            className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-xl text-xs font-semibold flex items-center gap-1 transition cursor-pointer disabled:opacity-50"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                             <span>Baja</span>
@@ -996,10 +1010,11 @@ export default function TiposConfiguracion() {
                         ) : (
                           <button
                             type="button"
+                            disabled={loading}
                             onClick={() =>
                               handleReactivarCategoria(cat.id, cat.nombre)
                             }
-                            className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-xl text-xs font-semibold flex items-center gap-1 transition cursor-pointer"
+                            className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-xl text-xs font-semibold flex items-center gap-1 transition cursor-pointer disabled:opacity-50"
                           >
                             <RotateCcw className="w-3.5 h-3.5" />
                             <span>Reactivar</span>
@@ -1060,28 +1075,31 @@ export default function TiposConfiguracion() {
                         {puedeEditarCategorias ? (
                           <>
                             <button
+                              disabled={loading}
                               onClick={() => abrirModalEditarCategoria(cat)}
-                              className="p-1 hover:text-indigo-600 transition cursor-pointer"
+                              className="p-1 hover:text-indigo-600 transition cursor-pointer disabled:opacity-50"
                               title="Editar Categoría"
                             >
                               <Pencil className="w-4 h-4" />
                             </button>
                             {cat.activo !== false ? (
                               <button
+                                disabled={loading}
                                 onClick={() =>
                                   handleEliminarCategoria(cat.id, cat.nombre)
                                 }
-                                className="p-1 hover:text-rose-600 transition cursor-pointer"
+                                className="p-1 hover:text-rose-600 transition cursor-pointer disabled:opacity-50"
                                 title="Dar de baja"
                               >
                                 <Trash2 className="w-4 h-4" />
                               </button>
                             ) : (
                               <button
+                                disabled={loading}
                                 onClick={() =>
                                   handleReactivarCategoria(cat.id, cat.nombre)
                                 }
-                                className="p-1 hover:text-emerald-600 transition cursor-pointer"
+                                className="p-1 hover:text-emerald-600 transition cursor-pointer disabled:opacity-50"
                                 title="Reactivar Categoría"
                               >
                                 <RotateCcw className="w-4 h-4 text-emerald-600" />
@@ -1123,8 +1141,9 @@ export default function TiposConfiguracion() {
             </div>
             {puedeEditarCargos ? (
               <button
+                disabled={loading}
                 onClick={abrirModalCrearCargo}
-                className="flex items-center justify-center gap-2 px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl bg-[#4b35e6] hover:bg-[#3f2bc9] text-white text-xs font-semibold shadow-md transition cursor-pointer w-full sm:w-auto"
+                className="flex items-center justify-center gap-2 px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl bg-[#4b35e6] hover:bg-[#3f2bc9] text-white text-xs font-semibold shadow-md transition cursor-pointer w-full sm:w-auto disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Plus className="w-4 h-4 stroke-[2.5]" />
                 <span>Nuevo Cargo</span>
@@ -1156,9 +1175,10 @@ export default function TiposConfiguracion() {
               <div className="flex items-center gap-2 text-slate-600">
                 <span className="font-medium text-slate-500">Categoría:</span>
                 <select
+                  disabled={loading}
                   value={cargoCategoryFilter}
                   onChange={(e) => setCargoCategoryFilter(e.target.value)}
-                  className="border border-slate-200 rounded-xl px-2.5 py-1.5 sm:py-2 text-xs bg-white outline-none focus:border-indigo-500 flex-1 sm:flex-initial"
+                  className="border border-slate-200 rounded-xl px-2.5 py-1.5 sm:py-2 text-xs bg-white outline-none focus:border-indigo-500 flex-1 sm:flex-initial disabled:opacity-50"
                 >
                   <option value="TODAS">Todas las categorías</option>
                   {categoriasActivas.map((c) => (
@@ -1172,9 +1192,10 @@ export default function TiposConfiguracion() {
               <div className="flex items-center gap-2 text-slate-600">
                 <span className="font-medium text-slate-500">Estado:</span>
                 <select
+                  disabled={loading}
                   value={filtroEstadoCargo}
                   onChange={(e) => setFiltroEstadoCargo(e.target.value)}
-                  className="bg-white border border-slate-200 text-slate-700 font-semibold rounded-xl px-2.5 py-1.5 sm:py-2 text-xs outline-none focus:border-indigo-600 transition shadow-xs flex-1 sm:flex-initial"
+                  className="bg-white border border-slate-200 text-slate-700 font-semibold rounded-xl px-2.5 py-1.5 sm:py-2 text-xs outline-none focus:border-indigo-600 transition shadow-xs flex-1 sm:flex-initial disabled:opacity-50"
                 >
                   <option value="ACTIVOS">Solo Activos</option>
                   <option value="TODOS">Todos</option>
@@ -1186,7 +1207,7 @@ export default function TiposConfiguracion() {
 
           {/* VISTA MÓVIL CARGOS (md:hidden) — TARJETAS TÁCTILES */}
           <div className="md:hidden divide-y divide-slate-100 bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-xs">
-            {filteredCargos.length === 0 ? (
+            {!loading && filteredCargos.length === 0 ? (
               <div className="p-8 text-center text-slate-400 text-xs italic">
                 No se encontraron cargos coincidentes con los filtros aplicados.
               </div>
@@ -1234,8 +1255,9 @@ export default function TiposConfiguracion() {
                       <>
                         <button
                           type="button"
+                          disabled={loading}
                           onClick={() => abrirModalEditarCargo(cg)}
-                          className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-xs font-semibold flex items-center gap-1 transition cursor-pointer"
+                          className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-xs font-semibold flex items-center gap-1 transition cursor-pointer disabled:opacity-50"
                         >
                           <Pencil className="w-3.5 h-3.5" />
                           <span>Editar</span>
@@ -1243,10 +1265,11 @@ export default function TiposConfiguracion() {
                         {cg.activo !== false ? (
                           <button
                             type="button"
+                            disabled={loading}
                             onClick={() =>
                               handleEliminarCargo(cg.id, cg.nombre)
                             }
-                            className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-xl text-xs font-semibold flex items-center gap-1 transition cursor-pointer"
+                            className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-xl text-xs font-semibold flex items-center gap-1 transition cursor-pointer disabled:opacity-50"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                             <span>Baja</span>
@@ -1254,10 +1277,11 @@ export default function TiposConfiguracion() {
                         ) : (
                           <button
                             type="button"
+                            disabled={loading}
                             onClick={() =>
                               handleReactivarCargo(cg.id, cg.nombre)
                             }
-                            className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-xl text-xs font-semibold flex items-center gap-1 transition cursor-pointer"
+                            className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-xl text-xs font-semibold flex items-center gap-1 transition cursor-pointer disabled:opacity-50"
                           >
                             <RotateCcw className="w-3.5 h-3.5" />
                             <span>Reactivar</span>
@@ -1335,28 +1359,31 @@ export default function TiposConfiguracion() {
                         {puedeEditarCargos ? (
                           <>
                             <button
+                              disabled={loading}
                               onClick={() => abrirModalEditarCargo(cg)}
-                              className="p-1 hover:text-indigo-600 transition cursor-pointer"
+                              className="p-1 hover:text-indigo-600 transition cursor-pointer disabled:opacity-50"
                               title="Editar Cargo"
                             >
                               <Pencil className="w-4 h-4" />
                             </button>
                             {cg.activo !== false ? (
                               <button
+                                disabled={loading}
                                 onClick={() =>
                                   handleEliminarCargo(cg.id, cg.nombre)
                                 }
-                                className="p-1 hover:text-rose-600 transition cursor-pointer"
+                                className="p-1 hover:text-rose-600 transition cursor-pointer disabled:opacity-50"
                                 title="Dar de baja"
                               >
                                 <Trash2 className="w-4 h-4" />
                               </button>
                             ) : (
                               <button
+                                disabled={loading}
                                 onClick={() =>
                                   handleReactivarCargo(cg.id, cg.nombre)
                                 }
-                                className="p-1 hover:text-emerald-600 transition cursor-pointer"
+                                className="p-1 hover:text-emerald-600 transition cursor-pointer disabled:opacity-50"
                                 title="Reactivar Cargo"
                               >
                                 <RotateCcw className="w-4 h-4 text-emerald-600" />
@@ -1398,8 +1425,9 @@ export default function TiposConfiguracion() {
             </div>
             {puedeEditarTurnos ? (
               <button
+                disabled={loading}
                 onClick={abrirModalCrearHorario}
-                className="flex items-center justify-center gap-2 px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl bg-[#4b35e6] hover:bg-[#3f2bc9] text-white text-xs font-semibold shadow-md transition cursor-pointer w-full sm:w-auto"
+                className="flex items-center justify-center gap-2 px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl bg-[#4b35e6] hover:bg-[#3f2bc9] text-white text-xs font-semibold shadow-md transition cursor-pointer w-full sm:w-auto disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Plus className="w-4 h-4 stroke-[2.5]" />
                 <span>Nuevo Horario Preestablecido</span>
@@ -1425,8 +1453,9 @@ export default function TiposConfiguracion() {
                   <button
                     key={cat}
                     type="button"
+                    disabled={loading}
                     onClick={() => setHorarioCategoryFilter(cat)}
-                    className={`px-3 py-1.5 rounded-xl font-medium transition cursor-pointer shrink-0 whitespace-nowrap ${
+                    className={`px-3 py-1.5 rounded-xl font-medium transition cursor-pointer shrink-0 whitespace-nowrap disabled:opacity-50 ${
                       horarioCategoryFilter === cat
                         ? "bg-[#4338ca] text-white font-semibold shadow-xs"
                         : "bg-slate-100 text-slate-600 hover:bg-slate-200"
@@ -1441,9 +1470,10 @@ export default function TiposConfiguracion() {
             <div className="flex items-center gap-2 text-slate-600 self-start sm:self-auto">
               <span className="font-medium text-slate-500">Estado:</span>
               <select
+                disabled={loading}
                 value={filtroEstadoHorario}
                 onChange={(e) => setFiltroEstadoHorario(e.target.value)}
-                className="bg-white border border-slate-200 text-slate-700 font-semibold rounded-xl px-2.5 py-1.5 text-xs outline-none focus:border-indigo-600 transition shadow-xs"
+                className="bg-white border border-slate-200 text-slate-700 font-semibold rounded-xl px-2.5 py-1.5 text-xs outline-none focus:border-indigo-600 transition shadow-xs disabled:opacity-50"
               >
                 <option value="ACTIVOS">Solo Activos</option>
                 <option value="TODOS">Todos</option>
@@ -1485,28 +1515,31 @@ export default function TiposConfiguracion() {
                         {puedeEditarTurnos ? (
                           <>
                             <button
+                              disabled={loading}
                               onClick={() => abrirModalEditarHorario(h)}
-                              className="p-1 hover:text-indigo-600 transition cursor-pointer"
+                              className="p-1 hover:text-indigo-600 transition cursor-pointer disabled:opacity-50"
                               title="Editar Horario"
                             >
                               <Pencil className="w-4 h-4" />
                             </button>
                             {h.activo !== false ? (
                               <button
+                                disabled={loading}
                                 onClick={() =>
                                   handleEliminarHorario(h.id, h.nombre)
                                 }
-                                className="p-1 hover:text-rose-600 transition cursor-pointer"
+                                className="p-1 hover:text-rose-600 transition cursor-pointer disabled:opacity-50"
                                 title="Dar de baja"
                               >
                                 <Trash2 className="w-4 h-4" />
                               </button>
                             ) : (
                               <button
+                                disabled={loading}
                                 onClick={() =>
                                   handleReactivarHorario(h.id, h.nombre)
                                 }
-                                className="p-1 hover:text-emerald-600 transition cursor-pointer"
+                                className="p-1 hover:text-emerald-600 transition cursor-pointer disabled:opacity-50"
                                 title="Reactivar Horario"
                               >
                                 <RotateCcw className="w-4 h-4 text-emerald-600" />

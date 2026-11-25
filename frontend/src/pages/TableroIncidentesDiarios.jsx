@@ -9,7 +9,6 @@ import {
   AlertCircle,
   Eye,
   RefreshCw,
-  Loader2,
   GraduationCap,
   Briefcase,
   Wrench,
@@ -22,6 +21,7 @@ import {
 } from "../services/incidenteService";
 import ModalJustificarIncidente from "../components/incidentes/ModalJustificarIncidente";
 import PaginadorTabla from "../components/comunes/PaginadorTabla";
+import EstadoCarga from "../components/comunes/EstadoCarga";
 import { useAuth } from "../context/AuthContext";
 import { useLocation } from "react-router-dom";
 import {
@@ -226,6 +226,7 @@ export default function TableroIncidentesDiarios() {
   ]);
 
   const handleCambiarPagina = (nuevaPagina) => {
+    if (loading) return;
     const pag = Math.max(1, Math.min(nuevaPagina, totalPaginas));
     setPaginaActual(pag);
     cargarDatos(pag - 1, false);
@@ -263,15 +264,18 @@ export default function TableroIncidentesDiarios() {
   }, [cargarDatos, paginaActual]);
 
   const handleResolver = async (id, payload) => {
+    setLoading(true);
     try {
       await resolverIncidente(id, payload);
-      cargarDatos(paginaActual - 1, true);
+      await cargarDatos(paginaActual - 1, false);
     } catch (err) {
       console.error("Error al registrar justificación:", err);
+      setLoading(false);
     }
   };
 
   const abrirModalJustificar = (inc, soloLectura = false) => {
+    if (loading) return;
     setIncidenteSeleccionado(inc);
     setModoSoloLectura(soloLectura);
     setModalAbierto(true);
@@ -296,6 +300,7 @@ export default function TableroIncidentesDiarios() {
   };
 
   const handleResetFiltros = () => {
+    if (loading) return;
     setSeveridad("");
     setCategoria("");
     setEstado("");
@@ -306,6 +311,8 @@ export default function TableroIncidentesDiarios() {
 
   return (
     <div className="p-3.5 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-4 sm:space-y-6 font-sans">
+      <EstadoCarga cargando={loading} variante="flotante" icono={AlertCircle} />
+
       {/* 1. CABECERA CON FILTROS Y BOTÓN ACTUALIZAR */}
       <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
@@ -341,6 +348,7 @@ export default function TableroIncidentesDiarios() {
               <button
                 key={key}
                 type="button"
+                disabled={loading}
                 onClick={() => {
                   setModoFiltroFecha(key);
                   if (key === "DIA") {
@@ -366,7 +374,7 @@ export default function TableroIncidentesDiarios() {
                   }
                   setPaginaActual(1);
                 }}
-                className={`px-2.5 sm:px-3 py-1 rounded-lg transition cursor-pointer whitespace-nowrap shrink-0 ${
+                className={`px-2.5 sm:px-3 py-1 rounded-lg transition cursor-pointer whitespace-nowrap shrink-0 disabled:opacity-50 disabled:cursor-not-allowed ${
                   modoFiltroFecha === key
                     ? "bg-white text-indigo-700 shadow-xs border border-slate-200 font-bold"
                     : "text-slate-600 hover:text-slate-900"
@@ -380,6 +388,7 @@ export default function TableroIncidentesDiarios() {
           {modoFiltroFecha === "DIA" && (
             <div
               onClick={(e) => {
+                if (loading) return;
                 const input = e.currentTarget.querySelector("input");
                 if (input && typeof input.showPicker === "function")
                   input.showPicker();
@@ -395,6 +404,7 @@ export default function TableroIncidentesDiarios() {
               <Calendar className="w-3.5 h-3.5 text-slate-400 pointer-events-none shrink-0" />
               <input
                 type="date"
+                disabled={loading}
                 value={fechaDesde}
                 onChange={(e) => {
                   if (e.target.value) {
@@ -403,7 +413,7 @@ export default function TableroIncidentesDiarios() {
                     setPaginaActual(1);
                   }
                 }}
-                className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                className="absolute inset-0 opacity-0 cursor-pointer w-full h-full disabled:cursor-not-allowed"
               />
             </div>
           )}
@@ -411,6 +421,7 @@ export default function TableroIncidentesDiarios() {
           {modoFiltroFecha === "SEMANAL" && (
             <div
               onClick={(e) => {
+                if (loading) return;
                 const input = e.currentTarget.querySelector("input");
                 if (input && typeof input.showPicker === "function")
                   input.showPicker();
@@ -427,6 +438,7 @@ export default function TableroIncidentesDiarios() {
               <Calendar className="w-3.5 h-3.5 text-slate-400 pointer-events-none shrink-0" />
               <input
                 type="date"
+                disabled={loading}
                 value={fechaDesde}
                 onChange={(e) => {
                   if (e.target.value) {
@@ -436,7 +448,7 @@ export default function TableroIncidentesDiarios() {
                     setPaginaActual(1);
                   }
                 }}
-                className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                className="absolute inset-0 opacity-0 cursor-pointer w-full h-full disabled:cursor-not-allowed"
               />
             </div>
           )}
@@ -445,6 +457,7 @@ export default function TableroIncidentesDiarios() {
             <div className="flex items-center gap-1.5 shrink-0">
               <div
                 onClick={(e) => {
+                  if (loading) return;
                   const input = e.currentTarget.querySelector("input");
                   if (input && typeof input.showPicker === "function")
                     input.showPicker();
@@ -460,6 +473,7 @@ export default function TableroIncidentesDiarios() {
                 <Calendar className="w-3.5 h-3.5 text-slate-400 pointer-events-none" />
                 <input
                   type="date"
+                  disabled={loading}
                   value={fechaDesde}
                   onChange={(e) => {
                     if (e.target.value) {
@@ -469,7 +483,7 @@ export default function TableroIncidentesDiarios() {
                       setPaginaActual(1);
                     }
                   }}
-                  className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                  className="absolute inset-0 opacity-0 cursor-pointer w-full h-full disabled:cursor-not-allowed"
                 />
               </div>
 
@@ -477,6 +491,7 @@ export default function TableroIncidentesDiarios() {
 
               <div
                 onClick={(e) => {
+                  if (loading) return;
                   const input = e.currentTarget.querySelector("input");
                   if (input && typeof input.showPicker === "function")
                     input.showPicker();
@@ -492,6 +507,7 @@ export default function TableroIncidentesDiarios() {
                 <Calendar className="w-3.5 h-3.5 text-slate-400 pointer-events-none" />
                 <input
                   type="date"
+                  disabled={loading}
                   value={fechaHasta}
                   min={fechaDesde}
                   onChange={(e) => {
@@ -500,7 +516,7 @@ export default function TableroIncidentesDiarios() {
                       setPaginaActual(1);
                     }
                   }}
-                  className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                  className="absolute inset-0 opacity-0 cursor-pointer w-full h-full disabled:cursor-not-allowed"
                 />
               </div>
             </div>
@@ -513,6 +529,7 @@ export default function TableroIncidentesDiarios() {
                 Desde:
               </span>
               <select
+                disabled={loading}
                 value={fechaDesde.substring(0, 7)}
                 onChange={(e) => {
                   const val = e.target.value;
@@ -531,7 +548,7 @@ export default function TableroIncidentesDiarios() {
                     setPaginaActual(1);
                   }
                 }}
-                className="bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 font-semibold text-slate-800 outline-none cursor-pointer text-xs bg-white"
+                className="bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 font-semibold text-slate-800 outline-none cursor-pointer text-xs bg-white disabled:opacity-50"
               >
                 <option value={`${hoyIso.substring(0, 4)}-01`}>Enero</option>
                 <option value={`${hoyIso.substring(0, 4)}-02`}>Febrero</option>
@@ -558,7 +575,7 @@ export default function TableroIncidentesDiarios() {
           <button
             onClick={() => cargarDatos(paginaActual - 1, false)}
             disabled={loading}
-            className="p-2 border border-slate-200 rounded-xl hover:bg-slate-50 text-slate-600 transition cursor-pointer shrink-0 ml-auto sm:ml-0"
+            className="p-2 border border-slate-200 rounded-xl hover:bg-slate-50 text-slate-600 transition cursor-pointer shrink-0 ml-auto sm:ml-0 disabled:opacity-50 disabled:cursor-not-allowed"
             title="Actualizar datos"
           >
             <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
@@ -567,7 +584,11 @@ export default function TableroIncidentesDiarios() {
       </div>
 
       {/* 2. TARJETAS KPI */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2.5 sm:gap-3">
+      <div
+        className={`grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2.5 sm:gap-3 ${
+          loading ? "pointer-events-none opacity-75" : ""
+        }`}
+      >
         <div
           onClick={() => {
             setCategoria("SALIDAS_EN_CLASE");
@@ -803,12 +824,13 @@ export default function TableroIncidentesDiarios() {
           </div>
 
           <select
+            disabled={loading}
             value={severidad}
             onChange={(e) => {
               setSeveridad(e.target.value);
               setPaginaActual(1);
             }}
-            className="w-full px-3 py-2 border border-slate-200 rounded-xl outline-none focus:border-indigo-500 text-slate-700 bg-white"
+            className="w-full px-3 py-2 border border-slate-200 rounded-xl outline-none focus:border-indigo-500 text-slate-700 bg-white disabled:opacity-50"
           >
             <option value="">Severidad: Todas</option>
             <option value="CRÍTICA">Crítica</option>
@@ -817,13 +839,14 @@ export default function TableroIncidentesDiarios() {
           </select>
 
           <select
+            disabled={loading}
             value={categoria}
             onChange={(e) => {
               setCategoria(e.target.value);
               setFiltroRapido(e.target.value || "TODOS");
               setPaginaActual(1);
             }}
-            className="w-full px-3 py-2 border border-slate-200 rounded-xl outline-none focus:border-indigo-500 text-slate-700 bg-white"
+            className="w-full px-3 py-2 border border-slate-200 rounded-xl outline-none focus:border-indigo-500 text-slate-700 bg-white disabled:opacity-50"
           >
             <option value="">Categoría: Todas</option>
             <option value="SALIDAS_EN_CLASE">
@@ -842,12 +865,13 @@ export default function TableroIncidentesDiarios() {
 
           <div className="flex items-center gap-2">
             <select
+              disabled={loading}
               value={estado}
               onChange={(e) => {
                 setEstado(e.target.value);
                 setPaginaActual(1);
               }}
-              className="w-full px-3 py-2 border border-slate-200 rounded-xl outline-none focus:border-indigo-500 text-slate-700 bg-white"
+              className="w-full px-3 py-2 border border-slate-200 rounded-xl outline-none focus:border-indigo-500 text-slate-700 bg-white disabled:opacity-50"
             >
               <option value="">Auditoría: Todos</option>
               <option value="PENDIENTE">Pendientes</option>
@@ -858,8 +882,9 @@ export default function TableroIncidentesDiarios() {
 
             {(severidad || categoria || estado || busqueda) && (
               <button
+                disabled={loading}
                 onClick={handleResetFiltros}
-                className="text-[11px] font-semibold text-indigo-600 hover:text-indigo-800 whitespace-nowrap cursor-pointer px-1"
+                className="text-[11px] font-semibold text-indigo-600 hover:text-indigo-800 whitespace-nowrap cursor-pointer px-1 disabled:opacity-50"
               >
                 Restablecer
               </button>
@@ -885,12 +910,7 @@ export default function TableroIncidentesDiarios() {
 
         {/* VISTA MÓVIL */}
         <div className="md:hidden divide-y divide-slate-100">
-          {loading ? (
-            <div className="text-center py-12 text-slate-400 text-xs">
-              <Loader2 className="w-5 h-5 animate-spin mx-auto text-indigo-600 mb-2" />
-              Consultando incidentes del período...
-            </div>
-          ) : incidentes.length === 0 ? (
+          {!loading && incidentes.length === 0 ? (
             <div className="text-center py-12 text-slate-400 text-xs italic">
               No se registran incidentes para los filtros aplicados en este
               período.
@@ -987,16 +1007,18 @@ export default function TableroIncidentesDiarios() {
                     inc.estado === "PENDIENTE" ? (
                       <button
                         type="button"
+                        disabled={loading}
                         onClick={() => abrirModalJustificar(inc, false)}
-                        className="flex-1 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl text-xs font-bold transition text-center cursor-pointer"
+                        className="flex-1 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl text-xs font-bold transition text-center cursor-pointer disabled:opacity-50"
                       >
                         Justificar
                       </button>
                     ) : (
                       <button
                         type="button"
+                        disabled={loading}
                         onClick={() => abrirModalJustificar(inc, false)}
-                        className="flex-1 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold transition text-center cursor-pointer"
+                        className="flex-1 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold transition text-center cursor-pointer disabled:opacity-50"
                       >
                         Editar Resolución
                       </button>
@@ -1013,8 +1035,9 @@ export default function TableroIncidentesDiarios() {
 
                   <button
                     type="button"
+                    disabled={loading}
                     onClick={() => abrirModalJustificar(inc, true)}
-                    className="p-1.5 text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition cursor-pointer flex items-center justify-center"
+                    className="p-1.5 text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition cursor-pointer flex items-center justify-center disabled:opacity-50"
                     title="Ver detalle del incidente"
                   >
                     <Eye className="w-4 h-4 text-slate-600" />
@@ -1039,14 +1062,7 @@ export default function TableroIncidentesDiarios() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-slate-700">
-              {loading ? (
-                <tr>
-                  <td colSpan="6" className="text-center py-12 text-slate-400">
-                    <Loader2 className="w-5 h-5 animate-spin mx-auto text-indigo-600 mb-2" />
-                    Consultando incidentes del período...
-                  </td>
-                </tr>
-              ) : incidentes.length === 0 ? (
+              {!loading && incidentes.length === 0 ? (
                 <tr>
                   <td
                     colSpan="6"
@@ -1157,15 +1173,17 @@ export default function TableroIncidentesDiarios() {
                         {puedeJustificar ? (
                           inc.estado === "PENDIENTE" ? (
                             <button
+                              disabled={loading}
                               onClick={() => abrirModalJustificar(inc, false)}
-                              className="px-3 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg text-xs font-semibold transition cursor-pointer"
+                              className="px-3 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg text-xs font-semibold transition cursor-pointer disabled:opacity-50"
                             >
                               Justificar
                             </button>
                           ) : (
                             <button
+                              disabled={loading}
                               onClick={() => abrirModalJustificar(inc, false)}
-                              className="px-3 py-1 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-lg text-xs font-semibold transition cursor-pointer"
+                              className="px-3 py-1 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-lg text-xs font-semibold transition cursor-pointer disabled:opacity-50"
                             >
                               Editar
                             </button>
@@ -1182,8 +1200,9 @@ export default function TableroIncidentesDiarios() {
                           </span>
                         )}
                         <button
+                          disabled={loading}
                           onClick={() => abrirModalJustificar(inc, true)}
-                          className="p-1 text-slate-400 hover:text-slate-600 rounded-md cursor-pointer"
+                          className="p-1 text-slate-400 hover:text-slate-600 rounded-md cursor-pointer disabled:opacity-50"
                           title="Ver detalle del incidente"
                         >
                           <Eye className="w-4 h-4" />

@@ -1,5 +1,8 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { WifiOff, ServerCrash, RefreshCw } from "lucide-react";
+import { invalidarTodaLaCache } from "../../services/api"; // Ajustar ruta según tu carpeta (ej. ../services/api)
+
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8080/api";
 
 export default function BandaConexion() {
   const [online, setOnline] = useState(navigator.onLine);
@@ -21,13 +24,10 @@ export default function BandaConexion() {
     const timeoutId = setTimeout(() => controller.abort(), 2000);
 
     try {
-      const res = await fetch(
-        `http://localhost:8080/api/public/ping?_t=${Date.now()}`,
-        {
-          method: "GET",
-          signal: controller.signal,
-        },
-      );
+      const res = await fetch(`${API_BASE}/public/ping?_t=${Date.now()}`, {
+        method: "GET",
+        signal: controller.signal,
+      });
       clearTimeout(timeoutId);
 
       const estaVivo = res.status < 500;
@@ -36,7 +36,7 @@ export default function BandaConexion() {
 
       if (estaVivo && estabaDesconectado.current) {
         estabaDesconectado.current = false;
-        // Un único evento de restauración para refrescar datos en pantalla
+        invalidarTodaLaCache();
         window.dispatchEvent(new CustomEvent("conexion:restaurada"));
       } else if (!estaVivo) {
         estabaDesconectado.current = true;
@@ -69,6 +69,7 @@ export default function BandaConexion() {
         setServerOk(ok);
         if (ok && estabaDesconectado.current) {
           estabaDesconectado.current = false;
+          invalidarTodaLaCache();
           window.dispatchEvent(new CustomEvent("conexion:restaurada"));
         } else if (!ok) {
           estabaDesconectado.current = true;
@@ -80,7 +81,6 @@ export default function BandaConexion() {
     window.addEventListener("offline", handleOffline);
     window.addEventListener("servidor:estado", handleServidorEstado);
 
-    // Polling inteligente: solo se ejecuta cada 4s si el servidor está caído
     const intervalo = setInterval(() => {
       if (!serverOk && navigator.onLine) {
         verificarServidor();
@@ -99,13 +99,14 @@ export default function BandaConexion() {
   useEffect(() => {
     if (!online || !serverOk) return;
 
-    const sseUrl = "http://localhost:8080/api/stream/eventos";
+    const sseUrl = `${API_BASE}/stream/eventos`;
     const eventSource = new EventSource(sseUrl);
 
     eventSource.addEventListener("actualizacion", (event) => {
+      // Limpiamos caché ANTES de avisar a las vistas activas para que sus refetches vayan al backend
+      invalidarTodaLaCache();
       try {
         const payload = JSON.parse(event.data);
-        // Emite UN SOLO evento limpio para evitar ráfagas duplicadas
         window.dispatchEvent(
           new CustomEvent("datos:actualizados", { detail: payload }),
         );
