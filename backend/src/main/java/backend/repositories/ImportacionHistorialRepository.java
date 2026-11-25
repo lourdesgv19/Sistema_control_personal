@@ -23,6 +23,8 @@ public interface ImportacionHistorialRepository extends JpaRepository<Importacio
     // 1. Obtener la última importación registrada
     Optional<ImportacionHistorial> findFirstByActivoTrueOrderByFechaImportacionDesc();
 
+    Optional<ImportacionHistorial> findFirstByHashArchivoAndActivoTrue(String hashArchivo);
+
     // 2. Historial de importaciones paginado con filtros
     @Query("""
         SELECT h FROM ImportacionHistorial h

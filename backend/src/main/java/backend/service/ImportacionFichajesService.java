@@ -15,19 +15,30 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
+
 import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 
 @Service
 public class ImportacionFichajesService {
 
     private static final Logger log = LoggerFactory.getLogger(ImportacionFichajesService.class);
+
+    // Límites para Control 2 (Rango lógico de fechas)
+    private static final LocalDateTime FECHA_MINIMA_VALIDA = LocalDateTime.of(2024, 1, 1, 0, 0);
+    private static final long MARGEN_FUTURO_MINUTOS = 5;
+
+    // Umbral para filtro de rebote (2 minutos)
+    private static final long UMBRAL_REBOTE_SEGUNDOS = 120;
 
     private final EmpleadoRepository empleadoRepo;
     private final EmpleadoFichajeRepository fichajeRepo;
@@ -59,21 +70,60 @@ public class ImportacionFichajesService {
         return v.isEmpty() || v.equalsIgnoreCase("null") || v.equalsIgnoreCase("'null'");
     }
 
+    // =========================================================================
+    // CONTROL 4: CÁLCULO DE HUELLA SHA-256 DEL ARCHIVO
+    // =========================================================================
+    private String calcularSha256(byte[] bytes) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(bytes);
+            StringBuilder hexString = new StringBuilder(2 * hash.length);
+            for (byte b : hash) {
+                String hex = Integer.toHexString(0xff & b);
+                if (hex.length() == 1) hexString.append('0');
+                hexString.append(hex);
+            }
+            return hexString.toString();
+        } catch (Exception e) {
+            throw new RuntimeException("No se pudo calcular el hash de integridad del archivo", e);
+        }
+    }
+
     @Transactional
     public ResumenImportacionDTO importarArchivo(MultipartFile file) throws Exception {
         log.info(">>> INICIO DE IMPORTACIÓN: Archivo='{}'", file.getOriginalFilename());
 
-        List<FilaFichajeRaw> filas = parsearCSV(file);
+        byte[] fileBytes = file.getBytes();
+        if (fileBytes.length == 0) {
+            throw new IllegalArgumentException("El archivo seleccionado está vacío.");
+        }
+
+        // 1. Verificar duplicidad exacta de archivo mediante hash SHA-256 (Control 4)
+        String hashArchivo = calcularSha256(fileBytes);
+        Optional<ImportacionHistorial> lotePrevio = historialRepo.findFirstByHashArchivoAndActivoTrue(hashArchivo);
+        if (lotePrevio.isPresent()) {
+            ImportacionHistorial previo = lotePrevio.get();
+            String fechaCarga = previo.getFechaImportacion() != null
+                    ? previo.getFechaImportacion().format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm"))
+                    : "anteriormente";
+            throw new IllegalStateException(
+                    String.format("Este archivo ya fue importado el %s bajo el lote '%s' (ID #%d). Si deseas volver a cargarlo, primero da de baja el lote anterior.",
+                            fechaCarga, previo.getNombreArchivo(), previo.getId())
+            );
+        }
+
+        List<FilaFichajeRaw> filas = parsearCSV(fileBytes);
 
         ImportacionHistorial historial = new ImportacionHistorial(
-            file.getOriginalFilename(),
-            filas.size(),
-            0,
-            0,
-            0,
-            0,
-            "Administrador"
+                file.getOriginalFilename(),
+                filas.size(),
+                0,
+                0,
+                0,
+                0,
+                "Administrador"
         );
+        historial.setHashArchivo(hashArchivo);
         historial = historialRepo.save(historial);
 
         ResumenImportacionDTO resumen = procesarTodasLasFilas(filas, historial);
@@ -85,48 +135,49 @@ public class ImportacionFichajesService {
         historial.setErrores(resumen.errores());
         historialRepo.save(historial);
 
-try {
-    LocalDate minFecha = null;
-    LocalDate maxFecha = null;
+        // Evaluar incidentes en el rango continuo de fechas válidas del archivo
+        try {
+            LocalDate minFecha = null;
+            LocalDate maxFecha = null;
+            LocalDate hoy = LocalDate.now();
 
-    for (FilaFichajeRaw f : filas) {
-        if (!esVacioONulo(f.fecha())) {
-            try {
-                LocalDate d = parsearFechaSegura(f.fecha());
-                if (minFecha == null || d.isBefore(minFecha)) minFecha = d;
-                if (maxFecha == null || d.isAfter(maxFecha)) maxFecha = d;
-            } catch (Exception ignored) {}
-        }
-    }
-
-    if (minFecha != null && maxFecha != null) {
-        LocalDate hoy = LocalDate.now();
-        // Si el archivo es del mes en curso, extendemos hasta hoy para detectar ausencias recientes
-        if (maxFecha.getYear() == hoy.getYear() && maxFecha.getMonth() == hoy.getMonth() && maxFecha.isBefore(hoy)) {
-            maxFecha = hoy;
-        }
-        // Evaluar todos los días del rango (incluyendo los días en que hubo ausencia total)
-        LocalDate cursor = minFecha;
-        while (!cursor.isAfter(maxFecha)) {
-            if (!cursor.isAfter(hoy)) {
-                evaluadorIncidentes.evaluarFecha(cursor);
+            for (FilaFichajeRaw f : filas) {
+                if (!esVacioONulo(f.fecha())) {
+                    try {
+                        LocalDate d = parsearFechaSegura(f.fecha());
+                        // Ignorar fechas fuera de rango lógico al calcular límites de auditoría
+                        if (d.isBefore(FECHA_MINIMA_VALIDA.toLocalDate()) || d.isAfter(hoy)) {
+                            continue;
+                        }
+                        if (minFecha == null || d.isBefore(minFecha)) minFecha = d;
+                        if (maxFecha == null || d.isAfter(maxFecha)) maxFecha = d;
+                    } catch (Exception ignored) {}
+                }
             }
-            cursor = cursor.plusDays(1);
-        }
-    }
-} catch (Exception e) {
-    log.error("Error al auditar incidentes tras importación: {}", e.getMessage());
-}
 
-        // Notificar al Frontend que hay nuevos fichajes e incidentes
+            if (minFecha != null && maxFecha != null) {
+                if (maxFecha.getYear() == hoy.getYear() && maxFecha.getMonth() == hoy.getMonth() && maxFecha.isBefore(hoy)) {
+                    maxFecha = hoy;
+                }
+                LocalDate cursor = minFecha;
+                while (!cursor.isAfter(maxFecha)) {
+                    if (!cursor.isAfter(hoy)) {
+                        evaluadorIncidentes.evaluarFecha(cursor);
+                    }
+                    cursor = cursor.plusDays(1);
+                }
+            }
+        } catch (Exception e) {
+            log.error("Error al auditar incidentes tras importación: {}", e.getMessage());
+        }
+
         notificacionService.notificarCambio("IMPORTACION_FICHAJES");
 
         return resumen;
     }
 
-    private List<FilaFichajeRaw> parsearCSV(MultipartFile file) throws Exception {
+    private List<FilaFichajeRaw> parsearCSV(byte[] fileBytes) throws Exception {
         List<FilaFichajeRaw> lista = new ArrayList<>();
-        byte[] fileBytes = file.getBytes();
         char separador = '\t';
 
         try (BufferedReader br = new BufferedReader(new InputStreamReader(new ByteArrayInputStream(fileBytes), StandardCharsets.UTF_8))) {
@@ -191,10 +242,25 @@ try {
             }
         }
 
+        // Ordenar cronológicamente para detectar rebotes consecutivos
+        List<FilaFichajeRaw> filasOrdenadas = new ArrayList<>(filas);
+        filasOrdenadas.sort(Comparator.comparing(f -> {
+            try {
+                if (esVacioONulo(f.fecha()) || esVacioONulo(f.hora())) {
+                    return LocalDateTime.MAX;
+                }
+                return LocalDateTime.of(parsearFechaSegura(f.fecha()), parsearHoraSegura(f.hora()));
+            } catch (Exception e) {
+                return LocalDateTime.MAX;
+            }
+        }));
+
         Set<Long> serialesEnEsteArchivo = new HashSet<>();
+        Map<String, LocalDateTime> ultimaMarcaValidaPorIdBio = new HashMap<>();
+        LocalDateTime limiteMaximoFuturo = LocalDateTime.now().plusMinutes(MARGEN_FUTURO_MINUTOS);
 
         int indice = 0;
-        for (FilaFichajeRaw f : filas) {
+        for (FilaFichajeRaw f : filasOrdenadas) {
             indice++;
 
             if (esVacioONulo(f.sJobNo()) || esVacioONulo(f.sName())) {
@@ -215,17 +281,58 @@ try {
                 LocalTime hora = parsearHoraSegura(f.hora());
                 LocalDateTime fechaHora = LocalDateTime.of(fecha, hora);
 
-                Empleado emp = mapaEmpleados.get(f.sJobNo());
+                // =============================================================
+                // CONTROL 2: VALIDACIÓN DE FECHAS FUTURAS O FUERA DE RANGO LÓGICO
+                // =============================================================
+                if (fechaHora.isAfter(limiteMaximoFuturo)) {
+                    throw new IllegalArgumentException(
+                            "Fecha/hora futura detectada (" + fechaHora.format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm")) + "). Revise el reloj del terminal biométrico."
+                    );
+                }
+                if (fechaHora.isBefore(FECHA_MINIMA_VALIDA)) {
+                    throw new IllegalArgumentException(
+                            "Fecha fuera de rango histórico (" + fechaHora.format(DateTimeFormatter.ofPattern("dd/MM/yyyy")) + "). Posible desconfiguración de fecha del reloj."
+                    );
+                }
+
+                String idBio = f.sJobNo().trim();
+                Empleado emp = mapaEmpleados.get(idBio);
+
+                // Control de rebote (< 2 minutos para el mismo empleado/ID biométrico)
+                LocalDateTime anteriorValida = ultimaMarcaValidaPorIdBio.get(idBio);
+                if (anteriorValida == null) {
+                    anteriorValida = fichajeRepo
+                            .findTopByIdBiometricoAndEstadoFichajeAndActivoTrueOrderByHoraFichajeDesc(idBio, "valido")
+                            .map(EmpleadoFichaje::getHoraFichaje)
+                            .orElse(null);
+                }
+
+                String estadoFichaje = "valido";
+                String observacion = null;
+
+                if (anteriorValida != null) {
+                    long diffSegundos = Math.abs(Duration.between(anteriorValida, fechaHora).getSeconds());
+                    if (diffSegundos < UMBRAL_REBOTE_SEGUNDOS) {
+                        estadoFichaje = "duplicado_ignorado";
+                        observacion = "Descarte automático: marcación repetida con " + diffSegundos + "s de diferencia (< 2 min).";
+                        duplicadas++;
+                    }
+                }
+
+                if ("valido".equals(estadoFichaje)) {
+                    ultimaMarcaValidaPorIdBio.put(idBio, fechaHora);
+                }
 
                 EmpleadoFichaje fichaje = new EmpleadoFichaje();
                 fichaje.setImportacion(historial);
                 fichaje.setEmpleado(emp);
-                fichaje.setIdBiometrico(f.sJobNo());
+                fichaje.setIdBiometrico(idBio);
                 fichaje.setNombreReloj(f.sName());
                 fichaje.setHoraFichaje(fechaHora);
                 fichaje.setTipoEvento(f.status() != null && !f.status().isBlank() ? f.status() : "checkIn");
                 fichaje.setSerialNo(f.serialNo());
-                fichaje.setEstadoFichaje("valido");
+                fichaje.setEstadoFichaje(estadoFichaje);
+                fichaje.setObservacion(observacion);
                 fichaje.setActivo(true);
 
                 loteAGuardar.add(fichaje);
@@ -240,7 +347,9 @@ try {
 
         if (!loteAGuardar.isEmpty()) {
             fichajeRepo.saveAll(loteAGuardar);
-            procesadas = loteAGuardar.size();
+            procesadas = (int) loteAGuardar.stream()
+                    .filter(f -> "valido".equals(f.getEstadoFichaje()))
+                    .count();
         }
 
         return new ResumenImportacionDTO(filas.size(), procesadas, registrosNulos, duplicadas, errores, mensajesErrores);
@@ -272,7 +381,7 @@ try {
     @Transactional(readOnly = true)
     public org.springframework.data.domain.Page<EmpleadoFichaje> listarMarcacionesPaginadas(String q, int pagina, int tamano) {
         org.springframework.data.domain.Pageable pageable =
-            org.springframework.data.domain.PageRequest.of(pagina, tamano);
+                org.springframework.data.domain.PageRequest.of(pagina, tamano);
         return fichajeRepo.buscarMarcacionesPaginadas(q, pageable);
     }
 
@@ -306,24 +415,30 @@ try {
         fichajeRepo.desactivarFichajesPorImportacion(id, ahora);
         historialRepo.deleteById(id);
 
-        // Notificar al Frontend que se dio de baja un lote
         notificacionService.notificarCambio("BAJA_IMPORTACION");
     }
-    
+
     @Transactional
     public void reactivarHistorial(Long id) {
-    ImportacionHistorial h = historialRepo.findById(id)
-            .orElseThrow(() -> new RuntimeException("Importación no encontrada"));
+        ImportacionHistorial h = historialRepo.findById(id)
+                .orElseThrow(() -> new RuntimeException("Importación no encontrada"));
 
-    h.setActivo(true);
-    h.setFechaBaja(null);
-    historialRepo.save(h);
+        // Evitar reactivar si ya existe otro lote activo con el mismo hash
+        if (h.getHashArchivo() != null) {
+            Optional<ImportacionHistorial> otroActivo = historialRepo.findFirstByHashArchivoAndActivoTrue(h.getHashArchivo());
+            if (otroActivo.isPresent() && !otroActivo.get().getId().equals(id)) {
+                throw new IllegalStateException("Ya existe un lote activo con el mismo contenido de archivo (Lote #" + otroActivo.get().getId() + ").");
+            }
+        }
 
-    // Reactivar las marcaciones asociadas al lote
-    fichajeRepo.reactivarFichajesPorImportacion(id);
+        h.setActivo(true);
+        h.setFechaBaja(null);
+        historialRepo.save(h);
 
-    notificacionService.notificarCambio("REACTIVACION_IMPORTACION");
-}
+        fichajeRepo.reactivarFichajesPorImportacion(id);
+
+        notificacionService.notificarCambio("REACTIVACION_IMPORTACION");
+    }
 
     public record FilaFichajeRaw(String sName, String sJobNo, String fecha, String hora, String status, Long serialNo) {}
 }

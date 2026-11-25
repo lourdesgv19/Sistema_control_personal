@@ -42,6 +42,10 @@ public class ImportacionHistorial {
     @Column(name = "fecha_baja")
     private LocalDateTime fechaBaja;
 
+    @Column(name = "hash_archivo", length = 64)
+    private String hashArchivo;
+
+
     public ImportacionHistorial() {}
 
     public ImportacionHistorial(String nombreArchivo, int totalFilas, int procesadasOk, int registrosNulos, int duplicadasIgnoradas, int errores, String usuarioResponsable) {
@@ -79,4 +83,6 @@ public class ImportacionHistorial {
     public void setActivo(Boolean activo) { this.activo = activo; }
     public LocalDateTime getFechaBaja() { return fechaBaja; }
     public void setFechaBaja(LocalDateTime fechaBaja) { this.fechaBaja = fechaBaja; }
+    public String getHashArchivo() { return hashArchivo; }
+    public void setHashArchivo(String hashArchivo) { this.hashArchivo = hashArchivo; }
 }

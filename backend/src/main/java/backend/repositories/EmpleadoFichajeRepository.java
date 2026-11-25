@@ -145,4 +145,8 @@ List<EmpleadoFichaje> findFichajesPorRangoYBusqueda(
         Pageable pageable
     );
 
+    Optional<EmpleadoFichaje> findTopByIdBiometricoAndEstadoFichajeAndActivoTrueOrderByHoraFichajeDesc(
+        String idBiometrico,
+        String estadoFichaje
+);
 }
