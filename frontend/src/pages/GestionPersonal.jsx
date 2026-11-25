@@ -18,7 +18,6 @@ import {
   Trash2,
   RotateCcw,
   Calendar,
-  Loader2,
   Lock,
   AlertCircle,
   ArrowRight,
@@ -42,6 +41,7 @@ import {
 } from "../services/configuracionService";
 import { getBadgeColorClasses } from "./TiposConfiguracion";
 import ModalAlerta from "../components/comunes/ModalAlerta";
+import EstadoCarga from "../components/comunes/EstadoCarga";
 import ModalRegistroEmpleado from "../components/personal/ModalRegistroEmpleado";
 import ModalDetalleCronograma from "../components/personal/ModalDetalleCronograma";
 import ModalAsignarTurno from "../components/personal/ModalAsignarTurno";
@@ -312,6 +312,7 @@ export default function GestionPersonal() {
   );
 
   const handleCambiarPagina = (nuevaPagina) => {
+    if (loading) return;
     const pag = Math.max(1, Math.min(nuevaPagina, totalPaginas));
     setPaginaActual(pag);
     cargarEmpleadosServidor(pag - 1);
@@ -407,7 +408,7 @@ export default function GestionPersonal() {
   };
 
   const abrirModalCrear = () => {
-    if (!puedePersonalCrear) return;
+    if (!puedePersonalCrear || loading) return;
     setEditandoEmpleadoId(null);
     setFormEmpleado({
       ...FORM_EMP_INICIAL,
@@ -418,7 +419,7 @@ export default function GestionPersonal() {
   };
 
   const abrirModalEditar = (emp) => {
-    if (!puedePersonalEditar) return;
+    if (!puedePersonalEditar || loading) return;
     setEditandoEmpleadoId(emp.id);
     const catIds = Array.isArray(emp.categorias)
       ? emp.categorias.map((c) => c.id)
@@ -446,6 +447,7 @@ export default function GestionPersonal() {
 
   const handleGuardarEmpleado = async (e) => {
     e.preventDefault();
+    setLoading(true);
     try {
       const payload = {
         nombre: formEmpleado.nombre?.trim(),
@@ -490,6 +492,7 @@ export default function GestionPersonal() {
       cargarResumenGlobal();
       setModalRegistro(false);
     } catch (err) {
+      setLoading(false);
       mostrarAviso(
         "danger",
         "Error",
@@ -500,7 +503,7 @@ export default function GestionPersonal() {
   };
 
   const handleEliminarEmpleado = (id, nombre) => {
-    if (!puedePersonalBajaReactivar) return;
+    if (!puedePersonalBajaReactivar || loading) return;
     setModalAlerta({
       isOpen: true,
       tipo: "danger",
@@ -511,6 +514,7 @@ export default function GestionPersonal() {
       mostrarCancelar: true,
       onConfirmar: async () => {
         setModalAlerta((prev) => ({ ...prev, isOpen: false }));
+        setLoading(true);
         try {
           await deleteEmpleado(id);
           await cargarEmpleadosServidor(Math.max(0, paginaActual - 1));
@@ -521,6 +525,7 @@ export default function GestionPersonal() {
             `El empleado ${nombre} fue dado de baja.`,
           );
         } catch (err) {
+          setLoading(false);
           mostrarAviso(
             "danger",
             "Error",
@@ -533,7 +538,7 @@ export default function GestionPersonal() {
   };
 
   const handleReactivarEmpleado = (id, nombre) => {
-    if (!puedePersonalBajaReactivar) return;
+    if (!puedePersonalBajaReactivar || loading) return;
     setModalAlerta({
       isOpen: true,
       tipo: "info",
@@ -544,6 +549,7 @@ export default function GestionPersonal() {
       mostrarCancelar: true,
       onConfirmar: async () => {
         setModalAlerta((prev) => ({ ...prev, isOpen: false }));
+        setLoading(true);
         try {
           await reactivarEmpleado(id);
           await cargarEmpleadosServidor(Math.max(0, paginaActual - 1));
@@ -554,6 +560,7 @@ export default function GestionPersonal() {
             `El empleado ${nombre} está activo nuevamente.`,
           );
         } catch (err) {
+          setLoading(false);
           mostrarAviso(
             "danger",
             "Error",
@@ -565,8 +572,9 @@ export default function GestionPersonal() {
   };
 
   const handleVerDetalle = async (emp) => {
-    if (!puedeHorariosVer) return;
+    if (!puedeHorariosVer || loading) return;
     setEmpleadoSeleccionado(emp);
+    setLoading(true);
     try {
       const [horariosRes, metricasRes] = await Promise.all([
         getEmpleadoHorarios(emp.id),
@@ -578,19 +586,24 @@ export default function GestionPersonal() {
       console.error("Error al cargar cronograma:", err);
       setHorariosEmpleado([]);
       setMetricasEmpleado(null);
+    } finally {
+      setLoading(false);
     }
     setModalDetalle(true);
   };
 
   const handleEliminarHorario = async (horarioId) => {
-    if (!puedeHorariosEliminar) {
-      mostrarAviso(
-        "danger",
-        "Acceso Denegado",
-        "No posee permiso (HORARIOS_ELIMINAR).",
-      );
+    if (!puedeHorariosEliminar || loading) {
+      if (!puedeHorariosEliminar) {
+        mostrarAviso(
+          "danger",
+          "Acceso Denegado",
+          "No posee permiso (HORARIOS_ELIMINAR).",
+        );
+      }
       return;
     }
+    setLoading(true);
     try {
       await removeEmpleadoHorario(horarioId);
       const [horariosActualizados, metricasActualizadas] = await Promise.all([
@@ -606,6 +619,7 @@ export default function GestionPersonal() {
         "La franja horaria fue dada de baja.",
       );
     } catch (err) {
+      setLoading(false);
       mostrarAviso(
         "danger",
         "Error",
@@ -615,7 +629,7 @@ export default function GestionPersonal() {
   };
 
   const abrirModalTurno = (emp) => {
-    if (!puedeHorariosGestionar) return;
+    if (!puedeHorariosGestionar || loading) return;
     setEmpleadoSeleccionado(emp);
     setTipoAsignacionTurno("PREESTABLECIDO");
     setHorarioGeneralSeleccionado(horariosActivos[0]?.id || "");
@@ -631,12 +645,14 @@ export default function GestionPersonal() {
     const esForzado = typeof forzar === "boolean" ? forzar : false;
     if (!empleadoSeleccionado || !puedeHorariosGestionar) return;
 
+    setLoading(true);
     try {
       if (tipoAsignacionTurno === "PREESTABLECIDO") {
         const plantilla = horarios.find(
           (h) => h.id === parseInt(horarioGeneralSeleccionado, 10),
         );
         if (!plantilla) {
+          setLoading(false);
           mostrarAviso(
             "warning",
             "Atención",
@@ -715,6 +731,7 @@ export default function GestionPersonal() {
         "Se generaron las franjas horarias con éxito.",
       );
     } catch (err) {
+      setLoading(false);
       const mensaje = err.response?.data?.message || "";
       if (mensaje.includes("SOLAPAMIENTO")) {
         setModalAlerta({
@@ -742,6 +759,8 @@ export default function GestionPersonal() {
 
   return (
     <div className="p-3 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-4 sm:space-y-6 font-sans">
+      <EstadoCarga cargando={loading} variante="flotante" icono={Users} />
+
       {/* Encabezado Superior */}
       <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-3 sm:gap-4">
@@ -761,11 +780,12 @@ export default function GestionPersonal() {
         <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
           {totalIncompletos > 0 && (
             <button
+              disabled={loading}
               onClick={() => {
                 setSoloIncompletos(!soloIncompletos);
                 setPaginaActual(1);
               }}
-              className={`flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl text-xs font-bold transition shadow-xs cursor-pointer border ${
+              className={`flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl text-xs font-bold transition shadow-xs cursor-pointer border disabled:opacity-50 disabled:cursor-not-allowed ${
                 soloIncompletos
                   ? "bg-amber-600 text-white border-amber-600 ring-2 ring-amber-300"
                   : "bg-amber-50 hover:bg-amber-100 text-amber-800 border-amber-200 animate-pulse"
@@ -782,8 +802,9 @@ export default function GestionPersonal() {
 
           {puedePersonalCrear ? (
             <button
+              disabled={loading}
               onClick={abrirModalCrear}
-              className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-4 py-2 sm:px-5 sm:py-2.5 rounded-xl bg-[#4b35e6] hover:bg-[#3f2bc9] text-white text-xs font-semibold shadow-md shadow-indigo-100 transition cursor-pointer"
+              className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-4 py-2 sm:px-5 sm:py-2.5 rounded-xl bg-[#4b35e6] hover:bg-[#3f2bc9] text-white text-xs font-semibold shadow-md shadow-indigo-100 transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Plus className="w-4 h-4 stroke-[2.5]" />
               <span className="truncate">Registrar Empleado</span>
@@ -804,13 +825,14 @@ export default function GestionPersonal() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 sm:gap-4">
         <button
           type="button"
+          disabled={loading}
           onClick={() => {
             setFilterEstado("TODOS");
             setFilterCategoria("TODAS");
             setSoloIncompletos(false);
             setPaginaActual(1);
           }}
-          className={`p-3.5 sm:p-5 rounded-2xl flex flex-col justify-between text-left transition-all border cursor-pointer ${
+          className={`p-3.5 sm:p-5 rounded-2xl flex flex-col justify-between text-left transition-all border cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed ${
             filterEstado === "TODOS" &&
             filterCategoria === "TODAS" &&
             !soloIncompletos
@@ -836,13 +858,14 @@ export default function GestionPersonal() {
 
         <button
           type="button"
+          disabled={loading}
           onClick={() => {
             setFilterCategoria("Docentes");
             setFilterEstado("ACTIVOS");
             setSoloIncompletos(false);
             setPaginaActual(1);
           }}
-          className={`p-3.5 sm:p-5 rounded-2xl flex flex-col justify-between text-left transition-all border cursor-pointer ${
+          className={`p-3.5 sm:p-5 rounded-2xl flex flex-col justify-between text-left transition-all border cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed ${
             filterCategoria.toLowerCase().includes("docente") &&
             !soloIncompletos
               ? "bg-purple-50/80 border-purple-500 ring-2 sm:ring-4 ring-purple-500/20 shadow-md scale-[1.01]"
@@ -867,6 +890,7 @@ export default function GestionPersonal() {
 
         <button
           type="button"
+          disabled={loading}
           onClick={() => {
             const catAdmin = categorias.find((c) =>
               c.nombre?.toLowerCase().includes("administrativ"),
@@ -876,7 +900,7 @@ export default function GestionPersonal() {
             setSoloIncompletos(false);
             setPaginaActual(1);
           }}
-          className={`p-3.5 sm:p-5 rounded-2xl flex flex-col justify-between text-left transition-all border cursor-pointer ${
+          className={`p-3.5 sm:p-5 rounded-2xl flex flex-col justify-between text-left transition-all border cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed ${
             filterEstado === "ACTIVOS" &&
             filterCategoria.toLowerCase().includes("administrativ") &&
             !soloIncompletos
@@ -902,13 +926,14 @@ export default function GestionPersonal() {
 
         <button
           type="button"
+          disabled={loading}
           onClick={() => {
             setFilterEstado("INACTIVOS");
             setFilterCategoria("TODAS");
             setSoloIncompletos(false);
             setPaginaActual(1);
           }}
-          className={`p-3.5 sm:p-5 rounded-2xl flex flex-col justify-between text-left transition-all border cursor-pointer ${
+          className={`p-3.5 sm:p-5 rounded-2xl flex flex-col justify-between text-left transition-all border cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed ${
             filterEstado === "INACTIVOS" && !soloIncompletos
               ? "bg-rose-50/80 border-rose-500 ring-2 sm:ring-4 ring-rose-500/20 shadow-md scale-[1.01]"
               : "bg-white border-slate-200 hover:border-rose-300 hover:bg-rose-50/30"
@@ -946,9 +971,10 @@ export default function GestionPersonal() {
 
         <div className="grid grid-cols-2 sm:flex sm:items-center gap-2 text-xs">
           <select
+            disabled={loading}
             value={filterCategoria}
             onChange={(e) => setFilterCategoria(e.target.value)}
-            className="border border-slate-200 rounded-xl px-2.5 py-2 bg-white text-slate-700 outline-none focus:border-indigo-500 font-medium truncate"
+            className="border border-slate-200 rounded-xl px-2.5 py-2 bg-white text-slate-700 outline-none focus:border-indigo-500 font-medium truncate disabled:opacity-50"
           >
             <option value="TODAS">Todas Las Categorías</option>
             {categoriasActivas.map((c) => (
@@ -959,9 +985,10 @@ export default function GestionPersonal() {
           </select>
 
           <select
+            disabled={loading}
             value={filterEstado}
             onChange={(e) => setFilterEstado(e.target.value)}
-            className="border border-slate-200 rounded-xl px-2.5 py-2 bg-white font-semibold text-slate-700 outline-none focus:border-indigo-500 truncate"
+            className="border border-slate-200 rounded-xl px-2.5 py-2 bg-white font-semibold text-slate-700 outline-none focus:border-indigo-500 truncate disabled:opacity-50"
           >
             <option value="TODOS">Todos los estados</option>
             <option value="ACTIVOS">Solo Activos</option>
@@ -974,12 +1001,7 @@ export default function GestionPersonal() {
       <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-xs">
         {/* VISTA MÓVIL (Cards) */}
         <div className="block lg:hidden divide-y divide-slate-100">
-          {loading ? (
-            <div className="text-center py-12 text-slate-400 text-xs">
-              <Loader2 className="w-5 h-5 animate-spin mx-auto text-indigo-600 mb-2" />
-              Cargando nómina de empleados...
-            </div>
-          ) : empleadosRenderizados.length === 0 ? (
+          {!loading && empleadosRenderizados.length === 0 ? (
             <div className="text-center py-10 px-4 text-slate-400 text-xs italic">
               {soloIncompletos
                 ? "¡Excelente! No hay empleados con datos pendientes."
@@ -1108,8 +1130,9 @@ export default function GestionPersonal() {
                     <div>
                       {puedeHorariosVer ? (
                         <button
+                          disabled={loading}
                           onClick={() => handleVerDetalle(emp)}
-                          className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-xs font-semibold transition cursor-pointer"
+                          className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-xs font-semibold transition cursor-pointer disabled:opacity-50"
                         >
                           <Calendar className="w-3.5 h-3.5" />
                           <span>Cronograma</span>
@@ -1125,8 +1148,9 @@ export default function GestionPersonal() {
                     <div className="flex items-center gap-1 text-slate-400">
                       {incompleto && puedePersonalEditar && (
                         <button
+                          disabled={loading}
                           onClick={() => abrirModalEditar(emp)}
-                          className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl text-xs shadow-xs cursor-pointer"
+                          className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl text-xs shadow-xs cursor-pointer disabled:opacity-50"
                           title="Completar datos pendientes"
                         >
                           <Pencil className="w-3 h-3" />
@@ -1136,12 +1160,13 @@ export default function GestionPersonal() {
 
                       {!esDocente && puedeHorariosGestionar && (
                         <button
+                          disabled={loading}
                           onClick={() =>
                             verificarEmpleadoActivo(emp, () =>
                               abrirModalTurno(emp),
                             )
                           }
-                          className={`p-1.5 rounded-lg border border-slate-200 transition ${
+                          className={`p-1.5 rounded-lg border border-slate-200 transition disabled:opacity-50 ${
                             emp.activo === false
                               ? "opacity-30 cursor-not-allowed text-slate-300"
                               : "hover:text-indigo-600 hover:bg-indigo-50 text-slate-600 cursor-pointer"
@@ -1154,12 +1179,13 @@ export default function GestionPersonal() {
 
                       {esDocente && puedeHorariosGestionar && (
                         <button
+                          disabled={loading}
                           onClick={() =>
                             navigate("/materias", {
                               state: { tab: "catalogo", docenteId: emp.id },
                             })
                           }
-                          className="inline-flex items-center gap-1 px-2.5 py-1 bg-purple-50 hover:bg-purple-100 text-purple-700 font-bold rounded-xl text-xs border border-purple-200 cursor-pointer"
+                          className="inline-flex items-center gap-1 px-2.5 py-1 bg-purple-50 hover:bg-purple-100 text-purple-700 font-bold rounded-xl text-xs border border-purple-200 cursor-pointer disabled:opacity-50"
                           title="Materias"
                         >
                           <span>Materias</span>
@@ -1169,12 +1195,13 @@ export default function GestionPersonal() {
 
                       {puedePersonalEditar && (
                         <button
+                          disabled={loading}
                           onClick={() =>
                             verificarEmpleadoActivo(emp, () =>
                               abrirModalEditar(emp),
                             )
                           }
-                          className={`p-1.5 rounded-lg border border-slate-200 transition ${
+                          className={`p-1.5 rounded-lg border border-slate-200 transition disabled:opacity-50 ${
                             emp.activo === false
                               ? "opacity-30 cursor-not-allowed text-slate-300"
                               : "hover:text-indigo-600 hover:bg-indigo-50 text-slate-600 cursor-pointer"
@@ -1188,26 +1215,28 @@ export default function GestionPersonal() {
                       {puedePersonalBajaReactivar &&
                         (emp.activo !== false ? (
                           <button
+                            disabled={loading}
                             onClick={() =>
                               handleEliminarEmpleado(
                                 emp.id,
                                 `${emp.nombre} ${emp.apellido}`,
                               )
                             }
-                            className="p-1.5 rounded-lg border border-slate-200 hover:text-rose-600 hover:bg-rose-50 text-slate-600 transition cursor-pointer"
+                            className="p-1.5 rounded-lg border border-slate-200 hover:text-rose-600 hover:bg-rose-50 text-slate-600 transition cursor-pointer disabled:opacity-50"
                             title="Dar de baja"
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
                         ) : (
                           <button
+                            disabled={loading}
                             onClick={() =>
                               handleReactivarEmpleado(
                                 emp.id,
                                 `${emp.nombre} ${emp.apellido}`,
                               )
                             }
-                            className="p-1.5 rounded-lg border border-slate-200 hover:text-emerald-600 hover:bg-emerald-50 text-emerald-600 transition cursor-pointer"
+                            className="p-1.5 rounded-lg border border-slate-200 hover:text-emerald-600 hover:bg-emerald-50 text-emerald-600 transition cursor-pointer disabled:opacity-50"
                             title="Reactivar"
                           >
                             <RotateCcw className="w-4 h-4" />
@@ -1240,14 +1269,7 @@ export default function GestionPersonal() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-slate-800">
-              {loading ? (
-                <tr>
-                  <td colSpan={5} className="text-center py-12 text-slate-400">
-                    <Loader2 className="w-5 h-5 animate-spin mx-auto text-indigo-600 mb-2" />
-                    Cargando nómina de empleados...
-                  </td>
-                </tr>
-              ) : empleadosRenderizados.length === 0 ? (
+              {!loading && empleadosRenderizados.length === 0 ? (
                 <tr>
                   <td
                     colSpan={5}
@@ -1364,8 +1386,9 @@ export default function GestionPersonal() {
                       <td className="px-6 py-4">
                         {puedeHorariosVer ? (
                           <button
+                            disabled={loading}
                             onClick={() => handleVerDetalle(emp)}
-                            className="inline-flex items-center gap-1.5 px-3 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg text-xs font-semibold transition cursor-pointer"
+                            className="inline-flex items-center gap-1.5 px-3 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg text-xs font-semibold transition cursor-pointer disabled:opacity-50"
                           >
                             <Calendar className="w-3.5 h-3.5" />
                             Ver cronograma
@@ -1404,8 +1427,9 @@ export default function GestionPersonal() {
                         <div className="flex items-center justify-end gap-2 text-slate-400">
                           {incompleto && puedePersonalEditar && (
                             <button
+                              disabled={loading}
                               onClick={() => abrirModalEditar(emp)}
-                              className="inline-flex items-center gap-1 px-2.5 py-1 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-lg text-[11px] shadow-xs cursor-pointer transition mr-1"
+                              className="inline-flex items-center gap-1 px-2.5 py-1 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-lg text-[11px] shadow-xs cursor-pointer transition mr-1 disabled:opacity-50"
                               title="Completar datos pendientes"
                             >
                               <Pencil className="w-3 h-3" />
@@ -1415,8 +1439,9 @@ export default function GestionPersonal() {
 
                           {puedeHorariosVer && (
                             <button
+                              disabled={loading}
                               onClick={() => handleVerDetalle(emp)}
-                              className="p-1 hover:text-indigo-600 transition cursor-pointer"
+                              className="p-1 hover:text-indigo-600 transition cursor-pointer disabled:opacity-50"
                               title="Ver Cronograma y Ficha"
                             >
                               <Eye className="w-4 h-4" />
@@ -1425,12 +1450,13 @@ export default function GestionPersonal() {
 
                           {!esDocente && puedeHorariosGestionar && (
                             <button
+                              disabled={loading}
                               onClick={() =>
                                 verificarEmpleadoActivo(emp, () =>
                                   abrirModalTurno(emp),
                                 )
                               }
-                              className={`p-1 transition ${
+                              className={`p-1 transition disabled:opacity-50 ${
                                 emp.activo === false
                                   ? "opacity-30 cursor-not-allowed hover:text-slate-400"
                                   : "hover:text-indigo-600 cursor-pointer"
@@ -1447,12 +1473,13 @@ export default function GestionPersonal() {
 
                           {esDocente && puedeHorariosGestionar && (
                             <button
+                              disabled={loading}
                               onClick={() =>
                                 navigate("/materias", {
                                   state: { tab: "catalogo", docenteId: emp.id },
                                 })
                               }
-                              className="inline-flex items-center gap-1 px-2.5 py-1 bg-purple-50 hover:bg-purple-100 text-purple-700 font-bold rounded-lg text-[11px] transition cursor-pointer border border-purple-200"
+                              className="inline-flex items-center gap-1 px-2.5 py-1 bg-purple-50 hover:bg-purple-100 text-purple-700 font-bold rounded-lg text-[11px] transition cursor-pointer border border-purple-200 disabled:opacity-50"
                               title="Gestionar asignaciones en el catálogo institucional"
                             >
                               <span>Materias</span>
@@ -1462,12 +1489,13 @@ export default function GestionPersonal() {
 
                           {puedePersonalEditar && (
                             <button
+                              disabled={loading}
                               onClick={() =>
                                 verificarEmpleadoActivo(emp, () =>
                                   abrirModalEditar(emp),
                                 )
                               }
-                              className={`p-1 transition ${
+                              className={`p-1 transition disabled:opacity-50 ${
                                 emp.activo === false
                                   ? "opacity-30 cursor-not-allowed hover:text-slate-400"
                                   : "hover:text-indigo-600 cursor-pointer"
@@ -1485,26 +1513,28 @@ export default function GestionPersonal() {
                           {puedePersonalBajaReactivar &&
                             (emp.activo !== false ? (
                               <button
+                                disabled={loading}
                                 onClick={() =>
                                   handleEliminarEmpleado(
                                     emp.id,
                                     `${emp.nombre} ${emp.apellido}`,
                                   )
                                 }
-                                className="p-1 hover:text-rose-600 transition cursor-pointer"
+                                className="p-1 hover:text-rose-600 transition cursor-pointer disabled:opacity-50"
                                 title="Dar de baja empleado"
                               >
                                 <Trash2 className="w-4 h-4" />
                               </button>
                             ) : (
                               <button
+                                disabled={loading}
                                 onClick={() =>
                                   handleReactivarEmpleado(
                                     emp.id,
                                     `${emp.nombre} ${emp.apellido}`,
                                   )
                                 }
-                                className="p-1 hover:text-emerald-600 transition cursor-pointer"
+                                className="p-1 hover:text-emerald-600 transition cursor-pointer disabled:opacity-50"
                                 title="Reactivar Empleado"
                               >
                                 <RotateCcw className="w-4 h-4 text-emerald-600" />

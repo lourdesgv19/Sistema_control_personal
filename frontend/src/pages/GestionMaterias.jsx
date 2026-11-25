@@ -13,6 +13,7 @@ import CalendarioSemanalMaterias from "../components/materias/CalendarioSemanalM
 import CatalogoMateriasABM from "../components/materias/CatalogoMateriasABM";
 import ModalNuevaMateria from "../components/materias/ModalNuevaMateria";
 import ModalAlerta from "../components/comunes/ModalAlerta";
+import EstadoCarga from "../components/comunes/EstadoCarga";
 import { useAuth } from "../context/AuthContext";
 import {
   getResumenMaterias,
@@ -74,6 +75,7 @@ export default function GestionMaterias() {
     }
   }, [location.state, puedeVerCatalogo, puedeVerCalendario]);
 
+  const [loading, setLoading] = useState(false);
   const [docenteSeleccionadoId] = useState(
     () => location.state?.docenteId || null,
   );
@@ -122,6 +124,7 @@ export default function GestionMaterias() {
   };
 
   const cargarDatos = useCallback(async () => {
+    setLoading(true);
     try {
       const finSemana = new Date(fechaLunes + "T00:00:00");
       finSemana.setDate(finSemana.getDate() + 5);
@@ -133,6 +136,8 @@ export default function GestionMaterias() {
       }
     } catch (err) {
       console.error("Error al sincronizar métricas de materias:", err);
+    } finally {
+      setLoading(false);
     }
   }, [fechaLunes]);
 
@@ -159,11 +164,13 @@ export default function GestionMaterias() {
   }, [cargarDatos]);
 
   const handleEliminarMateria = async (id, nombre) => {
-    if (!puedeEliminarMateria) return;
+    if (!puedeEliminarMateria || loading) return;
 
+    setLoading(true);
     try {
       const res = await getImpactoBajaMateria(id);
       const data = res.data;
+      setLoading(false);
 
       let mensajeAviso = `¿Está seguro de dar de baja la materia "${nombre}"?`;
       if (data.totalHorariosAfectados > 0) {
@@ -193,6 +200,7 @@ export default function GestionMaterias() {
         mostrarCancelar: true,
         onConfirmar: async () => {
           setModalAlerta((p) => ({ ...p, isOpen: false }));
+          setLoading(true);
           try {
             await deleteMateriaEnCascada(id);
             window.dispatchEvent(new CustomEvent("datos:actualizados"));
@@ -203,6 +211,7 @@ export default function GestionMaterias() {
               `La materia "${nombre}" y sus horarios asociados fueron dados de baja correctamente.`,
             );
           } catch (err) {
+            setLoading(false);
             mostrarAviso(
               "danger",
               "Error",
@@ -212,6 +221,7 @@ export default function GestionMaterias() {
         },
       });
     } catch (err) {
+      setLoading(false);
       mostrarAviso(
         "danger",
         "Error",
@@ -221,13 +231,13 @@ export default function GestionMaterias() {
   };
 
   const handleAbrirCrear = () => {
-    if (!puedeCrearMateria) return;
+    if (!puedeCrearMateria || loading) return;
     setMateriaAEditar(null);
     setModalMateria(true);
   };
 
   const handleAbrirEditarHorario = (horario, materia) => {
-    if (!puedeEditarMateria && !puedeGestionarDocentes) return;
+    if ((!puedeEditarMateria && !puedeGestionarDocentes) || loading) return;
     setMateriaAEditar({
       idMateria: materia.idMateria,
       nombre: materia.nombre,
@@ -248,7 +258,7 @@ export default function GestionMaterias() {
   };
 
   const handleAbrirAsignarDocente = (materia) => {
-    if (!puedeGestionarDocentes && !puedeEditarMateria) return;
+    if ((!puedeGestionarDocentes && !puedeEditarMateria) || loading) return;
     const primerHorario =
       materia.desgloseHorarios && materia.desgloseHorarios.length > 0
         ? materia.desgloseHorarios[0]
@@ -294,6 +304,8 @@ export default function GestionMaterias() {
 
   return (
     <div className="p-3.5 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-4 sm:space-y-6">
+      <EstadoCarga cargando={loading} variante="flotante" icono={BookOpen} />
+
       {/* HEADER DE LA SECCIÓN */}
       <div className="bg-white border border-slate-200 rounded-2xl sm:rounded-3xl p-4 sm:p-5 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-3 sm:gap-4">
@@ -314,8 +326,9 @@ export default function GestionMaterias() {
         <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
           <button
             type="button"
+            disabled={loading}
             onClick={() => setMostrarResumen(!mostrarResumen)}
-            className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition cursor-pointer"
+            className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {mostrarResumen ? (
               <ChevronUp className="w-3.5 h-3.5" />
@@ -328,8 +341,9 @@ export default function GestionMaterias() {
           {puedeCrearMateria && (
             <button
               type="button"
+              disabled={loading}
               onClick={handleAbrirCrear}
-              className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-[#4b35e6] hover:bg-[#3f2bc9] text-white text-xs font-semibold shadow-xs transition cursor-pointer"
+              className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-[#4b35e6] hover:bg-[#3f2bc9] text-white text-xs font-semibold shadow-xs transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Plus className="w-4 h-4 stroke-[2.5]" />
               <span>Nueva Materia</span>
@@ -411,8 +425,9 @@ export default function GestionMaterias() {
             {puedeVerCalendario && (
               <button
                 type="button"
+                disabled={loading}
                 onClick={() => setTab("calendario")}
-                className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 px-3 sm:px-4 py-2 rounded-lg transition cursor-pointer ${
+                className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 px-3 sm:px-4 py-2 rounded-lg transition cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed ${
                   tab === "calendario"
                     ? "bg-white text-indigo-700 shadow-xs"
                     : "hover:text-slate-900"
@@ -426,8 +441,9 @@ export default function GestionMaterias() {
             {puedeVerCatalogo && (
               <button
                 type="button"
+                disabled={loading}
                 onClick={() => setTab("catalogo")}
-                className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 px-3 sm:px-4 py-2 rounded-lg transition cursor-pointer ${
+                className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 px-3 sm:px-4 py-2 rounded-lg transition cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed ${
                   tab === "catalogo"
                     ? "bg-white text-indigo-700 shadow-xs"
                     : "hover:text-slate-900"

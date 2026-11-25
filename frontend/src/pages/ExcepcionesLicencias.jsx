@@ -17,7 +17,6 @@ import {
   Briefcase,
   Palmtree,
   RotateCcw,
-  Loader2,
 } from "lucide-react";
 import {
   getExcepcionesMetricas,
@@ -34,6 +33,7 @@ import { useAuth } from "../context/AuthContext";
 import ModalCrearExcepcion from "../components/excepciones/ModalCrearExcepcion";
 import ModalFichaDetalleLicencia from "../components/excepciones/ModalFichaDetalleLicencia";
 import ModalAlerta from "../components/comunes/ModalAlerta";
+import EstadoCarga from "../components/comunes/EstadoCarga";
 import PaginadorTabla from "../components/comunes/PaginadorTabla";
 import TarjetasKpiExcepciones from "../components/excepciones/TarjetasKpiExcepciones";
 import { formatearFechaVisual } from "../utils/fechasFichaUtils";
@@ -198,6 +198,7 @@ export default function ExcepcionesLicencias() {
   );
 
   const handleCambiarPagina = (nuevaPagina) => {
+    if (loading) return;
     const pag = Math.max(1, Math.min(nuevaPagina, totalPaginas));
     setPaginaActual(pag);
     cargarRegistrosServidor(pag - 1);
@@ -349,6 +350,7 @@ export default function ExcepcionesLicencias() {
   };
 
   const abrirModalNuevo = (idEmpleadoPrefill = null, esAsueto = false) => {
+    if (loading) return;
     if (esAsueto) {
       setLicenciaEditando({ esInstitucional: true, tipo: "FERIADO_ASUETO" });
     } else if (idEmpleadoPrefill) {
@@ -364,11 +366,13 @@ export default function ExcepcionesLicencias() {
   };
 
   const abrirModalEditar = (lic) => {
+    if (loading) return;
     setLicenciaEditando(lic);
     setModalCrearAbierto(true);
   };
 
   const handleGuardar = async (payload, idAEditar) => {
+    setLoading(true);
     try {
       if (idAEditar) {
         await updateExcepcion(idAEditar, payload);
@@ -390,6 +394,7 @@ export default function ExcepcionesLicencias() {
         cargarMetricas(),
       ]);
     } catch (err) {
+      setLoading(false);
       mostrarAviso(
         "danger",
         "Error",
@@ -399,6 +404,8 @@ export default function ExcepcionesLicencias() {
   };
 
   const handleDictaminar = async (id, nuevoEstado) => {
+    if (loading) return;
+    setLoading(true);
     try {
       await dictaminarExcepcion(id, nuevoEstado);
       await Promise.all([
@@ -411,12 +418,13 @@ export default function ExcepcionesLicencias() {
         `La solicitud ha sido marcada como ${nuevoEstado}.`,
       );
     } catch (err) {
+      setLoading(false);
       mostrarAviso("danger", "Error", "No se pudo dictaminar la solicitud.");
     }
   };
 
   const handleEliminar = (lic) => {
-    if (!puedeEliminar) return;
+    if (!puedeEliminar || loading) return;
     setModalAlerta({
       isOpen: true,
       tipo: "danger",
@@ -427,6 +435,7 @@ export default function ExcepcionesLicencias() {
       mostrarCancelar: true,
       onConfirmar: async () => {
         setModalAlerta((p) => ({ ...p, isOpen: false }));
+        setLoading(true);
         try {
           await deleteExcepcion(lic.id);
           await Promise.all([
@@ -439,6 +448,7 @@ export default function ExcepcionesLicencias() {
             "La licencia fue dada de baja.",
           );
         } catch (err) {
+          setLoading(false);
           mostrarAviso("danger", "Error", "No se pudo anular la licencia.");
         }
       },
@@ -447,7 +457,7 @@ export default function ExcepcionesLicencias() {
   };
 
   const handleReactivar = (lic) => {
-    if (!puedeEliminar) return;
+    if (!puedeEliminar || loading) return;
     setModalAlerta({
       isOpen: true,
       tipo: "info",
@@ -458,6 +468,7 @@ export default function ExcepcionesLicencias() {
       mostrarCancelar: true,
       onConfirmar: async () => {
         setModalAlerta((p) => ({ ...p, isOpen: false }));
+        setLoading(true);
         try {
           await reactivarExcepcion(lic.id);
           await Promise.all([
@@ -470,6 +481,7 @@ export default function ExcepcionesLicencias() {
             "La licencia ha sido reactivada.",
           );
         } catch (err) {
+          setLoading(false);
           mostrarAviso("danger", "Error", "No se pudo reactivar la licencia.");
         }
       },
@@ -478,6 +490,7 @@ export default function ExcepcionesLicencias() {
   };
 
   const handleSeleccionarKpi = (tipoKpi) => {
+    if (loading) return;
     setFiltroKpi((prev) => (prev === tipoKpi ? "TODOS" : tipoKpi));
   };
 
@@ -527,6 +540,9 @@ export default function ExcepcionesLicencias() {
 
   return (
     <div className="p-3 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-4 sm:space-y-6 font-sans">
+      {/* INDICADOR DE CARGA FLOTANTE CON TRANSICIÓN SUAVE */}
+      <EstadoCarga cargando={loading} variante="flotante" tipoIcono="reloj" />
+
       {/* 1. HEADER */}
       <div className="bg-white border border-slate-200 rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
@@ -544,8 +560,9 @@ export default function ExcepcionesLicencias() {
           {/* Botón para alternar visibilidad de las tarjetas KPI */}
           <button
             type="button"
+            disabled={loading}
             onClick={() => setMostrarMetricas(!mostrarMetricas)}
-            className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold shadow-2xs transition cursor-pointer"
+            className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold shadow-2xs transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {mostrarMetricas ? (
               <ChevronUp className="w-4 h-4 text-slate-500 shrink-0" />
@@ -561,8 +578,9 @@ export default function ExcepcionesLicencias() {
           {puedeCrear && (
             <button
               type="button"
+              disabled={loading}
               onClick={() => abrirModalNuevo()}
-              className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-xs transition cursor-pointer"
+              className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-xs transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Plus className="w-4 h-4 stroke-[2.5]" />
               <span>Registrar Licencia / Excepción</span>
@@ -597,8 +615,9 @@ export default function ExcepcionesLicencias() {
             <button
               key={t.key}
               type="button"
+              disabled={loading}
               onClick={() => setTabPrincipal(t.key)}
-              className={`px-3 sm:px-3.5 py-1.5 rounded-xl transition cursor-pointer whitespace-nowrap flex-1 sm:flex-initial text-center ${
+              className={`px-3 sm:px-3.5 py-1.5 rounded-xl transition cursor-pointer whitespace-nowrap flex-1 sm:flex-initial text-center disabled:opacity-60 disabled:cursor-not-allowed ${
                 tabPrincipal === t.key
                   ? "bg-white text-indigo-700 shadow-xs border border-slate-200 font-bold"
                   : "text-slate-600 hover:text-slate-900"
@@ -612,8 +631,9 @@ export default function ExcepcionesLicencias() {
         {tabPrincipal === "DESGLOSE" && (
           <button
             type="button"
+            disabled={loading}
             onClick={alternarTodosDesgloses}
-            className="flex items-center justify-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 text-slate-700 rounded-xl text-xs font-semibold hover:bg-slate-50 transition cursor-pointer w-full sm:w-fit shadow-2xs"
+            className="flex items-center justify-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 text-slate-700 rounded-xl text-xs font-semibold hover:bg-slate-50 transition cursor-pointer w-full sm:w-fit shadow-2xs disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {estanTodosAbiertos ? (
               <>
@@ -644,9 +664,10 @@ export default function ExcepcionesLicencias() {
         </div>
 
         <select
+          disabled={loading}
           value={filtroEstadoActivo}
           onChange={(e) => setFiltroEstadoActivo(e.target.value)}
-          className="w-full px-3 py-2 border border-slate-200 rounded-xl outline-none focus:border-indigo-500 text-slate-700 font-semibold bg-white cursor-pointer"
+          className="w-full px-3 py-2 border border-slate-200 rounded-xl outline-none focus:border-indigo-500 text-slate-700 font-semibold bg-white cursor-pointer disabled:opacity-50"
         >
           <option value="ACTIVOS">Estado: Solo Activos</option>
           <option value="INACTIVOS">Estado: Solo Bajas (Inactivos)</option>
@@ -654,9 +675,10 @@ export default function ExcepcionesLicencias() {
         </select>
 
         <select
+          disabled={loading}
           value={filtroRegimen}
           onChange={(e) => setFiltroRegimen(e.target.value)}
-          className="w-full px-3 py-2 border border-slate-200 rounded-xl outline-none focus:border-indigo-500 text-slate-700 bg-white cursor-pointer"
+          className="w-full px-3 py-2 border border-slate-200 rounded-xl outline-none focus:border-indigo-500 text-slate-700 bg-white cursor-pointer disabled:opacity-50"
         >
           <option value="TODOS">Dictamen: Todos</option>
           <option value="APROBADA">Aprobadas</option>
@@ -665,9 +687,10 @@ export default function ExcepcionesLicencias() {
         </select>
 
         <select
+          disabled={loading}
           value={filtroTipo}
           onChange={(e) => setFiltroTipo(e.target.value)}
-          className="w-full px-3 py-2 border border-slate-200 rounded-xl outline-none focus:border-indigo-500 text-slate-700 bg-white cursor-pointer"
+          className="w-full px-3 py-2 border border-slate-200 rounded-xl outline-none focus:border-indigo-500 text-slate-700 bg-white cursor-pointer disabled:opacity-50"
         >
           <option value="TODOS">Tipo: Todos</option>
           <option value="LICENCIA_MEDICA">Licencias Médicas</option>
@@ -679,9 +702,10 @@ export default function ExcepcionesLicencias() {
         </select>
 
         <select
+          disabled={loading}
           value={filtroCategoria}
           onChange={(e) => setFiltroCategoria(e.target.value)}
-          className="w-full px-3 py-2 border border-slate-200 rounded-xl outline-none focus:border-indigo-500 text-slate-700 bg-white cursor-pointer"
+          className="w-full px-3 py-2 border border-slate-200 rounded-xl outline-none focus:border-indigo-500 text-slate-700 bg-white cursor-pointer disabled:opacity-50"
         >
           <option value="TODAS">Categoría: Todas</option>
           <option value="INSTITUCIONAL">Institucional</option>
@@ -696,12 +720,7 @@ export default function ExcepcionesLicencias() {
       {/* 5. VISTA 1: DESGLOSE POR AGENTE */}
       {tabPrincipal === "DESGLOSE" && (
         <div className="space-y-3 sm:space-y-4">
-          {loading ? (
-            <div className="p-8 sm:p-12 text-center text-slate-400 bg-white rounded-2xl sm:rounded-3xl border border-slate-200 text-xs">
-              <Loader2 className="w-5 h-5 animate-spin mx-auto text-indigo-600 mb-2" />
-              Consultando licencias del servidor...
-            </div>
-          ) : desgloseAgentes.length === 0 ? (
+          {!loading && desgloseAgentes.length === 0 ? (
             <div className="p-8 sm:p-12 text-center text-slate-400 bg-white rounded-2xl sm:rounded-3xl border border-slate-200 text-xs italic">
               No se registran licencias ni excepciones para el filtro aplicado.
             </div>
@@ -1109,12 +1128,7 @@ export default function ExcepcionesLicencias() {
       {/* 6. VISTA 2: LISTADO DETALLADO */}
       {tabPrincipal === "LISTADO" && (
         <div>
-          {loading ? (
-            <div className="bg-white border border-slate-200 rounded-2xl sm:rounded-3xl p-8 sm:p-12 text-center text-slate-400 text-xs">
-              <Loader2 className="w-5 h-5 animate-spin mx-auto text-indigo-600 mb-2" />
-              Consultando licencias del servidor...
-            </div>
-          ) : registros.length === 0 ? (
+          {!loading && registros.length === 0 ? (
             <div className="bg-white border border-slate-200 rounded-2xl sm:rounded-3xl p-8 sm:p-12 text-center text-slate-400 text-xs italic">
               No se registran licencias para los filtros aplicados.
             </div>
@@ -1565,8 +1579,9 @@ export default function ExcepcionesLicencias() {
             {puedeCrear && (
               <button
                 type="button"
+                disabled={loading}
                 onClick={() => abrirModalNuevo(null, true)}
-                className="w-full sm:w-auto px-4 py-2 bg-[#8b5cf6] hover:bg-[#7c3aed] text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer flex items-center justify-center gap-1.5 shrink-0"
+                className="w-full sm:w-auto px-4 py-2 bg-[#8b5cf6] hover:bg-[#7c3aed] text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer flex items-center justify-center gap-1.5 shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Plus className="w-4 h-4 stroke-[2.5]" />
                 <span>Agregar Feriado / Asueto</span>
@@ -1575,12 +1590,7 @@ export default function ExcepcionesLicencias() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
-            {loading ? (
-              <div className="col-span-full p-8 sm:p-12 text-center text-slate-400 bg-white border border-slate-200 rounded-2xl sm:rounded-3xl text-xs">
-                <Loader2 className="w-5 h-5 animate-spin mx-auto text-indigo-600 mb-2" />
-                Consultando asuetos...
-              </div>
-            ) : asuetos.length === 0 ? (
+            {!loading && asuetos.length === 0 ? (
               <div className="col-span-full p-8 sm:p-12 text-center text-slate-400 bg-white border border-slate-200 rounded-2xl sm:rounded-3xl text-xs italic">
                 No hay asuetos o feriados institucionales registrados bajo este
                 filtro.

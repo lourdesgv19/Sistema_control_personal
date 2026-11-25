@@ -190,6 +190,24 @@ export default function FichaComportamiento() {
     }
   }, [empleadoSeleccionado?.id]);
 
+  const esCargaPesada = useMemo(() => {
+    // Trimestre (3 meses) y Cuatrimestre (4 meses) siempre procesan muchos días
+    if (["TRIMESTRE", "CUATRIMESTRE"].includes(modalidad)) {
+      return true;
+    }
+
+    // En Rango de Fechas, si supera los 45 días (más de 1 mes y medio), se considera carga pesada
+    if (modalidad === "RANGO_FECHAS" && fechaConsulta && fechaHastaRango) {
+      const inicio = new Date(`${fechaConsulta}T00:00:00`);
+      const fin = new Date(`${fechaHastaRango}T00:00:00`);
+      const diffDias = Math.ceil((fin - inicio) / (1000 * 60 * 60 * 24)) + 1;
+      return diffDias > 45;
+    }
+
+    // Diario, Semanal, Mensual o rangos cortos son rápidos
+    return false;
+  }, [modalidad, fechaConsulta, fechaHastaRango]);
+
   // Obtiene los horarios activos verificando estrictamente fechaAlta y fechaBaja
   const obtenerHorariosDeFecha = useCallback(
     (fechaStr) => {
@@ -1738,9 +1756,15 @@ export default function FichaComportamiento() {
           {/* INDICADOR DE CARGA REUTILIZABLE */}
           <EstadoCarga
             cargando={loadingFicha}
-            tipoIcono="calendario"
+            variante={esCargaPesada ? "modal" : "flotante"}
+            tipoIcono={esCargaPesada ? "calendario" : "reloj"}
             titulo="Generando reporte..."
-            descripcion="Procesando asistencias e incidentes del período."
+            descripcion={
+              <>
+                Procesando asistencias e incidentes, esto puede demorar unos
+                segundos.
+              </>
+            }
           />
 
           {/* CONTENIDO DE RESULTADOS (atenúa y bloquea interacciones mientras carga) */}

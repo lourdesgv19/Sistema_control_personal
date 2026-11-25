@@ -8,7 +8,6 @@ import {
   Search,
   Users,
   ShieldAlert,
-  Loader2,
   Lock,
 } from "lucide-react";
 import {
@@ -20,6 +19,7 @@ import {
   getEmpleadosSinUsuario,
 } from "../services/usuarioService";
 import ModalAlerta from "../components/comunes/ModalAlerta";
+import EstadoCarga from "../components/comunes/EstadoCarga";
 import ModalCrearUsuario from "../components/usuarios/ModalCrearUsuario";
 import ModalMatrizPermisos from "../components/usuarios/ModalMatrizPermisos";
 import PaginadorTabla from "../components/comunes/PaginadorTabla";
@@ -82,7 +82,7 @@ export default function GestionUsuarios() {
   };
 
   const abrirModalPermisos = (u) => {
-    if (!puedeGestionarAccesos) return;
+    if (!puedeGestionarAccesos || loading) return;
     setModalPermisos({
       isOpen: true,
       usuario: u,
@@ -169,6 +169,7 @@ export default function GestionUsuarios() {
   );
 
   const handleCambiarPagina = (nuevaPagina) => {
+    if (loading) return;
     const pag = Math.max(1, Math.min(nuevaPagina, totalPaginas));
     setPaginaActual(pag);
     cargarUsuariosServidor(pag - 1);
@@ -193,6 +194,7 @@ export default function GestionUsuarios() {
 
   const handleCrearUsuario = async (payload) => {
     if (!puedeGestionarAccesos) return;
+    setLoading(true);
     try {
       const nuevoUsuarioCreado = await createUsuario(payload);
       setModalCrear(false);
@@ -216,6 +218,7 @@ export default function GestionUsuarios() {
         });
       }
     } catch (err) {
+      setLoading(false);
       mostrarAviso(
         "danger",
         "Error al crear usuario",
@@ -225,7 +228,7 @@ export default function GestionUsuarios() {
   };
 
   const handleResetPassword = (usuario) => {
-    if (!puedeResetPassword || usuario.username === "admin") return;
+    if (!puedeResetPassword || usuario.username === "admin" || loading) return;
     setModalAlerta({
       isOpen: true,
       tipo: "warning",
@@ -236,6 +239,7 @@ export default function GestionUsuarios() {
       mostrarCancelar: true,
       onConfirmar: async () => {
         setModalAlerta((prev) => ({ ...prev, isOpen: false }));
+        setLoading(true);
         try {
           await resetPasswordUsuario(usuario.id);
           mostrarAviso(
@@ -250,13 +254,15 @@ export default function GestionUsuarios() {
             err.response?.data?.message ||
               "No se pudo restablecer la contraseña.",
           );
+        } finally {
+          setLoading(false);
         }
       },
     });
   };
 
   const handleToggleEstado = (usuario) => {
-    if (!puedeSuspender || usuario.username === "admin") return;
+    if (!puedeSuspender || usuario.username === "admin" || loading) return;
     const nuevoEstado = !usuario.activo;
     setModalAlerta({
       isOpen: true,
@@ -268,6 +274,7 @@ export default function GestionUsuarios() {
       mostrarCancelar: true,
       onConfirmar: async () => {
         setModalAlerta((prev) => ({ ...prev, isOpen: false }));
+        setLoading(true);
         try {
           await toggleEstadoUsuario(usuario.id, nuevoEstado);
           await Promise.all([
@@ -280,6 +287,7 @@ export default function GestionUsuarios() {
             `El usuario ahora está ${nuevoEstado ? "Activo" : "Suspendido"}.`,
           );
         } catch (err) {
+          setLoading(false);
           mostrarAviso(
             "danger",
             "Error",
@@ -305,6 +313,8 @@ export default function GestionUsuarios() {
 
   return (
     <div className="p-3.5 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-4 sm:space-y-6 font-sans">
+      <EstadoCarga cargando={loading} variante="flotante" icono={ShieldCheck} />
+
       {/* 1. CABECERA */}
       <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-3 sm:gap-4">
@@ -324,8 +334,9 @@ export default function GestionUsuarios() {
 
         {puedeGestionarAccesos ? (
           <button
+            disabled={loading}
             onClick={() => setModalCrear(true)}
-            className="flex items-center justify-center gap-2 px-4 sm:px-5 py-2.5 rounded-xl bg-[#4b35e6] hover:bg-[#3f2bc9] text-white text-xs font-semibold shadow-md shadow-indigo-100 transition w-full sm:w-auto cursor-pointer"
+            className="flex items-center justify-center gap-2 px-4 sm:px-5 py-2.5 rounded-xl bg-[#4b35e6] hover:bg-[#3f2bc9] text-white text-xs font-semibold shadow-md shadow-indigo-100 transition w-full sm:w-auto cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <UserPlus className="w-4 h-4 stroke-[2.5]" />
             <span>Habilitar Nuevo Usuario</span>
@@ -345,12 +356,13 @@ export default function GestionUsuarios() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <button
           type="button"
+          disabled={loading}
           onClick={() => {
             setFiltroEstado("TODOS");
             setFiltroRol("TODOS");
             setPaginaActual(1);
           }}
-          className={`p-4 sm:p-5 rounded-2xl flex flex-col justify-between text-left transition-all border cursor-pointer ${
+          className={`p-4 sm:p-5 rounded-2xl flex flex-col justify-between text-left transition-all border cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed ${
             filtroEstado === "TODOS" && filtroRol === "TODOS"
               ? "bg-slate-50/90 border-slate-700 ring-4 ring-slate-400/20 shadow-md scale-[1.02]"
               : "bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50/50"
@@ -374,12 +386,13 @@ export default function GestionUsuarios() {
 
         <button
           type="button"
+          disabled={loading}
           onClick={() => {
             setFiltroRol("ADMINISTRADOR");
             setFiltroEstado("ACTIVOS");
             setPaginaActual(1);
           }}
-          className={`p-4 sm:p-5 rounded-2xl flex flex-col justify-between text-left transition-all border cursor-pointer ${
+          className={`p-4 sm:p-5 rounded-2xl flex flex-col justify-between text-left transition-all border cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed ${
             filtroRol === "ADMINISTRADOR" && filtroEstado === "ACTIVOS"
               ? "bg-purple-50/90 border-purple-500 ring-4 ring-purple-500/20 shadow-md scale-[1.02]"
               : "bg-white border-slate-200 hover:border-purple-300 hover:bg-purple-50/30"
@@ -403,12 +416,13 @@ export default function GestionUsuarios() {
 
         <button
           type="button"
+          disabled={loading}
           onClick={() => {
             setFiltroRol("AUDITOR");
             setFiltroEstado("ACTIVOS");
             setPaginaActual(1);
           }}
-          className={`p-4 sm:p-5 rounded-2xl flex flex-col justify-between text-left transition-all border cursor-pointer ${
+          className={`p-4 sm:p-5 rounded-2xl flex flex-col justify-between text-left transition-all border cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed ${
             filtroRol === "AUDITOR" && filtroEstado === "ACTIVOS"
               ? "bg-indigo-50/90 border-indigo-500 ring-4 ring-indigo-500/20 shadow-md scale-[1.02]"
               : "bg-white border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/30"
@@ -432,12 +446,13 @@ export default function GestionUsuarios() {
 
         <button
           type="button"
+          disabled={loading}
           onClick={() => {
             setFiltroEstado("INACTIVOS");
             setFiltroRol("TODOS");
             setPaginaActual(1);
           }}
-          className={`p-4 sm:p-5 rounded-2xl flex flex-col justify-between text-left transition-all border cursor-pointer ${
+          className={`p-4 sm:p-5 rounded-2xl flex flex-col justify-between text-left transition-all border cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed ${
             filtroEstado === "INACTIVOS"
               ? "bg-rose-50/90 border-rose-500 ring-4 ring-rose-500/20 shadow-md scale-[1.02]"
               : "bg-white border-slate-200 hover:border-rose-300 hover:bg-rose-50/30"
@@ -475,9 +490,10 @@ export default function GestionUsuarios() {
 
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 text-xs">
           <select
+            disabled={loading}
             value={filtroRol}
             onChange={(e) => setFiltroRol(e.target.value)}
-            className="border border-slate-200 rounded-xl px-3 py-2 bg-white text-slate-700 outline-none focus:border-indigo-500 font-medium"
+            className="border border-slate-200 rounded-xl px-3 py-2 bg-white text-slate-700 outline-none focus:border-indigo-500 font-medium disabled:opacity-50"
           >
             <option value="TODOS">Todos los roles</option>
             <option value="ADMINISTRADOR">Administrador</option>
@@ -487,9 +503,10 @@ export default function GestionUsuarios() {
           </select>
 
           <select
+            disabled={loading}
             value={filtroEstado}
             onChange={(e) => setFiltroEstado(e.target.value)}
-            className="border border-slate-200 rounded-xl px-3 py-2 bg-white font-medium text-slate-700 outline-none focus:border-indigo-500"
+            className="border border-slate-200 rounded-xl px-3 py-2 bg-white font-medium text-slate-700 outline-none focus:border-indigo-500 disabled:opacity-50"
           >
             <option value="TODOS">Todos los estados</option>
             <option value="ACTIVOS">Solo Activos</option>
@@ -502,12 +519,7 @@ export default function GestionUsuarios() {
       <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-xs">
         {/* VISTA MÓVIL */}
         <div className="md:hidden divide-y divide-slate-100">
-          {loading ? (
-            <div className="text-center py-12 text-slate-400 text-xs">
-              <Loader2 className="w-5 h-5 animate-spin mx-auto text-indigo-600 mb-2" />
-              Cargando usuarios del servidor...
-            </div>
-          ) : usuarios.length === 0 ? (
+          {!loading && usuarios.length === 0 ? (
             <div className="text-center py-12 text-slate-400 text-xs italic">
               No se encontraron usuarios registrados con los filtros aplicados.
             </div>
@@ -567,8 +579,9 @@ export default function GestionUsuarios() {
                     {!esAdminRaiz ? (
                       puedeResetPassword ? (
                         <button
+                          disabled={loading}
                           onClick={() => handleResetPassword(u)}
-                          className="flex items-center gap-1 px-2.5 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 rounded-lg text-xs font-semibold transition cursor-pointer"
+                          className="flex items-center gap-1 px-2.5 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 rounded-lg text-xs font-semibold transition cursor-pointer disabled:opacity-50"
                           title="Restablecer a contraseña predeterminada"
                         >
                           <KeyRound className="w-3.5 h-3.5 text-amber-600" />
@@ -596,7 +609,7 @@ export default function GestionUsuarios() {
                     {puedeGestionarAccesos ? (
                       <button
                         onClick={() => abrirModalPermisos(u)}
-                        disabled={esAdminRaiz}
+                        disabled={esAdminRaiz || loading}
                         className="px-2.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg text-xs font-semibold transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                         title={
                           esAdminRaiz
@@ -619,16 +632,18 @@ export default function GestionUsuarios() {
                       puedeSuspender ? (
                         u.activo !== false ? (
                           <button
+                            disabled={loading}
                             onClick={() => handleToggleEstado(u)}
-                            className="p-1.5 hover:text-rose-600 transition cursor-pointer text-rose-500"
+                            className="p-1.5 hover:text-rose-600 transition cursor-pointer text-rose-500 disabled:opacity-50"
                             title="Suspender acceso"
                           >
                             <XCircle className="w-5 h-5" />
                           </button>
                         ) : (
                           <button
+                            disabled={loading}
                             onClick={() => handleToggleEstado(u)}
-                            className="p-1.5 hover:text-emerald-600 transition cursor-pointer text-emerald-600"
+                            className="p-1.5 hover:text-emerald-600 transition cursor-pointer text-emerald-600 disabled:opacity-50"
                             title="Reactivar acceso"
                           >
                             <CheckCircle2 className="w-5 h-5" />
@@ -674,14 +689,7 @@ export default function GestionUsuarios() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-slate-800">
-              {loading ? (
-                <tr>
-                  <td colSpan={5} className="text-center py-12 text-slate-400">
-                    <Loader2 className="w-5 h-5 animate-spin mx-auto text-indigo-600 mb-2" />
-                    Cargando usuarios del servidor...
-                  </td>
-                </tr>
-              ) : usuarios.length === 0 ? (
+              {!loading && usuarios.length === 0 ? (
                 <tr>
                   <td
                     colSpan={5}
@@ -751,8 +759,9 @@ export default function GestionUsuarios() {
                           {!esAdminRaiz ? (
                             puedeResetPassword ? (
                               <button
+                                disabled={loading}
                                 onClick={() => handleResetPassword(u)}
-                                className="flex items-center gap-1 px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 rounded-lg text-xs font-semibold transition cursor-pointer"
+                                className="flex items-center gap-1 px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 rounded-lg text-xs font-semibold transition cursor-pointer disabled:opacity-50"
                                 title="Restablecer a contraseña predeterminada"
                               >
                                 <KeyRound className="w-3.5 h-3.5 text-amber-600" />
@@ -780,7 +789,7 @@ export default function GestionUsuarios() {
                           {puedeGestionarAccesos ? (
                             <button
                               onClick={() => abrirModalPermisos(u)}
-                              disabled={esAdminRaiz}
+                              disabled={esAdminRaiz || loading}
                               className="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg text-xs font-semibold transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                               title={
                                 esAdminRaiz
@@ -803,16 +812,18 @@ export default function GestionUsuarios() {
                             puedeSuspender ? (
                               u.activo !== false ? (
                                 <button
+                                  disabled={loading}
                                   onClick={() => handleToggleEstado(u)}
-                                  className="p-1.5 hover:text-rose-600 transition cursor-pointer text-rose-500"
+                                  className="p-1.5 hover:text-rose-600 transition cursor-pointer text-rose-500 disabled:opacity-50"
                                   title="Suspender acceso"
                                 >
                                   <XCircle className="w-5 h-5" />
                                 </button>
                               ) : (
                                 <button
+                                  disabled={loading}
                                   onClick={() => handleToggleEstado(u)}
-                                  className="p-1.5 hover:text-emerald-600 transition cursor-pointer text-emerald-600"
+                                  className="p-1.5 hover:text-emerald-600 transition cursor-pointer text-emerald-600 disabled:opacity-50"
                                   title="Reactivar acceso"
                                 >
                                   <CheckCircle2 className="w-5 h-5" />

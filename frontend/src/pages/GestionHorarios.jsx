@@ -17,6 +17,7 @@ import {
 } from "../services/empleadoService";
 import { getCategorias, getHorarios } from "../services/configuracionService";
 import ModalAlerta from "../components/comunes/ModalAlerta";
+import EstadoCarga from "../components/comunes/EstadoCarga";
 import ModalAsignarTurno from "../components/personal/ModalAsignarTurno";
 import PaginadorTabla from "../components/comunes/PaginadorTabla";
 import TablaEmpleadosHorarios from "../components/horarios/TablaEmpleadosHorarios";
@@ -240,7 +241,7 @@ export default function GestionHorarios() {
   }, [empleadosFiltrados, paginaActual]);
 
   const abrirTurno = (emp) => {
-    if (!puedeEditar && !puedeCrear) return;
+    if ((!puedeEditar && !puedeCrear) || loading) return;
     setEmpleadoEnModal(emp);
     setTolIngresoEsp(emp.toleranciaIngresoMin ?? 15);
     setTolEgresoEsp(emp.toleranciaEgresoMin ?? 10);
@@ -260,10 +261,12 @@ export default function GestionHorarios() {
     if (!empleadoEnModal) return;
 
     const empIdActual = empleadoEnModal.id;
+    setLoading(true);
 
     try {
       if (tipoAsignacionTurno === "FLEXIBLE") {
         if (!horasObjetivoTurno || horasObjetivoTurno <= 0) {
+          setLoading(false);
           mostrarAviso(
             "warning",
             "Atención",
@@ -297,6 +300,7 @@ export default function GestionHorarios() {
           (h) => h.id === parseInt(horarioGeneralSeleccionado, 10),
         );
         if (!plantilla) {
+          setLoading(false);
           mostrarAviso(
             "warning",
             "Atención",
@@ -370,6 +374,7 @@ export default function GestionHorarios() {
       ]);
       mostrarAviso("success", "Éxito", "Horario registrado correctamente.");
     } catch (err) {
+      setLoading(false);
       const msg = err.response?.data?.message || "";
       if (msg.includes("SOLAPAMIENTO")) {
         setModalAlerta({
@@ -396,7 +401,7 @@ export default function GestionHorarios() {
   };
 
   const handleConfirmarEliminarFranja = (emp, franja) => {
-    if (!puedeEliminar) return;
+    if (!puedeEliminar || loading) return;
 
     const esMateria = Boolean(franja.materia);
     const titulo = esMateria
@@ -416,6 +421,7 @@ export default function GestionHorarios() {
       mostrarCancelar: true,
       onConfirmar: async () => {
         setModalAlerta((p) => ({ ...p, isOpen: false }));
+        setLoading(true);
         try {
           await removeEmpleadoHorario(franja.id || franja.idEmpleadoHorario);
           await Promise.all([
@@ -428,6 +434,7 @@ export default function GestionHorarios() {
             "La franja fue desvinculada del cronograma.",
           );
         } catch {
+          setLoading(false);
           mostrarAviso("danger", "Error", "No se pudo eliminar el bloque.");
         }
       },
@@ -436,6 +443,8 @@ export default function GestionHorarios() {
 
   return (
     <div className="p-3 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-4 sm:space-y-5 font-sans">
+      <EstadoCarga cargando={loading} variante="flotante" tipoIcono="reloj" />
+
       {/* Cabecera */}
       <div className="bg-white border border-slate-200 rounded-2xl sm:rounded-3xl p-4 sm:p-5 shadow-xs flex items-center justify-between">
         <div className="flex items-center gap-3 sm:gap-4">
@@ -464,11 +473,12 @@ export default function GestionHorarios() {
         <div className="flex items-center gap-2 flex-wrap">
           <button
             type="button"
+            disabled={loading}
             onClick={() => {
               setCategoriaActiva("TODAS");
               setPaginaActual(1);
             }}
-            className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+            className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 disabled:opacity-50 disabled:cursor-not-allowed ${
               categoriaActiva === "TODAS"
                 ? "bg-[#111827] text-white shadow-xs"
                 : "bg-slate-100/90 hover:bg-slate-200/80 text-slate-700 border border-slate-200/60"
@@ -488,11 +498,12 @@ export default function GestionHorarios() {
               <button
                 key={cat.id}
                 type="button"
+                disabled={loading}
                 onClick={() => {
                   setCategoriaActiva(cat.nombre);
                   setPaginaActual(1);
                 }}
-                className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+                className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 disabled:opacity-50 disabled:cursor-not-allowed ${
                   activa
                     ? estiloActivo
                     : "bg-slate-100/90 hover:bg-slate-200/80 text-slate-700 border border-slate-200/60"
@@ -561,7 +572,9 @@ export default function GestionHorarios() {
           totalPaginas={totalPaginas}
           totalElementos={empleadosFiltrados.length}
           itemsPorPagina={ITEMS_POR_PAGINA}
-          onCambiarPagina={(nuevaPag) => setPaginaActual(nuevaPag)}
+          onCambiarPagina={(nuevaPag) => {
+            if (!loading) setPaginaActual(nuevaPag);
+          }}
           etiqueta="empleados"
         />
       </div>

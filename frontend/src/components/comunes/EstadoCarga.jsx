@@ -1,4 +1,5 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
+import { BookOpen, Users, ShieldCheck } from "lucide-react";
 
 /**
  * Opción 1: Reloj de arena donde cae la arena y gira 180° al completarse.
@@ -33,7 +34,6 @@ function IconoRelojArenaAnimado({ className = "w-16 h-16 text-indigo-600" }) {
         className={className}
         style={{ animation: "girarRelojArena 2.4s ease-in-out infinite" }}
       >
-        {/* Tapas superior e inferior */}
         <line
           x1="16"
           y1="10"
@@ -52,8 +52,6 @@ function IconoRelojArenaAnimado({ className = "w-16 h-16 text-indigo-600" }) {
           strokeWidth="3.5"
           strokeLinecap="round"
         />
-
-        {/* Cristal del reloj de arena */}
         <path
           d="M20 10C20 22 32 28 32 32C32 36 20 42 20 54H44C44 42 32 36 32 32C32 28 44 22 44 10H20Z"
           stroke="currentColor"
@@ -61,8 +59,6 @@ function IconoRelojArenaAnimado({ className = "w-16 h-16 text-indigo-600" }) {
           strokeLinecap="round"
           strokeLinejoin="round"
         />
-
-        {/* Arena superior vaciándose */}
         <path
           d="M24 16H40C39 22 32 26 32 28C32 26 25 22 24 16Z"
           fill="currentColor"
@@ -71,8 +67,6 @@ function IconoRelojArenaAnimado({ className = "w-16 h-16 text-indigo-600" }) {
             animation: "arenaSuperior 2.4s ease-in-out infinite",
           }}
         />
-
-        {/* Hilo fino de arena cayendo */}
         <line
           x1="32"
           y1="32"
@@ -84,8 +78,6 @@ function IconoRelojArenaAnimado({ className = "w-16 h-16 text-indigo-600" }) {
           strokeDasharray="2 3"
           style={{ animation: "hiloArena 2.4s linear infinite" }}
         />
-
-        {/* Arena inferior llenándose */}
         <path
           d="M23 50H41C40 44 34 41 32 41C30 41 24 44 23 50Z"
           fill="currentColor"
@@ -158,7 +150,6 @@ function IconoCalendarioAnimado({ className = "w-16 h-16 text-indigo-600" }) {
           strokeWidth="3.5"
           strokeLinecap="round"
         />
-
         <rect
           x="18"
           y="31"
@@ -232,7 +223,6 @@ function IconoEscanerAnimado({ className = "w-16 h-16 text-indigo-600" }) {
         xmlns="http://www.w3.org/2000/svg"
         className={className}
       >
-        {/* Esquinas del visor de escaneo */}
         <path
           d="M12 22V15C12 13.3431 13.3431 12 15 12H22"
           stroke="currentColor"
@@ -257,8 +247,6 @@ function IconoEscanerAnimado({ className = "w-16 h-16 text-indigo-600" }) {
           strokeWidth="3.2"
           strokeLinecap="round"
         />
-
-        {/* Arcos biométricos centrales */}
         <g style={{ animation: "pulsoHuella 1.8s ease-in-out infinite" }}>
           <path
             d="M22 34C22 28.4772 26.4772 24 32 24C37.5228 24 42 28.4772 42 34"
@@ -282,8 +270,6 @@ function IconoEscanerAnimado({ className = "w-16 h-16 text-indigo-600" }) {
             strokeLinecap="round"
           />
         </g>
-
-        {/* Línea láser de escaneo subiendo y bajando */}
         <line
           x1="14"
           y1="32"
@@ -322,7 +308,6 @@ function IconoRelojAnalogoAnimado({ className = "w-16 h-16 text-indigo-600" }) {
         xmlns="http://www.w3.org/2000/svg"
         className={className}
       >
-        {/* Esfera exterior */}
         <circle
           cx="32"
           cy="32"
@@ -330,8 +315,6 @@ function IconoRelojAnalogoAnimado({ className = "w-16 h-16 text-indigo-600" }) {
           stroke="currentColor"
           strokeWidth="3.2"
         />
-
-        {/* Marcas cardinales sutiles */}
         <line
           x1="32"
           y1="14"
@@ -368,8 +351,6 @@ function IconoRelojAnalogoAnimado({ className = "w-16 h-16 text-indigo-600" }) {
           strokeWidth="2.5"
           strokeLinecap="round"
         />
-
-        {/* Aguja horaria (lenta) */}
         <line
           x1="32"
           y1="32"
@@ -383,8 +364,6 @@ function IconoRelojAnalogoAnimado({ className = "w-16 h-16 text-indigo-600" }) {
             animation: "agujaHoraria 6s linear infinite",
           }}
         />
-
-        {/* Aguja minutera (rápida en sentido horario) */}
         <line
           x1="32"
           y1="32"
@@ -398,8 +377,6 @@ function IconoRelojAnalogoAnimado({ className = "w-16 h-16 text-indigo-600" }) {
             animation: "agujaMinutera 1.2s linear infinite",
           }}
         />
-
-        {/* Punto central */}
         <circle cx="32" cy="32" r="2.8" fill="currentColor" />
       </svg>
     </div>
@@ -407,47 +384,155 @@ function IconoRelojAnalogoAnimado({ className = "w-16 h-16 text-indigo-600" }) {
 }
 
 /**
- * Componente reutilizable de estado de carga.
+ * Envoltorio animado para cualquier componente de ícono (ej. Lucide React).
+ * Le aplica un latido/flotación suave y destello para que tenga presencia visual.
+ */
+function IconoCustomAnimado({
+  IconoComponent,
+  className = "w-16 h-16 text-indigo-600",
+}) {
+  return (
+    <div className="relative inline-flex items-center justify-center">
+      <style>{`
+        @keyframes flotarLatirIcono {
+          0%, 100% { transform: scale(1) translateY(0px); opacity: 0.85; }
+          50% { transform: scale(1.1) translateY(-3px); opacity: 1; }
+        }
+      `}</style>
+      <div
+        className="relative flex items-center justify-center"
+        style={{ animation: "flotarLatirIcono 1.6s ease-in-out infinite" }}
+      >
+        <IconoComponent className={className} strokeWidth={1.8} />
+      </div>
+    </div>
+  );
+}
+
+const ICONOS_LUCIDE_POR_NOMBRE = {
+  libro: BookOpen,
+  materias: BookOpen,
+  usuarios: Users,
+  personal: Users,
+  escudo: ShieldCheck,
+  seguridad: ShieldCheck,
+};
+
+/**
+ * Componente reutilizable de estado de carga con transiciones suaves de entrada y salida.
  *
- * @param {boolean} cargando - Controla si el componente se muestra o no.
- * @param {string} titulo - Título principal del aviso de carga.
+ * @param {boolean} cargando - Controla si el componente debe mostrarse.
+ * @param {string} titulo - Título principal del aviso de carga (usado en 'modal', 'inline' y 'overlay').
  * @param {string|React.ReactNode} descripcion - Texto descriptivo o detalle del proceso.
- * @param {'relojArena' | 'calendario' | 'escaner' | 'reloj'} tipoIcono - Ícono animado a mostrar (por defecto 'relojArena').
- * @param {'modal' | 'inline' | 'overlay'} variante - Estilo de presentación ('modal' | 'inline' | 'overlay').
+ * @param {'relojArena' | 'calendario' | 'escaner' | 'reloj' | 'libro' | 'usuarios' | 'escudo'} tipoIcono - Nombre del ícono animado a mostrar (por defecto 'relojArena').
+ * @param {React.ComponentType} icono - Componente de ícono personalizado opcional (ej: `icono={ShieldCheck}`). Tiene prioridad sobre `tipoIcono`.
+ * @param {'modal' | 'flotante' | 'inline' | 'overlay'} variante - Estilo de presentación.
  */
 export default function EstadoCarga({
   cargando = false,
   titulo = "Cargando...",
   descripcion = "",
   tipoIcono = "relojArena",
+  icono = null,
   variante = "modal",
 }) {
-  if (!cargando) return null;
+  const [debeRenderizar, setDebeRenderizar] = useState(cargando);
+  const [activoVisual, setActivoVisual] = useState(false);
+
+  useEffect(() => {
+    let timerSalida;
+    let rafEntrada;
+
+    if (cargando) {
+      setDebeRenderizar(true);
+      rafEntrada = requestAnimationFrame(() => {
+        setActivoVisual(true);
+      });
+    } else {
+      setActivoVisual(false);
+      timerSalida = setTimeout(() => {
+        setDebeRenderizar(false);
+      }, 250);
+    }
+
+    return () => {
+      if (timerSalida) clearTimeout(timerSalida);
+      if (rafEntrada) cancelAnimationFrame(rafEntrada);
+    };
+  }, [cargando]);
+
+  if (!debeRenderizar) return null;
 
   const renderIcono = (sizeClass) => {
-    const props = { className: `${sizeClass} text-indigo-600` };
+    const colorClass = `${sizeClass} text-indigo-600`;
+
+    // 1. Si se pasó un componente directo por la prop `icono` (ej: icono={ShieldCheck})
+    if (icono) {
+      return (
+        <IconoCustomAnimado IconoComponent={icono} className={colorClass} />
+      );
+    }
+
+    // 2. Si `tipoIcono` coincide con un alias de Lucide ('libro', 'usuarios', 'escudo', etc.)
+    const claveNormalizada = String(tipoIcono || "").toLowerCase();
+    if (ICONOS_LUCIDE_POR_NOMBRE[claveNormalizada]) {
+      return (
+        <IconoCustomAnimado
+          IconoComponent={ICONOS_LUCIDE_POR_NOMBRE[claveNormalizada]}
+          className={colorClass}
+        />
+      );
+    }
+
+    // 3. SVGs animados nativos del sistema
     switch (tipoIcono) {
       case "calendario":
-        return <IconoCalendarioAnimado {...props} />;
+        return <IconoCalendarioAnimado className={colorClass} />;
       case "escaner":
-        return <IconoEscanerAnimado {...props} />;
+        return <IconoEscanerAnimado className={colorClass} />;
       case "reloj":
-        return <IconoRelojAnalogoAnimado {...props} />;
+        return <IconoRelojAnalogoAnimado className={colorClass} />;
       case "relojArena":
       default:
-        return <IconoRelojArenaAnimado {...props} />;
+        return <IconoRelojArenaAnimado className={colorClass} />;
     }
   };
 
+  // 1. Variante 'flotante': Solo el ícono grande centrado sin recuadro blanco (ideal para cargas cortas)
+  if (variante === "flotante") {
+    return (
+      <div
+        role="status"
+        aria-live="polite"
+        className={`fixed inset-0 z-50 bg-slate-900/20 backdrop-blur-[1.5px] flex items-center justify-center p-4 select-none transition-opacity duration-250 ease-out ${
+          activoVisual ? "opacity-100" : "opacity-0 pointer-events-none"
+        }`}
+      >
+        <div
+          className={`transform transition-all duration-250 ease-out drop-shadow-md ${
+            activoVisual ? "scale-100 opacity-100" : "scale-90 opacity-0"
+          }`}
+        >
+          {renderIcono("w-16 h-16")}
+        </div>
+      </div>
+    );
+  }
+
+  // 2. Variante 'inline': Centrado dentro de tablas o contenedores
   if (variante === "inline") {
     return (
       <div
         role="status"
         aria-live="polite"
-        className="flex flex-col items-center justify-center py-10 px-4 text-center space-y-2.5 animate-fadeIn"
+        className={`flex flex-col items-center justify-center py-10 px-4 text-center space-y-2.5 transition-all duration-250 ease-out ${
+          activoVisual ? "opacity-100 translate-y-0" : "opacity-0 translate-y-1"
+        }`}
       >
         {renderIcono("w-12 h-12")}
-        <div className="text-xs font-bold text-slate-700">{titulo}</div>
+        {titulo && (
+          <div className="text-xs font-bold text-slate-700">{titulo}</div>
+        )}
         {descripcion && (
           <p className="text-[11px] text-slate-500 max-w-md">{descripcion}</p>
         )}
@@ -455,18 +540,27 @@ export default function EstadoCarga({
     );
   }
 
+  // 3. Variante 'overlay': Cubre un contenedor padre con `relative`
   if (variante === "overlay") {
     return (
       <div
         role="status"
         aria-live="polite"
-        className="absolute inset-0 z-30 bg-white/75 backdrop-blur-[2px] rounded-2xl flex flex-col items-center justify-center p-4 text-center space-y-2.5 animate-fadeIn"
+        className={`absolute inset-0 z-30 bg-white/75 backdrop-blur-[2px] rounded-2xl flex flex-col items-center justify-center p-4 text-center space-y-2.5 transition-opacity duration-250 ease-out ${
+          activoVisual ? "opacity-100" : "opacity-0 pointer-events-none"
+        }`}
       >
-        {renderIcono("w-14 h-14")}
-        <div>
-          <div className="text-xs font-black text-indigo-950 uppercase tracking-wide">
-            {titulo}
-          </div>
+        <div
+          className={`flex flex-col items-center space-y-2 transform transition-all duration-250 ease-out ${
+            activoVisual ? "scale-100" : "scale-95"
+          }`}
+        >
+          {renderIcono("w-14 h-14")}
+          {titulo && (
+            <div className="text-xs font-black text-indigo-950 uppercase tracking-wide">
+              {titulo}
+            </div>
+          )}
           {descripcion && (
             <p className="text-[11px] text-slate-600 mt-0.5 max-w-sm">
               {descripcion}
@@ -477,14 +571,20 @@ export default function EstadoCarga({
     );
   }
 
-  // Variante por defecto: 'modal' (cuadrado centrado con fondo traslúcido)
+  // 4. Variante por defecto 'modal': Recuadro cuadrado blanco centrado con fondo traslúcido
   return (
     <div
       role="status"
       aria-live="polite"
-      className="fixed inset-0 z-50 bg-slate-900/45 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150 select-none"
+      className={`fixed inset-0 z-50 bg-slate-900/45 backdrop-blur-xs flex items-center justify-center p-4 select-none transition-opacity duration-250 ease-out ${
+        activoVisual ? "opacity-100" : "opacity-0 pointer-events-none"
+      }`}
     >
-      <div className="bg-white border border-slate-200/90 rounded-3xl shadow-2xl w-64 min-h-60 p-6 flex flex-col items-center justify-center text-center space-y-4 animate-in zoom-in-95 duration-150">
+      <div
+        className={`bg-white border border-slate-200/90 rounded-3xl shadow-2xl w-64 min-h-60 p-6 flex flex-col items-center justify-center text-center space-y-4 transform transition-all duration-250 ease-out ${
+          activoVisual ? "scale-100 opacity-100" : "scale-95 opacity-0"
+        }`}
+      >
         <div className="flex items-center justify-center py-1">
           {renderIcono("w-16 h-16")}
         </div>
