@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect } from "react";
-import { Search, ChevronDown, Check, X } from "lucide-react";
+import { Search, ChevronDown, Check, X, UserPlus } from "lucide-react";
 
 export default function BuscadorEmpleadoSelect({
   empleados = [],
@@ -48,6 +48,8 @@ export default function BuscadorEmpleadoSelect({
     document.addEventListener("mousedown", handleClickFuera);
     return () => document.removeEventListener("mousedown", handleClickFuera);
   }, []);
+
+  const nombreParaCrear = (busqueda.trim() || sName || "").trim();
 
   return (
     <div className="relative w-full sm:w-72" ref={dropdownRef}>
@@ -115,25 +117,10 @@ export default function BuscadorEmpleadoSelect({
             </button>
 
             {filtrados.length === 0 ? (
-              <div className="p-3 text-center space-y-2">
+              <div className="py-3 text-center">
                 <p className="text-slate-400 text-[11px]">
                   No se hallaron coincidencias
                 </p>
-                {onRegistrarNuevo && puedeCrearEmpleado && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setAbierto(false);
-                      onRegistrarNuevo({
-                        sJobNo,
-                        sName: busqueda.trim() || sName,
-                      });
-                    }}
-                    className="w-full flex items-center justify-center gap-1.5 py-1.5 px-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold rounded-lg text-xs transition cursor-pointer"
-                  >
-                    <span>+ Registrar a "{busqueda.trim() || sName}"</span>
-                  </button>
-                )}
               </div>
             ) : (
               filtrados.map((emp) => {
@@ -166,6 +153,29 @@ export default function BuscadorEmpleadoSelect({
               })
             )}
           </div>
+
+          {onRegistrarNuevo && puedeCrearEmpleado && (
+            <div className="pt-1.5 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => {
+                  setAbierto(false);
+                  onRegistrarNuevo({
+                    sJobNo,
+                    sName: nombreParaCrear,
+                  });
+                }}
+                className="w-full flex items-center justify-center gap-1.5 py-1.5 px-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold rounded-lg text-xs transition cursor-pointer"
+              >
+                <UserPlus className="w-3.5 h-3.5 shrink-0" />
+                <span className="truncate">
+                  {nombreParaCrear
+                    ? `Registrar a "${nombreParaCrear}"`
+                    : "Registrar nuevo empleado"}
+                </span>
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>

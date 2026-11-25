@@ -1,4 +1,5 @@
 import React from "react";
+import { UserPlus } from "lucide-react";
 import BuscadorEmpleadoSelect from "./BuscadorEmpleadoSelect";
 
 export default function VistaAsistenteVinculacion({
@@ -18,11 +19,13 @@ export default function VistaAsistenteVinculacion({
             Asistente de Vinculación Biometría ↔ Empleados
           </h2>
           <p className="text-[11px] sm:text-xs text-slate-500 mt-0.5">
-            Escribe en el buscador para asociar o dar de alta al colaborador.
+            Selecciona un colaborador existente o crea uno nuevo directamente
+            desde cada fila pendiente.
           </p>
         </div>
         {puedeVincular && (
           <button
+            type="button"
             onClick={onGuardarVinculaciones}
             className="w-full sm:w-auto px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold shadow-xs transition cursor-pointer text-center"
           >
@@ -61,18 +64,39 @@ export default function VistaAsistenteVinculacion({
                     {v.sName}
                   </td>
                   <td className="py-3 px-4">
-                    <BuscadorEmpleadoSelect
-                      empleados={empleados}
-                      valorSeleccionado={v.sugeridoEmpleadoId}
-                      onSeleccionar={(nuevoId) =>
-                        onCambiarEmpleadoAsignado(v.sJobNo, nuevoId)
-                      }
-                      disabled={v.yaVinculado || !puedeVincular}
-                      sJobNo={v.sJobNo}
-                      sName={v.sName}
-                      onRegistrarNuevo={onAbrirRegistroNuevo}
-                      puedeCrearEmpleado={puedeCrearEmpleado}
-                    />
+                    <div className="flex flex-wrap items-center gap-2">
+                      <BuscadorEmpleadoSelect
+                        empleados={empleados}
+                        valorSeleccionado={v.sugeridoEmpleadoId}
+                        onSeleccionar={(nuevoId) =>
+                          onCambiarEmpleadoAsignado(v.sJobNo, nuevoId)
+                        }
+                        disabled={v.yaVinculado || !puedeVincular}
+                        sJobNo={v.sJobNo}
+                        sName={v.sName}
+                        onRegistrarNuevo={onAbrirRegistroNuevo}
+                        puedeCrearEmpleado={puedeCrearEmpleado}
+                      />
+
+                      {!v.yaVinculado &&
+                        puedeCrearEmpleado &&
+                        onAbrirRegistroNuevo && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              onAbrirRegistroNuevo({
+                                sJobNo: v.sJobNo,
+                                sName: v.sName,
+                              })
+                            }
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl text-[11px] font-bold whitespace-nowrap transition cursor-pointer"
+                            title="Dar de alta nuevo colaborador con este ID biométrico"
+                          >
+                            <UserPlus className="w-3.5 h-3.5 shrink-0" />
+                            <span>Crear empleado</span>
+                          </button>
+                        )}
+                    </div>
                   </td>
                   <td className="py-3 px-4">
                     {v.yaVinculado ? (

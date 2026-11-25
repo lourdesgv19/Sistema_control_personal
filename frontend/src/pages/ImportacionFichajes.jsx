@@ -607,7 +607,22 @@ export default function ImportacionFichajes() {
   const handleGuardarNuevoEmpleado = async (e) => {
     e.preventDefault();
     try {
-      const nuevo = await createEmpleado(formEmpleado);
+      const payload = {
+        ...formEmpleado,
+        dni: formEmpleado.dni?.trim() || null,
+        email: formEmpleado.email?.trim() || null,
+        telefono: formEmpleado.telefono?.trim() || null,
+        nroLegajo: formEmpleado.nroLegajo?.trim() || null,
+        idBiometrico: formEmpleado.idBiometrico?.trim() || null,
+        categorias: (formEmpleado.categoriasIds || []).map((id) => ({
+          id: Number(id),
+        })),
+        cargos: (formEmpleado.cargosIds || []).map((id) => ({
+          id: Number(id),
+        })),
+      };
+
+      const nuevo = await createEmpleado(payload);
 
       invalidarCacheEmpleados();
       setEmpleados((prev) => [...prev, nuevo]);

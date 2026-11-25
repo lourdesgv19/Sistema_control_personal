@@ -26,10 +26,10 @@ public class Empleado {
     @Column(nullable = true, unique = true, length = 20)
     private String dni;
 
-    @Column(length = 120)
+    @Column(length = 120, nullable = true)
     private String email;
 
-    @Column(length = 30)
+    @Column(length = 30, nullable = true)
     private String telefono;
 
     @Column(name = "nro_legajo", nullable = true, unique = true, length = 30)

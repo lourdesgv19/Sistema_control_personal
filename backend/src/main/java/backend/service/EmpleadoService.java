@@ -39,16 +39,24 @@ public class EmpleadoService {
                 .orElseThrow(() -> new RuntimeException("Empleado no encontrado con ID: " + id));
     }
 
-    @Transactional
+@Transactional
     public Empleado crear(Empleado emp) {
         emp.setActivo(true);
         emp.setFechaBaja(null);
+
+        // Evitar Duplicate entry '' en columnas UNIQUE de MySQL
+        emp.setEmail(blankToNull(emp.getEmail()));
+        emp.setDni(blankToNull(emp.getDni()));
+        emp.setIdBiometrico(blankToNull(emp.getIdBiometrico()));
+        emp.setNroLegajo(blankToNull(emp.getNroLegajo()));
+
         Empleado nuevo = empleadoRepo.save(emp);
 
         auditor.registrar(
             "CREAR_EMPLEADO",
             "PERSONAL",
-            "Alta de colaborador: " + nuevo.getNombre() + " " + nuevo.getApellido() + " (Legajo: " + nuevo.getNroLegajo() + ", DNI: " + nuevo.getDni() + ")"
+            "Alta de colaborador: " + nuevo.getNombre() + " " + nuevo.getApellido()
+                + " (Legajo: " + nuevo.getNroLegajo() + ", DNI: " + nuevo.getDni() + ")"
         );
 
         return nuevo;
@@ -59,11 +67,10 @@ public class EmpleadoService {
         Empleado emp = obtenerPorId(id);
         emp.setNombre(empActualizado.getNombre());
         emp.setApellido(empActualizado.getApellido());
-        emp.setDni(empActualizado.getDni());
-        emp.setEmail(empActualizado.getEmail());
-        emp.setTelefono(empActualizado.getTelefono());
-        emp.setNroLegajo(empActualizado.getNroLegajo());
-        emp.setIdBiometrico(empActualizado.getIdBiometrico());
+        emp.setDni(blankToNull(empActualizado.getDni()));
+        emp.setEmail(blankToNull(empActualizado.getEmail()));
+        emp.setNroLegajo(blankToNull(empActualizado.getNroLegajo()));
+        emp.setIdBiometrico(blankToNull(empActualizado.getIdBiometrico()));
         emp.setToleranciaIngresoMin(empActualizado.getToleranciaIngresoMin());
         emp.setToleranciaEgresoMin(empActualizado.getToleranciaEgresoMin());
         emp.setCategorias(empActualizado.getCategorias() != null ? empActualizado.getCategorias() : new ArrayList<>());
@@ -110,5 +117,9 @@ public class EmpleadoService {
             "PERSONAL",
             "Reactivación del empleado: " + emp.getNombre() + " " + emp.getApellido() + " (Legajo: " + emp.getNroLegajo() + ")"
         );
+    }
+
+    private String blankToNull(String value) {
+        return value == null || value.isBlank() ? null : value;
     }
 }
