@@ -8,7 +8,6 @@ import React, {
 import {
   Calendar as CalendarIcon,
   Printer,
-  FileSpreadsheet,
   CheckCircle2,
   Eye,
   ArrowRight,
@@ -33,8 +32,10 @@ import {
   CalendarRange,
   Clock,
   ShieldCheck,
+  GraduationCap,
 } from "lucide-react";
 import ListaEmpleadosSidebar from "../components/comunes/ListaEmpleadosSidebar";
+import EstadoCarga from "../components/comunes/EstadoCarga";
 import ModalJustificarIncidente from "../components/incidentes/ModalJustificarIncidente";
 import FichaKpisHeader from "../components/ficha/FichaKpisHeader";
 import FichaVistaDiaria from "../components/ficha/FichaVistaDiaria";
@@ -45,7 +46,6 @@ import { getEmpleadoHorarios } from "../services/empleadoService";
 import { useAuth } from "../context/AuthContext";
 import { useLocation, useSearchParams } from "react-router-dom";
 import { generarPdfFichaComportamiento } from "../utils/generadorPdfFicha";
-import { exportarFichaACsv } from "../utils/exportadorCsvFicha";
 import {
   formatearFechaVisual,
   obtenerNombreDia,
@@ -234,11 +234,9 @@ export default function FichaComportamiento() {
               : aliasDias[String(h.diaSemana).toLowerCase().trim()] || null;
           if (hDiaNum !== diaNum) return false;
 
-          // Vigencia de inicio
           if (h.fechaAlta && fechaLimpia < String(h.fechaAlta).split("T")[0])
             return false;
 
-          // Vigencia de fin
           if (h.fechaBaja) {
             if (fechaLimpia > String(h.fechaBaja).split("T")[0]) return false;
           } else if (h.activo === false) {
@@ -266,7 +264,6 @@ export default function FichaComportamiento() {
 
   // DETECCIÓN DE HORARIO HISTÓRICO PARA TODAS LAS MODALIDADES
   const horarioHistoricoActivoPeriodo = useMemo(() => {
-    // 1. En diario: si el planificado devuelto por backend viene marcado como histórico o por fecha
     if (modalidad === "DIARIO") {
       const planificadoHist = fichaData?.planificado?.find(
         (p) => p.esHistorico,
@@ -277,8 +274,6 @@ export default function FichaComportamiento() {
       );
     }
 
-    // 2. En semanal, mensual, trimestre, cuatrimestre, rango:
-    // Revisar si en los días del período hay algún turno histórico asignado
     if (!fichaData?.diasPeriodo || fichaData.diasPeriodo.length === 0)
       return null;
 
@@ -314,20 +309,27 @@ export default function FichaComportamiento() {
       }
       mapa[mesKey].dias.push(d);
     });
-    return Object.values(mapa).map((m) => ({
+    return Object.values(mapa).map((m, idx) => ({
       ...m,
+      orden: idx + 1,
       diasOffset: calcularOffsetPrimerDia(m.dias[0].fecha),
     }));
   }, [fichaData]);
 
   const toggleMes = (mesKey) =>
     setMesesExpandidos((prev) => ({ ...prev, [mesKey]: !prev[mesKey] }));
+
   const expandirTodos = () => {
-    if (!fichaData?.mesesPeriodo) return;
+    const lista =
+      modalidad === "RANGO_FECHAS"
+        ? mesesDelRango
+        : fichaData?.mesesPeriodo || [];
+    if (!lista.length) return;
     const all = {};
-    fichaData.mesesPeriodo.forEach((m) => (all[m.mesKey] = true));
+    lista.forEach((m) => (all[m.mesKey] = true));
     setMesesExpandidos(all);
   };
+
   const colapsarTodos = () => setMesesExpandidos({});
 
   useEffect(() => {
@@ -347,6 +349,7 @@ export default function FichaComportamiento() {
     if (!empId) return;
 
     setLoadingFicha(true);
+    setMenuImpresionAbierto(false);
     try {
       const params = {
         modalidad: modalidad === "RANGO_FECHAS" ? "RANGO_FECHAS" : modalidad,
@@ -389,6 +392,7 @@ export default function FichaComportamiento() {
   }, [cargarFicha]);
 
   const abrirModalJustificarDirecto = (inc, soloLectura = false) => {
+    if (loadingFicha) return;
     setIncidenteSeleccionado({
       ...inc,
       motivo: inc.resolucionMotivo || inc.motivo || "",
@@ -417,6 +421,7 @@ export default function FichaComportamiento() {
   };
 
   const moverFecha = (direccion) => {
+    if (loadingFicha) return;
     const partes = fechaConsulta.split("-");
     const actual = new Date(
       parseInt(partes[0], 10),
@@ -621,6 +626,7 @@ export default function FichaComportamiento() {
   };
 
   const abrirModalListaFiltrada = (filtro) => {
+    if (loadingFicha) return;
     setFiltroEstadoModal(filtro);
     if (modalidad === "DIARIO") {
       setTabInferior("INCIDENTES");
@@ -769,8 +775,9 @@ export default function FichaComportamiento() {
           {puedeJustificar ? (
             <button
               type="button"
+              disabled={loadingFicha}
               onClick={() => abrirModalJustificarDirecto(inc, false)}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer shadow-2xs ${
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer shadow-2xs disabled:opacity-50 disabled:cursor-not-allowed ${
                 inc.estado === "PENDIENTE" || !inc.estado
                   ? "bg-indigo-600 hover:bg-indigo-700 text-white"
                   : "bg-white hover:bg-slate-50 text-slate-700 border border-slate-200"
@@ -793,8 +800,9 @@ export default function FichaComportamiento() {
           )}
           <button
             type="button"
+            disabled={loadingFicha}
             onClick={() => abrirModalJustificarDirecto(inc, true)}
-            className="p-2 bg-white/80 hover:bg-white text-slate-500 hover:text-indigo-600 border border-slate-200/80 rounded-xl transition cursor-pointer"
+            className="p-2 bg-white/80 hover:bg-white text-slate-500 hover:text-indigo-600 border border-slate-200/80 rounded-xl transition cursor-pointer disabled:opacity-50"
             title="Ver detalle del incidente"
           >
             <Eye className="w-4 h-4" />
@@ -857,9 +865,9 @@ export default function FichaComportamiento() {
           <div className="flex items-center gap-2 justify-end">
             <button
               type="button"
-              disabled={esFuturo}
+              disabled={esFuturo || loadingFicha}
               onClick={() => {
-                if (!esFuturo) {
+                if (!esFuturo && !loadingFicha) {
                   setFechaConsulta(diaInspeccionado.fecha);
                   setModalidad("DIARIO");
                   setDiaInspeccionado(null);
@@ -867,7 +875,7 @@ export default function FichaComportamiento() {
               }}
               title={esFuturo ? "No disponible para fechas futuras" : undefined}
               className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition shadow-xs ${
-                esFuturo
+                esFuturo || loadingFicha
                   ? "bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed opacity-60"
                   : "bg-indigo-600 hover:bg-indigo-700 text-white cursor-pointer"
               }`}
@@ -1030,6 +1038,7 @@ export default function FichaComportamiento() {
       </div>
     );
   };
+
   const renderCuadriculaCalendario = (dias, offset) => {
     return (
       <div className="grid grid-cols-7 gap-1 sm:gap-2">
@@ -1097,7 +1106,6 @@ export default function FichaComportamiento() {
               (inc.categoriaRegla || "").toUpperCase() === "AUSENCIAS",
           );
 
-          // Solo se marca sin registro si tenía horario vigente E incidente real de falta
           const esSinRegistro =
             !esFuturo &&
             !esLicencia &&
@@ -1160,6 +1168,7 @@ export default function FichaComportamiento() {
             <div
               key={dia.fecha}
               onClick={() => {
+                if (loadingFicha) return;
                 if (diaInspeccionado?.fecha === dia.fecha)
                   setDiaInspeccionado(null);
                 else setDiaInspeccionado(dia);
@@ -1319,8 +1328,9 @@ export default function FichaComportamiento() {
       <div className="flex items-center justify-between no-print gap-2">
         <button
           type="button"
+          disabled={loadingFicha}
           onClick={() => setSidebarAbierto(!sidebarAbierto)}
-          className="inline-flex items-center gap-2 px-3 py-2 bg-white border border-slate-200 hover:border-indigo-400 text-slate-700 hover:text-indigo-600 rounded-2xl text-xs font-bold transition shadow-xs cursor-pointer shrink-0"
+          className="inline-flex items-center gap-2 px-3 py-2 bg-white border border-slate-200 hover:border-indigo-400 text-slate-700 hover:text-indigo-600 rounded-2xl text-xs font-bold transition shadow-xs cursor-pointer shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {sidebarAbierto ? (
             <>
@@ -1347,13 +1357,17 @@ export default function FichaComportamiento() {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-5 items-start">
         {/* SIDEBAR LISTA DE EMPLEADOS */}
         <div
-          className={`no-print transition-all duration-300 ${sidebarAbierto ? "lg:col-span-3 block" : "lg:hidden hidden"}`}
+          className={`no-print transition-all duration-300 ${
+            sidebarAbierto ? "lg:col-span-3 block" : "lg:hidden hidden"
+          } ${loadingFicha ? "opacity-50 pointer-events-none select-none" : ""}`}
         >
           <ListaEmpleadosSidebar
             isOpen={sidebarAbierto}
             onClose={() => setSidebarAbierto(false)}
             empleadoSeleccionadoId={empleadoSeleccionado?.id}
-            onSeleccionarEmpleado={(emp) => setEmpleadoSeleccionado(emp)}
+            onSeleccionarEmpleado={(emp) => {
+              if (!loadingFicha) setEmpleadoSeleccionado(emp);
+            }}
           />
         </div>
 
@@ -1382,16 +1396,18 @@ export default function FichaComportamiento() {
                 <button
                   key={key}
                   type="button"
+                  disabled={loadingFicha}
                   onClick={() => {
+                    if (loadingFicha) return;
                     setModalidad(key);
                     setDiaInspeccionado(null);
                     setModalListaIncidentesAbierto(false);
                     setMesesExpandidos({});
                   }}
-                  className={`px-3 py-1.5 rounded-xl transition cursor-pointer whitespace-nowrap flex-1 md:flex-initial text-center ${
+                  className={`px-3 py-1.5 rounded-xl transition whitespace-nowrap flex-1 md:flex-initial text-center disabled:cursor-not-allowed ${
                     modalidad === key
                       ? "bg-white text-indigo-700 shadow-xs border border-slate-200 font-bold"
-                      : "text-slate-600 hover:text-slate-900"
+                      : "text-slate-600 hover:text-slate-900 disabled:opacity-50"
                   }`}
                 >
                   {label}
@@ -1400,8 +1416,12 @@ export default function FichaComportamiento() {
             </div>
           </div>
 
-          {/* BARRA DE NAVEGACIÓN Y SELECCIONADORES DE FECHA PARA TODAS LAS MODALIDADES */}
-          <div className="bg-white border border-slate-200 rounded-2xl p-3 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+          {/* BARRA DE NAVEGACIÓN Y SELECCIONADORES DE FECHA */}
+          <div
+            className={`bg-white border border-slate-200 rounded-2xl p-3 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs transition-opacity ${
+              loadingFicha ? "opacity-65 pointer-events-none select-none" : ""
+            }`}
+          >
             <div className="flex items-center gap-2 flex-wrap">
               <span className="font-semibold text-slate-600">
                 {modalidad === "DIARIO"
@@ -1422,17 +1442,19 @@ export default function FichaComportamiento() {
               ) && (
                 <button
                   type="button"
+                  disabled={loadingFicha}
                   onClick={() => moverFecha(-1)}
-                  className="p-1 hover:bg-slate-100 rounded-lg text-slate-500 transition cursor-pointer"
+                  className="p-1 hover:bg-slate-100 rounded-lg text-slate-500 transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   <ChevronLeft className="w-4 h-4" />
                 </button>
               )}
 
-              {/* DIARIO: Selector nativo */}
+              {/* DIARIO */}
               {modalidad === "DIARIO" && (
                 <div
                   onClick={(e) => {
+                    if (loadingFicha) return;
                     const input = e.currentTarget.querySelector("input");
                     if (input && typeof input.showPicker === "function")
                       input.showPicker();
@@ -1445,19 +1467,21 @@ export default function FichaComportamiento() {
                   <CalendarIcon className="w-4 h-4 text-slate-400 ml-2 pointer-events-none" />
                   <input
                     type="date"
+                    disabled={loadingFicha}
                     value={fechaConsulta}
                     onChange={(e) =>
                       e.target.value && setFechaConsulta(e.target.value)
                     }
-                    className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                    className="absolute inset-0 opacity-0 cursor-pointer w-full h-full disabled:cursor-not-allowed"
                   />
                 </div>
               )}
 
-              {/* SEMANAL: Selector que navega semanas completas */}
+              {/* SEMANAL */}
               {modalidad === "SEMANAL" && (
                 <div
                   onClick={(e) => {
+                    if (loadingFicha) return;
                     const input = e.currentTarget.querySelector("input");
                     if (input && typeof input.showPicker === "function")
                       input.showPicker();
@@ -1471,19 +1495,21 @@ export default function FichaComportamiento() {
                   <CalendarIcon className="w-4 h-4 text-slate-400 ml-2 pointer-events-none" />
                   <input
                     type="date"
+                    disabled={loadingFicha}
                     value={fechaConsulta}
                     onChange={(e) =>
                       e.target.value && setFechaConsulta(e.target.value)
                     }
-                    className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                    className="absolute inset-0 opacity-0 cursor-pointer w-full h-full disabled:cursor-not-allowed"
                   />
                 </div>
               )}
 
-              {/* MENSUAL: Selector de mes */}
+              {/* MENSUAL */}
               {modalidad === "MENSUAL" && (
                 <div
                   onClick={(e) => {
+                    if (loadingFicha) return;
                     const input = e.currentTarget.querySelector("input");
                     if (input && typeof input.showPicker === "function")
                       input.showPicker();
@@ -1498,24 +1524,26 @@ export default function FichaComportamiento() {
                   <CalendarIcon className="w-4 h-4 text-slate-400 ml-2 pointer-events-none" />
                   <input
                     type="month"
+                    disabled={loadingFicha}
                     value={fechaConsulta.substring(0, 7)}
                     onChange={(e) =>
                       e.target.value && setFechaConsulta(`${e.target.value}-01`)
                     }
-                    className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                    className="absolute inset-0 opacity-0 cursor-pointer w-full h-full disabled:cursor-not-allowed"
                   />
                 </div>
               )}
 
-              {/* TRIMESTRE / CUATRIMESTRE: Selector de mes de inicio */}
+              {/* TRIMESTRE / CUATRIMESTRE */}
               {(modalidad === "TRIMESTRE" || modalidad === "CUATRIMESTRE") && (
                 <div className="flex items-center gap-2">
                   <select
+                    disabled={loadingFicha}
                     value={fechaConsulta.substring(0, 7)}
                     onChange={(e) =>
                       e.target.value && setFechaConsulta(`${e.target.value}-01`)
                     }
-                    className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 font-semibold text-slate-800 outline-none cursor-pointer text-xs"
+                    className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 font-semibold text-slate-800 outline-none cursor-pointer text-xs disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {[
                       { num: "01", mes: "Enero" },
@@ -1543,11 +1571,12 @@ export default function FichaComportamiento() {
                 </div>
               )}
 
-              {/* RANGO DE FECHAS: Selectores Desde y Hasta */}
+              {/* RANGO DE FECHAS */}
               {modalidad === "RANGO_FECHAS" && (
                 <div className="flex items-center gap-1.5 flex-wrap">
                   <div
                     onClick={(e) => {
+                      if (loadingFicha) return;
                       const input = e.currentTarget.querySelector("input");
                       if (input && typeof input.showPicker === "function")
                         input.showPicker();
@@ -1562,15 +1591,17 @@ export default function FichaComportamiento() {
                     </span>
                     <input
                       type="date"
+                      disabled={loadingFicha}
                       value={fechaConsulta}
                       onChange={(e) => {
                         const val = e.target.value;
                         if (val) {
                           setFechaConsulta(val);
                           if (val > fechaHastaRango) setFechaHastaRango(val);
+                          setMesesExpandidos({});
                         }
                       }}
-                      className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                      className="absolute inset-0 opacity-0 cursor-pointer w-full h-full disabled:cursor-not-allowed"
                     />
                   </div>
 
@@ -1578,6 +1609,7 @@ export default function FichaComportamiento() {
 
                   <div
                     onClick={(e) => {
+                      if (loadingFicha) return;
                       const input = e.currentTarget.querySelector("input");
                       if (input && typeof input.showPicker === "function")
                         input.showPicker();
@@ -1592,13 +1624,17 @@ export default function FichaComportamiento() {
                     </span>
                     <input
                       type="date"
+                      disabled={loadingFicha}
                       value={fechaHastaRango}
                       min={fechaConsulta}
                       onChange={(e) => {
                         const val = e.target.value;
-                        if (val) setFechaHastaRango(val);
+                        if (val) {
+                          setFechaHastaRango(val);
+                          setMesesExpandidos({});
+                        }
                       }}
-                      className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                      className="absolute inset-0 opacity-0 cursor-pointer w-full h-full disabled:cursor-not-allowed"
                     />
                   </div>
                 </div>
@@ -1609,8 +1645,9 @@ export default function FichaComportamiento() {
               ) && (
                 <button
                   type="button"
+                  disabled={loadingFicha}
                   onClick={() => moverFecha(1)}
-                  className="p-1 hover:bg-slate-100 rounded-lg text-slate-500 transition cursor-pointer"
+                  className="p-1 hover:bg-slate-100 rounded-lg text-slate-500 transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   <ChevronRight className="w-4 h-4" />
                 </button>
@@ -1627,15 +1664,16 @@ export default function FichaComportamiento() {
               <div className="relative">
                 <button
                   type="button"
+                  disabled={loadingFicha || !fichaData}
                   onClick={() => setMenuImpresionAbierto(!menuImpresionAbierto)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 rounded-xl font-bold transition shadow-2xs cursor-pointer text-xs"
+                  className="flex items-center gap-1.5 px-3 py-1.5 border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 rounded-xl font-bold transition shadow-2xs cursor-pointer text-xs disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Printer className="w-3.5 h-3.5 text-slate-600" />
                   <span>Imprimir / PDF</span>
                   <ChevronDown className="w-3 h-3 text-slate-400 ml-0.5" />
                 </button>
 
-                {menuImpresionAbierto && (
+                {menuImpresionAbierto && !loadingFicha && (
                   <>
                     <div
                       className="fixed inset-0 z-40"
@@ -1697,387 +1735,503 @@ export default function FichaComportamiento() {
             </div>
           </div>
 
-          {/* SUBMÓDULO: CABECERA Y KPIS */}
-          <FichaKpisHeader
-            fichaData={fichaData}
-            empleadoSeleccionado={empleadoSeleccionado}
-            esFlexible={esFlexible}
-            franjaFlexible={franjaFlexible}
-            metricas={metricas}
-            mostrarKpis={mostrarKpis}
-            setMostrarKpis={setMostrarKpis}
-            onAbrirAuditoria={() => setModalKpiJustificacionesAbierto(true)}
-            onAbrirIncidentes={() => abrirModalListaFiltrada("TODOS")}
-            modalidad={modalidad}
-            estadoJornadaDiaria={estadoJornadaDiaria}
-            esDocente={esDocente}
+          {/* INDICADOR DE CARGA REUTILIZABLE */}
+          <EstadoCarga
+            cargando={loadingFicha}
+            tipoIcono="calendario"
+            titulo="Generando reporte..."
+            descripcion="Procesando asistencias e incidentes del período."
           />
 
-          {/* BANNER DE HORARIO HISTÓRICO DISPONIBLE PARA TODAS LAS MODALIDADES */}
-          {horarioHistoricoActivoPeriodo && (
-            <div className="p-4 bg-amber-50 border-2 border-amber-300 rounded-2xl flex items-start sm:items-center gap-3 text-xs text-amber-950 shadow-xs animate-fadeIn">
-              <div className="p-2 bg-amber-100 rounded-xl text-amber-800 shrink-0">
-                <Clock className="w-5 h-5" />
+          {/* CONTENIDO DE RESULTADOS (atenúa y bloquea interacciones mientras carga) */}
+          <div
+            className={`space-y-4 sm:space-y-5 transition-opacity duration-200 ${
+              loadingFicha ? "opacity-45 pointer-events-none select-none" : ""
+            }`}
+          >
+            {/* SUBMÓDULO: CABECERA Y KPIS */}
+            <FichaKpisHeader
+              fichaData={fichaData}
+              empleadoSeleccionado={empleadoSeleccionado}
+              esFlexible={esFlexible}
+              franjaFlexible={franjaFlexible}
+              metricas={metricas}
+              mostrarKpis={mostrarKpis}
+              setMostrarKpis={setMostrarKpis}
+              onAbrirAuditoria={() =>
+                !loadingFicha && setModalKpiJustificacionesAbierto(true)
+              }
+              onAbrirIncidentes={() => abrirModalListaFiltrada("TODOS")}
+              modalidad={modalidad}
+              estadoJornadaDiaria={estadoJornadaDiaria}
+              esDocente={esDocente}
+              loadingFicha={loadingFicha}
+            />
+
+            {/* BANNER DE HORARIO HISTÓRICO */}
+            {horarioHistoricoActivoPeriodo && (
+              <div className="p-4 bg-amber-50 border-2 border-amber-300 rounded-2xl flex items-start sm:items-center gap-3 text-xs text-amber-950 shadow-xs animate-fadeIn">
+                <div className="p-2 bg-amber-100 rounded-xl text-amber-800 shrink-0">
+                  <Clock className="w-5 h-5" />
+                </div>
+                <div className="space-y-0.5">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-black uppercase tracking-wider text-[10px] bg-amber-600 text-white px-2 py-0.5 rounded-md shadow-2xs">
+                      Régimen Horario Histórico Detectado
+                    </span>
+                    <span className="font-bold text-amber-900">
+                      {horarioHistoricoActivoPeriodo.etiqueta ||
+                        horarioHistoricoActivoPeriodo.nombre}{" "}
+                      (
+                      {horarioHistoricoActivoPeriodo.horaInicio ||
+                        horarioHistoricoActivoPeriodo.entrada}{" "}
+                      hs →{" "}
+                      {horarioHistoricoActivoPeriodo.horaFin ||
+                        horarioHistoricoActivoPeriodo.salida}{" "}
+                      hs)
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-amber-800 leading-relaxed">
+                    En el período seleccionado (
+                    <strong>{textoRangoContemplado}</strong>) rigió un esquema
+                    horario anterior del colaborador, vigente desde el{" "}
+                    <strong>
+                      {formatearFechaVisual(
+                        horarioHistoricoActivoPeriodo.fechaAlta,
+                      )}
+                    </strong>
+                    {horarioHistoricoActivoPeriodo.fechaBaja ? (
+                      <>
+                        {" "}
+                        hasta el{" "}
+                        <strong>
+                          {formatearFechaVisual(
+                            horarioHistoricoActivoPeriodo.fechaBaja,
+                          )}
+                        </strong>
+                        .
+                      </>
+                    ) : (
+                      " (dado de baja)."
+                    )}{" "}
+                    Las asistencias, faltas e inasistencias en ese rango se
+                    auditan y computan conforme a dicho cronograma.
+                  </p>
+                </div>
               </div>
-              <div className="space-y-0.5">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="font-black uppercase tracking-wider text-[10px] bg-amber-600 text-white px-2 py-0.5 rounded-md shadow-2xs">
-                    Régimen Horario Histórico Detectado
+            )}
+
+            {/* ESCENARIOS ESPECÍFICOS DIARIOS */}
+            {modalidad === "DIARIO" && estadoJornadaDiaria.esLicencia && (
+              <div className="bg-sky-50 border-2 border-sky-300 rounded-2xl sm:rounded-3xl p-5 sm:p-7 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-fadeIn">
+                <div className="flex items-center gap-3.5 sm:gap-4">
+                  <div className="w-12 h-12 sm:w-13 sm:h-13 rounded-2xl bg-sky-100 border border-sky-200 flex items-center justify-center text-sky-700 shrink-0 shadow-2xs">
+                    <ShieldCheck className="w-6 h-6 sm:w-7 sm:h-7" />
+                  </div>
+                  <div className="space-y-1">
+                    <span className="inline-block px-2.5 py-0.5 rounded-full bg-sky-600 text-white font-black text-[9px] uppercase tracking-wider shadow-2xs">
+                      Jornada Justificada por Dictamen
+                    </span>
+                    <h3 className="text-sm sm:text-lg font-black text-sky-950">
+                      {infoLicenciaDiaria?.tipoLicenciaEtiqueta ||
+                        "Licencia / Asueto Institucional Vigente"}
+                    </h3>
+                    <p className="text-xs text-sky-800 max-w-2xl leading-relaxed">
+                      Para el día{" "}
+                      <strong>{formatearFechaVisual(fechaConsulta)}</strong> (
+                      {obtenerNombreDia(fechaConsulta)}) consta una excepción
+                      formal aprobada por Recursos Humanos.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex flex-col sm:items-end gap-1.5 shrink-0 self-start sm:self-center">
+                  <span className="inline-flex items-center gap-1 px-3 py-1 bg-white border border-sky-300 text-sky-800 rounded-xl text-xs font-bold shadow-2xs">
+                    ✓ Amparado por Reglamentación
                   </span>
-                  <span className="font-bold text-amber-900">
-                    {horarioHistoricoActivoPeriodo.etiqueta ||
-                      horarioHistoricoActivoPeriodo.nombre}{" "}
-                    (
-                    {horarioHistoricoActivoPeriodo.horaInicio ||
-                      horarioHistoricoActivoPeriodo.entrada}{" "}
-                    hs →{" "}
-                    {horarioHistoricoActivoPeriodo.horaFin ||
-                      horarioHistoricoActivoPeriodo.salida}{" "}
-                    hs)
+                  <span className="text-[11px] font-mono text-sky-700 font-bold">
+                    Cumplimiento: 100%
                   </span>
                 </div>
-                <p className="text-[11px] text-amber-800 leading-relaxed">
-                  En el período seleccionado (
-                  <strong>{textoRangoContemplado}</strong>) rigió un esquema
-                  horario anterior del colaborador, vigente desde el{" "}
-                  <strong>
-                    {formatearFechaVisual(
-                      horarioHistoricoActivoPeriodo.fechaAlta,
+              </div>
+            )}
+
+            {modalidad === "DIARIO" &&
+              !estadoJornadaDiaria.esLicencia &&
+              estadoJornadaDiaria.esFuturoConHorario && (
+                <div className="bg-indigo-50/60 border-2 border-indigo-200 rounded-2xl sm:rounded-3xl p-5 sm:p-8 text-center space-y-4 shadow-sm animate-fadeIn">
+                  <div className="w-12 h-12 sm:w-14 sm:h-14 mx-auto rounded-2xl bg-indigo-100 border border-indigo-200 flex items-center justify-center text-indigo-600 shadow-2xs">
+                    <CalendarCheck className="w-6 h-6 sm:w-7 sm:h-7" />
+                  </div>
+                  <div className="max-w-xl mx-auto space-y-1.5">
+                    <span className="inline-block px-3 py-0.5 rounded-full bg-indigo-600 text-white font-bold text-[10px] uppercase tracking-wider shadow-2xs">
+                      Jornada Futura Programada
+                    </span>
+                    <h3 className="text-sm sm:text-lg font-black text-slate-900">
+                      Horarios para el {formatearFechaVisual(fechaConsulta)} (
+                      {obtenerNombreDia(fechaConsulta)})
+                    </h3>
+                    <p className="text-xs text-slate-600">
+                      Esta fecha es posterior al día de hoy. El colaborador
+                      tiene los siguientes horarios laborales a cumplir.
+                    </p>
+                  </div>
+                  {Array.isArray(estadoJornadaDiaria.planificados) &&
+                    estadoJornadaDiaria.planificados.length > 0 && (
+                      <div className="max-w-lg mx-auto bg-white/95 border border-indigo-100 rounded-2xl p-3.5 text-left text-xs shadow-2xs space-y-1.5">
+                        {estadoJornadaDiaria.planificados.map((p, idx) => (
+                          <div
+                            key={idx}
+                            className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-200/80 font-medium text-slate-700"
+                          >
+                            <span className="font-semibold text-slate-800">
+                              {p.etiqueta || "Turno Laboral"}
+                            </span>
+                            <span className="font-mono font-bold text-indigo-700">
+                              {p.horaInicio} hs → {p.horaFin} hs
+                            </span>
+                          </div>
+                        ))}
+                      </div>
                     )}
-                  </strong>
-                  {horarioHistoricoActivoPeriodo.fechaBaja ? (
-                    <>
-                      {" "}
-                      hasta el{" "}
-                      <strong>
-                        {formatearFechaVisual(
-                          horarioHistoricoActivoPeriodo.fechaBaja,
-                        )}
-                      </strong>
-                      .
-                    </>
-                  ) : (
-                    " (dado de baja)."
-                  )}{" "}
-                  Las asistencias, faltas e inasistencias en ese rango se
-                  auditan y computan conforme a dicho cronograma.
-                </p>
-              </div>
-            </div>
-          )}
+                </div>
+              )}
 
-          {/* ESCENARIOS ESPECÍFICOS DIARIOS */}
-          {modalidad === "DIARIO" && estadoJornadaDiaria.esLicencia && (
-            <div className="bg-sky-50 border-2 border-sky-300 rounded-2xl sm:rounded-3xl p-5 sm:p-7 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-fadeIn">
-              <div className="flex items-center gap-3.5 sm:gap-4">
-                <div className="w-12 h-12 sm:w-13 sm:h-13 rounded-2xl bg-sky-100 border border-sky-200 flex items-center justify-center text-sky-700 shrink-0 shadow-2xs">
-                  <ShieldCheck className="w-6 h-6 sm:w-7 sm:h-7" />
+            {modalidad === "DIARIO" &&
+              !estadoJornadaDiaria.esLicencia &&
+              estadoJornadaDiaria.esInasistencia &&
+              !esFlexible && (
+                <div className="bg-rose-50/80 border-2 border-rose-300 rounded-2xl sm:rounded-3xl p-5 sm:p-8 text-center space-y-4 shadow-sm animate-fadeIn">
+                  <div className="w-12 h-12 sm:w-14 sm:h-14 mx-auto rounded-2xl bg-rose-100 border border-rose-200 flex items-center justify-center text-rose-600 shadow-2xs">
+                    <UserX className="w-6 h-6 sm:w-7 sm:h-7" />
+                  </div>
+                  <div className="max-w-xl mx-auto space-y-1.5">
+                    <span className="inline-block px-3 py-0.5 rounded-full bg-rose-600 text-white font-black text-[10px] uppercase tracking-wider shadow-2xs">
+                      Inasistencia detectada
+                    </span>
+                    <h3 className="text-sm sm:text-lg font-black text-rose-950">
+                      Jornada laboral asignada sin registro de asistencia
+                    </h3>
+                    <p className="text-xs text-rose-800">
+                      Para el día{" "}
+                      <strong>{formatearFechaVisual(fechaConsulta)}</strong> no
+                      se registraron marcaciones biométricas válidas de ingreso
+                      ni egreso.
+                    </p>
+                  </div>
+                  {Array.isArray(estadoJornadaDiaria.planificados) &&
+                    estadoJornadaDiaria.planificados.length > 0 && (
+                      <div className="max-w-lg mx-auto bg-white/90 border border-rose-200 rounded-2xl p-3.5 text-left text-xs shadow-2xs space-y-1.5">
+                        {estadoJornadaDiaria.planificados.map((p, idx) => (
+                          <div
+                            key={idx}
+                            className="flex items-center justify-between p-2 rounded-xl bg-rose-50/50 border border-rose-100 font-medium text-slate-700"
+                          >
+                            <span className="font-semibold text-rose-950">
+                              {p.etiqueta || "Turno Programado"}
+                            </span>
+                            <span className="font-mono font-bold text-rose-800">
+                              {p.horaInicio} hs → {p.horaFin} hs
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                 </div>
-                <div className="space-y-1">
-                  <span className="inline-block px-2.5 py-0.5 rounded-full bg-sky-600 text-white font-black text-[9px] uppercase tracking-wider shadow-2xs">
-                    Jornada Justificada por Dictamen
-                  </span>
-                  <h3 className="text-sm sm:text-lg font-black text-sky-950">
-                    {infoLicenciaDiaria?.tipoLicenciaEtiqueta ||
-                      "Licencia / Asueto Institucional Vigente"}
-                  </h3>
-                  <p className="text-xs text-sky-800 max-w-2xl leading-relaxed">
-                    Para el día{" "}
-                    <strong>{formatearFechaVisual(fechaConsulta)}</strong> (
-                    {obtenerNombreDia(fechaConsulta)}) consta una excepción
-                    formal aprobada por Recursos Humanos.
-                  </p>
-                </div>
-              </div>
-              <div className="flex flex-col sm:items-end gap-1.5 shrink-0 self-start sm:self-center">
-                <span className="inline-flex items-center gap-1 px-3 py-1 bg-white border border-sky-300 text-sky-800 rounded-xl text-xs font-bold shadow-2xs">
-                  ✓ Amparado por Reglamentación
-                </span>
-                <span className="text-[11px] font-mono text-sky-700 font-bold">
-                  Cumplimiento: 100%
-                </span>
-              </div>
-            </div>
-          )}
+              )}
 
-          {modalidad === "DIARIO" &&
-            !estadoJornadaDiaria.esLicencia &&
-            estadoJornadaDiaria.esFuturoConHorario && (
-              <div className="bg-indigo-50/60 border-2 border-indigo-200 rounded-2xl sm:rounded-3xl p-5 sm:p-8 text-center space-y-4 shadow-sm animate-fadeIn">
-                <div className="w-12 h-12 sm:w-14 sm:h-14 mx-auto rounded-2xl bg-indigo-100 border border-indigo-200 flex items-center justify-center text-indigo-600 shadow-2xs">
-                  <CalendarCheck className="w-6 h-6 sm:w-7 sm:h-7" />
-                </div>
-                <div className="max-w-xl mx-auto space-y-1.5">
-                  <span className="inline-block px-3 py-0.5 rounded-full bg-indigo-600 text-white font-bold text-[10px] uppercase tracking-wider shadow-2xs">
-                    Jornada Futura Programada
-                  </span>
-                  <h3 className="text-sm sm:text-lg font-black text-slate-900">
-                    Horarios para el {formatearFechaVisual(fechaConsulta)} (
-                    {obtenerNombreDia(fechaConsulta)})
-                  </h3>
-                  <p className="text-xs text-slate-600">
-                    Esta fecha es posterior al día de hoy. El colaborador tiene
-                    los siguientes horarios laborales a cumplir.
-                  </p>
-                </div>
-                {Array.isArray(estadoJornadaDiaria.planificados) &&
-                  estadoJornadaDiaria.planificados.length > 0 && (
-                    <div className="max-w-lg mx-auto bg-white/95 border border-indigo-100 rounded-2xl p-3.5 text-left text-xs shadow-2xs space-y-1.5">
-                      {estadoJornadaDiaria.planificados.map((p, idx) => (
-                        <div
-                          key={idx}
-                          className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-200/80 font-medium text-slate-700"
-                        >
-                          <span className="font-semibold text-slate-800">
-                            {p.etiqueta || "Turno Laboral"}
-                          </span>
-                          <span className="font-mono font-bold text-indigo-700">
-                            {p.horaInicio} hs → {p.horaFin} hs
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-              </div>
-            )}
-
-          {modalidad === "DIARIO" &&
-            !estadoJornadaDiaria.esLicencia &&
-            estadoJornadaDiaria.esInasistencia &&
-            !esFlexible && (
-              <div className="bg-rose-50/80 border-2 border-rose-300 rounded-2xl sm:rounded-3xl p-5 sm:p-8 text-center space-y-4 shadow-sm animate-fadeIn">
-                <div className="w-12 h-12 sm:w-14 sm:h-14 mx-auto rounded-2xl bg-rose-100 border border-rose-200 flex items-center justify-center text-rose-600 shadow-2xs">
-                  <UserX className="w-6 h-6 sm:w-7 sm:h-7" />
-                </div>
-                <div className="max-w-xl mx-auto space-y-1.5">
-                  <span className="inline-block px-3 py-0.5 rounded-full bg-rose-600 text-white font-black text-[10px] uppercase tracking-wider shadow-2xs">
-                    Inasistencia detectada
-                  </span>
-                  <h3 className="text-sm sm:text-lg font-black text-rose-950">
-                    Jornada laboral asignada sin registro de asistencia
-                  </h3>
-                  <p className="text-xs text-rose-800">
-                    Para el día{" "}
-                    <strong>{formatearFechaVisual(fechaConsulta)}</strong> no se
-                    registraron marcaciones biométricas válidas de ingreso ni
-                    egreso.
-                  </p>
-                </div>
-                {Array.isArray(estadoJornadaDiaria.planificados) &&
-                  estadoJornadaDiaria.planificados.length > 0 && (
-                    <div className="max-w-lg mx-auto bg-white/90 border border-rose-200 rounded-2xl p-3.5 text-left text-xs shadow-2xs space-y-1.5">
-                      {estadoJornadaDiaria.planificados.map((p, idx) => (
-                        <div
-                          key={idx}
-                          className="flex items-center justify-between p-2 rounded-xl bg-rose-50/50 border border-rose-100 font-medium text-slate-700"
-                        >
-                          <span className="font-semibold text-rose-950">
-                            {p.etiqueta || "Turno Programado"}
-                          </span>
-                          <span className="font-mono font-bold text-rose-800">
-                            {p.horaInicio} hs → {p.horaFin} hs
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-              </div>
-            )}
-
-          {modalidad === "DIARIO" &&
-            !estadoJornadaDiaria.esLicencia &&
-            (estadoJornadaDiaria.esSinHorario ||
-              (esFlexible && !estadoJornadaDiaria.tieneDatos)) && (
-              <div className="bg-white border border-slate-200 rounded-3xl p-8 sm:p-12 text-center space-y-4 shadow-xs animate-fadeIn">
-                <div className="w-16 h-16 mx-auto rounded-3xl bg-slate-50 border border-slate-200/80 flex items-center justify-center text-slate-400 shadow-2xs">
-                  <CalendarOff className="w-8 h-8 text-slate-400" />
-                </div>
-                <div className="max-w-md mx-auto space-y-1.5">
-                  <span className="inline-block px-3 py-0.5 rounded-full bg-slate-100 text-slate-600 font-bold text-[10px] uppercase tracking-wider">
-                    {esFlexible
-                      ? "Día Libre / Bolsa Flexible"
-                      : "Sin registros ni horario"}
-                  </span>
-                  <h3 className="text-base sm:text-lg font-black text-slate-900">
-                    {esFlexible
-                      ? "Sin actividad registrada en esta fecha"
-                      : "No hay datos para esta jornada"}
-                  </h3>
-                  <p className="text-xs text-slate-500 leading-relaxed">
-                    {esFlexible
-                      ? `El colaborador cuenta con esquema flexible y no registró fichajes el día ${formatearFechaVisual(fechaConsulta)}.`
-                      : `No existe registro de un horario laboral asignado ni marcaciones biométricas para el día ${formatearFechaVisual(fechaConsulta)} (${obtenerNombreDia(fechaConsulta)}).`}
-                  </p>
-                </div>
-                <div className="flex flex-wrap items-center justify-center gap-2.5 pt-3">
-                  <button
-                    type="button"
-                    onClick={() => moverFecha(-1)}
-                    className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer"
-                  >
-                    <ChevronLeft className="w-4 h-4" /> Día anterior
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => moverFecha(1)}
-                    className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer"
-                  >
-                    Día siguiente <ChevronRight className="w-4 h-4" />
-                  </button>
-                  {fechaConsulta !== hoyIso && (
+            {modalidad === "DIARIO" &&
+              !estadoJornadaDiaria.esLicencia &&
+              (estadoJornadaDiaria.esSinHorario ||
+                (esFlexible && !estadoJornadaDiaria.tieneDatos)) && (
+                <div className="bg-white border border-slate-200 rounded-3xl p-8 sm:p-12 text-center space-y-4 shadow-xs animate-fadeIn">
+                  <div className="w-16 h-16 mx-auto rounded-3xl bg-slate-50 border border-slate-200/80 flex items-center justify-center text-slate-400 shadow-2xs">
+                    <CalendarOff className="w-8 h-8 text-slate-400" />
+                  </div>
+                  <div className="max-w-md mx-auto space-y-1.5">
+                    <span className="inline-block px-3 py-0.5 rounded-full bg-slate-100 text-slate-600 font-bold text-[10px] uppercase tracking-wider">
+                      {esFlexible
+                        ? "Día Libre / Bolsa Flexible"
+                        : "Sin registros ni horario"}
+                    </span>
+                    <h3 className="text-base sm:text-lg font-black text-slate-900">
+                      {esFlexible
+                        ? "Sin actividad registrada en esta fecha"
+                        : "No hay datos para esta jornada"}
+                    </h3>
+                    <p className="text-xs text-slate-500 leading-relaxed">
+                      {esFlexible
+                        ? `El colaborador cuenta con esquema flexible y no registró fichajes el día ${formatearFechaVisual(fechaConsulta)}.`
+                        : `No existe registro de un horario laboral asignado ni marcaciones biométricas para el día ${formatearFechaVisual(fechaConsulta)} (${obtenerNombreDia(fechaConsulta)}).`}
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap items-center justify-center gap-2.5 pt-3">
                     <button
                       type="button"
-                      onClick={() => {
-                        setFechaConsulta(hoyIso);
-                        setDiaInspeccionado(null);
-                      }}
-                      className="px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-xs font-bold transition cursor-pointer"
+                      disabled={loadingFicha}
+                      onClick={() => moverFecha(-1)}
+                      className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer disabled:opacity-50"
                     >
-                      Volver a Hoy
+                      <ChevronLeft className="w-4 h-4" /> Día anterior
                     </button>
-                  )}
+                    <button
+                      type="button"
+                      disabled={loadingFicha}
+                      onClick={() => moverFecha(1)}
+                      className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                    >
+                      Día siguiente <ChevronRight className="w-4 h-4" />
+                    </button>
+                    {fechaConsulta !== hoyIso && (
+                      <button
+                        type="button"
+                        disabled={loadingFicha}
+                        onClick={() => {
+                          setFechaConsulta(hoyIso);
+                          setDiaInspeccionado(null);
+                        }}
+                        className="px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-xs font-bold transition cursor-pointer disabled:opacity-50"
+                      >
+                        Volver a Hoy
+                      </button>
+                    )}
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
 
-          {/* VISTA 1: DIARIO */}
-          {modalidad === "DIARIO" &&
-            !estadoJornadaDiaria.esSinHorario &&
-            !estadoJornadaDiaria.esFuturoConHorario && (
-              <FichaVistaDiaria
+            {/* VISTA 1: DIARIO */}
+            {modalidad === "DIARIO" &&
+              !estadoJornadaDiaria.esSinHorario &&
+              !estadoJornadaDiaria.esFuturoConHorario && (
+                <FichaVistaDiaria
+                  fichaData={fichaData}
+                  fechaConsulta={fechaConsulta}
+                  tabInferior={tabInferior}
+                  setTabInferior={setTabInferior}
+                  tablaDetalleRef={tablaDetalleRef}
+                  renderItemIncidenteInteractivo={
+                    renderItemIncidenteInteractivo
+                  }
+                  estadoJornadaDiaria={estadoJornadaDiaria}
+                />
+              )}
+
+            {/* VISTA 2: SEMANAL */}
+            {modalidad === "SEMANAL" && (
+              <FichaVistaSemanal
                 fichaData={fichaData}
-                fechaConsulta={fechaConsulta}
-                tabInferior={tabInferior}
-                setTabInferior={setTabInferior}
-                tablaDetalleRef={tablaDetalleRef}
-                renderItemIncidenteInteractivo={renderItemIncidenteInteractivo}
-                estadoJornadaDiaria={estadoJornadaDiaria}
+                inicioSemanaStr={inicioSemanaStr}
+                finSemanaStr={finSemanaStr}
+                esFlexible={esFlexible}
+                horasObjetivoSemana={horasObjetivoSemana}
+                metricas={metricas}
+                renderCardInspeccionDiaria={renderCardInspeccionDiaria}
+                obtenerHorariosDeFecha={obtenerHorariosDeFecha}
+                hoyIso={hoyIso}
+                diaInspeccionado={diaInspeccionado}
+                setDiaInspeccionado={setDiaInspeccionado}
               />
             )}
 
-          {/* VISTA 2: SEMANAL */}
-          {modalidad === "SEMANAL" && (
-            <FichaVistaSemanal
-              fichaData={fichaData}
-              inicioSemanaStr={inicioSemanaStr}
-              finSemanaStr={finSemanaStr}
-              esFlexible={esFlexible}
-              horasObjetivoSemana={horasObjetivoSemana}
-              metricas={metricas}
-              renderCardInspeccionDiaria={renderCardInspeccionDiaria}
-              obtenerHorariosDeFecha={obtenerHorariosDeFecha}
-              hoyIso={hoyIso}
-              diaInspeccionado={diaInspeccionado}
-              setDiaInspeccionado={setDiaInspeccionado}
-            />
-          )}
-
-          {/* VISTA 3: RANGO DE FECHAS */}
-          {modalidad === "RANGO_FECHAS" && (
-            <div className="space-y-4 sm:space-y-6">
-              <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                <div>
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800">
-                    Calendario del Rango ({formatearFechaVisual(fechaConsulta)}{" "}
-                    al {formatearFechaVisual(fechaHastaRango)})
-                  </h3>
-                </div>
-                <span className="px-3 py-1 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-xl font-bold text-xs">
-                  Total: {metricas.presenciaNetaTexto}
-                </span>
-              </div>
-              {renderCardInspeccionDiaria()}
-              {mesesDelRango.map((mes) => (
-                <div
-                  key={mes.mesKey}
-                  className="bg-white border border-slate-200 rounded-2xl sm:rounded-3xl p-4 sm:p-5 shadow-xs space-y-4"
-                >
-                  <h4 className="text-sm font-black text-slate-900 uppercase tracking-wide">
-                    {mes.nombreMes}
-                  </h4>
-                  {renderCuadriculaCalendario(mes.dias, mes.diasOffset)}
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* VISTA 4: MENSUAL */}
-          {modalidad === "MENSUAL" && (
-            <div className="bg-white border border-slate-200 rounded-2xl sm:rounded-3xl p-4 sm:p-5 shadow-xs space-y-4">
-              <div className="flex justify-between items-center">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800">
-                  Calendario Mensual • {fichaData?.periodoTexto}
-                </h3>
-              </div>
-              {renderCardInspeccionDiaria()}
-              {renderCuadriculaCalendario(
-                fichaData?.diasPeriodo,
-                diasOffsetInicioMes,
-              )}
-            </div>
-          )}
-
-          {/* VISTA 5: MULTIMES (TRIMESTRE / CUATRIMESTRE) */}
-          {["TRIMESTRE", "CUATRIMESTRE"].includes(modalidad) && (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between bg-white border border-slate-200 rounded-2xl p-4 shadow-xs">
-                <span className="text-xs font-bold uppercase tracking-wider text-slate-700 block">
-                  LISTA DE MESES DEL {modalidad}
-                </span>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={expandirTodos}
-                    className="px-3 py-1.5 bg-indigo-50 text-indigo-700 font-bold rounded-xl text-xs hover:bg-indigo-100 transition cursor-pointer"
-                  >
-                    Expandir
-                  </button>
-                  <button
-                    type="button"
-                    onClick={colapsarTodos}
-                    className="px-3 py-1.5 bg-slate-100 text-slate-700 font-bold rounded-xl text-xs hover:bg-slate-200 transition cursor-pointer"
-                  >
-                    Colapsar
-                  </button>
-                </div>
-              </div>
-
-              {(fichaData?.mesesPeriodo || []).map((mes) => {
-                const isExpanded = mesesExpandidos[mes.mesKey];
-                return (
-                  <div
-                    key={mes.mesKey}
-                    className="bg-white border border-slate-200 rounded-2xl sm:rounded-3xl shadow-xs overflow-hidden transition-all"
-                  >
-                    <div className="p-4 sm:p-5 flex items-center justify-between bg-slate-50/50">
-                      <h4 className="text-base font-black text-slate-900">
-                        {mes.nombreMes}
-                      </h4>
-                      <button
-                        type="button"
-                        onClick={() => toggleMes(mes.mesKey)}
-                        className="px-3 py-1.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition cursor-pointer flex items-center gap-1 text-xs font-bold"
-                      >
-                        {isExpanded ? "Ocultar" : "Ver Calendario"}{" "}
-                        <ChevronDown
-                          className={`w-3.5 h-3.5 transition-transform ${isExpanded ? "rotate-180" : ""}`}
-                        />
-                      </button>
-                    </div>
-                    {isExpanded && (
-                      <div className="p-4 sm:p-5 border-t border-slate-100">
-                        {renderCardInspeccionDiaria()}
-                        {renderCuadriculaCalendario(
-                          mes.diasPeriodo,
-                          mes.diasOffset,
-                        )}
-                      </div>
+            {/* VISTA 3: RANGO DE FECHAS (Colapsable cuando abarca varios meses) */}
+            {modalidad === "RANGO_FECHAS" && (
+              <div className="space-y-4 sm:space-y-5">
+                <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800">
+                      Calendario del Rango (
+                      {formatearFechaVisual(fechaConsulta)} al{" "}
+                      {formatearFechaVisual(fechaHastaRango)})
+                    </h3>
+                    {mesesDelRango.length > 1 && (
+                      <span className="text-[11px] text-slate-500">
+                        El rango abarca {mesesDelRango.length} meses. Toque un
+                        mes para desplegar su calendario.
+                      </span>
                     )}
                   </div>
-                );
-              })}
-            </div>
-          )}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="px-3 py-1.5 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-xl font-bold text-xs">
+                      Total: {metricas.presenciaNetaTexto}
+                    </span>
+                    {mesesDelRango.length > 1 && (
+                      <>
+                        <button
+                          type="button"
+                          disabled={loadingFicha}
+                          onClick={expandirTodos}
+                          className="px-3 py-1.5 bg-indigo-50 text-indigo-700 font-bold rounded-xl text-xs hover:bg-indigo-100 transition cursor-pointer disabled:opacity-50"
+                        >
+                          Expandir
+                        </button>
+                        <button
+                          type="button"
+                          disabled={loadingFicha}
+                          onClick={colapsarTodos}
+                          className="px-3 py-1.5 bg-slate-100 text-slate-700 font-bold rounded-xl text-xs hover:bg-slate-200 transition cursor-pointer disabled:opacity-50"
+                        >
+                          Colapsar
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                {mesesDelRango.length <= 1 ? (
+                  <>
+                    {renderCardInspeccionDiaria()}
+                    {mesesDelRango.map((mes) => (
+                      <div
+                        key={mes.mesKey}
+                        className="bg-white border border-slate-200 rounded-2xl sm:rounded-3xl p-4 sm:p-5 shadow-xs space-y-4"
+                      >
+                        <h4 className="text-sm font-black text-slate-900 uppercase tracking-wide">
+                          {mes.nombreMes}
+                        </h4>
+                        {renderCuadriculaCalendario(mes.dias, mes.diasOffset)}
+                      </div>
+                    ))}
+                  </>
+                ) : (
+                  mesesDelRango.map((mes) => {
+                    const isExpanded = Boolean(mesesExpandidos[mes.mesKey]);
+                    const contieneDiaInspeccionado =
+                      diaInspeccionado &&
+                      diaInspeccionado.fecha.startsWith(mes.mesKey);
+
+                    return (
+                      <div
+                        key={mes.mesKey}
+                        className="bg-white border border-slate-200 rounded-2xl sm:rounded-3xl shadow-xs overflow-hidden transition-all"
+                      >
+                        <div className="p-4 sm:p-5 flex items-center justify-between bg-slate-50/50">
+                          <div className="flex items-center gap-3">
+                            <div className="w-9 h-9 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 shrink-0">
+                              <CalendarIcon className="w-4 h-4" />
+                            </div>
+                            <div>
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-indigo-100 text-indigo-800 uppercase block w-fit mb-0.5">
+                                Mes {mes.orden} de {mesesDelRango.length}
+                              </span>
+                              <h4 className="text-base font-black text-slate-900">
+                                {mes.nombreMes}
+                              </h4>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            disabled={loadingFicha}
+                            onClick={() => toggleMes(mes.mesKey)}
+                            className="px-3 py-1.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition cursor-pointer flex items-center gap-1 text-xs font-bold disabled:opacity-50"
+                          >
+                            {isExpanded ? "Ocultar" : "Ver Calendario"}{" "}
+                            <ChevronDown
+                              className={`w-3.5 h-3.5 transition-transform ${isExpanded ? "rotate-180" : ""}`}
+                            />
+                          </button>
+                        </div>
+                        {isExpanded && (
+                          <div className="p-4 sm:p-5 border-t border-slate-100 space-y-4">
+                            {contieneDiaInspeccionado &&
+                              renderCardInspeccionDiaria()}
+                            {renderCuadriculaCalendario(
+                              mes.dias,
+                              mes.diasOffset,
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            )}
+
+            {/* VISTA 4: MENSUAL */}
+            {modalidad === "MENSUAL" && (
+              <div className="bg-white border border-slate-200 rounded-2xl sm:rounded-3xl p-4 sm:p-5 shadow-xs space-y-4">
+                <div className="flex justify-between items-center">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800">
+                    Calendario Mensual • {fichaData?.periodoTexto}
+                  </h3>
+                </div>
+                {renderCardInspeccionDiaria()}
+                {renderCuadriculaCalendario(
+                  fichaData?.diasPeriodo,
+                  diasOffsetInicioMes,
+                )}
+              </div>
+            )}
+
+            {/* VISTA 5: MULTIMES (TRIMESTRE / CUATRIMESTRE) */}
+            {["TRIMESTRE", "CUATRIMESTRE"].includes(modalidad) && (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between bg-white border border-slate-200 rounded-2xl p-4 shadow-xs">
+                  <span className="text-xs font-bold uppercase tracking-wider text-slate-700 block">
+                    LISTA DE MESES DEL {modalidad}
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      disabled={loadingFicha}
+                      onClick={expandirTodos}
+                      className="px-3 py-1.5 bg-indigo-50 text-indigo-700 font-bold rounded-xl text-xs hover:bg-indigo-100 transition cursor-pointer disabled:opacity-50"
+                    >
+                      Expandir
+                    </button>
+                    <button
+                      type="button"
+                      disabled={loadingFicha}
+                      onClick={colapsarTodos}
+                      className="px-3 py-1.5 bg-slate-100 text-slate-700 font-bold rounded-xl text-xs hover:bg-slate-200 transition cursor-pointer disabled:opacity-50"
+                    >
+                      Colapsar
+                    </button>
+                  </div>
+                </div>
+
+                {(fichaData?.mesesPeriodo || []).map((mes) => {
+                  const isExpanded = mesesExpandidos[mes.mesKey];
+                  const contieneDiaInspeccionado =
+                    diaInspeccionado &&
+                    diaInspeccionado.fecha.startsWith(mes.mesKey);
+
+                  return (
+                    <div
+                      key={mes.mesKey}
+                      className="bg-white border border-slate-200 rounded-2xl sm:rounded-3xl shadow-xs overflow-hidden transition-all"
+                    >
+                      <div className="p-4 sm:p-5 flex items-center justify-between bg-slate-50/50">
+                        <h4 className="text-base font-black text-slate-900">
+                          {mes.nombreMes}
+                        </h4>
+                        <button
+                          type="button"
+                          disabled={loadingFicha}
+                          onClick={() => toggleMes(mes.mesKey)}
+                          className="px-3 py-1.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition cursor-pointer flex items-center gap-1 text-xs font-bold disabled:opacity-50"
+                        >
+                          {isExpanded ? "Ocultar" : "Ver Calendario"}{" "}
+                          <ChevronDown
+                            className={`w-3.5 h-3.5 transition-transform ${isExpanded ? "rotate-180" : ""}`}
+                          />
+                        </button>
+                      </div>
+                      {isExpanded && (
+                        <div className="p-4 sm:p-5 border-t border-slate-100 space-y-4">
+                          {contieneDiaInspeccionado &&
+                            renderCardInspeccionDiaria()}
+                          {renderCuadriculaCalendario(
+                            mes.diasPeriodo,
+                            mes.diasOffset,
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
